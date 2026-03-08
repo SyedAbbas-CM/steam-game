@@ -117,6 +117,7 @@ func _get_base_value(stat_type: StatModifier.StatType) -> float:
 		StatModifier.StatType.GOLD_MULT: return base_stats.gold_mult
 		StatModifier.StatType.PICKUP_RADIUS: return base_stats.pickup_radius
 		StatModifier.StatType.COOLDOWN_REDUCTION: return base_stats.cooldown_reduction
+		StatModifier.StatType.STEALTH: return base_stats.stealth
 	return 0.0
 
 func get_move_speed() -> float: return get_stat(StatModifier.StatType.MOVE_SPEED)
@@ -141,3 +142,4 @@ func get_xp_mult() -> float: return get_stat(StatModifier.StatType.XP_MULT)
 func get_gold_mult() -> float: return get_stat(StatModifier.StatType.GOLD_MULT)
 func get_pickup_radius() -> float: return get_stat(StatModifier.StatType.PICKUP_RADIUS)
 func get_cooldown_reduction() -> float: return get_stat(StatModifier.StatType.COOLDOWN_REDUCTION)
+func get_stealth() -> float: return get_stat(StatModifier.StatType.STEALTH)

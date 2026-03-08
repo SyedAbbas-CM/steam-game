@@ -18,12 +18,13 @@ var _enemy_def_cache: Dictionary = {}  # path -> EnemyDefinition
 
 const CHUNK_SIZE = 64  # tiles per chunk side
 const LOAD_RADIUS = 3  # chunks loaded around player
-const TILES_PER_FRAME = 3000  # max tile set_cell calls per frame
+const TILES_PER_FRAME = 2000  # max tile set_cell calls per frame
 var _chunk_keys_set: Dictionary = {}  # "cx_cy" -> true (available chunks from index)
 var _chunk_cache: Dictionary = {}  # "cx_cy" -> Resource (pre-loaded chunk data)
 var _loaded_chunks: Dictionary = {}  # Vector2i -> { "cells": { layer -> [cells] }, "shapes": Array, "entrances": Array }
 var _tile_queue: Array = []  # [{chunk_key, layer, cells_remaining, chunk_info}] for incremental loading
-var _pending_loads: Dictionary = {}  # "cx_cy" -> Vector2i chunk_key (async loads in progress)
+var _pending_loads: Dictionary = {}  # "cx_cy" -> true (async loads in progress)
+var _unload_queue: Array = []  # Array of Vector2i chunk keys to unload incrementally
 var _last_chunk: Vector2i = Vector2i(-9999, -9999)
 var _all_layers: Dictionary = {}  # name -> TileMapLayer
 var _layer_names: Array = ["ground", "paths", "water", "decorations", "buildings", "fences"]
@@ -618,8 +619,18 @@ func _process(_delta: float) -> void:
 	_update_gold_label()
 	_poll_async_loads()
 	_update_chunks()
+	_drain_unload_queue()
 	_process_ready_chunks()
 	_drain_tile_queue()
+
+func _drain_unload_queue() -> void:
+	# Unload max 2 chunks per frame to avoid stutters
+	var count = 0
+	while count < 2 and not _unload_queue.is_empty():
+		var key = _unload_queue.pop_front()
+		if _loaded_chunks.has(key):
+			_unload_chunk(key)
+			count += 1
 
 func _update_chunks() -> void:
 	var player = get_node_or_null("Player")
@@ -641,13 +652,10 @@ func _load_chunks_around(center: Vector2i) -> void:
 		for dx in range(-LOAD_RADIUS, LOAD_RADIUS + 1):
 			needed[Vector2i(center.x + dx, center.y + dy)] = true
 
-	# Unload chunks that are too far
-	var to_unload: Array = []
+	# Queue chunks for incremental unloading (not all at once)
 	for key in _loaded_chunks:
-		if not needed.has(key):
-			to_unload.append(key)
-	for key in to_unload:
-		_unload_chunk(key)
+		if not needed.has(key) and not key in _unload_queue:
+			_unload_queue.append(key)
 
 	# Cancel queued tiles for chunks no longer needed
 	_tile_queue = _tile_queue.filter(func(item): return needed.has(item["chunk_key"]))

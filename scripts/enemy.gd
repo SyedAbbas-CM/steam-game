@@ -108,6 +108,11 @@ func _physics_process(delta: float) -> void:
 	var aggro_range = 60.0
 	if definition:
 		aggro_range = definition.aggro_range if definition.aggro_range > 0 else 60.0
+	# Player stealth reduces aggro range
+	if is_instance_valid(player) and player.get_node_or_null("EquipmentManager"):
+		var stealth_val = player.equipment_manager.get_stealth()
+		if stealth_val > 0:
+			aggro_range *= (1.0 - clampf(stealth_val / 100.0, 0.0, 0.8))
 
 	match state:
 		State.IDLE:

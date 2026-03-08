@@ -11,34 +11,99 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 		room_count = 12 + floor_number * 2 + randi() % 5
 		room_count = mini(room_count, 35)
 
-	# Generate rooms using random walk from center
-	var rooms: Dictionary = {}  # Vector2i -> RoomData
-	var positions: Array[Vector2i] = []
-	var current = Vector2i.ZERO
-
-	# Place starting room
-	positions.append(current)
-
-	# Random walk to create connected layout
 	var directions = [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]
+
+	# Generate layout using branching random walk
+	var positions: Array[Vector2i] = []
+	var position_set: Dictionary = {}  # fast lookup
+	var start_pos = Vector2i.ZERO
+	positions.append(start_pos)
+	position_set[start_pos] = true
+
+	# Phase 1: Main path (60% of rooms) — creates the critical path
+	var main_path_count = int(room_count * 0.6)
+	var current = start_pos
+	for _i in range(main_path_count - 1):
+		var placed = false
+		for _attempt in range(10):
+			var dir = directions[randi() % 4]
+			var next = current + dir
+			if not position_set.has(next):
+				positions.append(next)
+				position_set[next] = true
+				current = next
+				placed = true
+				break
+		if not placed:
+			# Stuck — jump to a random existing position and branch from there
+			current = positions[randi() % positions.size()]
+
+	# Phase 2: Branch paths (remaining rooms) — creates dead ends and alternate routes
+	var branches_remaining = room_count - positions.size()
+	var branch_starts: Array[Vector2i] = []
+	# Pick 3-5 branch points along the existing layout
+	var num_branches = clampi(branches_remaining / 3, 2, 5)
+	for _b in range(num_branches):
+		branch_starts.append(positions[randi() % positions.size()])
+
+	for branch_root in branch_starts:
+		if positions.size() >= room_count:
+			break
+		current = branch_root
+		var branch_len = randi_range(2, maxi(2, branches_remaining / num_branches + 1))
+		for _step in range(branch_len):
+			if positions.size() >= room_count:
+				break
+			var placed = false
+			for _attempt in range(10):
+				var dir = directions[randi() % 4]
+				var next = current + dir
+				if not position_set.has(next):
+					positions.append(next)
+					position_set[next] = true
+					current = next
+					placed = true
+					break
+			if not placed:
+				break  # dead end, stop this branch
+
+	# Phase 3: Fill remaining rooms by sprouting off random positions
 	while positions.size() < room_count:
-		var dir = directions[randi() % 4]
-		var next = current + dir
-		if not next in positions:
-			positions.append(next)
-		current = next
+		var root = positions[randi() % positions.size()]
+		var placed = false
+		for _attempt in range(10):
+			var dir = directions[randi() % 4]
+			var next = root + dir
+			if not position_set.has(next):
+				positions.append(next)
+				position_set[next] = true
+				placed = true
+				break
+		if not placed:
+			break  # can't place more
 
-	# Assign room types
-	var start_pos = positions[0]
-	# Stairs in the farthest room from start
-	var stairs_pos = positions[0]
-	var max_dist = 0
-	for pos in positions:
-		var dist = abs(pos.x - start_pos.x) + abs(pos.y - start_pos.y)
-		if dist > max_dist:
-			max_dist = dist
-			stairs_pos = pos
+	# Phase 4: Add loop connections (15% chance for adjacent non-connected rooms)
+	# This creates alternate routes so the player isn't stuck on one path
 
+	# Find stairs — farthest room from start using BFS distance
+	var stairs_pos = start_pos
+	var bfs_dist: Dictionary = {}
+	bfs_dist[start_pos] = 0
+	var bfs_queue: Array[Vector2i] = [start_pos]
+	var bfs_idx = 0
+	while bfs_idx < bfs_queue.size():
+		var pos = bfs_queue[bfs_idx]
+		bfs_idx += 1
+		for dir in directions:
+			var neighbor = pos + dir
+			if position_set.has(neighbor) and not bfs_dist.has(neighbor):
+				bfs_dist[neighbor] = bfs_dist[pos] + 1
+				bfs_queue.append(neighbor)
+				if bfs_dist[neighbor] > bfs_dist.get(stairs_pos, 0):
+					stairs_pos = neighbor
+
+	# Build rooms
+	var rooms: Dictionary = {}
 	for i in range(positions.size()):
 		var pos = positions[i]
 		var room = RoomData.new()
@@ -49,7 +114,6 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 			room.enemy_count = 3 + floor_number
 		elif pos == stairs_pos:
 			room.has_stairs_down = true
-			# Boss every 3 floors, elite otherwise
 			if floor_number % 3 == 0:
 				room.type = RoomData.RoomType.BOSS
 				room.enemy_count = 1
@@ -81,10 +145,10 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 		room.shape_height = shape_data["height"]
 		room.floor_mask = shape_data["mask"]
 
-		# Build connections to adjacent rooms
+		# Build connections to ALL adjacent rooms (including loop connections)
 		for dir in directions:
 			var neighbor = pos + dir
-			if neighbor in positions:
+			if position_set.has(neighbor):
 				var dir_name = _dir_to_name(dir)
 				room.connections[dir_name] = neighbor
 
@@ -149,7 +213,6 @@ static func _roll_room_shape(room_type: RoomData.RoomType, is_start: bool) -> Ro
 			]
 			return shapes[randi() % shapes.size()]
 		_:
-			# Combat and Elite: all shapes
 			var all_shapes = [
 				RoomData.RoomShape.RECTANGLE,
 				RoomData.RoomShape.WIDE_RECT,
@@ -164,7 +227,6 @@ static func _roll_room_shape(room_type: RoomData.RoomType, is_start: bool) -> Ro
 			return all_shapes[randi() % all_shapes.size()]
 
 static func _roll_transition_type(room_type: RoomData.RoomType, is_start: bool, biome: DungeonBiome) -> RoomData.TransitionType:
-	# Start room and non-combat rooms always have open transitions
 	if is_start:
 		return RoomData.TransitionType.OPEN
 	match room_type:
@@ -173,7 +235,6 @@ static func _roll_transition_type(room_type: RoomData.RoomType, is_start: bool, 
 		_:
 			pass
 
-	# Get allowed transitions from biome
 	var allowed: Array[int] = [0, 1, 2, 3]
 	if biome and biome.allowed_transitions.size() > 0:
 		allowed = []

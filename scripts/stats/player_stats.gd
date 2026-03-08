@@ -31,3 +31,4 @@ extends Resource
 @export var gold_mult: float = 1.0
 @export var pickup_radius: float = 24.0
 @export var cooldown_reduction: float = 0.0
+@export var stealth: float = 0.0  # reduces enemy aggro range by stealth% (0-100)

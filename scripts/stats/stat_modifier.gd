@@ -24,6 +24,7 @@ enum StatType {
 	GOLD_MULT,
 	PICKUP_RADIUS,
 	COOLDOWN_REDUCTION,
+	STEALTH,
 }
 
 @export var stat: StatType
