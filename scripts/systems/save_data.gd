@@ -28,6 +28,12 @@ var npc_states: Dictionary = {}  # npc_name -> {talked, flags}
 # Pets
 var pet_data: Array = []  # [{type, name, level, xp, active}]
 
+# Player progression
+var player_level: int = 1
+var player_xp: int = 0
+var stat_points_unspent: int = 0
+var stat_allocations: Dictionary = {}  # "vitality" -> count
+
 const SAVE_PATH = "user://save_data.tres"
 
 static func load_game() -> SaveData:

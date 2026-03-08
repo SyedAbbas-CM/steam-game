@@ -23,6 +23,11 @@ extends Resource
 @export var ability_description: String = ""
 @export var ability_cost: int = 0  # resource cost to use
 
+@export_group("Stats")
+@export var base_mp: int = 20
+@export var base_weight: float = 1.0
+@export var base_acceleration: float = 1.0
+
 @export_group("Visuals")
 @export var loy_tile_index: int = 160  # LoY char sprite index
 @export var sprite_color: Color = Color.WHITE

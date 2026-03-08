@@ -7,6 +7,7 @@ var damage: int = 1
 var pierce_count: int = 0
 var homing_strength: float = 0.0
 var lifetime: float = 3.0
+var is_crit: bool = false
 var _hits_remaining: int = 1
 
 func _ready() -> void:
@@ -16,9 +17,14 @@ func _ready() -> void:
 	var sprite = $Sprite2D as Sprite2D
 	if is_player_bullet:
 		var img = Image.create(3, 3, false, Image.FORMAT_RGBA8)
-		img.fill(Color.YELLOW)
-		sprite.texture = ImageTexture.create_from_image(img)
-		sprite.scale = Vector2(1, 1)
+		if is_crit:
+			img.fill(Color(1.0, 1.0, 0.3))  # bright white-yellow for crits
+			sprite.texture = ImageTexture.create_from_image(img)
+			sprite.scale = Vector2(1.5, 1.5)
+		else:
+			img.fill(Color.YELLOW)
+			sprite.texture = ImageTexture.create_from_image(img)
+			sprite.scale = Vector2(1, 1)
 	else:
 		var img = Image.create(3, 3, false, Image.FORMAT_RGBA8)
 		img.fill(Color(1.0, 0.2, 0.2))  # bright red

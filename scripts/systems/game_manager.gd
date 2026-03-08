@@ -15,10 +15,12 @@ func _ready() -> void:
 
 func start_dungeon_run(biome_name: String) -> void:
 	pending_biome_name = biome_name
+	_save_player_level()
 	_transition_to_scene("res://scenes/dungeon/dungeon.tscn", "Entering dungeon...")
 
 func return_to_overworld() -> void:
 	pending_biome_name = ""
+	_save_player_level()
 	# Use .scn (binary) for faster parsing than .tscn (text)
 	if ResourceLoader.exists("res://scenes/overworld/overworld.scn"):
 		_transition_to_scene("res://scenes/overworld/overworld.scn", "Loading world...")
@@ -96,6 +98,11 @@ func on_run_ended(run_state: RunState) -> void:
 	add_relics(run_state.run_relics)
 	add_troop_tokens(run_state.run_troop_tokens)
 
+	# Save player level data from the active player
+	var player = get_tree().get_first_node_in_group("player")
+	if player and player.get_node_or_null("LevelSystem"):
+		save_level_data(player.get_node("LevelSystem"))
+
 	save_data.save_game()
 
 func get_gold() -> int:
@@ -106,3 +113,25 @@ func get_relics() -> int:
 
 func get_troop_tokens() -> int:
 	return save_data.troop_tokens
+
+func save_level_data(level_system: LevelSystem) -> void:
+	if not save_data or not level_system:
+		return
+	save_data.player_level = level_system.level
+	save_data.player_xp = level_system.xp
+	save_data.stat_points_unspent = level_system.unspent_stat_points
+	save_data.stat_allocations = level_system.allocated.duplicate()
+	save_data.save_game()
+
+func _save_player_level() -> void:
+	var player = get_tree().get_first_node_in_group("player")
+	if player and player.get_node_or_null("LevelSystem"):
+		save_level_data(player.get_node("LevelSystem"))
+
+func load_level_data(level_system: LevelSystem) -> void:
+	if not save_data or not level_system:
+		return
+	level_system.level = save_data.player_level
+	level_system.xp = save_data.player_xp
+	level_system.unspent_stat_points = save_data.stat_points_unspent
+	level_system.allocated = save_data.stat_allocations.duplicate()

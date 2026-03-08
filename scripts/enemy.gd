@@ -615,6 +615,11 @@ func _die() -> void:
 	if definition and definition.attack_type == EnemyDefinition.AttackType.SPLIT and definition.split_definition:
 		_split_on_death()
 
+	# Grant XP to player
+	if definition and definition.xp_value > 0 and is_instance_valid(player):
+		if player.has_method("gain_xp"):
+			player.gain_xp(definition.xp_value)
+
 	if drop_table:
 		var dropped_item = drop_table.roll()
 		if dropped_item:

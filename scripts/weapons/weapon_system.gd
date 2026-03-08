@@ -56,7 +56,17 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	bullet.direction = data["direction"]
 	bullet.is_player_bullet = true
 	bullet.speed = equipment_manager.get_bullet_speed() * data["speed_mult"]
-	bullet.damage = equipment_manager.get_damage()
+	var base_damage = equipment_manager.get_damage()
+
+	# Crit roll: chance = luck / 2 %
+	var luck = equipment_manager.get_luck()
+	var crit_chance = luck / 2.0
+	if crit_chance > 0 and randf() * 100.0 < crit_chance:
+		bullet.is_crit = true
+		bullet.damage = int(base_damage * equipment_manager.get_crit_damage())
+	else:
+		bullet.damage = base_damage
+
 	bullet.pierce_count = equipment_manager.get_pierce_count()
 	bullet.lifetime = equipment_manager.get_bullet_lifetime()
 

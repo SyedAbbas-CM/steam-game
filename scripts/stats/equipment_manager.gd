@@ -73,10 +73,17 @@ func unequip(item: EquipmentItem) -> void:
 	equipped_items.erase(item)
 	stats_changed.emit()
 
+var level_system: LevelSystem  # Set by player on ready
+
 func get_stat(stat_type: StatModifier.StatType) -> float:
 	var base_value: float = _get_base_value(stat_type)
 	var flat_sum: float = 0.0
 	var percent_sum: float = 0.0
+
+	# Level bonuses (auto per-level + allocated stat points)
+	if level_system:
+		flat_sum += level_system.get_level_bonus(stat_type)
+		flat_sum += level_system.get_allocation_bonus(stat_type)
 
 	for item in equipped_items:
 		for mod in item.modifiers:
@@ -97,6 +104,19 @@ func _get_base_value(stat_type: StatModifier.StatType) -> float:
 		StatModifier.StatType.SPREAD_ANGLE: return base_stats.spread_angle
 		StatModifier.StatType.PIERCE_COUNT: return base_stats.pierce_count
 		StatModifier.StatType.BULLET_LIFETIME: return base_stats.bullet_lifetime
+		StatModifier.StatType.MAX_MP: return base_stats.max_mp
+		StatModifier.StatType.HP_REGEN: return base_stats.hp_regen
+		StatModifier.StatType.MP_REGEN: return base_stats.mp_regen
+		StatModifier.StatType.LUCK: return base_stats.luck
+		StatModifier.StatType.CRIT_DAMAGE: return base_stats.crit_damage
+		StatModifier.StatType.ARMOR: return base_stats.armor
+		StatModifier.StatType.WEIGHT: return base_stats.weight
+		StatModifier.StatType.ACCELERATION: return base_stats.acceleration
+		StatModifier.StatType.DODGE_CHANCE: return base_stats.dodge_chance
+		StatModifier.StatType.XP_MULT: return base_stats.xp_mult
+		StatModifier.StatType.GOLD_MULT: return base_stats.gold_mult
+		StatModifier.StatType.PICKUP_RADIUS: return base_stats.pickup_radius
+		StatModifier.StatType.COOLDOWN_REDUCTION: return base_stats.cooldown_reduction
 	return 0.0
 
 func get_move_speed() -> float: return get_stat(StatModifier.StatType.MOVE_SPEED)
@@ -108,3 +128,16 @@ func get_spread_angle() -> float: return get_stat(StatModifier.StatType.SPREAD_A
 func get_pierce_count() -> int: return int(get_stat(StatModifier.StatType.PIERCE_COUNT))
 func get_max_hp() -> int: return int(get_stat(StatModifier.StatType.MAX_HP))
 func get_bullet_lifetime() -> float: return get_stat(StatModifier.StatType.BULLET_LIFETIME)
+func get_max_mp() -> float: return get_stat(StatModifier.StatType.MAX_MP)
+func get_hp_regen() -> float: return get_stat(StatModifier.StatType.HP_REGEN)
+func get_mp_regen() -> float: return get_stat(StatModifier.StatType.MP_REGEN)
+func get_luck() -> float: return get_stat(StatModifier.StatType.LUCK)
+func get_crit_damage() -> float: return get_stat(StatModifier.StatType.CRIT_DAMAGE)
+func get_armor() -> float: return get_stat(StatModifier.StatType.ARMOR)
+func get_weight() -> float: return get_stat(StatModifier.StatType.WEIGHT)
+func get_acceleration() -> float: return get_stat(StatModifier.StatType.ACCELERATION)
+func get_dodge_chance() -> float: return get_stat(StatModifier.StatType.DODGE_CHANCE)
+func get_xp_mult() -> float: return get_stat(StatModifier.StatType.XP_MULT)
+func get_gold_mult() -> float: return get_stat(StatModifier.StatType.GOLD_MULT)
+func get_pickup_radius() -> float: return get_stat(StatModifier.StatType.PICKUP_RADIUS)
+func get_cooldown_reduction() -> float: return get_stat(StatModifier.StatType.COOLDOWN_REDUCTION)
