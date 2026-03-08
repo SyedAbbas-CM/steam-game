@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1_ms4ck"]
+
+[resource]
+script = ExtResource("1_ms4ck")
+commands = [{
+"cmd": "showDialog",
+"name": "Priestess",
+"options": [{
+"name": "Hail",
+"script": []
+}],
+"portrait": 153,
+"text": "Welcome to the Shrine of Gannara, god of travel. Be warned of the catacombs here - they are full of dangers"
+}]

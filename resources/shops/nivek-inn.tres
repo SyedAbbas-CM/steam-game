@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "nivek-inn"
+shop_type = "inn"
+shop_name = "Tangy"
+portrait = 153
+title = "The Backward Bup"
+welcome = "Come in, come in, what can I get you?"
+nomoney = "I may be short, but I'm not stupid. You need to pay!"
+buy_text = "Here you go, come again!"
+sell_text = "Wow, I'll take that, for sure."
+stock = [{ "item_name": "Meat", "required_quest": "" }, { "item_name": "Fishing Pole", "required_quest": "" }, { "item_name": "Spade", "required_quest": "" }, { "item_name": "Trap", "required_quest": "" }, { "item_name": "Powder Keg", "required_quest": "" }, { "item_name": "Gold Plate", "required_quest": "" }, { "item_name": "Lava Rod", "required_quest": "" }, { "item_name": "Pet Food", "required_quest": "" }]

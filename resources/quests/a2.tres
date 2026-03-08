@@ -1,0 +1,122 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_urgaf"]
+
+[resource]
+script = ExtResource("1_urgaf")
+id = "a2"
+title = "The Mighty Horn"
+level = 30
+location = "nord1"
+target_location = "heim"
+start_script = [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "a2"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 169,
+"text": "My son is ill. We need Minotaur horn ground down to save him!"
+}]
+}],
+"portrait": 169,
+"text": "Will you slay the beast and fetch it's horn from Dondheim dungeon?"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Mintoaur Horn"
+}]
+events = [{
+"param": "Minotaur",
+"script": [{
+"attribute": "count-Mintoaur Horn",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Mintoaur Horn"
+}, {
+"attribute": "count-Mintoaur Horn",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 169,
+"text": "Thank the gods hero! Now return the horn before my son dies!"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "nord1",
+"script": [{
+"attribute": "count-Mintoaur Horn",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 169,
+"text": "My son is dying, please help!"
+}]
+}, {
+"attribute": "count-Mintoaur Horn",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "4000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Mintoaur Horn"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Lined Boots"
+}, {
+"cmd": "getItem",
+"count": "8000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 169,
+"text": "My son is dying, please help!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

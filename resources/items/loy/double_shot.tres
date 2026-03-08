@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Double Shot"
+description = "Shoot two arrows at once (need special arrows)"
+slot_type = 4
+rarity = 0

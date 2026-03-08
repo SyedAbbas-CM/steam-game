@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "tor-weapon"
+shop_type = "weapon"
+shop_name = "Iver"
+portrait = 215
+title = "The Mighty Cutless"
+welcome = "Welcome matey, to the finest weapon store in seven seas!"
+nomoney = "You need more treasure matey!"
+buy_text = "A great deal!"
+sell_text = "A deal has been struck!"
+stock = [{ "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Hunter Knife", "required_quest": "" }, { "item_name": "Wooden Shield", "required_quest": "" }, { "item_name": "Leather Armor", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Explosion Arrow", "required_quest": "" }, { "item_name": "Lined Cap", "required_quest": "a1" }, { "item_name": "Mustard Tome", "required_quest": "a10" }, { "item_name": "Juganaught Plate", "required_quest": "a17" }, { "item_name": "Clawed Gloves", "required_quest": "a7" }, { "item_name": "Lava Rod", "required_quest": "a23" }]

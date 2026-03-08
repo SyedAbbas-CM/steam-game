@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Medusa"
+description = "Snake-haired witch whose spiraling venom fills the arena with toxic death"
+max_hp = 220
+move_speed = 14.0
+contact_damage = 5
+level = 50
+kingdom = "magical"
+size_class = 2
+hostile = true
+attack_type = 14
+attack_damage = 40
+attack_speed = 1.4
+bullet_speed = 48
+bullet_count = 10
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 100.0
+ignores_terrain = false
+poison_chance = 0.5
+boss_phases = 3
+phase_2_attack = 3
+phase_3_attack = 14
+phase_2_bullet_count = 14
+phase_3_bullet_count = 18
+summon_on_phase_change = true
+summon_phase_count = 3
+use_loy_sprite = true
+loy_tile_index = 39
+sprite_color = Color(0.5, 0.9, 0.4, 1)
+xp_value = 155
+score_value = 310

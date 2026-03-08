@@ -1,0 +1,99 @@
+[gd_scene format=3 uid="uid://1yjdg6132p1s"]
+
+[ext_resource type="Script" uid="uid://cf24ch5mupaer" path="res://scripts/dungeon/dungeon_scene.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://b6fyqtc45muq" path="res://scripts/dungeon/dungeon_manager.gd" id="2_dungeon"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/ui/reward_screen.tscn" id="4_reward"]
+[ext_resource type="PackedScene" path="res://scenes/ui/death_screen.tscn" id="5_death"]
+[ext_resource type="PackedScene" path="res://scenes/ui/inventory_screen.tscn" id="7_inventory"]
+[ext_resource type="PackedScene" path="res://scenes/ui/touch_controls.tscn" id="8_touch"]
+[ext_resource type="TileSet" path="res://assets/tilesets/environment_tileset.tres" id="6_tileset"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_1"]
+font_size = 10
+outline_size = 2
+outline_color = Color(0, 0, 0, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_small"]
+font_size = 8
+font_color = Color(0.8, 0.8, 0.8, 1)
+outline_size = 1
+outline_color = Color(0, 0, 0, 1)
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="DungeonManager" type="Node2D" parent="."]
+script = ExtResource("2_dungeon")
+
+[node name="Floor" type="TileMapLayer" parent="DungeonManager"]
+tile_set = ExtResource("6_tileset")
+z_index = 0
+
+[node name="Liquids" type="TileMapLayer" parent="DungeonManager"]
+tile_set = ExtResource("6_tileset")
+z_index = 1
+
+[node name="Walls" type="TileMapLayer" parent="DungeonManager"]
+tile_set = ExtResource("6_tileset")
+z_index = 2
+
+[node name="Decorations" type="TileMapLayer" parent="DungeonManager"]
+tile_set = ExtResource("6_tileset")
+z_index = 3
+
+[node name="RoomTriggers" type="Node2D" parent="DungeonManager"]
+
+[node name="EnemyContainer" type="Node2D" parent="DungeonManager"]
+z_index = 1
+
+[node name="HazardContainer" type="Node2D" parent="DungeonManager"]
+
+[node name="Player" parent="DungeonManager" instance=ExtResource("3_player")]
+z_index = 1
+
+[node name="Camera2D" type="Camera2D" parent="DungeonManager/Player"]
+zoom = Vector2(7, 7)
+
+[node name="Bullets" type="Node2D" parent="."]
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="HPLabel" type="Label" parent="HUD"]
+offset_left = 10.0
+offset_top = 5.0
+offset_right = 200.0
+offset_bottom = 20.0
+text = "HP: 5/5"
+label_settings = SubResource("LabelSettings_1")
+
+[node name="FloorLabel" type="Label" parent="HUD"]
+offset_left = 10.0
+offset_top = 20.0
+offset_right = 200.0
+offset_bottom = 35.0
+text = "Floor 1"
+label_settings = SubResource("LabelSettings_small")
+
+[node name="GoldLabel" type="Label" parent="HUD"]
+offset_left = 10.0
+offset_top = 33.0
+offset_right = 200.0
+offset_bottom = 48.0
+text = "Gold: 0"
+label_settings = SubResource("LabelSettings_small")
+
+[node name="ItemsLabel" type="Label" parent="HUD"]
+offset_left = 10.0
+offset_top = 46.0
+offset_right = 300.0
+offset_bottom = 61.0
+label_settings = SubResource("LabelSettings_small")
+
+[node name="RewardScreen" parent="." instance=ExtResource("4_reward")]
+
+[node name="DeathScreen" parent="." instance=ExtResource("5_death")]
+
+[node name="InventoryScreen" parent="." instance=ExtResource("7_inventory")]
+
+[node name="TouchControls" parent="." instance=ExtResource("8_touch")]

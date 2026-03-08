@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Rock Troll"
+description = "Massive stone-skinned beast that explodes into shrapnel when killed"
+max_hp = 85
+move_speed = 10.0
+contact_damage = 5
+level = 8
+kingdom = "orc"
+size_class = 1
+hostile = true
+attack_type = 7
+attack_damage = 16
+attack_speed = 2.8
+bullet_speed = 70
+bullet_count = 1
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 80.0
+ignores_terrain = false
+slam_radius = 32.0
+explodes_on_death = true
+explode_radius = 28.0
+use_loy_sprite = true
+loy_tile_index = 38
+sprite_color = Color(0.6, 0.8, 0.4, 1)
+xp_value = 58
+score_value = 116

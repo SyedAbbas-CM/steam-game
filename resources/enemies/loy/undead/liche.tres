@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Liche"
+description = "An undead sorcerer that drains your soul while pelting you with dark bolts"
+max_hp = 60
+move_speed = 16.0
+contact_damage = 2
+level = 8
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 2
+attack_damage = 11
+attack_speed = 1.0
+bullet_speed = 75
+bullet_count = 4
+preferred_distance = 55.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 90.0
+ignores_terrain = false
+drains_resource = true
+use_loy_sprite = true
+loy_tile_index = 62
+sprite_color = Color(0.8, 0.85, 1, 1)
+xp_value = 45
+score_value = 90

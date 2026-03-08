@@ -1,0 +1,138 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_qh7fr"]
+
+[resource]
+script = ExtResource("1_qh7fr")
+id = "end"
+title = "Vanquish Evil"
+level = 175
+location = "aria"
+start_script = [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Oh yes?",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Ah ha!",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "I am!",
+"script": [{
+"cmd": "startQuest",
+"id": "end"
+}, {
+"cmd": "set",
+"id": "end",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Ok",
+"script": []
+}],
+"portrait": 147,
+"text": "Yore has been invested with evil due to the presence of a evil being."
+}]
+}, {
+"name": "No!",
+"script": []
+}],
+"portrait": 147,
+"text": "Deathbringer has been sealed in a catacomb south of Thule"
+}]
+}],
+"portrait": 147,
+"text": "Until a hero appears to slay he once and for all, are you that hero?"
+}]
+}],
+"portrait": 147,
+"text": "Then go! Slay Deathbringer and become a Legend of Yore!"
+}]
+events = [{
+"param": "Smorag",
+"script": [{
+"cmd": "showDialog",
+"name": "Smorag",
+"options": [{
+"name": "Ok",
+"script": []
+}],
+"portrait": 511,
+"text": ".ssshh.. You may have slain me, but my master will vanquish you!"
+}],
+"type": "kill"
+}, {
+"param": "Deathbringer",
+"script": [{
+"cmd": "set",
+"id": "end",
+"index": "1",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Deathbringer",
+"options": [{
+"name": "Ok",
+"script": []
+}],
+"portrait": 510,
+"text": "Nooooooo! My rein is at end! Destroyed by one such as you.. I will return!"
+}],
+"type": "kill"
+}, {
+"param": "aria",
+"script": [{
+"attribute": "session-end-1",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Not yet!",
+"script": []
+}],
+"portrait": 147,
+"text": "Have you found the evil one yet?"
+}]
+}, {
+"attribute": "session-end-1",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "30000"
+}, {
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "I will?",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Thank you!",
+"script": []
+}],
+"portrait": 147,
+"text": "The land rejoices for your victory! You shall be honoured across the land of Yore!"
+}]
+}],
+"portrait": 147,
+"text": "You are now a LEGEND OF YORE!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

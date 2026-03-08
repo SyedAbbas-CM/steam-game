@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/spectre.tres" id="2_spectre"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/liche.tres" id="3_liche"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/vampire.tres" id="4_vampire"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/mummy.tres" id="5_mummy"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/ghost.tres" id="6_ghost"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/magical/genie.tres" id="7_boss"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Deep Crypt"
+theme = "grey"
+enemy_pool = [ExtResource("2_spectre"), ExtResource("3_liche"), ExtResource("4_vampire"), ExtResource("5_mummy"), ExtResource("6_ghost")]
+hazard_tiles = Array[Vector2i]([Vector2i(1, 17), Vector2i(1, 18)])
+decoration_tiles = Array[Vector2i]([])
+liquid_type = "poison"
+hazard_damage = 1
+hazard_interval = 1.0
+hazard_intensity = 0.35
+trap_density = 0.03
+web_bridge_density = 0.2
+allowed_transitions = Array[int]([0, 1, 2, 3])
+min_floor = 7
+max_floor = 9
+boss_definition = ExtResource("7_boss")
+difficulty_tier = 2
+base_difficulty = 4

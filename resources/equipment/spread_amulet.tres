@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EquipmentItem" format=3 uid="uid://crm5gbyoqyyp2"]
+
+[ext_resource type="Script" uid="uid://b5xxlx52j1xwg" path="res://scripts/stats/equipment_item.gd" id="1"]
+[ext_resource type="Script" uid="uid://dmu5yivm3b28s" path="res://scripts/weapons/bullet_modifier.gd" id="1_kfo3m"]
+[ext_resource type="Script" uid="uid://k0224xd25o7s" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="mod_count"]
+script = ExtResource("2")
+stat = 5
+flat_bonus = 2.0
+
+[sub_resource type="Resource" id="mod_spread"]
+script = ExtResource("2")
+stat = 6
+flat_bonus = 0.6
+
+[resource]
+script = ExtResource("1")
+item_name = "Spread Amulet"
+description = "+2 bullets, wider spread"
+modifiers = Array[ExtResource("2")]([SubResource("mod_count"), SubResource("mod_spread")])
+rarity = 2

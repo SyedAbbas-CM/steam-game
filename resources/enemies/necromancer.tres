@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/skeleton_minion.tres" id="2_skeleton"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Necromancer"
+max_hp = 5
+move_speed = 12.0
+contact_damage = 1
+attack_type = 6
+attack_damage = 1
+attack_speed = 4.0
+bullet_speed = 0.0
+bullet_count = 0
+preferred_distance = 60.0
+summon_count = 2
+summon_definition = ExtResource("2_skeleton")
+sprite_frame = 144
+sprite_color = Color(0.5, 0.2, 0.6, 1)
+xp_value = 4
+score_value = 30

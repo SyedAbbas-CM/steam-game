@@ -1,0 +1,60 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "ynys"
+zone_name = "Port Ynys"
+tileset = 224
+height = 35
+world_pos = Vector2i(106, 37)
+dungeon_base = "Ynys-Base"
+dungeon_count = 5
+description = "The port of Ynys"
+baked_offset = Vector2i(-920, -580)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "moors",
+"tx": 12,
+"ty": 29,
+"x": 12,
+"y": 0
+}])
+npcs = Array[Dictionary]([{
+"file": "scripts/ynns-ebb.xml",
+"name": "Ebb",
+"portrait": 213,
+"tile": 212,
+"type": "scriptfile",
+"x": 14,
+"y": 32
+}, {
+"name": "Zadan",
+"portrait": 150,
+"tile": 134,
+"type": "shop",
+"x": 17,
+"y": 11
+}, {
+"name": "Nazam",
+"portrait": 201,
+"tile": 185,
+"type": "shop",
+"x": 5,
+"y": 6
+}, {
+"name": "Valensh",
+"portrait": 202,
+"tile": 186,
+"type": "shop",
+"x": 6,
+"y": 15
+}, {
+"name": "Gasdan",
+"portrait": 151,
+"tile": 135,
+"type": "elder",
+"x": 15,
+"y": 18
+}])

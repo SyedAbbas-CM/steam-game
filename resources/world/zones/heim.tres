@@ -1,0 +1,129 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "heim"
+zone_name = "Dondheim City"
+tileset = 240
+width = 20
+height = 20
+world_pos = Vector2i(42, 30)
+dungeon_base = "Heim-Dungeons"
+dungeon_count = 6
+description = "The northern city of Donheim rests in the mountains. A gruff and busy place."
+baked_offset = Vector2i(104, -476)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "mnt1",
+"tx": 48,
+"ty": 10,
+"x": 0,
+"y": 16
+}, {
+"target": "crt1",
+"tx": 20,
+"ty": 19,
+"x": 16,
+"y": 0
+}])
+npcs = Array[Dictionary]([{
+"message": "Stay back from the palace child!",
+"name": "Guard",
+"portrait": 149,
+"tile": 61,
+"type": "message",
+"x": 15,
+"y": 1
+}, {
+"message": "You have no business here, be gone!",
+"name": "Guard",
+"portrait": 149,
+"tile": 61,
+"type": "message",
+"x": 17,
+"y": 1
+}, {
+"name": "Thor",
+"portrait": 155,
+"tile": 139,
+"type": "shop",
+"x": 5,
+"y": 5
+}, {
+"name": "Odin",
+"portrait": 156,
+"tile": 140,
+"type": "elder",
+"x": 10,
+"y": 10
+}, {
+"name": "Balder",
+"portrait": 150,
+"tile": 134,
+"type": "shop",
+"x": 10,
+"y": 5
+}, {
+"name": "Loki",
+"portrait": 152,
+"tile": 136,
+"type": "shop",
+"x": 10,
+"y": 15
+}, {
+"file": "scripts/stable-heim.xml",
+"name": "Stable",
+"portrait": 173,
+"tile": 172,
+"type": "scriptfile",
+"x": 3,
+"y": 14
+}, {
+"message": "Neigh!",
+"name": "Horse",
+"portrait": 175,
+"tile": 174,
+"type": "message",
+"x": 2,
+"y": 14
+}, {
+"name": "Leon",
+"portrait": 203,
+"tile": 187,
+"type": "craft",
+"x": 2,
+"y": 9
+}])
+houses = Array[Dictionary]([{
+"height": 8,
+"sign": "Vahalla's Entrance / / Magical items and powerful charms!",
+"width": 7,
+"x": 7,
+"y": 12
+}, {
+"height": 7,
+"sign": "War Room / / Matters of importance and Ale only!",
+"width": 8,
+"x": 6,
+"y": 6
+}, {
+"height": 7,
+"sign": "",
+"width": 7,
+"x": 0,
+"y": 6
+}, {
+"height": 6,
+"sign": "Thor's Armory / / Quality weapons for dispatching evil!",
+"width": 8,
+"x": 0,
+"y": 1
+}, {
+"height": 7,
+"sign": "The Rusty Axe / / Fine Ale!",
+"width": 7,
+"x": 7,
+"y": 0
+}])

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="mod_0"]
+script = ExtResource("2")
+stat = 2
+flat_bonus = 18.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 0
+flat_bonus = 4.0
+
+[resource]
+script = ExtResource("1")
+item_name = "Malorian Crook"
+description = "A golden crook"
+slot_type = 0
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
+rarity = 2

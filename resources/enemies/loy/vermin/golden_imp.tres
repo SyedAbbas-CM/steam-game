@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Golden Imp"
+description = "A dark imp with glowing eyes"
+max_hp = 116
+move_speed = 22.0
+contact_damage = 5
+level = 25
+kingdom = "vermin"
+size_class = 0
+hostile = true
+attack_type = 5
+attack_damage = 8
+attack_speed = 0.8
+bullet_speed = 85
+bullet_count = 5
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 120.0
+ignores_terrain = false
+shield_hp = 15
+boss_phases = 2
+phase_2_attack = 3
+phase_2_bullet_count = 6
+use_loy_sprite = true
+loy_tile_index = 373
+sprite_color = Color(0.45, 0.6, 0.35, 1)
+xp_value = 250
+score_value = 500

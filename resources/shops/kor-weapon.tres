@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "kor-weapon"
+shop_type = "weapon"
+shop_name = "Mollqui"
+portrait = 211
+title = "Mighty Metal"
+welcome = "Stand back I'm forging weapons, what do you want?"
+nomoney = "I don't work for free!"
+buy_text = "Take this, you know how to use it right?"
+sell_text = "I'll take it, I can probably make it into something else!"
+stock = [{ "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Hunter Knife", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Explosion Arrow", "required_quest": "" }, { "item_name": "Lion Blade", "required_quest": "" }]

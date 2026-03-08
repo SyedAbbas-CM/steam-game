@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Goblin"
+description = "Crafty ranged fighter that peppers you with a spread of crude arrows"
+max_hp = 25
+move_speed = 24.0
+contact_damage = 2
+level = 3
+kingdom = "orc"
+size_class = 0
+hostile = true
+attack_type = 2
+attack_damage = 4
+attack_speed = 1.4
+bullet_speed = 65
+bullet_count = 3
+preferred_distance = 45.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 80.0
+ignores_terrain = false
+use_loy_sprite = true
+loy_tile_index = 4
+sprite_color = Color(0.6, 0.8, 0.4, 1)
+xp_value = 18
+score_value = 36

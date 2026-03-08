@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/blob.tres" id="2_blob"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/imp.tres" id="3_imp"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/animal/bear.tres" id="4_bear"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/animal/wild_dog.tres" id="5_wild_dog"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/goblin.tres" id="6_goblin"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Flooded Cavern"
+theme = "blue"
+enemy_pool = [ExtResource("2_blob"), ExtResource("3_imp"), ExtResource("4_bear"), ExtResource("5_wild_dog"), ExtResource("6_goblin")]
+hazard_tiles = Array[Vector2i]([Vector2i(4, 17), Vector2i(5, 17)])
+decoration_tiles = Array[Vector2i]([Vector2i(10, 16), Vector2i(12, 16), Vector2i(13, 16)])
+liquid_type = "water"
+hazard_damage = 0
+hazard_interval = 0.5
+hazard_intensity = 0.4
+trap_density = 0.01
+web_bridge_density = 0.35
+allowed_transitions = Array[int]([0, 1, 2, 3])
+min_floor = 4
+max_floor = 6
+difficulty_tier = 3
+base_difficulty = 0

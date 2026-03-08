@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Zomboid"
+description = "An undead warrior"
+max_hp = 118
+move_speed = 26.0
+contact_damage = 5
+level = 9
+kingdom = "vermin"
+size_class = 0
+hostile = true
+attack_type = 5
+attack_damage = 8
+attack_speed = 1.2
+bullet_speed = 70
+bullet_count = 5
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 90.0
+ignores_terrain = false
+shield_hp = 15
+use_loy_sprite = true
+loy_tile_index = 392
+sprite_color = Color(0.45, 0.6, 0.35, 1)
+xp_value = 97
+score_value = 195

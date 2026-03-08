@@ -1,0 +1,114 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1_xkvpy"]
+
+[resource]
+script = ExtResource("1_xkvpy")
+commands = [{
+"attribute": "session-notch-0",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"attribute": "session-notch-0",
+"cmd": "if",
+"compare": "2",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Notch",
+"options": [{
+"name": "Yes",
+"script": [{
+"cmd": "showDialog",
+"name": "Notch",
+"options": [{
+"name": "I'll find it!",
+"script": [{
+"cmd": "set",
+"id": "notch",
+"index": "0",
+"value": "1"
+}]
+}],
+"portrait": 509,
+"text": "Well met fellow! I seem to have lost my trademark hat, could you find it for me?"
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 509,
+"text": "Ah great! I think I lost it down on the southern island!"
+}]
+}]
+}, {
+"attribute": "session-notch-0",
+"cmd": "if",
+"compare": "2",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Notch",
+"options": [{
+"name": "Yes",
+"script": []
+}],
+"portrait": 509,
+"text": "Hello again, are you still here? Begone mortal!"
+}]
+}, {
+"attribute": "session-notch-0",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"attribute": "count-Notch's Hat",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Notch",
+"options": [{
+"name": "No",
+"script": []
+}],
+"portrait": 509,
+"text": "Well if it's not you again, have you found my hat?"
+}]
+}, {
+"attribute": "count-Notch's Hat",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Notch",
+"options": [{
+"name": "But.. um..",
+"script": [{
+"cmd": "showDialog",
+"name": "Notch",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "getItem",
+"count": "20000",
+"name": "Gold"
+}, {
+"cmd": "set",
+"id": "notch",
+"index": "0",
+"value": "2"
+}]
+}],
+"portrait": 509,
+"text": "Oh, you found it! Keep it, I'm sure it will help you and I have 100s more"
+}]
+}],
+"portrait": 509,
+"text": "Don't forget to let me know you found it via Twitter! (@notch)"
+}]
+}]
+}]

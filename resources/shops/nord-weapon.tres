@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "nord-weapon"
+shop_type = "weapon"
+shop_name = "Able"
+portrait = 169
+title = "Icy Anvil"
+welcome = "Ah, a customer, what can the Anvil do for you?"
+nomoney = "You'll need coins for that"
+buy_text = "Sale, thank you kindly!"
+sell_text = "May it serve you well."
+stock = [{ "item_name": "Dagger", "required_quest": "" }, { "item_name": "Sword", "required_quest": "" }, { "item_name": "Bow", "required_quest": "" }, { "item_name": "Boots", "required_quest": "" }, { "item_name": "Robes", "required_quest": "" }, { "item_name": "Staff", "required_quest": "" }, { "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Hunter Knife", "required_quest": "" }, { "item_name": "Wooden Shield", "required_quest": "" }, { "item_name": "Leather Armor", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Shimmering Shield", "required_quest": "" }, { "item_name": "Frost Arrow", "required_quest": "" }, { "item_name": "Lined Boots", "required_quest": "a2" }, { "item_name": "Magicians Tunic", "required_quest": "a14" }, { "item_name": "Book of Majesty", "required_quest": "a20" }, { "item_name": "Shadow Boots", "required_quest": "a6" }, { "item_name": "Spiked Club", "required_quest": "a9" }]

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CompanionDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/companions/companion_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+companion_id = "archer"
+companion_name = "Archer"
+type = 0
+sprite_frame = 17
+hp = 8
+damage = 1
+attack_speed = 0.8
+move_speed = 55.0
+attack_range = 70.0
+behavior = 0
+follow_distance = 25.0

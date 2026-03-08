@@ -1,0 +1,96 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_n6ajn"]
+
+[resource]
+script = ExtResource("1_n6ajn")
+id = "a10"
+title = "Creepers Peepers"
+level = 32
+location = "gomb"
+target_location = "for1"
+properties = [{
+"index": 0,
+"name": "Creepers Killed",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Oh yes?",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Sure",
+"script": [{
+"cmd": "startQuest",
+"id": "a10"
+}]
+}, {
+"name": "Nay!",
+"script": []
+}],
+"portrait": 200,
+"text": "The creepers are over running us, please help! We'll pay you!"
+}]
+}],
+"portrait": 200,
+"text": "Will you kill 20 creepers for the town of Gombard?"
+}]
+events = [{
+"param": "Creeper",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "gomb",
+"script": [{
+"attribute": "session-a10-0",
+"cmd": "if",
+"compare": "20",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Yes Sir!",
+"script": []
+}],
+"portrait": 200,
+"text": "We need help, the creepers are getting closer!"
+}]
+}, {
+"attribute": "session-a10-0",
+"cmd": "if",
+"compare": "19",
+"operation": "gt",
+"script": [{
+"cmd": "getItem",
+"count": "1500",
+"name": "Gold"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Mustard Tome"
+}, {
+"cmd": "getExp",
+"value": "1500"
+}, {
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 200,
+"text": "Oh, thank you hero! Take this as payment."
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

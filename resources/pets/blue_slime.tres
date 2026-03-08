@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="PetDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/pet_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 3
+pet_type = "Blue Slime"
+search_distance = 10
+wander_distance = 8
+max_level = 40
+owner_level = 75
+cost = 100000
+recover_rate = 0.1
+base_attack = 4
+base_defense = 5
+base_hp = 25
+base_charge = 0
+hp_gain = 3
+attack_gain = 1.5
+defense_gain = 1
+charge_gain = 0
+abilities = [{ "level": 12, "name": "poison", "desc": "Poison Touch" }, { "level": 23, "name": "poison2", "desc": "Poison Slime" }, { "level": 33, "name": "poison3", "desc": "Poison Grab" }]
+evolve_level = 30
+evolve_name = "Bluholder"
+possible_names = PackedStringArray("Goop", "Fry", "Gish", "Mookie", "Slim", "Mauve")

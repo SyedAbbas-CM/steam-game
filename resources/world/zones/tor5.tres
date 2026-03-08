@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "tor5"
+zone_name = "Hidden Cove"
+tileset = 224
+width = 47
+height = 8
+world_pos = Vector2i(70, 32)
+dungeon_base = "Inf1-Dungeons"
+description = "A hidden cove"
+baked_offset = Vector2i(1388, -364)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "tor1",
+"tx": 46,
+"ty": 16,
+"x": 0,
+"y": 3
+}])

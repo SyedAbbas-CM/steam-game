@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Aria-4"
+tileset = 8
+chests = 3
+width = 50
+height = 35
+rooms = 25
+min_monsters = 0
+max_monsters = 2
+aggro_chance = 0
+requires_key = true
+legend = ""
+monster_pool = [{ "type": "Skeleton", "chance": 5 }, { "type": "Snake", "chance": 5 }, { "type": "Cobra", "chance": 5 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 0, "items": [{ "name": "Apple", "chance": 4, "min": 1, "max": 1 }, { "name": "Red Potion", "chance": 4, "min": 1, "max": 1 }, { "name": "Town Portal", "chance": 1, "min": 1, "max": 1 }] }]

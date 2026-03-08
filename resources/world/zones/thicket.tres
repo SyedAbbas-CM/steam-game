@@ -1,0 +1,47 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "thicket"
+zone_name = "Thicket"
+tileset = 112
+world_pos = Vector2i(111, 73)
+dungeon_base = "Thicket-Base"
+dungeon_count = 5
+description = "Forrest Thicket"
+baked_offset = Vector2i(-816, -360)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "thicket2",
+"tx": 7,
+"ty": 0,
+"x": 21,
+"y": 24
+}, {
+"target": "talnivek",
+"tx": 3,
+"ty": 24,
+"x": 7,
+"y": 0
+}])
+npcs = Array[Dictionary]([{
+"name": "Spawhawk",
+"portrait": 171,
+"tile": 170,
+"type": "shop",
+"x": 4,
+"y": 20
+}])
+spawns = Array[Dictionary]([{
+"chance": 75,
+"type": "Squib",
+"x": 2,
+"y": 2
+}, {
+"chance": 75,
+"type": "Night Goblin",
+"x": 2,
+"y": 2
+}])

@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>World Map Editor — Legends of Yore</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; user-select: none; }
+
+#toolbar { background: #16213e; padding: 6px 12px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #0f3460; z-index: 10; flex-wrap: wrap; }
+#toolbar h1 { font-size: 15px; color: #e94560; margin-right: 8px; white-space: nowrap; }
+#toolbar button { background: #0f3460; color: #e0e0e0; border: 1px solid #1a4a8a; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap; }
+#toolbar button:hover { background: #1a4a8a; }
+#toolbar button.active { background: #e94560; border-color: #e94560; }
+#toolbar .sep { width: 1px; height: 22px; background: #0f3460; }
+#toolbar input { background: #0d1b2a; border: 1px solid #1a4a8a; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 11px; }
+#toolbar .info { color: #888; font-size: 10px; margin-left: auto; white-space: nowrap; }
+
+#main { display: flex; flex: 1; overflow: hidden; }
+#canvas-wrap { flex: 1; position: relative; overflow: hidden; background: #0d1117; cursor: grab; }
+#canvas-wrap.dragging { cursor: grabbing; }
+#canvas-wrap.painting { cursor: crosshair; }
+#canvas-wrap.annotating { cursor: text; }
+canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; }
+
+#panel { width: 380px; background: #16213e; border-left: 1px solid #0f3460; display: flex; flex-direction: column; overflow: hidden; }
+#panel-header { padding: 8px 12px; background: #0f3460; font-weight: 600; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+#panel-tabs { display: flex; background: #1a1a2e; border-bottom: 1px solid #0f3460; }
+#panel-tabs button { flex: 1; padding: 6px 2px; background: none; border: none; color: #888; font-size: 10px; cursor: pointer; border-bottom: 2px solid transparent; }
+#panel-tabs button.active { color: #e94560; border-bottom-color: #e94560; }
+#panel-tabs button:hover { color: #e0e0e0; }
+#panel-content { flex: 1; overflow-y: auto; padding: 8px 12px; }
+
+.field { margin-bottom: 6px; }
+.field label { display: block; font-size: 9px; color: #888; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+.field input, .field textarea, .field select { width: 100%; background: #0d1b2a; border: 1px solid #1a4a8a; color: #e0e0e0; padding: 4px 6px; border-radius: 3px; font-size: 11px; font-family: inherit; }
+.field textarea { min-height: 40px; resize: vertical; }
+.field-row { display: flex; gap: 6px; }
+.field-row .field { flex: 1; }
+
+.item-list { list-style: none; }
+.item-list li { padding: 5px 7px; background: #0d1b2a; border: 1px solid #1a4a8a; border-radius: 3px; margin-bottom: 3px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 11px; }
+.item-list li:hover { border-color: #e94560; }
+.npc-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.npc-name { flex: 1; }
+.npc-type { color: #888; font-size: 9px; }
+.btn-remove { background: none; border: none; color: #e94560; cursor: pointer; font-size: 13px; padding: 1px 4px; }
+
+/* Palette grid */
+#palette-grid { display: grid; grid-template-columns: repeat(16, 21px); gap: 1px; margin-bottom: 6px; }
+#palette-grid .ptile { width: 21px; height: 21px; cursor: pointer; border: 1px solid #1a4a8a; image-rendering: pixelated; background-size: cover; background-repeat: no-repeat; }
+#palette-grid .ptile:hover { border-color: #e94560; }
+#palette-grid .ptile.selected { border: 2px solid #e94560; }
+
+/* Annotation input popup */
+#ann-popup { position: fixed; z-index: 50; display: none; }
+#ann-popup input { background: #0d1b2a; border: 2px solid #4ade80; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 12px; width: 200px; outline: none; }
+
+/* Annotation markers on canvas */
+.ann-marker { pointer-events: none; }
+
+#statusbar { background: #0d1b2a; padding: 3px 12px; font-size: 10px; color: #666; display: flex; gap: 12px; border-top: 1px solid #0f3460; }
+.toast { position: fixed; bottom: 36px; left: 50%; transform: translateX(-50%); background: #4ade80; color: #000; padding: 6px 16px; border-radius: 5px; font-size: 12px; z-index: 100; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.toast.show { opacity: 1; }
+#loading { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 200; font-size: 16px; color: #e94560; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+    <h1>World Editor</h1>
+    <input id="author-name" placeholder="Your name" style="width:100px">
+    <div class="sep"></div>
+    <button onclick="setMode('pan')" id="btn-pan" class="active">Pan</button>
+    <button onclick="setMode('paint')" id="btn-paint">Paint</button>
+    <button onclick="setMode('annotate')" id="btn-annotate">Note</button>
+    <button onclick="toggleEraser()" id="btn-eraser">Eraser</button>
+    <div class="sep"></div>
+    <button onclick="undo()">Undo</button>
+    <button onclick="redo()">Redo</button>
+    <div class="sep"></div>
+    <button onclick="fitView()">Fit</button>
+    <button onclick="toggleLabels()" id="btn-labels" class="active">Labels</button>
+    <button onclick="toggleNpcs()" id="btn-npcs" class="active">NPCs</button>
+    <button onclick="toggleQuests()" id="btn-quests" class="active">Quests</button>
+    <div class="sep"></div>
+    <button onclick="exportChangeset()" style="background:#166534;border-color:#4ade80;color:#4ade80">Export</button>
+    <button onclick="importChangeset()">Import</button>
+    <div class="sep"></div>
+    <input type="text" id="search" placeholder="Search..." style="width:120px" oninput="filterZones(this.value)">
+    <div class="info" id="info-bar">Loading...</div>
+</div>
+
+<div id="main">
+    <div id="canvas-wrap">
+        <canvas id="map"></canvas>
+    </div>
+    <div id="panel">
+        <div id="panel-header">
+            <span id="panel-title">Select a zone</span>
+            <span id="panel-subtitle" style="color:#888;font-size:10px"></span>
+        </div>
+        <div id="panel-tabs">
+            <button class="active" data-tab="palette" onclick="switchTab('palette')">Palette</button>
+            <button data-tab="info" onclick="switchTab('info')">Info</button>
+            <button data-tab="npcs" onclick="switchTab('npcs')">NPCs</button>
+            <button data-tab="exits" onclick="switchTab('exits')">Exits</button>
+            <button data-tab="notes" onclick="switchTab('notes')">Notes</button>
+            <button data-tab="quests" onclick="switchTab('quests')">Quests</button>
+            <button data-tab="ideas" onclick="switchTab('ideas')">Ideas</button>
+        </div>
+        <div id="panel-content"></div>
+    </div>
+</div>
+
+<div id="statusbar">
+    <span id="status-zones">Zones: 0</span>
+    <span id="status-changes">Changes: 0</span>
+    <span id="status-notes">Notes: 0</span>
+    <span id="status-zoom" style="margin-left:auto"></span>
+    <span id="status-mouse"></span>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="loading">Loading world data...</div>
+<div id="ann-popup"><input id="ann-input" placeholder="Type note, press Enter"></div>
+<input type="file" id="import-file" accept=".json" style="display:none">
+
+<script>
+/*__WORLD_DATA__*/
+
+// ── State ────────────────────────────────────────────────────────────────
+let zones = [];       // flat list for rendering
+let zonesMap = {};    // id -> zone data (with grids)
+let quests = [];
+let selectedZone = null;
+let currentTab = 'palette';
+let showLabels = true;
+let showNpcs = true;
+let showQuests = true;
+let searchFilter = '';
+
+// Quest-to-zone lookup (built in init)
+let questsByZone = {};
+
+// Canvas
+const canvas = document.getElementById('map');
+const ctx = canvas.getContext('2d');
+let camX = 0, camY = 0, zoom = 1.0;
+let isDragging = false, dragStartX = 0, dragStartY = 0, dragStartCamX = 0, dragStartCamY = 0, didDrag = false;
+
+// Tile rendering
+const TILE_PX = 32;
+const ATLAS_COLS = 16;
+let maptilesImg = null, maptilesLoaded = false;
+let charsImg = null, chars2Img = null;
+const tileCache = {}; // zone_id -> offscreen canvas (for painting)
+const terrainChunks = {}; // "cx,cy" -> offscreen canvas (Godot terrain)
+const TERRAIN_CHUNK = 64; // tiles per chunk side
+let terrainData = null; // decoded terrain grid
+let terrainReady = false;
+
+// Modes
+let mode = 'pan'; // 'pan', 'paint', 'annotate'
+let eraserOn = false;
+let selectedTileIdx = 1; // default floor
+let brushSize = 1;
+let isPainting = false;
+
+// Changes tracking
+let tileChanges = {};  // {zone_id: Map("x,y" -> [x, y, oldIdx, newIdx])}
+let undoStack = [];    // [{zone_id, x, y, oldIdx, newIdx}, ...]
+let redoStack = [];
+
+// Annotations
+let annotations = {};  // {zone_id: [{x, y, text}]}
+let pendingAnnZone = null;
+let pendingAnnX = 0, pendingAnnY = 0;
+
+// Imported changeset overlay
+let importedChangeset = null;
+
+// Selected annotation (click to expand)
+let selectedAnnotation = null; // {zoneId, idx}
+
+// ── Init ─────────────────────────────────────────────────────────────────
+async function init() {
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    maptilesImg = new Image();
+    maptilesImg.onload = () => {
+        maptilesLoaded = true;
+        // Show loading state immediately, decode terrain async
+        document.getElementById('loading').textContent = 'Decoding terrain...';
+        document.getElementById('loading').style.display = '';
+        setTimeout(() => {
+            const t0 = performance.now();
+            try {
+                decodeTerrain();
+                const dt = ((performance.now() - t0) / 1000).toFixed(1);
+                console.log(`decodeTerrain: ${dt}s, terrainReady: ${terrainReady}, chunks: ${Object.keys(terrainChunks).length}`);
+                document.title = `LoY Editor — terrain: ${Object.keys(terrainChunks).length} chunks in ${dt}s`;
+            } catch(e) {
+                console.error('decodeTerrain FAILED:', e);
+                document.title = 'LoY Editor — TERRAIN ERROR: ' + e.message;
+            }
+            prebakeAllZones();
+            buildPaletteAtlas();
+            document.getElementById('loading').style.display = 'none';
+            render();
+        }, 50);
+    };
+    maptilesImg.src = 'maptiles.png';
+    charsImg = new Image(); charsImg.src = 'chars.png';
+    chars2Img = new Image(); chars2Img.src = 'chars2.png';
+
+    if (typeof WORLD_DATA === 'undefined') {
+        document.getElementById('loading').textContent = 'ERROR: No embedded data. Run bake_editor_data.py first.';
+        return;
+    }
+
+    // Filter to only zones that were placed in the baked world (have baked_scale set)
+    const allZones = WORLD_DATA.zones;
+    zonesMap = {};
+    for (const [zid, z] of Object.entries(allZones)) {
+        const off = z.baked_offset || {x:0, y:0};
+        if (z.baked_scale && z.baked_scale > 1 && off.x > -99000) {
+            zonesMap[zid] = z;
+        }
+    }
+    quests = WORLD_DATA.quests || [];
+
+    // Build flat zones list
+    zones = Object.values(zonesMap).map(z => ({
+        id: z.id, zone_name: z.zone_name, tileset: z.tileset,
+        width: z.width, height: z.height,
+        baked_offset: z.baked_offset, baked_scale: z.baked_scale,
+        description: z.description, dungeon_base: z.dungeon_base,
+        dungeon_count: z.dungeon_count,
+        npc_count: (z.npcs || []).length,
+        exits: z.exits || [],
+    }));
+
+    // Build quest-to-zone lookup
+    questsByZone = {};
+    for (const q of quests) {
+        if (!q.location) continue;
+        if (!questsByZone[q.location]) questsByZone[q.location] = [];
+        questsByZone[q.location].push(q);
+    }
+
+    // Load saved state from localStorage (annotations, ideas, tile changes)
+    loadSavedState();
+
+    document.getElementById('status-zones').textContent = `Zones: ${zones.length}`;
+    document.getElementById('info-bar').textContent = `${zones.length} zones | ${quests.length} quests`;
+    document.getElementById('loading').style.display = 'none';
+
+    // Start camera at Aria Town
+    const ariaZone = zones.find(z => z.id === 'aria');
+    if (ariaZone) {
+        const off = ariaZone.baked_offset || {x:0,y:0};
+        const s = ariaZone.baked_scale || 1;
+        zoom = 0.12;
+        camX = -(off.x + (ariaZone.width||25)*s/2) * TILE_PX * zoom + canvas.width/2;
+        camY = -(off.y + (ariaZone.height||25)*s/2) * TILE_PX * zoom + canvas.height/2;
+    } else {
+        fitView();
+    }
+    switchTab('palette');
+
+    // Annotation popup handler
+    document.getElementById('ann-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { commitAnnotation(e.target.value); e.target.value = ''; }
+        if (e.key === 'Escape') { document.getElementById('ann-popup').style.display = 'none'; }
+    });
+
+    document.getElementById('import-file').addEventListener('change', handleImportFile);
+}
+
+function resizeCanvas() {
+    const wrap = document.getElementById('canvas-wrap');
+    canvas.width = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+    render();
+}
+
+// ── Prebake zone tile canvases ──────────────────────────────────────────
+function prebakeAllZones() {
+    if (!maptilesLoaded) return;
+    for (const [zid, z] of Object.entries(zonesMap)) {
+        prebakeZone(zid, z);
+    }
+}
+
+function prebakeZone(zid, z) {
+    if (!z.grid || !maptilesLoaded) return;
+    const oc = document.createElement('canvas');
+    oc.width = z.width * TILE_PX;
+    oc.height = z.height * TILE_PX;
+    const octx = oc.getContext('2d');
+    octx.imageSmoothingEnabled = false;
+    for (let y = 0; y < z.height; y++) {
+        for (let x = 0; x < z.width; x++) {
+            const si = z.grid[y][x];
+            if (si < 0) continue;
+            const sx = (si % ATLAS_COLS) * TILE_PX;
+            const sy = Math.floor(si / ATLAS_COLS) * TILE_PX;
+            octx.drawImage(maptilesImg, sx, sy, TILE_PX, TILE_PX, x * TILE_PX, y * TILE_PX, TILE_PX, TILE_PX);
+        }
+    }
+    tileCache[zid] = oc;
+}
+
+function repaintTile(zid, x, y, spriteIdx) {
+    const oc = tileCache[zid];
+    if (!oc || !maptilesLoaded) return;
+    const octx = oc.getContext('2d');
+    octx.imageSmoothingEnabled = false;
+    octx.clearRect(x * TILE_PX, y * TILE_PX, TILE_PX, TILE_PX);
+    if (spriteIdx >= 0) {
+        const sx = (spriteIdx % ATLAS_COLS) * TILE_PX;
+        const sy = Math.floor(spriteIdx / ATLAS_COLS) * TILE_PX;
+        octx.drawImage(maptilesImg, sx, sy, TILE_PX, TILE_PX, x * TILE_PX, y * TILE_PX, TILE_PX, TILE_PX);
+    }
+}
+
+// ── Godot Terrain ───────────────────────────────────────────────────────
+// Terrain tile data: sparse maps for on-demand chunk rendering
+let terrainGround = null; // Map: "x,y" -> sprite
+let terrainOverlay = null; // Map: "x,y" -> sprite
+const MAX_CACHED_CHUNKS = 80; // LRU cache limit
+const chunkLRU = []; // recently used chunk keys
+
+function decodeRleToMap(rle, t) {
+    // Decode RLE into a simple object mapping "x,y" -> sprite
+    const map = {};
+    let tileIdx = 0;
+    const w = t.width, minX = t.min_x, minY = t.min_y;
+    for (let i = 0; i < rle.length; i += 2) {
+        const sprite = rle[i];
+        const count = rle[i + 1];
+        if (sprite === -1) { tileIdx += count; continue; }
+        for (let j = 0; j < count; j++) {
+            const col = tileIdx % w;
+            const row = (tileIdx - col) / w;
+            map[(minX + col) + ',' + (minY + row)] = sprite;
+            tileIdx++;
+        }
+    }
+    return map;
+}
+
+function decodeTerrain() {
+    if (!WORLD_DATA.terrain || !maptilesLoaded) return;
+    const t = WORLD_DATA.terrain;
+    terrainData = { minX: t.min_x, minY: t.min_y, width: t.width, height: t.height };
+
+    // Decode RLE into sparse tile maps (fast, no canvas creation)
+    terrainGround = decodeRleToMap(t.ground_rle || [], t);
+    terrainOverlay = decodeRleToMap(t.overlay_rle || [], t);
+
+    terrainReady = true;
+    console.log(`Terrain decoded: ground=${Object.keys(terrainGround).length} overlay=${Object.keys(terrainOverlay).length} tiles`);
+}
+
+function renderChunk(cx, cy) {
+    // Render a single chunk canvas on-demand
+    const oc = document.createElement('canvas');
+    const TC = TERRAIN_CHUNK, TP = TILE_PX;
+    oc.width = TC * TP; oc.height = TC * TP;
+    const octx = oc.getContext('2d');
+    octx.imageSmoothingEnabled = false;
+
+    const baseX = cx * TC, baseY = cy * TC;
+    for (let ly = 0; ly < TC; ly++) {
+        for (let lx = 0; lx < TC; lx++) {
+            const key = (baseX + lx) + ',' + (baseY + ly);
+            // Ground
+            const gs = terrainGround[key];
+            if (gs !== undefined) {
+                if (gs === -2) {
+                    octx.fillStyle = '#0a0a12';
+                    octx.fillRect(lx * TP, ly * TP, TP, TP);
+                } else {
+                    const sx = (gs % ATLAS_COLS) * TP;
+                    const sy = ((gs / ATLAS_COLS) | 0) * TP;
+                    octx.drawImage(maptilesImg, sx, sy, TP, TP, lx * TP, ly * TP, TP, TP);
+                }
+            }
+            // Overlay on top
+            const os = terrainOverlay[key];
+            if (os !== undefined && os >= 0) {
+                const sx = (os % ATLAS_COLS) * TP;
+                const sy = ((os / ATLAS_COLS) | 0) * TP;
+                octx.drawImage(maptilesImg, sx, sy, TP, TP, lx * TP, ly * TP, TP, TP);
+            }
+        }
+    }
+    return oc;
+}
+
+function getTerrainChunk(cx, cy) {
+    const key = cx + ',' + cy;
+    if (terrainChunks[key]) {
+        // Move to front of LRU
+        const idx = chunkLRU.indexOf(key);
+        if (idx > 0) { chunkLRU.splice(idx, 1); chunkLRU.unshift(key); }
+        return terrainChunks[key];
+    }
+    // Render on demand
+    const oc = renderChunk(cx, cy);
+    terrainChunks[key] = oc;
+    chunkLRU.unshift(key);
+    // Evict oldest if over limit
+    while (chunkLRU.length > MAX_CACHED_CHUNKS) {
+        const old = chunkLRU.pop();
+        delete terrainChunks[old];
+    }
+    return oc;
+}
+
+function drawTerrain() {
+    if (!terrainReady) return;
+    // Find visible chunk range
+    const screenL = -camX / zoom;
+    const screenT = -camY / zoom;
+    const screenR = screenL + canvas.width / zoom;
+    const screenB = screenT + canvas.height / zoom;
+
+    const cxMin = Math.floor(screenL / (TERRAIN_CHUNK * TILE_PX));
+    const cxMax = Math.floor(screenR / (TERRAIN_CHUNK * TILE_PX));
+    const cyMin = Math.floor(screenT / (TERRAIN_CHUNK * TILE_PX));
+    const cyMax = Math.floor(screenB / (TERRAIN_CHUNK * TILE_PX));
+
+    for (let cy = cyMin; cy <= cyMax; cy++) {
+        for (let cx = cxMin; cx <= cxMax; cx++) {
+            const chunk = getTerrainChunk(cx, cy);
+            ctx.drawImage(chunk, cx * TERRAIN_CHUNK * TILE_PX, cy * TERRAIN_CHUNK * TILE_PX);
+        }
+    }
+}
+
+// ── Camera ───────────────────────────────────────────────────────────────
+function fitView() {
+    if (!zones.length) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const z of zones) {
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        minX = Math.min(minX, off.x);
+        minY = Math.min(minY, off.y);
+        maxX = Math.max(maxX, off.x + (z.width||25)*s);
+        maxY = Math.max(maxY, off.y + (z.height||25)*s);
+    }
+    const ww = (maxX - minX) * TILE_PX, wh = (maxY - minY) * TILE_PX;
+    zoom = Math.min(canvas.width / (ww + 80), canvas.height / (wh + 80));
+    zoom = Math.max(0.01, Math.min(zoom, 4));
+    camX = -(minX * TILE_PX + ww/2) * zoom + canvas.width/2;
+    camY = -(minY * TILE_PX + wh/2) * zoom + canvas.height/2;
+    updateStatus(); render();
+}
+
+// ── Mode switching ──────────────────────────────────────────────────────
+function setMode(m) {
+    mode = m;
+    const wrap = document.getElementById('canvas-wrap');
+    wrap.className = m === 'paint' ? 'painting' : m === 'annotate' ? 'annotating' : '';
+    document.getElementById('btn-pan').classList.toggle('active', m === 'pan');
+    document.getElementById('btn-paint').classList.toggle('active', m === 'paint');
+    document.getElementById('btn-annotate').classList.toggle('active', m === 'annotate');
+    if (m === 'paint') switchTab('palette');
+}
+
+function toggleEraser() {
+    eraserOn = !eraserOn;
+    document.getElementById('btn-eraser').classList.toggle('active', eraserOn);
+    if (eraserOn) setMode('paint');
+}
+
+function toggleLabels() {
+    showLabels = !showLabels;
+    document.getElementById('btn-labels').classList.toggle('active', showLabels);
+    render();
+}
+function toggleNpcs() {
+    showNpcs = !showNpcs;
+    document.getElementById('btn-npcs').classList.toggle('active', showNpcs);
+    render();
+}
+function toggleQuests() {
+    showQuests = !showQuests;
+    document.getElementById('btn-quests').classList.toggle('active', showQuests);
+    render();
+}
+
+// ── Mouse handling ───────────────────────────────────────────────────────
+const wrap = document.getElementById('canvas-wrap');
+
+function screenToWorld(e) {
+    const rect = canvas.getBoundingClientRect();
+    const wx = (e.clientX - rect.left - camX) / (zoom * TILE_PX);
+    const wy = (e.clientY - rect.top - camY) / (zoom * TILE_PX);
+    return {wx, wy};
+}
+
+function worldToZoneTile(wx, wy) {
+    for (const z of zones) {
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        const w = (z.width||25)*s, h = (z.height||25)*s;
+        if (wx >= off.x && wx < off.x+w && wy >= off.y && wy < off.y+h) {
+            const lx = Math.floor((wx - off.x) / s);
+            const ly = Math.floor((wy - off.y) / s);
+            if (lx >= 0 && lx < (z.width||25) && ly >= 0 && ly < (z.height||25)) {
+                return { zoneId: z.id, x: lx, y: ly, zone: z };
+            }
+        }
+    }
+    return null;
+}
+
+canvas.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+
+    if (mode === 'pan') {
+        isDragging = true; didDrag = false;
+        dragStartX = e.clientX; dragStartY = e.clientY;
+        dragStartCamX = camX; dragStartCamY = camY;
+        wrap.classList.add('dragging');
+        canvas.setPointerCapture(e.pointerId);
+    } else if (mode === 'paint') {
+        isPainting = true;
+        canvas.setPointerCapture(e.pointerId);
+        const {wx, wy} = screenToWorld(e);
+        paintAt(wx, wy);
+    } else if (mode === 'annotate') {
+        const {wx, wy} = screenToWorld(e);
+        startAnnotation(wx, wy, e.clientX, e.clientY);
+    }
+});
+
+canvas.addEventListener('pointermove', e => {
+    const {wx, wy} = screenToWorld(e);
+    document.getElementById('status-mouse').textContent = `Tile: ${Math.floor(wx)},${Math.floor(wy)}`;
+
+    if (mode === 'pan' && isDragging) {
+        const dx = e.clientX - dragStartX, dy = e.clientY - dragStartY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDrag = true;
+        camX = dragStartCamX + dx; camY = dragStartCamY + dy;
+        render();
+    } else if (mode === 'paint' && isPainting) {
+        paintAt(wx, wy);
+    }
+});
+
+canvas.addEventListener('pointerup', e => {
+    if (mode === 'pan' && isDragging) {
+        isDragging = false;
+        wrap.classList.remove('dragging');
+        canvas.releasePointerCapture(e.pointerId);
+        if (!didDrag) {
+            const {wx, wy} = screenToWorld(e);
+            handleClick(wx, wy);
+        }
+    } else if (mode === 'paint') {
+        isPainting = false;
+        canvas.releasePointerCapture(e.pointerId);
+    }
+});
+
+canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const worldX = (mx - camX) / zoom, worldY = (my - camY) / zoom;
+    zoom *= e.deltaY < 0 ? 1.2 : 0.833;
+    zoom = Math.max(0.03, Math.min(zoom, 8));
+    camX = mx - worldX * zoom; camY = my - worldY * zoom;
+    updateStatus(); render();
+}, { passive: false });
+
+function handleClick(wx, wy) {
+    // Check annotation dots first (click to expand/collapse)
+    const clickR = 6 / zoom; // hit radius in world units (slightly larger than dot)
+    for (const [zid, anns] of Object.entries(annotations)) {
+        const z = zonesMap[zid];
+        if (!z) continue;
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        for (let i = 0; i < anns.length; i++) {
+            const ax = off.x + anns[i].x * s;
+            const ay = off.y + anns[i].y * s;
+            if (Math.abs(wx - ax) < clickR && Math.abs(wy - ay) < clickR) {
+                if (selectedAnnotation && selectedAnnotation.zoneId === zid && selectedAnnotation.idx === i) {
+                    selectedAnnotation = null; // collapse
+                } else {
+                    selectedAnnotation = { zoneId: zid, idx: i }; // expand
+                }
+                render();
+                return;
+            }
+        }
+    }
+    // Clicked empty space — collapse any expanded annotation
+    if (selectedAnnotation) { selectedAnnotation = null; render(); return; }
+
+    for (const z of zones) {
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        if (wx >= off.x && wx < off.x + (z.width||25)*s && wy >= off.y && wy < off.y + (z.height||25)*s) {
+            selectZone(z.id);
+            return;
+        }
+    }
+}
+
+// ── Tile Painting ───────────────────────────────────────────────────────
+function paintAt(wx, wy) {
+    const hit = worldToZoneTile(wx, wy);
+    if (!hit) return;
+    const z = zonesMap[hit.zoneId];
+    if (!z || !z.grid) return;
+
+    const tileIdx = eraserOn ? (1 + (z.tileset < 30 ? z.tileset : 0)) : selectedTileIdx;
+    const half = Math.floor(brushSize / 2);
+
+    for (let dy = -half; dy < brushSize - half; dy++) {
+        for (let dx = -half; dx < brushSize - half; dx++) {
+            const tx = hit.x + dx, ty = hit.y + dy;
+            if (tx < 0 || tx >= z.width || ty < 0 || ty >= z.height) continue;
+
+            const oldIdx = z.grid[ty][tx];
+            if (oldIdx === tileIdx) continue;
+
+            // Record change
+            if (!tileChanges[hit.zoneId]) tileChanges[hit.zoneId] = new Map();
+            const key = `${tx},${ty}`;
+            const existing = tileChanges[hit.zoneId].get(key);
+            const origOld = existing ? existing[2] : oldIdx;
+            tileChanges[hit.zoneId].set(key, [tx, ty, origOld, tileIdx]);
+
+            undoStack.push({ zoneId: hit.zoneId, x: tx, y: ty, oldIdx, newIdx: tileIdx });
+            redoStack = [];
+
+            // Apply
+            z.grid[ty][tx] = tileIdx;
+            repaintTile(hit.zoneId, tx, ty, tileIdx);
+        }
+    }
+    saveAnnotations();
+    updateStatus();
+    render();
+}
+
+function undo() {
+    if (!undoStack.length) return;
+    const act = undoStack.pop();
+    const z = zonesMap[act.zoneId];
+    if (!z) return;
+    z.grid[act.y][act.x] = act.oldIdx;
+    repaintTile(act.zoneId, act.x, act.y, act.oldIdx);
+
+    // Update tileChanges map
+    if (tileChanges[act.zoneId]) {
+        const key = `${act.x},${act.y}`;
+        const entry = tileChanges[act.zoneId].get(key);
+        if (entry) {
+            if (entry[2] === act.oldIdx) {
+                tileChanges[act.zoneId].delete(key);
+            } else {
+                entry[3] = act.oldIdx;
+            }
+        }
+    }
+    redoStack.push(act);
+    updateStatus(); render();
+}
+
+function redo() {
+    if (!redoStack.length) return;
+    const act = redoStack.pop();
+    const z = zonesMap[act.zoneId];
+    if (!z) return;
+    z.grid[act.y][act.x] = act.newIdx;
+    repaintTile(act.zoneId, act.x, act.y, act.newIdx);
+
+    if (!tileChanges[act.zoneId]) tileChanges[act.zoneId] = new Map();
+    const key = `${act.x},${act.y}`;
+    const existing = tileChanges[act.zoneId].get(key);
+    const origOld = existing ? existing[2] : act.oldIdx;
+    tileChanges[act.zoneId].set(key, [act.x, act.y, origOld, act.newIdx]);
+
+    undoStack.push(act);
+    updateStatus(); render();
+}
+
+// ── Annotations ─────────────────────────────────────────────────────────
+function startAnnotation(wx, wy, screenX, screenY) {
+    const hit = worldToZoneTile(wx, wy);
+    if (!hit) return;
+    pendingAnnZone = hit.zoneId;
+    pendingAnnX = hit.x; pendingAnnY = hit.y;
+    const popup = document.getElementById('ann-popup');
+    popup.style.display = 'block';
+    popup.style.left = screenX + 'px';
+    popup.style.top = (screenY - 30) + 'px';
+    const inp = document.getElementById('ann-input');
+    inp.value = '';
+    inp.focus();
+}
+
+function commitAnnotation(text) {
+    if (!text.trim() || !pendingAnnZone) return;
+    if (!annotations[pendingAnnZone]) annotations[pendingAnnZone] = [];
+    annotations[pendingAnnZone].push({ x: pendingAnnX, y: pendingAnnY, text: text.trim() });
+    document.getElementById('ann-popup').style.display = 'none';
+    saveAnnotations();
+    updateStatus(); render();
+    if (currentTab === 'notes') switchTab('notes');
+}
+
+function saveAnnotations() {
+    try { localStorage.setItem('loy_annotations', JSON.stringify(annotations)); } catch(e) {}
+    try { localStorage.setItem('loy_ideas', JSON.stringify(savedIdeas)); } catch(e) {}
+    try { localStorage.setItem('loy_tile_changes', JSON.stringify(
+        Object.fromEntries(Object.entries(tileChanges).map(([k,v]) => [k, [...v.values()]]))
+    )); } catch(e) {}
+}
+
+function loadSavedState() {
+    try {
+        const a = localStorage.getItem('loy_annotations');
+        if (a) annotations = JSON.parse(a);
+        const i = localStorage.getItem('loy_ideas');
+        if (i) savedIdeas = JSON.parse(i);
+        const tc = localStorage.getItem('loy_tile_changes');
+        if (tc) {
+            const parsed = JSON.parse(tc);
+            for (const [zid, changes] of Object.entries(parsed)) {
+                tileChanges[zid] = new Map();
+                for (const c of changes) {
+                    tileChanges[zid].set(`${c[0]},${c[1]}`, c);
+                    // Apply tile change to grid
+                    const z = zonesMap[zid];
+                    if (z && z.grid && c[1] < z.height && c[0] < z.width) {
+                        z.grid[c[1]][c[0]] = c[3];
+                    }
+                }
+            }
+        }
+    } catch(e) {}
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────
+function render() {
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false; // crisp pixel art like Godot
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(camX, camY);
+    ctx.scale(zoom, zoom);
+
+    if (terrainReady) {
+        drawTerrain();
+    } else {
+        for (const z of zones) drawZone(z);
+    }
+    for (const z of zones) drawZoneOutline(z);
+    drawConnections();
+    if (showNpcs) for (const z of zones) drawNpcMarkers(z);
+    if (showQuests) for (const z of zones) drawQuestMarkers(z);
+    for (const z of zones) drawDungeonLabel(z);
+    drawAnnotations();
+    drawImportedOverlay();
+    if (showLabels) for (const z of zones) drawZoneLabel(z);
+
+    ctx.restore();
+}
+
+function drawZone(z) {
+    const off = z.baked_offset || {x:0,y:0};
+    const s = z.baked_scale || 1;
+    const px = off.x * TILE_PX, py = off.y * TILE_PX;
+    const pw = (z.width||25)*s*TILE_PX, ph = (z.height||25)*s*TILE_PX;
+    const isFiltered = searchFilter && !z.zone_name.toLowerCase().includes(searchFilter) && !z.id.toLowerCase().includes(searchFilter);
+
+    ctx.save();
+    if (isFiltered) ctx.globalAlpha = 0.15;
+
+    const cached = tileCache[z.id];
+    if (cached && maptilesLoaded) {
+        ctx.drawImage(cached, px, py, pw, ph);
+    } else {
+        const COLORS = {0:'#4b5563',8:'#78531e',16:'#1e3a6e',112:'#1a5c30',144:'#5ba8c8',192:'#0f3d1a',224:'#9a7b18',240:'#5a2e0a'};
+        ctx.fillStyle = COLORS[z.tileset] || '#4b5563';
+        ctx.globalAlpha *= 0.6;
+        ctx.fillRect(px, py, pw, ph);
+    }
+    ctx.restore();
+}
+
+function drawZoneOutline(z) {
+    const off = z.baked_offset || {x:0,y:0};
+    const s = z.baked_scale || 1;
+    const px = off.x * TILE_PX, py = off.y * TILE_PX;
+    const pw = (z.width||25)*s*TILE_PX, ph = (z.height||25)*s*TILE_PX;
+    const isSelected = selectedZone === z.id;
+
+    ctx.save();
+    ctx.strokeStyle = isSelected ? '#e94560' : 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = isSelected ? 4 : 1;
+    ctx.strokeRect(px, py, pw, ph);
+    if (isSelected) { ctx.fillStyle = 'rgba(233,69,96,0.08)'; ctx.fillRect(px, py, pw, ph); }
+    ctx.restore();
+}
+
+function drawZoneLabel(z) {
+    const off = z.baked_offset || {x:0,y:0};
+    const s = z.baked_scale || 1;
+    const px = off.x*TILE_PX, py = off.y*TILE_PX;
+    const pw = (z.width||25)*s*TILE_PX, ph = (z.height||25)*s*TILE_PX;
+    const screenW = pw * zoom;
+    if (screenW < 30) return;
+    const isFiltered = searchFilter && !z.zone_name.toLowerCase().includes(searchFilter) && !z.id.toLowerCase().includes(searchFilter);
+
+    ctx.save();
+    if (isFiltered) ctx.globalAlpha = 0.15;
+    const fs = Math.max(8/zoom, Math.min(14/zoom, pw/6));
+    const pad = 4/zoom;
+    const name = z.zone_name || z.id;
+    ctx.font = `bold ${fs}px sans-serif`;
+    const tm = ctx.measureText(name);
+    const lw = tm.width + pad*3, lh = fs + pad*2;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.beginPath(); ctx.roundRect(px+pw/2-lw/2, py+ph/2-lh/2, lw, lh, pad); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(name, px+pw/2, py+ph/2);
+
+    if (z.npc_count > 0 && screenW > 50) {
+        const bs = fs*0.6;
+        ctx.fillStyle = '#e94560'; ctx.beginPath(); ctx.arc(px+pw-bs*1.5, py+bs*1.5, bs*0.8, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = `bold ${bs*0.9}px sans-serif`; ctx.fillText(z.npc_count, px+pw-bs*1.5, py+bs*1.5);
+    }
+    ctx.restore();
+}
+
+const NPC_COLORS = {shop:'#fbbf24',elder:'#60a5fa',scriptfile:'#4ade80',message:'#9ca3af',tips:'#a78bfa',craft:'#34d399',trainer:'#f472b6',pets:'#f9a8d4',maps:'#38bdf8'};
+
+function drawNpcMarkers(z) {
+    const zd = zonesMap[z.id];
+    if (!zd || !zd.npcs || !zd.npcs.length) return;
+    const off = z.baked_offset || {x:0,y:0};
+    const s = z.baked_scale || 1;
+    const screenW = (z.width||25)*s*TILE_PX*zoom;
+    if (screenW < 60) return; // too small to show markers
+
+    ctx.save();
+    const dotR = Math.max(3/zoom, Math.min(6/zoom, s*TILE_PX*0.3));
+    const fs = Math.max(5/zoom, Math.min(9/zoom, dotR*1.5));
+
+    for (const npc of zd.npcs) {
+        const px = (off.x + (npc.x + 0.5) * s) * TILE_PX;
+        const py = (off.y + (npc.y + 0.5) * s) * TILE_PX;
+        const color = NPC_COLORS[npc.type] || '#888';
+
+        // Dot
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 1/zoom;
+        ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI*2); ctx.stroke();
+
+        // Name label (only when zoomed in enough)
+        if (screenW > 200) {
+            ctx.font = `${fs}px sans-serif`;
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2/zoom;
+            ctx.strokeText(npc.name || '?', px + dotR + 2/zoom, py);
+            ctx.fillText(npc.name || '?', px + dotR + 2/zoom, py);
+        }
+    }
+    ctx.restore();
+}
+
+function drawDungeonLabel(z) {
+    if (!z.dungeon_base) return;
+    const off = z.baked_offset || {x:0,y:0};
+    const s = z.baked_scale || 1;
+    const px = off.x * TILE_PX, py = off.y * TILE_PX;
+    const pw = (z.width||25)*s*TILE_PX, ph = (z.height||25)*s*TILE_PX;
+    const screenW = pw * zoom;
+    if (screenW < 40) return;
+
+    ctx.save();
+    const fs = Math.max(6/zoom, Math.min(10/zoom, pw/8));
+    const pad = 3/zoom;
+    const label = `${z.dungeon_base} (${z.dungeon_count} floors)`;
+    ctx.font = `bold ${fs}px sans-serif`;
+    const tm = ctx.measureText(label);
+    const lw = tm.width + pad*3, lh = fs + pad*2;
+    const lx = px + pw/2 - lw/2, ly = py + ph/2 + fs*1.5;
+
+    ctx.fillStyle = 'rgba(251,191,36,0.85)';
+    ctx.beginPath(); ctx.roundRect(lx, ly, lw, lh, pad); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, px + pw/2, ly + lh/2);
+    ctx.restore();
+}
+
+function drawQuestMarkers(z) {
+    const zQuests = questsByZone[z.id];
+    if (!zQuests || !zQuests.length) return;
+    const off = z.baked_offset || {x:0,y:0};
+    const s = z.baked_scale || 1;
+    const px = off.x * TILE_PX, py = off.y * TILE_PX;
+    const pw = (z.width||25)*s*TILE_PX;
+    const screenW = pw * zoom;
+    if (screenW < 40) return;
+
+    ctx.save();
+    const bs = Math.max(5/zoom, Math.min(10/zoom, pw/15));
+
+    // Draw "!" markers, stacked vertically near top-left
+    for (let i = 0; i < zQuests.length && i < 5; i++) {
+        const mx = px + bs*2, my = py + bs*2 + i * bs*2.5;
+
+        // Yellow circle
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath(); ctx.arc(mx, my, bs, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 1/zoom;
+        ctx.beginPath(); ctx.arc(mx, my, bs, 0, Math.PI*2); ctx.stroke();
+
+        // "!" text
+        ctx.fillStyle = '#000'; ctx.font = `bold ${bs*1.4}px sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('!', mx, my);
+
+        // Quest title (when zoomed in)
+        if (screenW > 150) {
+            const fs = Math.max(5/zoom, Math.min(8/zoom, bs));
+            ctx.font = `${fs}px sans-serif`;
+            ctx.fillStyle = '#fbbf24'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2/zoom;
+            ctx.strokeText(zQuests[i].title, mx + bs + 3/zoom, my);
+            ctx.fillText(zQuests[i].title, mx + bs + 3/zoom, my);
+        }
+    }
+    if (zQuests.length > 5) {
+        const fs = Math.max(5/zoom, Math.min(8/zoom, bs));
+        ctx.font = `${fs}px sans-serif`; ctx.fillStyle = '#fbbf24'; ctx.textAlign = 'left';
+        ctx.fillText(`+${zQuests.length - 5} more`, px + bs*2, py + bs*2 + 5*bs*2.5);
+    }
+    ctx.restore();
+}
+
+function drawConnections() {
+    ctx.save();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(233,69,96,0.3)'; ctx.setLineDash([6,4]);
+    for (const z of zones) {
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        for (const ex of z.exits) {
+            const t = zones.find(t => t.id === ex.target);
+            if (!t) continue;
+            const tOff = t.baked_offset || {x:0,y:0};
+            const tS = t.baked_scale || 1;
+            ctx.beginPath();
+            ctx.moveTo((off.x + (ex.x||0)*s)*TILE_PX, (off.y + (ex.y||0)*s)*TILE_PX);
+            ctx.lineTo((tOff.x + (ex.tx||0)*tS)*TILE_PX, (tOff.y + (ex.ty||0)*tS)*TILE_PX);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
+function drawAnnotations() {
+    ctx.save();
+    for (const [zid, anns] of Object.entries(annotations)) {
+        const z = zones.find(z => z.id === zid);
+        if (!z) continue;
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        for (let i = 0; i < anns.length; i++) {
+            const ann = anns[i];
+            const px = (off.x + ann.x * s) * TILE_PX;
+            const py = (off.y + ann.y * s) * TILE_PX;
+            const isExpanded = selectedAnnotation && selectedAnnotation.zoneId === zid && selectedAnnotation.idx === i;
+            const fs = Math.max(6/zoom, Math.min(11/zoom, 200));
+            const pad = 4/zoom;
+
+            if (isExpanded) {
+                // Full text bubble with word wrap
+                const maxW = 220/zoom;
+                ctx.font = `${fs}px sans-serif`;
+                const lines = wrapText(ctx, ann.text, maxW - pad*2);
+                const bw = maxW, bh = lines.length * fs * 1.3 + pad*2;
+
+                // Pin marker
+                ctx.fillStyle = '#22c55e';
+                ctx.beginPath(); ctx.arc(px, py, 4/zoom, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = '#000'; ctx.lineWidth = 1/zoom;
+                ctx.beginPath(); ctx.arc(px, py, 4/zoom, 0, Math.PI*2); ctx.stroke();
+
+                // Text bubble
+                const bx = px + 8/zoom, by = py - bh - 6/zoom;
+                ctx.fillStyle = 'rgba(74,222,128,0.94)';
+                ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, pad); ctx.fill();
+                ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.5/zoom;
+                ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, pad); ctx.stroke();
+                ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+                lines.forEach((line, li) => {
+                    ctx.fillText(line, bx + pad, by + pad + li * fs * 1.3);
+                });
+            } else {
+                // Collapsed: small tag with truncated text preview
+                ctx.font = `${fs}px sans-serif`;
+                const preview = ann.text.length > 20 ? ann.text.slice(0, 18) + '..' : ann.text;
+                const tw = ctx.measureText(preview).width;
+                const bw = tw + pad*3 + 6/zoom; // extra space for pin circle
+                const bh = fs * 1.3 + pad*2;
+                const bx = px, by = py - bh/2;
+
+                // Background pill
+                ctx.fillStyle = 'rgba(74,222,128,0.85)';
+                ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh/2); ctx.fill();
+                ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1/zoom;
+                ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, bh/2); ctx.stroke();
+
+                // Pin dot
+                ctx.fillStyle = '#16a34a';
+                ctx.beginPath(); ctx.arc(bx + pad + 3/zoom, py, 3/zoom, 0, Math.PI*2); ctx.fill();
+
+                // Preview text
+                ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+                ctx.fillText(preview, bx + pad*2 + 6/zoom, py);
+            }
+        }
+    }
+    ctx.restore();
+}
+
+function wrapText(ctx, text, maxWidth) {
+    const words = text.split(' ');
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+            lines.push(line);
+            line = word;
+        } else {
+            line = test;
+        }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : [''];
+}
+
+function drawImportedOverlay() {
+    if (!importedChangeset) return;
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    for (const [zid, changes] of Object.entries(importedChangeset.tile_changes || {})) {
+        const z = zones.find(z => z.id === zid);
+        if (!z) continue;
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        for (const [x, y, oldIdx, newIdx] of changes) {
+            const px = (off.x + x*s) * TILE_PX;
+            const py = (off.y + y*s) * TILE_PX;
+            const pw = s * TILE_PX, ph = s * TILE_PX;
+            ctx.fillStyle = '#4ade80';
+            ctx.fillRect(px, py, pw, ph);
+        }
+    }
+    // Imported annotations
+    for (const [zid, anns] of Object.entries(importedChangeset.annotations || {})) {
+        const z = zones.find(z => z.id === zid);
+        if (!z) continue;
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        for (const ann of anns) {
+            const px = (off.x + ann.x*s)*TILE_PX, py = (off.y + ann.y*s)*TILE_PX;
+            ctx.globalAlpha = 0.8;
+            ctx.fillStyle = '#38bdf8';
+            ctx.beginPath(); ctx.arc(px, py, 5/zoom, 0, Math.PI*2); ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+
+// ── Zone Selection ───────────────────────────────────────────────────────
+function selectZone(zoneId) {
+    selectedZone = zoneId;
+    const z = zones.find(z => z.id === zoneId);
+    document.getElementById('panel-title').textContent = z ? (z.zone_name || z.id) : zoneId;
+    document.getElementById('panel-subtitle').textContent = zoneId;
+    switchTab(currentTab);
+    render();
+}
+
+// ── Tab Switching ────────────────────────────────────────────────────────
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('#panel-tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    const content = document.getElementById('panel-content');
+
+    if (tab === 'palette') { renderPaletteTab(); return; }
+    if (tab === 'notes') { renderNotesTab(); return; }
+    if (tab === 'ideas') { renderIdeasTab(); return; }
+    if (!selectedZone || !zonesMap[selectedZone]) {
+        content.innerHTML = '<p style="color:#666;text-align:center;margin-top:30px">Click a zone first</p>';
+        return;
+    }
+    const d = zonesMap[selectedZone];
+    switch (tab) {
+        case 'info': renderInfoTab(d); break;
+        case 'npcs': renderNpcsTab(d); break;
+        case 'exits': renderExitsTab(d); break;
+        case 'quests': renderQuestsTab(d); break;
+    }
+}
+
+// Pre-render palette atlas as a data URL
+let paletteDataUrl = '';
+function buildPaletteAtlas() {
+    if (!maptilesLoaded) return;
+    // Already have the maptiles image, use it directly as background
+    paletteDataUrl = maptilesImg.src;
+    if (currentTab === 'palette') renderPaletteTab();
+}
+
+function renderPaletteTab() {
+    const content = document.getElementById('panel-content');
+    let html = '<div class="field-row" style="margin-bottom:6px;align-items:end"><div class="field"><label>Brush Size</label>';
+    html += '<select id="brush-sel" onchange="brushSize=parseInt(this.value)" style="background:#0d1b2a;border:1px solid #1a4a8a;color:#e0e0e0;padding:3px;font-size:11px;width:100%">';
+    html += `<option value="1" ${brushSize===1?'selected':''}>1x1</option>`;
+    html += `<option value="2" ${brushSize===2?'selected':''}>2x2</option>`;
+    html += `<option value="3" ${brushSize===3?'selected':''}>3x3</option>`;
+    html += `<option value="5" ${brushSize===5?'selected':''}>5x5</option>`;
+    html += '</select></div>';
+    html += `<div class="field"><label>Selected: ${selectedTileIdx}</label>`;
+    html += `<div style="width:32px;height:32px;border:2px solid #e94560;border-radius:3px;image-rendering:pixelated;background-image:url('${paletteDataUrl}');background-size:${16*32}px ${16*32}px;background-position:-${(selectedTileIdx%16)*32}px -${Math.floor(selectedTileIdx/16)*32}px"></div></div></div>`;
+    html += '<div id="palette-grid">';
+    for (let i = 0; i < 256; i++) {
+        const col = i % 16, row = Math.floor(i / 16);
+        const bgPos = `-${col*21}px -${row*21}px`;
+        html += `<div class="ptile${i===selectedTileIdx?' selected':''}" data-idx="${i}" onclick="selectBrushTile(${i})" style="background-image:url('${paletteDataUrl}');background-size:${16*21}px ${16*21}px;background-position:${bgPos}"></div>`;
+    }
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+function selectBrushTile(idx) {
+    selectedTileIdx = idx;
+    eraserOn = false;
+    document.getElementById('btn-eraser').classList.remove('active');
+    setMode('paint');
+    document.querySelectorAll('#palette-grid .ptile').forEach(el => {
+        el.classList.toggle('selected', parseInt(el.dataset.idx) === idx);
+    });
+    // Update selected preview
+    renderPaletteTab();
+}
+
+function renderInfoTab(d) {
+    document.getElementById('panel-content').innerHTML = `
+        <div class="field"><label>Zone Name</label><input value="${esc(d.zone_name||'')}" readonly></div>
+        <div class="field"><label>Description</label><textarea readonly>${esc(d.description||'')}</textarea></div>
+        <div class="field-row">
+            <div class="field"><label>Width</label><input value="${d.width}" readonly></div>
+            <div class="field"><label>Height</label><input value="${d.height}" readonly></div>
+            <div class="field"><label>Tileset</label><input value="${d.tileset}" readonly></div>
+        </div>
+        <div class="field-row">
+            <div class="field"><label>Scale</label><input value="${d.baked_scale||1}" readonly></div>
+            <div class="field"><label>Dungeon</label><input value="${d.dungeon_base||'none'}" readonly></div>
+        </div>
+    `;
+}
+
+function renderNpcsTab(d) {
+    const npcs = d.npcs || [];
+    const COLORS = {shop:'#fbbf24',elder:'#60a5fa',scriptfile:'#4ade80',message:'#9ca3af',tips:'#a78bfa'};
+    let html = '<ul class="item-list">';
+    npcs.forEach(npc => {
+        html += `<li><span class="npc-dot" style="background:${COLORS[npc.type]||'#666'}"></span>
+            <span class="npc-name">${esc(npc.name||'?')}</span>
+            <span class="npc-type">${npc.type} (${npc.x},${npc.y})</span></li>`;
+    });
+    html += '</ul>';
+    if (!npcs.length) html = '<p style="color:#666;text-align:center;margin-top:20px">No NPCs</p>';
+    document.getElementById('panel-content').innerHTML = html;
+}
+
+function renderExitsTab(d) {
+    const exits = d.exits || [];
+    let html = '';
+    exits.forEach(ex => {
+        const tgt = zones.find(z => z.id === ex.target);
+        html += `<div style="padding:5px 7px;background:#0d1b2a;border:1px solid #1a4a8a;border-radius:3px;margin-bottom:3px;font-size:11px">
+            -> <strong>${esc(tgt?.zone_name || ex.target)}</strong>
+            <span style="color:#888;font-size:9px"> from (${ex.x},${ex.y}) to (${ex.tx},${ex.ty})</span></div>`;
+    });
+    if (!exits.length) html = '<p style="color:#666;text-align:center;margin-top:20px">No exits</p>';
+    document.getElementById('panel-content').innerHTML = html;
+}
+
+function renderQuestsTab(d) {
+    const related = quests.filter(q => q.location === d.id);
+    let html = '';
+    related.forEach(q => {
+        html += `<div style="padding:7px;background:#0d1b2a;border:1px solid #1a4a8a;border-radius:3px;margin-bottom:5px;font-size:11px">
+            <div><strong style="color:#fbbf24">${esc(q.title)}</strong> <span style="color:#888">Lv.${q.level}</span></div>`;
+        if (q.giver) html += `<div style="color:#60a5fa;font-size:10px;margin-top:2px">Quest giver: ${esc(q.giver)}</div>`;
+        if (q.description) html += `<div style="color:#aaa;font-size:10px;margin-top:2px;font-style:italic">"${esc(q.description)}"</div>`;
+        if (q.objectives && q.objectives.length) {
+            html += '<div style="margin-top:3px;font-size:10px;color:#e0e0e0">Objectives:';
+            q.objectives.forEach(o => {
+                if (o.type === 'kill') html += ` <span style="color:#e94560">Kill ${esc(o.target)}</span>`;
+            });
+            html += '</div>';
+        }
+        if (q.turn_in) {
+            const tz = zones.find(z => z.id === q.turn_in);
+            html += `<div style="font-size:10px;color:#4ade80;margin-top:2px">Turn in: ${esc(tz?.zone_name || q.turn_in)}</div>`;
+        }
+        if (q.rewards && q.rewards.length) {
+            html += '<div style="font-size:10px;color:#fbbf24;margin-top:2px">Rewards: ';
+            html += q.rewards.map(r => {
+                if (r.type === 'xp') return `${r.amount} XP`;
+                if (r.type === 'gold') return `${r.amount} Gold`;
+                if (r.type === 'item') return esc(r.name);
+                return '';
+            }).filter(Boolean).join(', ');
+            html += '</div>';
+        }
+        html += '</div>';
+    });
+    if (!related.length) html = '<p style="color:#666;text-align:center;margin-top:20px">No quests in this zone</p>';
+    document.getElementById('panel-content').innerHTML = html;
+}
+
+function renderNotesTab() {
+    let html = '<p style="color:#888;font-size:10px;margin-bottom:6px">Click "Note" mode then click on map to add notes</p>';
+    let total = 0;
+    for (const [zid, anns] of Object.entries(annotations)) {
+        if (!anns.length) continue;
+        const z = zones.find(z => z.id === zid);
+        html += `<div style="margin-bottom:8px"><strong style="font-size:11px">${esc(z?.zone_name || zid)}</strong>`;
+        anns.forEach((ann, i) => {
+            html += `<div style="padding:4px 6px;background:#0d1b2a;border:1px solid #1a4a8a;border-radius:3px;margin:2px 0;font-size:11px;display:flex;align-items:center">
+                <span style="flex:1">(${ann.x},${ann.y}) ${esc(ann.text)}</span>
+                <button class="btn-remove" onclick="removeAnnotation('${zid}',${i})">x</button>
+            </div>`;
+            total++;
+        });
+        html += '</div>';
+    }
+    if (!total) html += '<p style="color:#666;text-align:center;margin-top:20px">No notes yet</p>';
+    document.getElementById('panel-content').innerHTML = html;
+}
+
+function removeAnnotation(zid, idx) {
+    if (annotations[zid]) { annotations[zid].splice(idx, 1); saveAnnotations(); updateStatus(); render(); renderNotesTab(); }
+}
+
+// ── Ideas Tab ───────────────────────────────────────────────────────────
+function renderIdeasTab() {
+    const content = document.getElementById('panel-content');
+    content.innerHTML = `
+        <p style="color:#888;font-size:10px;margin-bottom:8px">Write your suggestions below. These get included when you export a changeset.</p>
+        <div class="field"><label>NPC Ideas</label><textarea id="ideas-npcs" placeholder="e.g. Add a blacksmith near the river in Aria" rows="3">${esc(getIdea('npcs'))}</textarea></div>
+        <div class="field"><label>Dungeon Ideas</label><textarea id="ideas-dungeons" placeholder="e.g. The cellar needs more skeleton spawns" rows="3">${esc(getIdea('dungeons'))}</textarea></div>
+        <div class="field"><label>Quest Ideas</label><textarea id="ideas-quests" placeholder="e.g. Fetch quest from guard to graveyard" rows="3">${esc(getIdea('quests'))}</textarea></div>
+        <div class="field"><label>General Ideas</label><textarea id="ideas-general" placeholder="e.g. The mountain pass feels too empty" rows="3">${esc(getIdea('general'))}</textarea></div>
+        <p style="color:#4ade80;font-size:10px;margin-top:6px">Ideas auto-save as you type</p>
+    `;
+    // Auto-save on input
+    for (const key of ['npcs','dungeons','quests','general']) {
+        const el = document.getElementById(`ideas-${key}`);
+        if (el) el.addEventListener('input', () => { savedIdeas[key] = el.value; saveAnnotations(); });
+    }
+}
+
+let savedIdeas = {npcs:'', dungeons:'', quests:'', general:''};
+function getIdea(key) { return savedIdeas[key] || ''; }
+
+// ── Export / Import Changeset ───────────────────────────────────────────
+function exportChangeset() {
+    const author = document.getElementById('author-name').value || 'Anonymous';
+    const changeset = {
+        version: 1,
+        author,
+        timestamp: new Date().toISOString(),
+        tile_changes: {},
+        annotations: {},
+        ideas: {},
+    };
+
+    // Collect ideas
+    for (const key of ['npcs','dungeons','quests','general']) {
+        if (savedIdeas[key] && savedIdeas[key].trim()) changeset.ideas[key] = savedIdeas[key].trim();
+    }
+
+    for (const [zid, changeMap] of Object.entries(tileChanges)) {
+        const filtered = [];
+        for (const [key, entry] of changeMap) {
+            if (entry[2] !== entry[3]) filtered.push(entry);
+        }
+        if (filtered.length) changeset.tile_changes[zid] = filtered;
+    }
+
+    for (const [zid, anns] of Object.entries(annotations)) {
+        if (anns.length) changeset.annotations[zid] = anns;
+    }
+
+    const totalChanges = Object.values(changeset.tile_changes).reduce((s, v) => s + v.length, 0);
+    const totalNotes = Object.values(changeset.annotations).reduce((s, v) => s + v.length, 0);
+
+    const hasIdeas = Object.keys(changeset.ideas).length > 0;
+    if (totalChanges === 0 && totalNotes === 0 && !hasIdeas) {
+        showToast('Nothing to export', true);
+        return;
+    }
+
+    const blob = new Blob([JSON.stringify(changeset, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `changeset_${author.replace(/\s+/g,'_')}_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported: ${totalChanges} tile changes, ${totalNotes} notes`);
+}
+
+function importChangeset() {
+    document.getElementById('import-file').click();
+}
+
+function handleImportFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        try {
+            importedChangeset = JSON.parse(ev.target.result);
+            const tc = Object.values(importedChangeset.tile_changes || {}).reduce((s,v) => s+v.length, 0);
+            // Merge imported annotations into main annotations
+            let an = 0;
+            for (const [zid, anns] of Object.entries(importedChangeset.annotations || {})) {
+                if (!annotations[zid]) annotations[zid] = [];
+                for (const ann of anns) {
+                    // Avoid duplicates (same position + text)
+                    const dup = annotations[zid].some(a => a.x === ann.x && a.y === ann.y && a.text === ann.text);
+                    if (!dup) { annotations[zid].push(ann); an++; }
+                }
+            }
+            // Merge imported ideas
+            const imp = importedChangeset.ideas || {};
+            for (const key of ['npcs','dungeons','quests','general']) {
+                if (imp[key]) {
+                    savedIdeas[key] = savedIdeas[key] ? savedIdeas[key] + '\n' + imp[key] : imp[key];
+                }
+            }
+            saveAnnotations();
+            showToast(`Imported: ${importedChangeset.author} — ${tc} tiles, ${an} notes merged`);
+            render();
+        } catch (err) {
+            showToast('Invalid changeset file', true);
+        }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+}
+
+// ── Utilities ────────────────────────────────────────────────────────────
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function filterZones(q) { searchFilter = q.toLowerCase(); render(); }
+
+function updateStatus() {
+    document.getElementById('status-zoom').textContent = `Zoom: ${(zoom*100).toFixed(0)}%`;
+    let tc = 0;
+    for (const m of Object.values(tileChanges)) tc += m.size;
+    document.getElementById('status-changes').textContent = `Changes: ${tc}`;
+    let nc = 0;
+    for (const a of Object.values(annotations)) nc += a.length;
+    document.getElementById('status-notes').textContent = `Notes: ${nc}`;
+}
+
+function showToast(msg, isError) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = isError ? '#e94560' : '#4ade80';
+    t.style.color = isError ? '#fff' : '#000';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+document.addEventListener('keydown', e => {
+    const tag = document.activeElement?.tagName;
+    const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+    // Ctrl shortcuts work even in inputs
+    if (e.ctrlKey && e.shiftKey && e.key === 'Z') { e.preventDefault(); redo(); return; }
+    if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); return; }
+    if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); return; }
+
+    // Don't trigger single-key shortcuts while typing
+    if (inInput) return;
+
+    if (e.key === 'Escape') {
+        document.getElementById('ann-popup').style.display = 'none';
+        importedChangeset = null;
+        selectedAnnotation = null;
+        render();
+    }
+    if (e.key === 'b') setMode('paint');
+    if (e.key === 'v') setMode('pan');
+    if (e.key === 'n') setMode('annotate');
+    if (e.key === 'e') toggleEraser();
+});
+
+init();
+</script>
+</body>
+</html>

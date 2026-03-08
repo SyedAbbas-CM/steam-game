@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Fawn"
+description = "Hooven ginger beast"
+max_hp = 16
+move_speed = 18.0
+contact_damage = 1
+level = 1
+kingdom = "vermin"
+size_class = 0
+hostile = true
+attack_type = 15
+attack_damage = 3
+attack_speed = 2.0
+bullet_speed = 50
+bullet_count = 2
+preferred_distance = 45.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 60.0
+ignores_terrain = false
+use_loy_sprite = true
+loy_tile_index = 298
+sprite_color = Color(0.45, 0.6, 0.35, 1)
+xp_value = 11
+score_value = 23

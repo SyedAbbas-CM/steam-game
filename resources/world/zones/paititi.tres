@@ -1,0 +1,54 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "paititi"
+zone_name = "Paititi Village"
+tileset = 192
+width = 20
+height = 20
+world_pos = Vector2i(74, 16)
+dungeon_base = "-Dungeons"
+dungeon_count = 8
+description = "The Jungle Village"
+baked_offset = Vector2i(1604, -568)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "jungle1",
+"tx": 5,
+"ty": 0,
+"x": 10,
+"y": 19
+}])
+npcs = Array[Dictionary]([{
+"name": "Netsu",
+"portrait": 325,
+"tile": 305,
+"type": "shop",
+"x": 14,
+"y": 3
+}, {
+"name": "Hado",
+"portrait": 326,
+"tile": 306,
+"type": "shop",
+"x": 16,
+"y": 13
+}, {
+"name": "Ken",
+"portrait": 327,
+"shop": "ari",
+"tile": 307,
+"type": "elder",
+"x": 4,
+"y": 13
+}, {
+"name": "Shaku",
+"portrait": 324,
+"tile": 304,
+"type": "shop",
+"x": 4,
+"y": 3
+}])

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "necro"
+shop_type = "necro"
+shop_name = "Necromancer"
+portrait = 227
+title = "Necromancer"
+welcome = "What are you doing here? / / Have you come for the item?"
+nomoney = "If you don't have the money, begone!"
+buy_text = "Take it, may the evil be with you"
+sell_text = "No, stay back demon"
+stock = [{ "item_name": "Skull", "required_quest": "" }]

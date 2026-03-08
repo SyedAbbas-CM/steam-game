@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "cycl"
+zone_name = "Cyclops Valley"
+tileset = 240
+width = 30
+height = 30
+world_pos = Vector2i(20, 22)
+dungeon_base = "Drt-Dungeons"
+dungeon_count = 8
+baked_offset = Vector2i(-116, -592)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "mnt1",
+"tx": 10,
+"ty": 1,
+"x": 15,
+"y": 29
+}])
+signs = Array[Dictionary]([{
+"message": "To Mountains",
+"x": 14,
+"y": 28
+}])
+spawns = Array[Dictionary]([{
+"chance": 100,
+"type": "Cyclops",
+"x": 2,
+"y": 2
+}, {
+"chance": 200,
+"type": "Rock Troll",
+"x": 2,
+"y": 2
+}])

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1_dxq23"]
+
+[resource]
+script = ExtResource("1_dxq23")
+commands = [{
+"cmd": "showDialog",
+"name": "Skoticus",
+"options": [{
+"name": "Um, ok!",
+"script": []
+}],
+"portrait": 283,
+"text": "Hic!! Hic!!! I remember, this was all field... hic!! What was I saying? Hic!.."
+}]

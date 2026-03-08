@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Shrine"
+theme = "grey"
+enemy_pool = [ExtResource("2")]
+min_floor = 1
+max_floor = 7
+room_count = 15
+map_width = 35
+map_height = 35
+chest_count = 3
+min_monsters = 1
+max_monsters = 3
+has_locked_doors = true
+loy_level_id = "Shrine-2"
+loy_tileset_offset = 0
+floor_count = 7

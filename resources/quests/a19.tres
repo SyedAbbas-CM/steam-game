@@ -1,0 +1,129 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_486yy"]
+
+[resource]
+script = ExtResource("1_486yy")
+id = "a19"
+title = "Light the Way"
+level = 61
+location = "tor4"
+target_location = "gomb"
+properties = [{
+"index": 0,
+"name": "Delivered",
+"type": "yesno"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "getItem",
+"count": "1",
+"name": "Lantern"
+}, {
+"cmd": "startQuest",
+"id": "a19"
+}]
+}],
+"portrait": 239,
+"text": "We owe Wang over in Gombard over favor, we need him to have this."
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 239,
+"text": "Take this lantern to him, it's not quite what it appears. Be careful."
+}]
+}],
+"portrait": 239,
+"text": "Return to me for your reward."
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Lantern"
+}]
+events = [{
+"param": "Wang",
+"script": [{
+"cmd": "set",
+"id": "",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Wang",
+"options": [{
+"name": "No Problem",
+"script": [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Lantern"
+}]
+}],
+"portrait": 198,
+"text": "Oh, so they finally repaid me did they. Ohhh, and handsomely. Thank you!"
+}],
+"type": "activate"
+}, {
+"param": "tor4",
+"script": [{
+"attribute": "session-a19-0",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Ok, sorry!",
+"script": []
+}],
+"portrait": 239,
+"text": "We owe Wang for his deeds in a past life. Deliver the object now!"
+}]
+}, {
+"attribute": "session-a19-0",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "2400",
+"name": "Gold"
+}, {
+"cmd": "getItem",
+"count": "1",
+"name": "Tiger Cloak"
+}, {
+"cmd": "getExp",
+"value": "5000"
+}, {
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 239,
+"text": "Well done, Wang should never talk of the past now. Take this."
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

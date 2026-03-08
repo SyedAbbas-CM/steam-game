@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/liche.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Sthel8"
+theme = "red"
+enemy_pool = [ExtResource("2")]
+liquid_type = "lava"
+hazard_damage = 1
+min_floor = 1
+max_floor = 1
+room_count = 20
+map_width = 40
+map_height = 40
+chest_count = 5
+min_monsters = 2
+max_monsters = 5
+has_locked_doors = true
+loy_level_id = "Sthel8"
+loy_tileset_offset = 24
+floor_count = 1

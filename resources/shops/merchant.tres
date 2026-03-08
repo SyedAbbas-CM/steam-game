@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "merchant"
+shop_type = "weapon"
+shop_name = "Merchant"
+portrait = 145
+title = "Wandering Merchant"
+welcome = "Lost in a dungeon and I find a customer! What can I do for you?"
+nomoney = "Find me when you have some cash!"
+buy_text = "I'll spend it once I'm out of here!"
+sell_text = "Hopefully I'll get out to use it!"
+stock = [{ "item_name": "Town Portal", "required_quest": "" }, { "item_name": "Blue Potion", "required_quest": "" }, { "item_name": "Orange Potion", "required_quest": "" }, { "item_name": "Green Potion", "required_quest": "" }, { "item_name": "Aqua Potion", "required_quest": "" }, { "item_name": "Gold Potion", "required_quest": "" }, { "item_name": "Pale Potion", "required_quest": "" }, { "item_name": "Powder Keg", "required_quest": "" }, { "item_name": "Trap", "required_quest": "" }, { "item_name": "Pet Food", "required_quest": "" }]

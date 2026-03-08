@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "swamp"
+zone_name = "Naleg Swamps"
+tileset = 84
+height = 40
+world_pos = Vector2i(87, 35)
+dungeon_base = "Dungeon-Base"
+description = "temp description"
+baked_offset = Vector2i(2080, -252)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "plains",
+"tx": 38,
+"ty": 0,
+"x": 15,
+"y": 39
+}, {
+"target": "talmita",
+"tx": 14,
+"ty": 24,
+"x": 6,
+"y": 0
+}])
+signs = Array[Dictionary]([{
+"message": "To Cennyn",
+"x": 13,
+"y": 38
+}, {
+"message": "To Tal Mita",
+"x": 5,
+"y": 1
+}])
+spawns = Array[Dictionary]([{
+"chance": 100,
+"type": "Zombini",
+"x": 0,
+"y": 3
+}, {
+"chance": 100,
+"type": "Zomboid",
+"x": 0,
+"y": 3
+}])

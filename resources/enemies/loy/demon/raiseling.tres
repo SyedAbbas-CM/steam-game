@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Raiseling"
+description = "An huge blue demon"
+max_hp = 225
+move_speed = 22.0
+contact_damage = 5
+level = 78
+kingdom = "demon"
+size_class = 1
+hostile = true
+attack_type = 3
+attack_damage = 8
+attack_speed = 0.8
+bullet_speed = 85
+bullet_count = 5
+preferred_distance = 45.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 120.0
+ignores_terrain = false
+shield_hp = 15
+boss_phases = 3
+phase_2_attack = 3
+phase_3_attack = 14
+phase_2_bullet_count = 8
+phase_3_bullet_count = 12
+summon_on_phase_change = true
+summon_phase_count = 3
+use_loy_sprite = true
+loy_tile_index = 508
+sprite_color = Color(0.9, 0.35, 0.3, 1)
+xp_value = 782
+score_value = 1564

@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Spider"
+description = "Fast and agile, dashes at prey while trailing sticky webs behind"
+max_hp = 10
+move_speed = 34.0
+contact_damage = 1
+level = 1
+kingdom = "crawler"
+size_class = 0
+hostile = true
+attack_type = 5
+attack_damage = 2
+attack_speed = 1.5
+bullet_speed = 70
+bullet_count = 1
+preferred_distance = 0.0
+charge_speed = 95.0
+charge_duration = 0.3
+aggro_range = 80.0
+ignores_terrain = false
+leaves_trail = true
+trail_type = "web"
+use_loy_sprite = true
+loy_tile_index = 22
+sprite_color = Color(0.7, 0.9, 0.5, 1)
+xp_value = 7
+score_value = 14

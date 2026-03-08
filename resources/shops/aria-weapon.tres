@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "aria-weapon"
+shop_type = "weapon"
+shop_name = "Arnie"
+portrait = 145
+title = "Arnie's Weapon Emporium"
+welcome = "Welcome to Arnie's Weapon Emporium! / /  What can I do for you today?"
+nomoney = "Sorry adventurer, you don't have the funds!"
+buy_text = "Thanks for the business!"
+sell_text = "A good deal has been made, well met hero!"
+stock = [{ "item_name": "Dagger", "required_quest": "" }, { "item_name": "Sword", "required_quest": "" }, { "item_name": "Cloak", "required_quest": "" }, { "item_name": "Bow", "required_quest": "" }, { "item_name": "Boots", "required_quest": "" }, { "item_name": "Robes", "required_quest": "" }, { "item_name": "Staff", "required_quest": "" }, { "item_name": "Bone Staff", "required_quest": "" }, { "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Ridged Dagger", "required_quest": "" }, { "item_name": "Wooden Shield", "required_quest": "" }, { "item_name": "Leather Armor", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Shimmering Shield", "required_quest": "" }, { "item_name": "Fire Arrow", "required_quest": "" }, { "item_name": "Pelt Cloak", "required_quest": "q3" }, { "item_name": "Sandals of Hoff", "required_quest": "a0" }, { "item_name": "Curved Sword", "required_quest": "a5" }, { "item_name": "Conical Helmet", "required_quest": "a12" }, { "item_name": "Chaos Spear", "required_quest": "a21" }]

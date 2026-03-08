@@ -1,0 +1,172 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1_aqghc"]
+
+[resource]
+script = ExtResource("1_aqghc")
+commands = [{
+"cmd": "showDialog",
+"name": "Stable",
+"options": [{
+"name": "Yes",
+"script": [{
+"cmd": "showDialog",
+"name": "Stable",
+"options": [{
+"name": "Yes",
+"script": [{
+"attribute": "gold",
+"cmd": "if",
+"compare": "5000",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Stable",
+"options": [{
+"name": "Sorry",
+"script": []
+}],
+"portrait": 173,
+"text": "Hello hero! I can lend you a fast horse for a small fee, interested?"
+}]
+}, {
+"attribute": "gold",
+"cmd": "if",
+"compare": "4999",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Stable",
+"options": [{
+"name": "Lets Go!",
+"script": [{
+"cmd": "takeItem",
+"count": "5000",
+"name": "Gold"
+}, {
+"cmd": "moveToMap",
+"map": "gomb",
+"x": "5",
+"y": "11"
+}]
+}],
+"portrait": 173,
+"text": "Would you like to travel to Gombard for 5,000 gold?"
+}]
+}]
+}, {
+"name": "No",
+"script": [{
+"cmd": "showDialog",
+"name": "Stable",
+"options": [{
+"name": "Yes",
+"script": [{
+"attribute": "gold",
+"cmd": "if",
+"compare": "5000",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Stable",
+"options": [{
+"name": "Sorry",
+"script": []
+}],
+"portrait": 173,
+"text": "You don't have enough money! Fool!"
+}]
+}, {
+"attribute": "gold",
+"cmd": "if",
+"compare": "4999",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Stable",
+"options": [{
+"name": "Lets Go!",
+"script": [{
+"cmd": "takeItem",
+"count": "5000",
+"name": "Gold"
+}, {
+"cmd": "moveToMap",
+"map": "nord1",
+"x": "22",
+"y": "22"
+}]
+}],
+"portrait": 173,
+"text": "Great, take this horse and get going!"
+}]
+}]
+}, {
+"name": "No",
+"script": [{
+"cmd": "showDialog",
+"name": "Stable",
+"options": [{
+"name": "Yes",
+"script": [{
+"attribute": "gold",
+"cmd": "if",
+"compare": "5000",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Stable",
+"options": [{
+"name": "Sorry",
+"script": []
+}],
+"portrait": 173,
+"text": "Would you like to travel to Nordolk for 5,000 gold?"
+}]
+}, {
+"attribute": "gold",
+"cmd": "if",
+"compare": "4999",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Stable",
+"options": [{
+"name": "Lets Go!",
+"script": [{
+"cmd": "takeItem",
+"count": "5000",
+"name": "Gold"
+}, {
+"cmd": "moveToMap",
+"map": "aria",
+"x": "12",
+"y": "3"
+}]
+}],
+"portrait": 173,
+"text": "You don't have enough money! Fool!"
+}]
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 173,
+"text": "Great, take this horse and get going!"
+}]
+}],
+"portrait": 173,
+"text": "Would you like to travel to Aria for 5,000 gold?"
+}]
+}],
+"portrait": 173,
+"text": "You don't have enough money! Fool!"
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 172,
+"text": "Great, take this horse and get going!"
+}]

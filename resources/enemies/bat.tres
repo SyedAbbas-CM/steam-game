@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Bat"
+max_hp = 2
+move_speed = 30.0
+contact_damage = 1
+attack_type = 5
+attack_damage = 1
+attack_speed = 1.5
+bullet_speed = 0.0
+bullet_count = 0
+preferred_distance = 0.0
+charge_speed = 100.0
+charge_duration = 0.4
+sprite_frame = 208
+sprite_color = Color(0.4, 0.3, 0.5, 1)
+xp_value = 1
+score_value = 10

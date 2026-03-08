@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1_30i3x"]
+
+[resource]
+script = ExtResource("1_30i3x")
+commands = [{
+"cmd": "showDialog",
+"name": "Flow",
+"options": [{
+"name": "Yes",
+"script": [{
+"cmd": "showDialog",
+"name": "Flow",
+"options": [{
+"name": "Lets Go!",
+"script": [{
+"cmd": "moveToMap",
+"map": "naleg",
+"x": "36",
+"y": "15"
+}]
+}],
+"portrait": 219,
+"text": "And now back? Do make up your mind boy!"
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 219,
+"text": "Back to Naleg, and be smart about it!"
+}]

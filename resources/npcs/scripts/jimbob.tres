@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1_6ffy5"]
+
+[resource]
+script = ExtResource("1_6ffy5")
+commands = [{
+"cmd": "showDialog",
+"name": "Jimbob",
+"options": [{
+"name": "How Odd!",
+"script": []
+}],
+"portrait": 153,
+"text": "The dungeons in Yore are crazy, always changing, it's worth visiting them over and over!"
+}]

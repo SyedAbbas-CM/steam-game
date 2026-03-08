@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "clear-inn"
+shop_type = "inn"
+shop_name = "Durnik"
+portrait = 202
+title = "The Might Oak"
+welcome = "Wow, a visitor, there seem to be so few these days! / /  Welcome to the Mighty Oak!"
+nomoney = "Sorry you don't have the money, I don't do loans"
+buy_text = "Much needed business my friend."
+sell_text = "Ok! I hope someone comes by to buy it!"
+stock = [{ "item_name": "Meat", "required_quest": "" }, { "item_name": "Trap", "required_quest": "" }, { "item_name": "Bone Staff", "required_quest": "" }, { "item_name": "Hunter Knife", "required_quest": "" }, { "item_name": "Spade", "required_quest": "" }, { "item_name": "Sickle", "required_quest": "" }, { "item_name": "Dark Staff", "required_quest": "" }, { "item_name": "Pale Potion", "required_quest": "" }, { "item_name": "Pet Food", "required_quest": "" }]

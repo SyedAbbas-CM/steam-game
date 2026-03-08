@@ -1,0 +1,128 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_y6a43"]
+
+[resource]
+script = ExtResource("1_y6a43")
+id = "z1"
+title = "Dark side of Magic"
+level = 101
+location = "cennyn"
+target_location = "cennyn"
+start_script = [{
+"cmd": "showDialog",
+"name": "Lord Cennyn",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Lord Cennyn",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "z1"
+}]
+}, {
+"name": "No thanks",
+"script": []
+}],
+"portrait": 411,
+"text": "Our sacred relic, the Elven Horn has been stolen by the Necromantic! Please recover it."
+}]
+}],
+"portrait": 411,
+"text": "Thank you hero, please return it to us as soon as possible.!"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Elven Horn"
+}]
+events = [{
+"param": "Necromantic",
+"script": [{
+"attribute": "count-Elven Horn",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"attribute": "random-50",
+"cmd": "if",
+"compare": "0",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Elven Horn"
+}, {
+"attribute": "count-Elven Horn",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Lord Cennyn",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 411,
+"text": "You have found our horn! Please return it to us!"
+}]
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "cennyn",
+"script": [{
+"attribute": "count-Elven Horn",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Lord Cennyn",
+"options": [{
+"name": "I shall not fail!",
+"script": []
+}],
+"portrait": 411,
+"text": "Have you found the relic yet?"
+}]
+}, {
+"attribute": "count-Elven Horn",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "5000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Elven Horn"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Corlion"
+}, {
+"cmd": "getItem",
+"count": "5000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Lord Cennyn",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 411,
+"text": "Thank your my lord, you have done us a great service this day!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/human/bandit.tres" id="2_bandit"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/human/thief.tres" id="3_thief"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/orc.tres" id="4_orc"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/ogre.tres" id="5_ogre"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="6_skeleton"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/minotaur.tres" id="7_boss"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Ancient Ruins"
+theme = "brown"
+enemy_pool = [ExtResource("2_bandit"), ExtResource("3_thief"), ExtResource("4_orc"), ExtResource("5_ogre"), ExtResource("6_skeleton")]
+hazard_tiles = Array[Vector2i]([Vector2i(2, 17), Vector2i(2, 18)])
+decoration_tiles = Array[Vector2i]([])
+liquid_type = "water"
+hazard_damage = 0
+hazard_interval = 1.0
+hazard_intensity = 0.25
+trap_density = 0.02
+web_bridge_density = 0.0
+allowed_transitions = Array[int]([0, 1, 2, 3])
+min_floor = 5
+max_floor = 7
+boss_definition = ExtResource("7_boss")
+difficulty_tier = 1
+base_difficulty = 3

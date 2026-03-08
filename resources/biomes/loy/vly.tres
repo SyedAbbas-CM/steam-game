@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/magical/medusa.tres" id="3"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Vly Dungeons"
+theme = "brown"
+enemy_pool = [ExtResource("2")]
+min_floor = 1
+max_floor = 5
+room_count = 30
+map_width = 60
+map_height = 60
+chest_count = 5
+min_monsters = 1
+max_monsters = 5
+has_locked_doors = true
+boss_name = "Medusa"
+boss_definition = ExtResource("3")
+loy_level_id = "Vly-Dungeons"
+loy_tileset_offset = 8
+floor_count = 5

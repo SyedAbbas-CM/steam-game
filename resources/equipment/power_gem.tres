@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EquipmentItem" format=3 uid="uid://lth80yklgm84"]
+
+[ext_resource type="Script" uid="uid://b5xxlx52j1xwg" path="res://scripts/stats/equipment_item.gd" id="1"]
+[ext_resource type="Script" uid="uid://dmu5yivm3b28s" path="res://scripts/weapons/bullet_modifier.gd" id="1_mcqyf"]
+[ext_resource type="Script" uid="uid://k0224xd25o7s" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="mod_dmg"]
+script = ExtResource("2")
+stat = 2
+flat_bonus = 1.0
+
+[resource]
+script = ExtResource("1")
+item_name = "Power Gem"
+description = "+1 attack damage"
+modifiers = Array[ExtResource("2")]([SubResource("mod_dmg")])
+rarity = 1

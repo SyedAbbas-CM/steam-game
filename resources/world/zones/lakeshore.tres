@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "lakeshore"
+zone_name = "Lakeshore"
+tileset = 112
+height = 20
+description = "A tranquil lake between the mountains and the valley. Good fishing, fresh water."
+baked_offset = Vector2i(-69, -92)
+exits = Array[Dictionary]([{
+"target": "vly1",
+"tx": 59,
+"ty": 12,
+"x": 0,
+"y": 10
+}, {
+"target": "wild1",
+"tx": 1,
+"ty": 25,
+"x": 24,
+"y": 10
+}])
+npcs = Array[Dictionary]([{
+"file": "",
+"message": "Best fishing in all of Yore right here. Silverscale love this lake.",
+"name": "Old Fisher",
+"portrait": 160,
+"shop": "",
+"tile": 134,
+"type": "message",
+"x": 20,
+"y": 12
+}])
+signs = Array[Dictionary]([{
+"message": "Lakeshore
+Peaceful Waters",
+"x": 12,
+"y": 1
+}])

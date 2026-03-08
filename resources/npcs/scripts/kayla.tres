@@ -1,0 +1,67 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1_6aci2"]
+
+[resource]
+script = ExtResource("1_6aci2")
+commands = [{
+"attribute": "stat-level",
+"cmd": "if",
+"compare": "50",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Kayla",
+"options": [{
+"name": "Why?",
+"script": [{
+"cmd": "showDialog",
+"name": "Kayla",
+"options": [{
+"name": "Hmm, ok",
+"script": []
+}],
+"portrait": 193,
+"text": "You are still young adventurer, come back and see me at level 50."
+}]
+}],
+"portrait": 193,
+"text": "Patience young one, your time will come."
+}]
+}, {
+"attribute": "stat-level",
+"cmd": "if",
+"compare": "49",
+"operation": "gt",
+"script": [{
+"attribute": "upgrade",
+"cmd": "if",
+"compare": "0",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Kayla",
+"options": [{
+"name": "Huh?",
+"script": []
+}],
+"portrait": 193,
+"text": "You have worked hard adventurer, now comes your reward."
+}]
+}, {
+"attribute": "upgrade",
+"cmd": "if",
+"compare": "0",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Kayla",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 193,
+"text": "Good to see you adventurer!"
+}]
+}]
+}]

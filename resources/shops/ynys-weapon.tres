@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "ynys-weapon"
+shop_type = "weapon"
+shop_name = "Valensh"
+portrait = 202
+title = "Violent Arms"
+welcome = "Evil to slay? You've come to the right place."
+nomoney = "Are you joking? Give me the gold!"
+buy_text = "Take it and kill, it is the only truth!"
+sell_text = "We'll find a use for it. Always something to kill."
+stock = [{ "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Hunter Knife", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Explosion Arrow", "required_quest": "" }, { "item_name": "Lion Blade", "required_quest": "" }]

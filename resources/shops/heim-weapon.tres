@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "heim-weapon"
+shop_type = "weapon"
+shop_name = "Thor"
+portrait = 155
+title = "Thor's Anvil"
+welcome = "Well met good fellow! / /  What mighty weapon can I find you?"
+nomoney = "Come back with treasure!"
+buy_text = "May it serve you well!"
+sell_text = "Well worth it!"
+stock = [{ "item_name": "Longsword", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Dagger", "required_quest": "" }, { "item_name": "Staff", "required_quest": "" }, { "item_name": "Boots", "required_quest": "" }, { "item_name": "Cloak", "required_quest": "" }, { "item_name": "Spiked Shield", "required_quest": "" }, { "item_name": "Leather Armor", "required_quest": "" }, { "item_name": "Wooden Shield", "required_quest": "" }, { "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Ridged Dagger", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Mighty Axe", "required_quest": "" }, { "item_name": "Iron Helm", "required_quest": "" }, { "item_name": "Canabe Cloak", "required_quest": "" }, { "item_name": "Templar Armor", "required_quest": "" }, { "item_name": "Frost Arrow", "required_quest": "" }, { "item_name": "Stinger Sword", "required_quest": "q5" }, { "item_name": "Cowled Robes", "required_quest": "a3" }, { "item_name": "Flinger", "required_quest": "a8" }, { "item_name": "Swamp Gloves", "required_quest": "a16" }, { "item_name": "Red Stone Sceptre", "required_quest": "a18" }]

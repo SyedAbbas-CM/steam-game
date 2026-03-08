@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "bluff-inn"
+shop_type = "magic"
+shop_name = "Hermit"
+portrait = 205
+title = "Herman's House"
+welcome = "What are you doing here? / / I have only a few things."
+nomoney = "Money first, I'm old, not stupid!"
+buy_text = "I'll miss that one."
+sell_text = "Hope it does you more good than me."
+stock = [{ "item_name": "Blue Potion", "required_quest": "" }, { "item_name": "Trap", "required_quest": "" }, { "item_name": "Town Portal", "required_quest": "" }, { "item_name": "Ring of Health", "required_quest": "" }, { "item_name": "Task Spear", "required_quest": "" }, { "item_name": "Spade", "required_quest": "" }, { "item_name": "Fishing Pole", "required_quest": "" }, { "item_name": "Shimmering Helm", "required_quest": "" }, { "item_name": "Infused Robes", "required_quest": "" }, { "item_name": "Pet Food", "required_quest": "" }]

@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Centaur"
+description = "Swift archer that kites relentlessly, firing rapid volleys of piercing arrows"
+max_hp = 160
+move_speed = 26.0
+contact_damage = 4
+level = 50
+kingdom = "magical"
+size_class = 2
+hostile = true
+attack_type = 2
+attack_damage = 18
+attack_speed = 1.0
+bullet_speed = 90
+bullet_count = 5
+preferred_distance = 60.0
+charge_speed = 120.0
+charge_duration = 0.4
+aggro_range = 100.0
+ignores_terrain = false
+boss_phases = 3
+phase_2_attack = 3
+phase_3_attack = 14
+phase_2_bullet_count = 8
+phase_3_bullet_count = 10
+summon_on_phase_change = false
+use_loy_sprite = true
+loy_tile_index = 74
+sprite_color = Color(0.7, 0.5, 1, 1)
+xp_value = 100
+score_value = 200

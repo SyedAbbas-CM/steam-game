@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Healer"
+max_hp = 4
+move_speed = 15.0
+contact_damage = 1
+attack_type = 9
+attack_damage = 0
+attack_speed = 2.5
+bullet_speed = 0.0
+bullet_count = 0
+preferred_distance = 50.0
+heal_amount = 3
+heal_range = 48.0
+sprite_frame = 240
+sprite_color = Color(0.3, 1.0, 0.3, 1)
+xp_value = 3
+score_value = 20

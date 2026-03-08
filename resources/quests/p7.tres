@@ -1,0 +1,121 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_vdd57"]
+
+[resource]
+script = ExtResource("1_vdd57")
+id = "p7"
+title = "Hunt the Lizard"
+level = 173
+location = "airlon"
+start_script = [{
+"cmd": "showDialog",
+"name": "Ponzar",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Ponzar",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "p7"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 145,
+"text": "A huge lizard is said to live beneath this city, it has slain many heros."
+}]
+}],
+"portrait": 145,
+"text": "Please investigate and slay the beast if it exists?"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Frogs Legs"
+}]
+events = [{
+"param": "Giant Lizard",
+"script": [{
+"attribute": "count-Frogs Legs",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Frogs Legs"
+}, {
+"attribute": "count-Frogs Legs",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Ponzar",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 145,
+"text": "You have slain it! Bring back it's legs to me!"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "airlon",
+"script": [{
+"attribute": "count-Frogs Legs",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Ponzar",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 145,
+"text": "Have you found any sign of the lizard yet?"
+}]
+}, {
+"attribute": "count-Frogs Legs",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "12000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Frogs Legs"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Mechanical Bow"
+}, {
+"cmd": "getItem",
+"count": "9000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Ponzar",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 145,
+"text": "Have you found any sign of the lizard yet?"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

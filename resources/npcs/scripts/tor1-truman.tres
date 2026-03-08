@@ -1,0 +1,49 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1_a3vq2"]
+
+[resource]
+script = ExtResource("1_a3vq2")
+commands = [{
+"cmd": "showDialog",
+"name": "Truman",
+"options": [{
+"name": "Gate",
+"script": [{
+"cmd": "showDialog",
+"name": "Truman",
+"options": [{
+"name": "Ok",
+"script": []
+}],
+"portrait": 217,
+"text": "Welcome to Toronega Haven, there are many delights here. Can I help you with something?"
+}]
+}, {
+"name": "Pets",
+"script": [{
+"cmd": "showDialog",
+"name": "Truman",
+"options": [{
+"name": "Wow, cool!",
+"script": []
+}],
+"portrait": 217,
+"text": "Now you are recognised in Toronega the south gate will be open to you. Should save you some dabloons!"
+}]
+}, {
+"name": "Maps",
+"script": [{
+"cmd": "showDialog",
+"name": "Truman",
+"options": [{
+"name": "Thanks!",
+"script": []
+}],
+"portrait": 217,
+"text": "The pirates are trying to tame local beasts, eventually you should be able to buy pets in Town!"
+}]
+}],
+"portrait": 217,
+"text": "Every now and again someone finds a treasure map, they normally sell them on in town, lazy pirates!"
+}]

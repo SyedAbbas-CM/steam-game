@@ -1,0 +1,128 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_ikrqc"]
+
+[resource]
+script = ExtResource("1_ikrqc")
+id = "p1"
+title = "Harold's Happyness"
+level = 122
+location = "ynys"
+properties = [{
+"index": 0,
+"name": "Delivered",
+"type": "yesno"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "getItem",
+"count": "1",
+"name": "Harold"
+}, {
+"cmd": "startQuest",
+"id": "p1"
+}]
+}],
+"portrait": 151,
+"text": "Harold my Parrot here needs to be a with a pirate. "
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 151,
+"text": "Any chance you could take him to Flow in Naleg for me?"
+}]
+}],
+"portrait": 151,
+"text": "Thanks, come back here and I'll have a small reward for you."
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Harold"
+}]
+events = [{
+"param": "Flow",
+"script": [{
+"cmd": "set",
+"id": "",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Flow",
+"options": [{
+"name": "No Problem",
+"script": [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Harold"
+}]
+}],
+"portrait": 219,
+"text": "Good golly, Harold! A parrot all of my own, my brother will be jealous!"
+}],
+"type": "activate"
+}, {
+"param": "ynys",
+"script": [{
+"attribute": "session-p1-0",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Ok, sorry!",
+"script": []
+}],
+"portrait": 151,
+"text": "Have you delivered Harold yet?"
+}]
+}, {
+"attribute": "session-p1-0",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "3000",
+"name": "Gold"
+}, {
+"cmd": "getItem",
+"count": "1",
+"name": "Medal"
+}, {
+"cmd": "getExp",
+"value": "2000"
+}, {
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 151,
+"text": "Why thank you hero, you will always be welcome here."
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

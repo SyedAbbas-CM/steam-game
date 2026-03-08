@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/ice_elemental.tres" id="2_ice_elemental"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/cyclops.tres" id="3_cyclops"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/rock_troll.tres" id="4_rock_troll"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/animal/bear.tres" id="5_bear"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/kobold.tres" id="6_kobold"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/faabian.tres" id="7_boss"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Frozen Depths"
+theme = "blue"
+enemy_pool = [ExtResource("2_ice_elemental"), ExtResource("3_cyclops"), ExtResource("4_rock_troll"), ExtResource("5_bear"), ExtResource("6_kobold")]
+hazard_tiles = Array[Vector2i]([Vector2i(2, 17), Vector2i(2, 18)])
+decoration_tiles = Array[Vector2i]([])
+liquid_type = "water"
+hazard_damage = 0
+hazard_interval = 1.0
+hazard_intensity = 0.45
+trap_density = 0.02
+web_bridge_density = 0.3
+allowed_transitions = Array[int]([0, 1, 2, 3])
+min_floor = 8
+max_floor = 10
+boss_definition = ExtResource("7_boss")
+difficulty_tier = 3
+base_difficulty = 5

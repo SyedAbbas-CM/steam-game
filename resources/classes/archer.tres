@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="PlayerClass" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/player_class.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+class_name_str = "Archer"
+description = "A swift ranged fighter. Fast movement, parallel shots at long range, and a multishot burst that triples bullet count."
+base_hp = 40
+base_speed = 40.0
+base_damage = 1.0
+resource_type = "zen"
+resource_max = 20
+starting_weapon_pattern = "parallel"
+bullet_count = 2
+bullet_speed = 120.0
+attack_speed = 0.25
+preferred_range = 60.0
+ability_name = "Multishot"
+ability_description = "Temporarily triples bullet count for 3 seconds"
+ability_cost = 10
+loy_tile_index = 162
+sprite_color = Color(0.8, 1, 0.8, 1)

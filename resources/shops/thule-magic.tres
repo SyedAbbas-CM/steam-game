@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "thule-magic"
+shop_type = "magic"
+shop_name = "Nazar"
+portrait = 333
+title = "The Freezen Vial"
+welcome = "Come in if you must. This cursed place has some magic left in it!"
+nomoney = "I need gold to go on, give me gold!"
+buy_text = "Finally, someone buys. I hope this serves you well against the curse!"
+sell_text = "Items are scarce here, these are welcome."
+stock = [{ "item_name": "Town Portal", "required_quest": "" }, { "item_name": "Magic Missile", "required_quest": "" }, { "item_name": "Red Potion", "required_quest": "" }, { "item_name": "Blue Potion", "required_quest": "" }, { "item_name": "Purple Potion", "required_quest": "" }, { "item_name": "Turq Potion", "required_quest": "" }, { "item_name": "Orange Potion", "required_quest": "" }, { "item_name": "Green Potion", "required_quest": "" }, { "item_name": "Aqua Potion", "required_quest": "" }, { "item_name": "Gold Potion", "required_quest": "" }, { "item_name": "Pale Potion", "required_quest": "" }, { "item_name": "Drain", "required_quest": "" }]

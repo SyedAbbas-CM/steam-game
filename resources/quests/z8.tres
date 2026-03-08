@@ -1,0 +1,96 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_1evlv"]
+
+[resource]
+script = ExtResource("1_1evlv")
+id = "z8"
+title = "End the Endermen"
+level = 140
+location = "kor"
+target_location = "peaks"
+properties = [{
+"index": 0,
+"name": "Endermans Killed",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Bal Die",
+"options": [{
+"name": "Oh yes?",
+"script": [{
+"cmd": "showDialog",
+"name": "Bal Die",
+"options": [{
+"name": "Sure",
+"script": [{
+"cmd": "startQuest",
+"id": "z8"
+}]
+}, {
+"name": "Nay!",
+"script": []
+}],
+"portrait": 173,
+"text": "The evil spirit Endermen have been spotted just north of here, please cut them down"
+}]
+}],
+"portrait": 173,
+"text": "Well done hero, kill 5 and return to me for your reward."
+}]
+events = [{
+"param": "Enderman",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "kor",
+"script": [{
+"attribute": "session-z8-0",
+"cmd": "if",
+"compare": "5",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Bal Die",
+"options": [{
+"name": "Yes Sir!",
+"script": []
+}],
+"portrait": 173,
+"text": "Still hunting Endermen are you?"
+}]
+}, {
+"attribute": "session-z8-0",
+"cmd": "if",
+"compare": "4",
+"operation": "gt",
+"script": [{
+"cmd": "getItem",
+"count": "1000",
+"name": "Gold"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Magical Gauntlets"
+}, {
+"cmd": "getExp",
+"value": "3000"
+}, {
+"cmd": "showDialog",
+"name": "Bal Die",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 173,
+"text": "Oh you have done us a great favor this day, take this reward!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

@@ -1,0 +1,122 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_2jbqx"]
+
+[resource]
+script = ExtResource("1_2jbqx")
+id = "a3"
+title = "Snakes Alive"
+level = 34
+location = "aria"
+target_location = "vly1"
+start_script = [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "a3"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 147,
+"text": "We are trying to produce a mighty cure potion in town today."
+}]
+}],
+"portrait": 147,
+"text": "We require the venom of Medusa's snakes, can you get it?"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Medusa Hair"
+}]
+events = [{
+"param": "Medusa",
+"script": [{
+"attribute": "count-Medusa Hair",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Medusa Hair"
+}, {
+"attribute": "count-Medusa Hair",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 147,
+"text": "Oh well done my lord. Bring it to us here in Aria"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "aria",
+"script": [{
+"attribute": "count-Medusa Hair",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 147,
+"text": "Our potion can not continue without you help!"
+}]
+}, {
+"attribute": "count-Medusa Hair",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "4000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Medusa Hair"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Cowled Robes"
+}, {
+"cmd": "getItem",
+"count": "8000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 147,
+"text": "Our potion can not continue without you help!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

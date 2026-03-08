@@ -1,0 +1,58 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "tundra"
+zone_name = "The Pasla Tundra"
+tileset = 224
+width = 30
+height = 30
+world_pos = Vector2i(70, 38)
+dungeon_base = "Tund-Dungeons"
+description = "The Pasla Tundra"
+baked_offset = Vector2i(1596, -328)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "jungle1",
+"tx": 12,
+"ty": 29,
+"x": 19,
+"y": 0
+}, {
+"target": "tor4",
+"tx": 46,
+"ty": 12,
+"x": 0,
+"y": 19
+}, {
+"target": "vale",
+"tx": 11,
+"ty": 0,
+"x": 24,
+"y": 29
+}])
+signs = Array[Dictionary]([{
+"message": "To the Vale",
+"x": 25,
+"y": 28
+}, {
+"message": "To Toronega",
+"x": 1,
+"y": 17
+}, {
+"message": "Condemned ",
+"x": 27,
+"y": 8
+}, {
+"message": "Jungle - Beware",
+"x": 17,
+"y": 1
+}])
+spawns = Array[Dictionary]([{
+"chance": 110,
+"type": "Rhino",
+"x": 1,
+"y": 1
+}])

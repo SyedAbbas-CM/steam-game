@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "for4"
+zone_name = "Clearing"
+tileset = 112
+width = 32
+height = 15
+world_pos = Vector2i(40, 56)
+dungeon_base = "Clearing-Dungeons"
+baked_offset = Vector2i(196, 128)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "for3",
+"tx": 23,
+"ty": 14,
+"x": 15,
+"y": 0
+}, {
+"target": "cel1",
+"tx": 1,
+"ty": 1,
+"x": 22,
+"y": 11
+}])
+npcs = Array[Dictionary]([{
+"name": "Durnik",
+"portrait": 202,
+"tile": 186,
+"type": "shop",
+"x": 14,
+"y": 10
+}])
+spawns = Array[Dictionary]([{
+"chance": 200,
+"type": "Creeper",
+"x": 3,
+"y": 3
+}])

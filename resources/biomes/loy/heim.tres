@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/animal/dragon.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/fire_elemental.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/ogre.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/minotaur.tres" id="5"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Heim Dungeons"
+theme = "brown"
+enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4")]
+min_floor = 1
+max_floor = 6
+room_count = 20
+map_width = 40
+map_height = 40
+chest_count = 5
+min_monsters = 1
+max_monsters = 5
+has_locked_doors = true
+boss_name = "Minotaur"
+boss_definition = ExtResource("5")
+loy_level_id = "Heim-Dungeons"
+loy_tileset_offset = 8
+floor_count = 6

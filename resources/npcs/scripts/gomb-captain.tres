@@ -1,0 +1,106 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1_fu3nr"]
+
+[resource]
+script = ExtResource("1_fu3nr")
+commands = [{
+"attribute": "session-ship-0",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Captain",
+"options": [{
+"name": "Yes",
+"script": [{
+"attribute": "gold",
+"cmd": "if",
+"compare": "100000",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Captain",
+"options": [{
+"name": "Sorry",
+"script": []
+}],
+"portrait": 223,
+"text": "A ride to Toronega matey? Be warned, it's a scary place (level 40+). The fare is 100,000 gold."
+}]
+}, {
+"attribute": "gold",
+"cmd": "if",
+"compare": "99999",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Captain",
+"options": [{
+"name": "Lets Go!",
+"script": [{
+"cmd": "set",
+"id": "ship",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "takeItem",
+"count": "100000",
+"name": "Gold"
+}, {
+"cmd": "moveToMap",
+"map": "tor1",
+"x": "31",
+"y": "5"
+}]
+}],
+"portrait": 223,
+"text": "Come back when you have the cash!"
+}]
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 223,
+"text": "Right, raise the sail, we've got a punter!"
+}]
+}, {
+"attribute": "session-ship-0",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Captain",
+"options": [{
+"name": "Yes",
+"script": [{
+"cmd": "showDialog",
+"name": "Captain",
+"options": [{
+"name": "Lets Go!",
+"script": [{
+"cmd": "set",
+"id": "ship",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "moveToMap",
+"map": "tor1",
+"x": "31",
+"y": "5"
+}]
+}],
+"portrait": 223,
+"text": "Ah, my old hero matey? A ride to Toronega again is it?"
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 223,
+"text": "Right, raise the sail, we've got a punter!"
+}]
+}]

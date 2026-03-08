@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/devil.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/ghost.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/mummy.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/vampire.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/animal/wild_dog.tres" id="6"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Wild Dungeons"
+theme = "grey"
+enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6")]
+min_floor = 1
+max_floor = 5
+room_count = 20
+map_width = 40
+map_height = 40
+chest_count = 5
+min_monsters = 1
+max_monsters = 5
+has_locked_doors = false
+loy_level_id = "Wild-Dungeons"
+loy_tileset_offset = 0
+floor_count = 5

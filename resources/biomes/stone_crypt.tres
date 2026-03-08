@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="2_skeleton"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/ghost.tres" id="3_ghost"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/mummy.tres" id="4_mummy"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/goblin.tres" id="5_goblin"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/cobra.tres" id="6_cobra"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton_king.tres" id="7_boss"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Stone Crypt"
+theme = "grey"
+enemy_pool = [ExtResource("2_skeleton"), ExtResource("3_ghost"), ExtResource("4_mummy"), ExtResource("5_goblin"), ExtResource("6_cobra")]
+hazard_tiles = Array[Vector2i]([Vector2i(9, 0), Vector2i(10, 0)])
+decoration_tiles = Array[Vector2i]([Vector2i(9, 16), Vector2i(10, 16)])
+liquid_type = ""
+hazard_damage = 1
+hazard_interval = 1.0
+hazard_intensity = 0.0
+trap_density = 0.02
+web_bridge_density = 0.0
+allowed_transitions = Array[int]([0, 1, 2, 3])
+min_floor = 1
+max_floor = 3
+boss_definition = ExtResource("7_boss")
+difficulty_tier = 2
+base_difficulty = 0

@@ -1,0 +1,122 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_vbqd8"]
+
+[resource]
+script = ExtResource("1_vbqd8")
+id = "z7"
+title = "Snake Slaughter"
+level = 140
+location = "naleg"
+target_location = "naleg"
+start_script = [{
+"cmd": "showDialog",
+"name": "Par Tak",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Par Tak",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "z7"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 200,
+"text": "Legends tells of a huge snake that resides in an underground lair hereabouts."
+}]
+}],
+"portrait": 200,
+"text": "As a hero I believe it's your duty to slay it and bring back its treasure, will you?"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Ocarina"
+}]
+events = [{
+"param": "King Cobra",
+"script": [{
+"attribute": "count-Ocarina",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Ocarina"
+}, {
+"attribute": "count-Ocarina",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Par Tak",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 200,
+"text": "Oh well done hero, bring the Ocarina back to me!"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "naleg",
+"script": [{
+"attribute": "count-Ocarina",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Par Tak",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 200,
+"text": "Have your found that serpent yet?"
+}]
+}, {
+"attribute": "count-Ocarina",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "4000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Ocarina"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Cutlass"
+}, {
+"cmd": "getItem",
+"count": "1300",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Par Tak",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 200,
+"text": "Have your found that serpent yet?"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

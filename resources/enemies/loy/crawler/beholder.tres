@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Beholder"
+description = "Floating eyeball that sweeps a devastating beam across the room, then spirals"
+max_hp = 180
+move_speed = 10.0
+contact_damage = 4
+level = 50
+kingdom = "crawler"
+size_class = 2
+hostile = true
+attack_type = 13
+attack_damage = 20
+attack_speed = 2.5
+bullet_speed = 80
+bullet_count = 1
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 100.0
+ignores_terrain = false
+beam_duration = 1.5
+beam_sweep_speed = 2.0
+boss_phases = 3
+phase_2_attack = 14
+phase_3_attack = 13
+phase_2_bullet_count = 10
+phase_3_bullet_count = 2
+summon_on_phase_change = false
+use_loy_sprite = true
+loy_tile_index = 34
+sprite_color = Color(0.7, 0.9, 0.5, 1)
+xp_value = 110
+score_value = 220

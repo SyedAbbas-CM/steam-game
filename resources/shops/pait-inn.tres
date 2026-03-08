@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "pait-inn"
+shop_type = "inn"
+shop_name = "Hado"
+portrait = 326
+title = "The Fire Pit"
+welcome = "Come in! Come in! I get you good food!"
+nomoney = "You need gold here."
+buy_text = "Take it, I hope help you."
+sell_text = "Yes! Deal me!"
+stock = [{ "item_name": "Meat", "required_quest": "" }, { "item_name": "Fishing Pole", "required_quest": "" }, { "item_name": "Spade", "required_quest": "" }, { "item_name": "Trap", "required_quest": "" }, { "item_name": "Powder Keg", "required_quest": "" }, { "item_name": "Horse Hair", "required_quest": "" }, { "item_name": "Pet Food", "required_quest": "" }]

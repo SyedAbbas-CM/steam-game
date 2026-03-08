@@ -1,0 +1,122 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_a0nq5"]
+
+[resource]
+script = ExtResource("1_a0nq5")
+id = "q9"
+title = "Hyrda Claw"
+level = 42
+location = "gomb"
+target_location = "cycl"
+start_script = [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "q9"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 200,
+"text": "Bring me the claw of the Hydra and I will reward you!"
+}]
+}],
+"portrait": 200,
+"text": "Will you take the quest and bring the claw here?"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Hydra Claw"
+}]
+events = [{
+"param": "Hydra",
+"script": [{
+"attribute": "count-Hydra Claw",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Hydra Claw"
+}, {
+"attribute": "count-Hydra Claw",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 200,
+"text": "You have the claw, bring it to me!"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "gomb",
+"script": [{
+"attribute": "count-Hydra Claw",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "No, I'll get it",
+"script": []
+}],
+"portrait": 200,
+"text": "Do you have the claw?"
+}]
+}, {
+"attribute": "count-Hydra Claw",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "10000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Hydra Claw"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Lion Shield"
+}, {
+"cmd": "getItem",
+"count": "10000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 200,
+"text": "Do you have the claw?"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

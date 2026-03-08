@@ -1,0 +1,122 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_xdx2b"]
+
+[resource]
+script = ExtResource("1_xdx2b")
+id = "z9"
+title = "Deadly Disease"
+level = 145
+location = "kor"
+target_location = "kor"
+start_script = [{
+"cmd": "showDialog",
+"name": "Bal Die",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Bal Die",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "z9"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 173,
+"text": "Our fair town has been suffering a terrible plague of the rats."
+}]
+}],
+"portrait": 173,
+"text": "Would you venture beneath the town and slay the Plaguemaster?"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Mandrake Root"
+}]
+events = [{
+"param": "Plaguemaster",
+"script": [{
+"attribute": "count-Mandrake Root",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Mandrake Root"
+}, {
+"attribute": "count-Mandrake Root",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Bal Die",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 173,
+"text": "Thank you hero, you have saved our town! Return to me for your reward."
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "kor",
+"script": [{
+"attribute": "count-Mandrake Root",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Bal Die",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 173,
+"text": "Have you found him yet, we're dieing here!"
+}]
+}, {
+"attribute": "count-Mandrake Root",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "3000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Mandrake Root"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Blade of Virtue"
+}, {
+"cmd": "getItem",
+"count": "2000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Bal Die",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 173,
+"text": "Have you found him yet, we're dieing here!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

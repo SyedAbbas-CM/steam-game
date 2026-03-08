@@ -1,0 +1,90 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_8mohw"]
+
+[resource]
+script = ExtResource("1_8mohw")
+id = "q1"
+title = "Them Bones"
+location = "aria"
+properties = [{
+"index": 0,
+"name": "Skeletons Killed",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Oh yes?",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Sure",
+"script": [{
+"cmd": "startQuest",
+"id": "q1"
+}]
+}, {
+"name": "Nay!",
+"script": []
+}],
+"portrait": 147,
+"text": "We're having a real problem with the skeletons round here"
+}]
+}],
+"portrait": 147,
+"text": "There's a large payment for only 20 kills! Will you take the quest?"
+}]
+events = [{
+"param": "Skeleton",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "aria",
+"script": [{
+"attribute": "session-q1-0",
+"cmd": "if",
+"compare": "20",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Yes Sir!",
+"script": []
+}],
+"portrait": 147,
+"text": "Still hunting Skeletons? Thank you hero!"
+}]
+}, {
+"attribute": "session-q1-0",
+"cmd": "if",
+"compare": "19",
+"operation": "gt",
+"script": [{
+"cmd": "getItem",
+"count": "500",
+"name": "Gold"
+}, {
+"cmd": "getExp",
+"value": "300"
+}, {
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 147,
+"text": "Thank you hero, I am very impressed. Here is your reward of 500 gold"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Shrine-7"
+tileset = 8
+chests = 3
+width = 35
+height = 35
+rooms = 15
+min_monsters = 1
+max_monsters = 3
+aggro_chance = 0
+requires_key = true
+legend = ""
+monster_pool = [{ "type": "Snobling Archer", "chance": 3 }, { "type": "Snobling Ninja", "chance": 1 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 4, "items": [{ "name": "Gold", "chance": 10, "min": 10, "max": 50 }, { "name": "Turq Potion", "chance": 5, "min": 1, "max": 1 }] }]

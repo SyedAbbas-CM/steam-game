@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="NpcScriptData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+commands = [{ "cmd": "showDialog", "name": "Hawkeye", "portrait": 171, "text": "Welcome, I've been shooting many years. Would you like some advice?", "options": [{ "name": "No", "script": [] }, { "name": "Yes", "script": [{ "cmd": "showDialog", "name": "Hawkeye", "portrait": 171, "text": "When you're fighting from afar you can just tap your opponents to shoot at them.", "options": [{ "name": "Yes, I know", "script": [{ "cmd": "showDialog", "name": "Hawkeye", "portrait": 171, "text": "But did you know you could use the buttons to target enemies?", "options": [{ "name": "Oh, hows that?", "script": [{ "cmd": "showDialog", "name": "Hawkeye", "portrait": 171, "text": "Tap T, Search, or on screen target to cycle through visible targets...", "options": [{ "name": "Right?", "script": [{ "cmd": "showDialog", "name": "Hawkeye", "portrait": 171, "text": "Then hit select or tap the screen to shoot. / / Press ESC or Back to cancel targeting", "options": [{ "name": "Awesome!", "script": [] }] }] }] }] }] }] }] }] }] }]

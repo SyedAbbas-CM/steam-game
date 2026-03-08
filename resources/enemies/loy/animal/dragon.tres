@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Dragon"
+description = "Winged fire-breather that kites at range, raining flame-trails and 5-bullet spreads"
+max_hp = 75
+move_speed = 20.0
+contact_damage = 4
+level = 9
+kingdom = "animal"
+size_class = 1
+hostile = true
+attack_type = 2
+attack_damage = 12
+attack_speed = 1.5
+bullet_speed = 70
+bullet_count = 5
+preferred_distance = 50.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 90.0
+ignores_terrain = false
+leaves_trail = true
+trail_type = "fire"
+use_loy_sprite = true
+loy_tile_index = 48
+sprite_color = Color(0.9, 0.8, 0.6, 1)
+xp_value = 50
+score_value = 100

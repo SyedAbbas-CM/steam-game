@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Bear"
+description = "Lumbering beast that charges and mauls anything in its way"
+max_hp = 30
+move_speed = 18.0
+contact_damage = 3
+level = 4
+kingdom = "animal"
+size_class = 0
+hostile = true
+attack_type = 4
+attack_damage = 7
+attack_speed = 1.5
+bullet_speed = 70
+bullet_count = 1
+preferred_distance = 0.0
+charge_speed = 85.0
+charge_duration = 0.45
+aggro_range = 80.0
+ignores_terrain = false
+use_loy_sprite = true
+loy_tile_index = 7
+sprite_color = Color(0.9, 0.8, 0.6, 1)
+xp_value = 20
+score_value = 40

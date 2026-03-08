@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Imp"
+description = "Quick little fiend that pelts you with rapid-fire dark bolts"
+max_hp = 18
+move_speed = 26.0
+contact_damage = 1
+level = 3
+kingdom = "demon"
+size_class = 0
+hostile = true
+attack_type = 2
+attack_damage = 4
+attack_speed = 0.8
+bullet_speed = 75
+bullet_count = 2
+preferred_distance = 45.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 80.0
+ignores_terrain = false
+use_loy_sprite = true
+loy_tile_index = 6
+sprite_color = Color(1, 0.5, 0.3, 1)
+xp_value = 14
+score_value = 28

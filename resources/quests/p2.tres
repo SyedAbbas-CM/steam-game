@@ -1,0 +1,127 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_edl5l"]
+
+[resource]
+script = ExtResource("1_edl5l")
+id = "p2"
+title = "Magical Music Box"
+level = 131
+location = "ynys"
+start_script = [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "p2"
+}]
+}, {
+"name": "No thanks",
+"script": []
+}],
+"portrait": 151,
+"text": "Some of those evil ninjas took my daughter's music box in a raid, could you retrieve it?"
+}]
+}],
+"portrait": 151,
+"text": "Thanks, I believe they hide out in a clearing north of here.!"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Music Box"
+}]
+events = [{
+"param": "Nongan Ninja Elite",
+"script": [{
+"attribute": "count-Music Box",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"attribute": "random-10",
+"cmd": "if",
+"compare": "0",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Music Box"
+}, {
+"attribute": "count-Music Box",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 151,
+"text": "You've found the music box, please return it to me!"
+}]
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "ynys",
+"script": [{
+"attribute": "count-Music Box",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "I shall not fail!",
+"script": []
+}],
+"portrait": 151,
+"text": "My daughter really misses that music box. Sniff. Sniff."
+}]
+}, {
+"attribute": "count-Music Box",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "1000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Music Box"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Zombie Disguise"
+}, {
+"cmd": "getItem",
+"count": "4000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 151,
+"text": "Thank you kindly hero, take this odd item as a reward."
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

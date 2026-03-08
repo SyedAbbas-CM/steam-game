@@ -1,0 +1,9 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Node/Electron tool artifacts
+node_modules/
+dist/
+*.exe
+*.dmg

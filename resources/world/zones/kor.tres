@@ -1,0 +1,58 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "kor"
+zone_name = "Kor"
+tileset = 240
+width = 30
+height = 20
+world_pos = Vector2i(96, 66)
+dungeon_base = "Kor-Base"
+dungeon_count = 5
+description = "The Town of Kor"
+baked_offset = Vector2i(2076, 228)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "peaks",
+"tx": 15,
+"ty": 39,
+"x": 12,
+"y": 0
+}])
+npcs = Array[Dictionary]([{
+"name": "Bal Die",
+"portrait": 173,
+"tile": 172,
+"type": "elder",
+"x": 19,
+"y": 8
+}, {
+"name": "Mabel",
+"portrait": 204,
+"tile": 188,
+"type": "shop",
+"x": 17,
+"y": 15
+}, {
+"name": "Greybeard",
+"portrait": 223,
+"tile": 222,
+"type": "shop",
+"x": 6,
+"y": 9
+}, {
+"name": "Mollqui",
+"portrait": 211,
+"tile": 210,
+"type": "shop",
+"x": 6,
+"y": 15
+}])
+signs = Array[Dictionary]([{
+"message": "Town of Kor",
+"x": 14,
+"y": 4
+}])

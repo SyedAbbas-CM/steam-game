@@ -1,0 +1,127 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_frig6"]
+
+[resource]
+script = ExtResource("1_frig6")
+id = "p6"
+title = "Find the Compass"
+level = 164
+location = "airlon"
+start_script = [{
+"cmd": "showDialog",
+"name": "Ponzar",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Ponzar",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "p6"
+}]
+}, {
+"name": "No thanks",
+"script": []
+}],
+"portrait": 145,
+"text": "The Urgon's came here from far away, they stole our sacred compass and left. Will you find it?"
+}]
+}],
+"portrait": 145,
+"text": "Many thanks, bring it back here and I will reward you!"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Compass"
+}]
+events = [{
+"param": "Urgon Warrior",
+"script": [{
+"attribute": "count-Compass",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"attribute": "random-20",
+"cmd": "if",
+"compare": "0",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Compass"
+}, {
+"attribute": "count-Compass",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Ponzar",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 145,
+"text": "You have found our relic, bring it back to us for your reward!"
+}]
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "airlon",
+"script": [{
+"attribute": "count-Compass",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Ponzar",
+"options": [{
+"name": "I shall not fail!",
+"script": []
+}],
+"portrait": 145,
+"text": "Have you found those Urgon yet?"
+}]
+}, {
+"attribute": "count-Compass",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "12000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Compass"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Blade of Justice"
+}, {
+"cmd": "getItem",
+"count": "7000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Ponzar",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 145,
+"text": "Much appreciated Hero! Here take these."
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

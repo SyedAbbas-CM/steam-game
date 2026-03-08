@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Faabian"
+description = "Master of darkness who fills the arena with cascading rings of shadow bullets"
+max_hp = 320
+move_speed = 14.0
+contact_damage = 6
+level = 50
+kingdom = "orc"
+size_class = 2
+hostile = true
+attack_type = 3
+attack_damage = 42
+attack_speed = 1.8
+bullet_speed = 48
+bullet_count = 12
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 100.0
+ignores_terrain = false
+boss_phases = 3
+phase_2_attack = 14
+phase_3_attack = 3
+phase_2_bullet_count = 16
+phase_3_bullet_count = 20
+summon_on_phase_change = true
+summon_phase_count = 3
+use_loy_sprite = true
+loy_tile_index = 35
+sprite_color = Color(0.6, 0.8, 0.4, 1)
+xp_value = 210
+score_value = 420

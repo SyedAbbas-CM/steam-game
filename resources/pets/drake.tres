@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="PetDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/pet_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 4
+pet_type = "Drake"
+search_distance = 10
+wander_distance = 8
+max_level = 40
+owner_level = 105
+cost = 250000
+recover_rate = 0.1
+base_attack = 12
+base_defense = 13
+base_hp = 40
+base_charge = 25
+hp_gain = 5
+attack_gain = 2
+defense_gain = 2
+charge_gain = 5
+abilities = [{ "level": 8, "name": "fire", "desc": "Fire Breathing" }, { "level": 12, "name": "poison", "desc": "Poison Bite" }, { "level": 19, "name": "frost", "desc": "Frost Breath" }, { "level": 29, "name": "explosion", "desc": "Fire Blast" }]
+evolve_level = 25
+evolve_name = "Dragoon"
+possible_names = PackedStringArray("Drako", "Mavis", "Smorg", "Bathos", "Isdare", "Gorin")

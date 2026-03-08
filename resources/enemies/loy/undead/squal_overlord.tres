@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Squal Overlord"
+description = "A mighty wizard of the Squal nation"
+max_hp = 108
+move_speed = 22.0
+contact_damage = 5
+level = 20
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 2
+attack_damage = 8
+attack_speed = 0.8
+bullet_speed = 85
+bullet_count = 5
+preferred_distance = 45.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 120.0
+ignores_terrain = false
+shield_hp = 15
+boss_phases = 2
+phase_2_attack = 3
+phase_2_bullet_count = 6
+use_loy_sprite = true
+loy_tile_index = 270
+sprite_color = Color(0.7, 0.65, 0.85, 1)
+xp_value = 201
+score_value = 402

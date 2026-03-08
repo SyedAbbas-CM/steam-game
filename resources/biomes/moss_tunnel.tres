@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/spider.tres" id="2_spider"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/widow.tres" id="3_widow"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/scorpion.tres" id="4_scorpion"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/cobra.tres" id="5_cobra"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/creeper.tres" id="6_creeper"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/beholder.tres" id="7_boss"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Moss Tunnel"
+theme = "green"
+enemy_pool = [ExtResource("2_spider"), ExtResource("3_widow"), ExtResource("4_scorpion"), ExtResource("5_cobra"), ExtResource("6_creeper")]
+hazard_tiles = Array[Vector2i]([Vector2i(1, 17), Vector2i(1, 18)])
+decoration_tiles = Array[Vector2i]([])
+liquid_type = "poison"
+hazard_damage = 1
+hazard_interval = 1.2
+hazard_intensity = 0.3
+trap_density = 0.02
+web_bridge_density = 0.2
+allowed_transitions = Array[int]([0, 1, 2, 3])
+min_floor = 4
+max_floor = 6
+boss_definition = ExtResource("7_boss")
+difficulty_tier = 4
+base_difficulty = 0

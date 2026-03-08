@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Mnt-2"
+tileset = 16
+chests = 8
+width = 50
+height = 50
+rooms = 30
+min_monsters = 1
+max_monsters = 4
+aggro_chance = 0
+requires_key = true
+legend = ""
+monster_pool = [{ "type": "Ettin", "chance": 5 }, { "type": "Ettin Guard", "chance": 2 }, { "type": "Bone Guard", "chance": 5 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 5, "items": [{ "name": "Gold", "chance": 20, "min": 50, "max": 100 }, { "name": "Town Portal", "chance": 1, "min": 1, "max": 1 }, { "name": "Ruby", "chance": 1, "min": 1, "max": 1 }, { "name": "Composite Bow", "chance": 1, "min": 1, "max": 1 }, { "name": "Meat", "chance": 10, "min": 1, "max": 1 }] }]

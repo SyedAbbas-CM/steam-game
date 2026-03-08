@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "nord-inn"
+shop_type = "inn"
+shop_name = "Moe"
+portrait = 169
+title = "The Frosty Barnacle"
+welcome = "What brings you to the Barnacle? / / Food, drink, something else?"
+nomoney = "You don't have the coins boy."
+buy_text = "Fill your boots!"
+sell_text = "I shall make use of it!"
+stock = [{ "item_name": "Meat", "required_quest": "" }, { "item_name": "Trap", "required_quest": "" }, { "item_name": "Fishing Pole", "required_quest": "" }, { "item_name": "Spade", "required_quest": "" }, { "item_name": "Powder Keg", "required_quest": "" }, { "item_name": "Attack Elixir", "required_quest": "" }, { "item_name": "Pet Food", "required_quest": "" }]

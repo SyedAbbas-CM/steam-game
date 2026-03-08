@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="PlayerClass" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/player_class.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+class_name_str = "Warrior"
+description = "A sturdy fighter who wades into battle. High HP, close-range spread weapon, and a shield bash that reflects enemy bullets."
+base_hp = 50
+base_speed = 30.0
+base_damage = 1.5
+resource_type = "rage"
+resource_max = 10
+starting_weapon_pattern = "spread"
+bullet_count = 3
+bullet_speed = 80.0
+attack_speed = 0.35
+preferred_range = 0.0
+ability_name = "Shield Bash"
+ability_description = "Reflects nearby bullets back at enemies"
+ability_cost = 5
+loy_tile_index = 160
+sprite_color = Color(1, 0.9, 0.8, 1)

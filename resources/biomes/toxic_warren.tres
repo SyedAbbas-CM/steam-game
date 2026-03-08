@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/scorpion.tres" id="2_scorpion"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/cobra.tres" id="3_cobra"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/widow.tres" id="4_widow"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/creeper.tres" id="5_creeper"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/spider.tres" id="6_spider"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/magical/medusa.tres" id="7_boss"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Toxic Warren"
+theme = "green"
+enemy_pool = [ExtResource("2_scorpion"), ExtResource("3_cobra"), ExtResource("4_widow"), ExtResource("5_creeper"), ExtResource("6_spider")]
+hazard_tiles = Array[Vector2i]([Vector2i(1, 17), Vector2i(1, 18)])
+decoration_tiles = Array[Vector2i]([])
+liquid_type = "poison"
+hazard_damage = 2
+hazard_interval = 0.8
+hazard_intensity = 0.5
+trap_density = 0.04
+web_bridge_density = 0.25
+allowed_transitions = Array[int]([0, 1, 2, 3])
+min_floor = 10
+max_floor = 12
+boss_definition = ExtResource("7_boss")
+difficulty_tier = 4
+base_difficulty = 7

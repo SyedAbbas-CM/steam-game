@@ -1,0 +1,88 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "thule"
+zone_name = "Thule"
+tileset = 144
+width = 30
+world_pos = Vector2i(77, 60)
+dungeon_base = "Frozen-base"
+dungeon_count = 8
+description = "The cursed city of Thule"
+baked_offset = Vector2i(1512, 4)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "frozen",
+"tx": 11,
+"ty": 24,
+"x": 10,
+"y": 0
+}, {
+"target": "end1",
+"tx": 6,
+"ty": 1,
+"x": 7,
+"y": 24
+}, {
+"target": "end1",
+"tx": 7,
+"ty": 1,
+"x": 8,
+"y": 24
+}])
+npcs = Array[Dictionary]([{
+"message": "Leave here outsider! This place is cursed!",
+"name": "Maudit",
+"portrait": 332,
+"tile": 319,
+"type": "message",
+"x": 14,
+"y": 3
+}, {
+"name": "Madito",
+"portrait": 330,
+"tile": 320,
+"type": "shop",
+"x": 4,
+"y": 5
+}, {
+"name": "Alva",
+"portrait": 328,
+"tile": 315,
+"type": "craft",
+"x": 10,
+"y": 9
+}, {
+"name": "Nazar",
+"portrait": 333,
+"tile": 314,
+"type": "shop",
+"x": 26,
+"y": 4
+}, {
+"name": "Samil",
+"portrait": 329,
+"tile": 316,
+"type": "elder",
+"x": 22,
+"y": 19
+}, {
+"name": "Mukesh",
+"portrait": 315,
+"tile": 315,
+"type": "shop",
+"x": 4,
+"y": 18
+}])
+signs = Array[Dictionary]([{
+"message": "To the Frozen Wastes",
+"x": 11,
+"y": 1
+}, {
+"message": "To Castle Azazel",
+"x": 10,
+"y": 22
+}])

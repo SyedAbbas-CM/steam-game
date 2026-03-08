@@ -1,0 +1,105 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_qj2yy"]
+
+[resource]
+script = ExtResource("1_qj2yy")
+id = "q5"
+title = "It Stings!"
+level = 15
+location = "heim"
+target_location = "sthel"
+start_script = [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "q5"
+}]
+}],
+"portrait": 156,
+"text": "Bring me 12 stingers so I can forge an item, will you?"
+}]
+}, {
+"name": "Later",
+"script": []
+}],
+"portrait": 156,
+"text": "Return here with the stingers"
+}]
+events = [{
+"param": "heim",
+"script": [{
+"attribute": "count-Stinger",
+"cmd": "if",
+"compare": "12",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Um, ok!",
+"script": []
+}],
+"portrait": 156,
+"text": "Bring me the stingers boy!"
+}]
+}, {
+"attribute": "count-Stinger",
+"cmd": "if",
+"compare": "11",
+"operation": "gt",
+"script": [{
+"attribute": "hasFreeSlot",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Ok",
+"script": []
+}],
+"portrait": 156,
+"text": "Good work, but you have no room for your reward. Come back later."
+}]
+}, {
+"attribute": "hasFreeSlot",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getExp",
+"value": "1000"
+}, {
+"cmd": "takeItem",
+"count": "12",
+"name": "Stinger"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Stinger Sword"
+}, {
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Yes",
+"script": []
+}],
+"portrait": 156,
+"text": "Stand back, man working / / Here, take this mighty sword!"
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}],
+"type": "quest"
+}]

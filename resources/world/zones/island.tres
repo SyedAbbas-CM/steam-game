@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="LoyZoneData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "island"
+zone_name = "The Island"
+tileset = 112
+width = 25
+height = 35
+world_pos = Vector2i(111, 73)
+dungeon_base = "Island-Base"
+dungeon_count = 7
+description = "The Island"
+spawns = [{"type": "Frost Ifrit", "x": 2, "y": 2, "chance": 85}, {"type": "Fire Ifrit", "x": 2, "y": 2, "chance": 85}, {"type": "Silver Ifrit", "x": 2, "y": 2, "chance": 85}]

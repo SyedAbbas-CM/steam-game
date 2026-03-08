@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1_x18d6"]
+
+[resource]
+script = ExtResource("1_x18d6")
+id = "aria-g"
+zone_name = "Graveyard"
+tileset = 112
+width = 20
+height = 30
+world_pos = Vector2i(30, 70)
+dungeon_base = "Aria-Crypt"
+dungeon_count = 3
+baked_offset = Vector2i(-8, 108)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "aria",
+"tx": 11,
+"ty": 24,
+"x": 10,
+"y": 0
+}])
+spawns = Array[Dictionary]([{
+"chance": 20,
+"type": "Skeleton",
+"x": 2,
+"y": 4
+}])

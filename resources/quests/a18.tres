@@ -1,0 +1,129 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_wod2r"]
+
+[resource]
+script = ExtResource("1_wod2r")
+id = "a18"
+title = "Medcinial Hope"
+level = 50
+location = "nord1"
+target_location = "aria"
+properties = [{
+"index": 0,
+"name": "Delivered",
+"type": "yesno"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "getItem",
+"count": "1",
+"name": "Medicines"
+}, {
+"cmd": "startQuest",
+"id": "a18"
+}]
+}],
+"portrait": 169,
+"text": "The town of Aria have need of our special potions"
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 169,
+"text": "Would you please deliver this rack to Morin in Aria?"
+}]
+}],
+"portrait": 169,
+"text": "Please be careful, these are very precious!"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Medicines"
+}]
+events = [{
+"param": "Morin",
+"script": [{
+"cmd": "set",
+"id": "",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Morin",
+"options": [{
+"name": "No Problem",
+"script": [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Medicines"
+}]
+}],
+"portrait": 144,
+"text": "Thank the gods, we need these so badly. Please send my regards to Eski!"
+}],
+"type": "activate"
+}, {
+"param": "nord1",
+"script": [{
+"attribute": "session-a18-0",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Ok, sorry!",
+"script": []
+}],
+"portrait": 169,
+"text": "Aria is doomed without the potions you know!"
+}]
+}, {
+"attribute": "session-a18-0",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "1000",
+"name": "Gold"
+}, {
+"cmd": "getItem",
+"count": "1",
+"name": "Red Stone Sceptre"
+}, {
+"cmd": "getExp",
+"value": "1200"
+}, {
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 169,
+"text": "Thank you, the town is safe. We have a special reward for you!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

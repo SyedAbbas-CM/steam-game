@@ -1,0 +1,105 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_5t71c"]
+
+[resource]
+script = ExtResource("1_5t71c")
+id = "q4"
+title = "Tooth Ache"
+level = 12
+location = "sthel"
+target_location = "mnt1"
+start_script = [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "q4"
+}]
+}],
+"portrait": 151,
+"text": "If you gather me 8 teeth I can craft an item, will you?"
+}]
+}, {
+"name": "Later",
+"script": []
+}],
+"portrait": 151,
+"text": "Return here with the teeth"
+}]
+events = [{
+"param": "sthel",
+"script": [{
+"attribute": "count-Tooth",
+"cmd": "if",
+"compare": "8",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Not yet!",
+"script": []
+}],
+"portrait": 151,
+"text": "Found them teeth yet?!"
+}]
+}, {
+"attribute": "count-Tooth",
+"cmd": "if",
+"compare": "7",
+"operation": "gt",
+"script": [{
+"attribute": "hasFreeSlot",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Ok",
+"script": []
+}],
+"portrait": 151,
+"text": "Good work, but you have no room for your reward. Come back later."
+}]
+}, {
+"attribute": "hasFreeSlot",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getExp",
+"value": "1000"
+}, {
+"cmd": "takeItem",
+"count": "8",
+"name": "Tooth"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Tooth Dagger"
+}, {
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 151,
+"text": "Right, let me work ... / / Your reward, the tooth dagger!"
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}],
+"type": "quest"
+}]

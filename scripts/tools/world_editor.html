@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>World Map Editor — Legends of Yore</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #1a1a2e; color: #e0e0e0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+/* Toolbar */
+#toolbar { background: #16213e; padding: 8px 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #0f3460; z-index: 10; flex-wrap: wrap; }
+#toolbar h1 { font-size: 16px; color: #e94560; margin-right: 12px; }
+#toolbar button { background: #0f3460; color: #e0e0e0; border: 1px solid #1a4a8a; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+#toolbar button:hover { background: #1a4a8a; }
+#toolbar button.active { background: #e94560; border-color: #e94560; }
+#toolbar .sep { width: 1px; height: 24px; background: #0f3460; }
+#toolbar input { background: #0d1b2a; border: 1px solid #1a4a8a; color: #e0e0e0; padding: 5px 10px; border-radius: 4px; font-size: 12px; width: 160px; }
+#toolbar .info { color: #888; font-size: 11px; margin-left: auto; }
+
+/* Main content */
+#main { display: flex; flex: 1; overflow: hidden; }
+
+/* Canvas */
+#canvas-wrap { flex: 1; position: relative; overflow: hidden; background: #0d1117; cursor: grab; }
+#canvas-wrap.dragging { cursor: grabbing; }
+canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; }
+
+/* Properties panel */
+#panel { width: 400px; background: #16213e; border-left: 1px solid #0f3460; display: flex; flex-direction: column; overflow: hidden; }
+#panel-header { padding: 10px 14px; background: #0f3460; font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; }
+#panel-tabs { display: flex; background: #1a1a2e; border-bottom: 1px solid #0f3460; }
+#panel-tabs button { flex: 1; padding: 7px 4px; background: none; border: none; color: #888; font-size: 11px; cursor: pointer; border-bottom: 2px solid transparent; }
+#panel-tabs button.active { color: #e94560; border-bottom-color: #e94560; }
+#panel-tabs button:hover { color: #e0e0e0; }
+#panel-content { flex: 1; overflow-y: auto; padding: 10px 14px; }
+
+/* Form elements */
+.field { margin-bottom: 8px; }
+.field label { display: block; font-size: 10px; color: #888; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+.field input, .field textarea, .field select { width: 100%; background: #0d1b2a; border: 1px solid #1a4a8a; color: #e0e0e0; padding: 5px 7px; border-radius: 3px; font-size: 12px; font-family: inherit; }
+.field textarea { min-height: 50px; resize: vertical; }
+.field-row { display: flex; gap: 6px; }
+.field-row .field { flex: 1; }
+
+/* NPC/item list */
+.item-list { list-style: none; }
+.item-list li { padding: 6px 8px; background: #0d1b2a; border: 1px solid #1a4a8a; border-radius: 4px; margin-bottom: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.item-list li:hover { border-color: #e94560; }
+.item-list li.selected { border-color: #e94560; background: #1a0a1a; }
+.item-list .npc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.item-list .npc-name { flex: 1; }
+.item-list .npc-type { color: #888; font-size: 10px; }
+
+.btn-add { background: #0f3460; color: #4ade80; border: 1px dashed #4ade80; padding: 5px; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 4px; font-size: 11px; }
+.btn-add:hover { background: #1a4a8a; }
+.btn-remove { background: none; border: none; color: #e94560; cursor: pointer; font-size: 14px; padding: 2px 6px; }
+
+/* Status bar */
+#statusbar { background: #0d1b2a; padding: 3px 16px; font-size: 10px; color: #666; display: flex; gap: 16px; border-top: 1px solid #0f3460; }
+.unsaved { color: #e94560 !important; font-weight: 600; }
+
+/* Toast */
+.toast { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: #4ade80; color: #000; padding: 8px 20px; border-radius: 6px; font-size: 13px; z-index: 100; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.toast.show { opacity: 1; }
+
+/* Loading overlay */
+#loading { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 200; font-size: 18px; color: #e94560; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+    <h1>World Editor</h1>
+    <button onclick="saveChanges()">Save (Ctrl+S)</button>
+    <div class="sep"></div>
+    <button onclick="fitView()">Fit View</button>
+    <button onclick="toggleLabels()" id="btn-labels" class="active">Labels</button>
+    <button onclick="toggleConnections()" id="btn-connections" class="active">Exits</button>
+    <div class="sep"></div>
+    <button onclick="takeSnapshot()">Snapshot</button>
+    <button onclick="showDiff()">Diff</button>
+    <button onclick="exportAll()">Export</button>
+    <div class="sep"></div>
+    <button onclick="importChangesetFile()" style="background:#166534;border-color:#4ade80;color:#4ade80">Import Changeset</button>
+    <button onclick="clearChangeset()" id="btn-clear-cs" style="display:none">Clear</button>
+    <div class="sep"></div>
+    <input type="text" id="search" placeholder="Search zones..." oninput="filterZones(this.value)">
+    <input type="file" id="cs-file-input" accept=".json" style="display:none">
+    <div class="info" id="info-bar">Loading...</div>
+</div>
+
+<div id="main">
+    <div id="canvas-wrap">
+        <canvas id="map"></canvas>
+    </div>
+    <div id="panel">
+        <div id="panel-header">
+            <span id="panel-title">Select a zone</span>
+            <span id="panel-subtitle" style="color:#888;font-size:11px"></span>
+        </div>
+        <div id="panel-tabs">
+            <button class="active" data-tab="info" onclick="switchTab('info')">Info</button>
+            <button data-tab="npcs" onclick="switchTab('npcs')">NPCs</button>
+            <button data-tab="buildings" onclick="switchTab('buildings')">Houses</button>
+            <button data-tab="exits" onclick="switchTab('exits')">Exits</button>
+            <button data-tab="spawns" onclick="switchTab('spawns')">Spawns</button>
+            <button data-tab="quests" onclick="switchTab('quests')">Quests</button>
+            <button data-tab="changeset" onclick="switchTab('changeset')">Changes</button>
+        </div>
+        <div id="panel-content">
+            <p style="color:#666;text-align:center;margin-top:40px">Click a zone on the map to edit it</p>
+        </div>
+    </div>
+</div>
+
+<div id="statusbar">
+    <span id="status-zones">Zones: 0</span>
+    <span id="status-npcs">NPCs: 0</span>
+    <span id="status-quests">Quests: 0</span>
+    <span id="status-save"></span>
+    <span id="status-zoom" style="margin-left:auto"></span>
+    <span id="status-mouse"></span>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="loading">Loading world data...</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────
+let zones = [];
+let quests = [];
+let selectedZone = null;
+let selectedZoneFull = null;
+let currentTab = 'info';
+let showConnections = true;
+let showLabels = true;
+let hasUnsavedChanges = false;
+let searchFilter = '';
+
+// Canvas state
+const canvas = document.getElementById('map');
+const ctx = canvas.getContext('2d');
+let camX = 0, camY = 0, zoom = 1.0;
+let isDragging = false, dragStartX = 0, dragStartY = 0, dragStartCamX = 0, dragStartCamY = 0;
+let didDrag = false;
+
+// Tile rendering
+const TILE_PX = 32; // pixels per tile in maptiles.png atlas
+const ATLAS_COLS = 16;
+let maptilesImg = null;
+let maptilesLoaded = false;
+let charsImg = null, chars2Img = null;
+
+// Tile grid cache: zone_id -> {grid, width, height, canvas}
+const tileCache = {};
+const tileFetchQueue = new Set();
+
+// ── Init ─────────────────────────────────────────────────────────────────
+async function init() {
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // Load sprite atlases
+    maptilesImg = new Image();
+    maptilesImg.crossOrigin = 'anonymous';
+    maptilesImg.onload = () => { maptilesLoaded = true; render(); };
+    maptilesImg.src = '/sprites/maptiles.png';
+
+    charsImg = new Image(); charsImg.src = '/sprites/chars.png';
+    chars2Img = new Image(); chars2Img.src = '/sprites/chars2.png';
+
+    // Load data
+    const [zonesData, questsData] = await Promise.all([
+        fetch('/api/zones').then(r => r.json()),
+        fetch('/api/quests').then(r => r.json()),
+    ]);
+    // Filter to only zones placed in the baked world
+    zones = zonesData.filter(z => {
+        const off = z.baked_offset || {x:0, y:0};
+        return z.baked_scale && z.baked_scale > 1 && off.x > -99000;
+    });
+    quests = questsData;
+
+    let totalNpcs = zones.reduce((s, z) => s + (z.npc_count || 0), 0);
+    document.getElementById('status-zones').textContent = `Zones: ${zones.length}`;
+    document.getElementById('status-npcs').textContent = `NPCs: ${totalNpcs}`;
+    document.getElementById('status-quests').textContent = `Quests: ${quests.length}`;
+    document.getElementById('info-bar').textContent = `${zones.length} zones | ${totalNpcs} NPCs | ${quests.length} quests`;
+    document.getElementById('loading').style.display = 'none';
+
+    fitView();
+
+    // Pre-fetch visible zone tiles
+    fetchVisibleTiles();
+}
+
+function resizeCanvas() {
+    const wrap = document.getElementById('canvas-wrap');
+    canvas.width = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+    render();
+}
+
+// ── Tile Grid Fetching ──────────────────────────────────────────────────
+function fetchVisibleTiles() {
+    if (!maptilesLoaded) return;
+    for (const z of zones) {
+        if (isZoneVisible(z) && !tileCache[z.id] && !tileFetchQueue.has(z.id)) {
+            tileFetchQueue.add(z.id);
+            fetchZoneTiles(z.id, z);
+        }
+    }
+}
+
+async function fetchZoneTiles(zoneId, zoneMeta) {
+    try {
+        const resp = await fetch(`/api/zone/${zoneId}/tiles`);
+        if (!resp.ok) { tileFetchQueue.delete(zoneId); return; }
+        const data = await resp.json();
+
+        // Pre-render zone to an offscreen canvas
+        const oc = document.createElement('canvas');
+        oc.width = data.width * TILE_PX;
+        oc.height = data.height * TILE_PX;
+        const octx = oc.getContext('2d');
+        octx.imageSmoothingEnabled = false;
+
+        for (let y = 0; y < data.height; y++) {
+            for (let x = 0; x < data.width; x++) {
+                const si = data.grid[y][x];
+                if (si < 0) continue;
+                const sx = (si % ATLAS_COLS) * TILE_PX;
+                const sy = Math.floor(si / ATLAS_COLS) * TILE_PX;
+                octx.drawImage(maptilesImg, sx, sy, TILE_PX, TILE_PX, x * TILE_PX, y * TILE_PX, TILE_PX, TILE_PX);
+            }
+        }
+
+        tileCache[zoneId] = { canvas: oc, width: data.width, height: data.height };
+        tileFetchQueue.delete(zoneId);
+        render();
+    } catch (e) {
+        console.error(`Failed to fetch tiles for ${zoneId}:`, e);
+        tileFetchQueue.delete(zoneId);
+    }
+}
+
+function isZoneVisible(z) {
+    const off = z.baked_offset || {x:0, y:0};
+    const s = z.baked_scale || 1;
+    const w = (z.width || 25) * s * TILE_PX;
+    const h = (z.height || 25) * s * TILE_PX;
+    const sx = off.x * TILE_PX * zoom + camX;
+    const sy = off.y * TILE_PX * zoom + camY;
+    const sw = w * zoom;
+    const sh = h * zoom;
+    return sx + sw > 0 && sy + sh > 0 && sx < canvas.width && sy < canvas.height;
+}
+
+// ── Camera ───────────────────────────────────────────────────────────────
+function fitView() {
+    if (!zones.length) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const z of zones) {
+        const off = z.baked_offset || {x:0, y:0};
+        const s = z.baked_scale || 1;
+        const w = (z.width || 25) * s;
+        const h = (z.height || 25) * s;
+        minX = Math.min(minX, off.x);
+        minY = Math.min(minY, off.y);
+        maxX = Math.max(maxX, off.x + w);
+        maxY = Math.max(maxY, off.y + h);
+    }
+    const worldW = (maxX - minX) * TILE_PX;
+    const worldH = (maxY - minY) * TILE_PX;
+    zoom = Math.min(canvas.width / (worldW + 100), canvas.height / (worldH + 100));
+    zoom = Math.max(0.01, Math.min(zoom, 4));
+    camX = -(minX * TILE_PX + worldW / 2) * zoom + canvas.width / 2;
+    camY = -(minY * TILE_PX + worldH / 2) * zoom + canvas.height / 2;
+    updateZoomDisplay();
+    render();
+    fetchVisibleTiles();
+}
+
+function updateZoomDisplay() {
+    document.getElementById('status-zoom').textContent = `Zoom: ${(zoom * 100).toFixed(0)}%`;
+}
+
+// ── Mouse handling ───────────────────────────────────────────────────────
+const wrap = document.getElementById('canvas-wrap');
+
+canvas.addEventListener('pointerdown', e => {
+    if (e.button === 0) {
+        isDragging = true;
+        didDrag = false;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        dragStartCamX = camX;
+        dragStartCamY = camY;
+        wrap.classList.add('dragging');
+        canvas.setPointerCapture(e.pointerId);
+    }
+});
+
+canvas.addEventListener('pointermove', e => {
+    if (isDragging) {
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDrag = true;
+        camX = dragStartCamX + dx;
+        camY = dragStartCamY + dy;
+        render();
+    }
+    // Update mouse world coords
+    const rect = canvas.getBoundingClientRect();
+    const wx = (e.clientX - rect.left - camX) / (zoom * TILE_PX);
+    const wy = (e.clientY - rect.top - camY) / (zoom * TILE_PX);
+    document.getElementById('status-mouse').textContent = `Tile: ${Math.floor(wx)}, ${Math.floor(wy)}`;
+});
+
+canvas.addEventListener('pointerup', e => {
+    if (isDragging) {
+        isDragging = false;
+        wrap.classList.remove('dragging');
+        canvas.releasePointerCapture(e.pointerId);
+        if (!didDrag) {
+            // Click — find zone under cursor
+            const rect = canvas.getBoundingClientRect();
+            const wx = (e.clientX - rect.left - camX) / (zoom * TILE_PX);
+            const wy = (e.clientY - rect.top - camY) / (zoom * TILE_PX);
+            handleClick(wx, wy);
+        }
+        fetchVisibleTiles();
+    }
+});
+
+canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const worldX = (mx - camX) / zoom;
+    const worldY = (my - camY) / zoom;
+
+    const factor = e.deltaY < 0 ? 1.2 : 0.833;
+    zoom *= factor;
+    zoom = Math.max(0.01, Math.min(zoom, 8));
+
+    camX = mx - worldX * zoom;
+    camY = my - worldY * zoom;
+    updateZoomDisplay();
+    render();
+    // Debounce tile fetching on zoom
+    clearTimeout(window._zoomFetchTimer);
+    window._zoomFetchTimer = setTimeout(fetchVisibleTiles, 200);
+}, { passive: false });
+
+function handleClick(wx, wy) {
+    for (const z of zones) {
+        const off = z.baked_offset || {x:0, y:0};
+        const s = z.baked_scale || 1;
+        const w = (z.width || 25) * s;
+        const h = (z.height || 25) * s;
+        if (wx >= off.x && wx <= off.x + w && wy >= off.y && wy <= off.y + h) {
+            selectZone(z.id);
+            return;
+        }
+    }
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────
+function render() {
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(camX, camY);
+    ctx.scale(zoom, zoom);
+
+    // Draw zones with tiles
+    for (const z of zones) {
+        drawZone(z);
+    }
+
+    // Draw connections on top
+    if (showConnections) {
+        drawConnections();
+    }
+
+    // Draw changeset overlay
+    drawChangesetOverlay();
+
+    // Draw labels last (on top of everything)
+    if (showLabels) {
+        for (const z of zones) {
+            drawZoneLabel(z);
+        }
+    }
+
+    ctx.restore();
+}
+
+function drawZone(z) {
+    const off = z.baked_offset || {x:0, y:0};
+    const s = z.baked_scale || 1;
+    const w = (z.width || 25) * s;
+    const h = (z.height || 25) * s;
+    const px = off.x * TILE_PX;
+    const py = off.y * TILE_PX;
+    const pw = w * TILE_PX;
+    const ph = h * TILE_PX;
+    const isSelected = selectedZone === z.id;
+    const isFiltered = searchFilter && !z.zone_name.toLowerCase().includes(searchFilter) && !z.id.toLowerCase().includes(searchFilter);
+
+    ctx.save();
+    if (isFiltered) ctx.globalAlpha = 0.15;
+
+    // Check if we have cached tiles for this zone
+    const cached = tileCache[z.id];
+    if (cached && maptilesLoaded) {
+        // Draw actual tiles (the cached canvas is at 1:1 LoY scale, but baked zones are scaled)
+        // The cached canvas is width*TILE_PX x height*TILE_PX (LoY source size)
+        // The baked zone is width*scale tiles, so we need to stretch
+        ctx.drawImage(cached.canvas, px, py, pw, ph);
+    } else {
+        // Fallback: colored rectangle
+        const TILESET_COLORS = {
+            0: '#4b5563', 8: '#78531e', 16: '#1e3a6e', 112: '#1a5c30',
+            144: '#5ba8c8', 192: '#0f3d1a', 224: '#9a7b18', 240: '#5a2e0a',
+        };
+        ctx.fillStyle = TILESET_COLORS[z.tileset] || '#4b5563';
+        ctx.globalAlpha *= 0.6;
+        ctx.fillRect(px, py, pw, ph);
+        ctx.globalAlpha = isFiltered ? 0.15 : 1;
+    }
+
+    // Border
+    ctx.strokeStyle = isSelected ? '#e94560' : 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = isSelected ? 4 : 1;
+    ctx.strokeRect(px, py, pw, ph);
+
+    // Selection highlight
+    if (isSelected) {
+        ctx.fillStyle = 'rgba(233, 69, 96, 0.1)';
+        ctx.fillRect(px, py, pw, ph);
+    }
+
+    ctx.restore();
+}
+
+function drawZoneLabel(z) {
+    const off = z.baked_offset || {x:0, y:0};
+    const s = z.baked_scale || 1;
+    const w = (z.width || 25) * s;
+    const h = (z.height || 25) * s;
+    const px = off.x * TILE_PX;
+    const py = off.y * TILE_PX;
+    const pw = w * TILE_PX;
+    const ph = h * TILE_PX;
+    const isFiltered = searchFilter && !z.zone_name.toLowerCase().includes(searchFilter) && !z.id.toLowerCase().includes(searchFilter);
+
+    ctx.save();
+    if (isFiltered) ctx.globalAlpha = 0.15;
+
+    // Only draw labels when zoomed enough to see them
+    const screenW = pw * zoom;
+    if (screenW < 30) { ctx.restore(); return; }
+
+    // Font size in world coords that appears reasonable on screen
+    // Target ~12-14px on screen, so divide by zoom
+    const fontSize = Math.max(8 / zoom, Math.min(14 / zoom, pw / 6));
+    const pad = 4 / zoom;
+
+    // Background pill for readability
+    const name = z.zone_name || z.id;
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    const tm = ctx.measureText(name);
+    const lblW = tm.width + pad * 3;
+    const lblH = fontSize + pad * 2;
+    const lblX = px + pw / 2 - lblW / 2;
+    const lblY = py + ph / 2 - lblH / 2;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.beginPath();
+    ctx.roundRect(lblX, lblY, lblW, lblH, pad);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(name, px + pw / 2, py + ph / 2);
+
+    // NPC count badge
+    if (z.npc_count > 0 && screenW > 50) {
+        const bs = fontSize * 0.6;
+        ctx.fillStyle = '#e94560';
+        ctx.beginPath();
+        ctx.arc(px + pw - bs * 1.5, py + bs * 1.5, bs * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${bs * 0.9}px sans-serif`;
+        ctx.fillText(z.npc_count, px + pw - bs * 1.5, py + bs * 1.5);
+    }
+
+    // Dungeon icon
+    if (z.dungeon_base && screenW > 50) {
+        const bs = fontSize * 0.6;
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.beginPath();
+        ctx.arc(px + bs * 1.5, py + bs * 1.5, bs * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = `${bs}px sans-serif`;
+        ctx.fillText('D', px + bs * 1.5, py + bs * 1.5);
+    }
+
+    ctx.restore();
+}
+
+function drawConnections() {
+    ctx.save();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(233, 69, 96, 0.5)';
+    ctx.setLineDash([8, 6]);
+    for (const z of zones) {
+        const off = z.baked_offset || {x:0, y:0};
+        const s = z.baked_scale || 1;
+        for (const exit of (z.exits || [])) {
+            const target = zones.find(t => t.id === exit.target);
+            if (!target) continue;
+            const tOff = target.baked_offset || {x:0, y:0};
+            const tS = target.baked_scale || 1;
+
+            const sx = (off.x + (exit.x || 0) * s) * TILE_PX;
+            const sy = (off.y + (exit.y || 0) * s) * TILE_PX;
+            const tx = (tOff.x + (exit.tx || 0) * tS) * TILE_PX;
+            const ty = (tOff.y + (exit.ty || 0) * tS) * TILE_PX;
+
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(tx, ty);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
+// ── Zone Selection ───────────────────────────────────────────────────────
+async function selectZone(zoneId) {
+    selectedZone = zoneId;
+    const z = zones.find(z => z.id === zoneId);
+    document.getElementById('panel-title').textContent = z ? (z.zone_name || z.id) : zoneId;
+    document.getElementById('panel-subtitle').textContent = zoneId;
+
+    const data = await fetch(`/api/zone/${zoneId}`).then(r => r.json());
+    selectedZoneFull = data;
+
+    switchTab(currentTab);
+    render();
+}
+
+// ── Tab Switching ────────────────────────────────────────────────────────
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('#panel-tabs button').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tab);
+    });
+    const content = document.getElementById('panel-content');
+    if (tab === 'changeset') { renderChangesetTab(); return; }
+    if (!selectedZoneFull) {
+        content.innerHTML = '<p style="color:#666;text-align:center;margin-top:40px">Click a zone on the map to edit it</p>';
+        return;
+    }
+
+    const d = selectedZoneFull;
+    switch (tab) {
+        case 'info': renderInfoTab(d); break;
+        case 'npcs': renderNpcsTab(d); break;
+        case 'buildings': renderBuildingsTab(d); break;
+        case 'exits': renderExitsTab(d); break;
+        case 'spawns': renderSpawnsTab(d); break;
+        case 'quests': renderQuestsTab(d); break;
+    }
+}
+
+function renderInfoTab(d) {
+    document.getElementById('panel-content').innerHTML = `
+        <div class="field"><label>Zone ID</label><input value="${d.id || ''}" readonly style="opacity:0.6"></div>
+        <div class="field"><label>Zone Name</label><input value="${esc(d.zone_name || '')}" onchange="updateField('zone_name', this.value)"></div>
+        <div class="field"><label>Description</label><textarea onchange="updateField('description', this.value)">${esc(d.description || '')}</textarea></div>
+        <div class="field-row">
+            <div class="field"><label>Width</label><input type="number" value="${d.width || 25}" onchange="updateField('width', parseInt(this.value))"></div>
+            <div class="field"><label>Height</label><input type="number" value="${d.height || 25}" onchange="updateField('height', parseInt(this.value))"></div>
+            <div class="field"><label>Tileset</label><input type="number" value="${d.tileset || 0}" onchange="updateField('tileset', parseInt(this.value))"></div>
+        </div>
+        <div class="field-row">
+            <div class="field"><label>Scale</label><input type="number" value="${d.baked_scale || 1}" readonly style="opacity:0.6"></div>
+            <div class="field"><label>Offset X</label><input type="number" value="${d.baked_offset ? d.baked_offset.x : 0}" readonly style="opacity:0.6"></div>
+            <div class="field"><label>Offset Y</label><input type="number" value="${d.baked_offset ? d.baked_offset.y : 0}" readonly style="opacity:0.6"></div>
+        </div>
+        <div class="field-row">
+            <div class="field"><label>Dungeon Base</label><input value="${esc(d.dungeon_base || '')}" onchange="updateField('dungeon_base', this.value)"></div>
+            <div class="field"><label>Floors</label><input type="number" value="${d.dungeon_count || 0}" onchange="updateField('dungeon_count', parseInt(this.value))"></div>
+        </div>
+    `;
+}
+
+function renderNpcsTab(d) {
+    const npcs = d.npcs || [];
+    const NPC_COLORS = { shop:'#fbbf24', elder:'#60a5fa', scriptfile:'#4ade80', message:'#9ca3af', tips:'#a78bfa', pets:'#f472b6', craft:'#fb923c', maps:'#38bdf8', trainer:'#ef4444' };
+    let html = '<ul class="item-list">';
+    npcs.forEach((npc, i) => {
+        const color = NPC_COLORS[npc.type] || '#666';
+        html += `<li onclick="editNpc(${i})">
+            <span class="npc-dot" style="background:${color}"></span>
+            <span class="npc-name">${esc(npc.name || 'Unknown')}</span>
+            <span class="npc-type">${npc.type || '?'} (${npc.x},${npc.y})</span>
+            <button class="btn-remove" onclick="event.stopPropagation();removeNpc(${i})">x</button>
+        </li>`;
+    });
+    html += '</ul><button class="btn-add" onclick="addNpc()">+ Add NPC</button><div id="npc-editor"></div>';
+    document.getElementById('panel-content').innerHTML = html;
+}
+
+function editNpc(index) {
+    const npc = selectedZoneFull.npcs[index];
+    document.getElementById('npc-editor').innerHTML = `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #0f3460">
+            <div class="field"><label>Name</label><input value="${esc(npc.name || '')}" onchange="updateNpc(${index}, 'name', this.value)"></div>
+            <div class="field"><label>Type</label>
+                <select onchange="updateNpc(${index}, 'type', this.value)">
+                    ${['shop','scriptfile','elder','message','tips','pets','craft','maps','trainer'].map(t =>
+                        `<option value="${t}" ${npc.type === t ? 'selected' : ''}>${t}</option>`
+                    ).join('')}
+                </select>
+            </div>
+            <div class="field-row">
+                <div class="field"><label>X</label><input type="number" value="${npc.x || 0}" onchange="updateNpc(${index}, 'x', parseInt(this.value))"></div>
+                <div class="field"><label>Y</label><input type="number" value="${npc.y || 0}" onchange="updateNpc(${index}, 'y', parseInt(this.value))"></div>
+            </div>
+            <div class="field-row">
+                <div class="field"><label>Tile</label><input type="number" value="${npc.tile || 0}" onchange="updateNpc(${index}, 'tile', parseInt(this.value))"></div>
+                <div class="field"><label>Portrait</label><input type="number" value="${npc.portrait || 0}" onchange="updateNpc(${index}, 'portrait', parseInt(this.value))"></div>
+            </div>
+            ${npc.type === 'shop' ? `<div class="field"><label>Shop ID</label><input value="${esc(npc.shop_id || '')}" onchange="updateNpc(${index}, 'shop_id', this.value)"></div>` : ''}
+            ${npc.type === 'message' ? `<div class="field"><label>Message</label><textarea onchange="updateNpc(${index}, 'message', this.value)">${esc(npc.message || '')}</textarea></div>` : ''}
+            ${npc.type === 'scriptfile' ? `<div class="field"><label>Script File</label><input value="${esc(npc.file || '')}" onchange="updateNpc(${index}, 'file', this.value)"></div>` : ''}
+            <canvas id="npc-preview" width="64" height="64" style="border:1px solid #1a4a8a;border-radius:4px;image-rendering:pixelated;margin-top:6px"></canvas>
+        </div>
+    `;
+    renderNpcSprite(npc.tile || 0);
+}
+
+function renderNpcSprite(tileIdx) {
+    const cv = document.getElementById('npc-preview');
+    if (!cv) return;
+    const c = cv.getContext('2d');
+    c.clearRect(0, 0, 64, 64);
+    c.imageSmoothingEnabled = false;
+    const img = tileIdx < 4096 ? charsImg : chars2Img;
+    const idx = tileIdx % 4096;
+    const sx = (idx % 64) * 8;
+    const sy = Math.floor(idx / 64) * 8;
+    if (img && img.complete) {
+        c.drawImage(img, sx, sy, 8, 8, 0, 0, 64, 64);
+    }
+}
+
+function updateNpc(index, field, value) { selectedZoneFull.npcs[index][field] = value; markUnsaved(); }
+function addNpc() {
+    if (!selectedZoneFull.npcs) selectedZoneFull.npcs = [];
+    selectedZoneFull.npcs.push({ name: 'New NPC', type: 'message', x: 12, y: 12, tile: 128, portrait: 144, message: 'Hello!' });
+    markUnsaved(); renderNpcsTab(selectedZoneFull);
+}
+function removeNpc(index) { selectedZoneFull.npcs.splice(index, 1); markUnsaved(); renderNpcsTab(selectedZoneFull); }
+
+function renderBuildingsTab(d) {
+    const houses = d.houses || [];
+    let html = '<ul class="item-list">';
+    houses.forEach((h, i) => {
+        const name = (h.sign || '').split('/')[0].trim() || `Building ${i+1}`;
+        html += `<li onclick="editBuilding(${i})">
+            <span class="npc-dot" style="background:#78350f"></span>
+            <span class="npc-name">${esc(name)}</span>
+            <span class="npc-type">${h.width}x${h.height} (${h.x},${h.y})</span>
+            <button class="btn-remove" onclick="event.stopPropagation();removeBuilding(${i})">x</button>
+        </li>`;
+    });
+    html += '</ul><button class="btn-add" onclick="addBuilding()">+ Add Building</button><div id="building-editor"></div>';
+    document.getElementById('panel-content').innerHTML = html;
+}
+
+function editBuilding(index) {
+    const h = selectedZoneFull.houses[index];
+    document.getElementById('building-editor').innerHTML = `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #0f3460">
+            <div class="field"><label>Sign Text</label><textarea onchange="updateBuilding(${index}, 'sign', this.value)">${esc(h.sign || '')}</textarea></div>
+            <div class="field-row">
+                <div class="field"><label>X</label><input type="number" value="${h.x||0}" onchange="updateBuilding(${index},'x',parseInt(this.value))"></div>
+                <div class="field"><label>Y</label><input type="number" value="${h.y||0}" onchange="updateBuilding(${index},'y',parseInt(this.value))"></div>
+            </div>
+            <div class="field-row">
+                <div class="field"><label>Width</label><input type="number" value="${h.width||4}" onchange="updateBuilding(${index},'width',parseInt(this.value))"></div>
+                <div class="field"><label>Height</label><input type="number" value="${h.height||4}" onchange="updateBuilding(${index},'height',parseInt(this.value))"></div>
+            </div>
+            <div class="field-row">
+                <div class="field"><label>Door DX</label><input type="number" value="${h.dx||0}" onchange="updateBuilding(${index},'dx',parseInt(this.value))"></div>
+                <div class="field"><label>Door DY</label><input type="number" value="${h.dy||0}" onchange="updateBuilding(${index},'dy',parseInt(this.value))"></div>
+            </div>
+        </div>
+    `;
+}
+
+function updateBuilding(index, field, value) { selectedZoneFull.houses[index][field] = value; markUnsaved(); }
+function addBuilding() {
+    if (!selectedZoneFull.houses) selectedZoneFull.houses = [];
+    selectedZoneFull.houses.push({ sign: 'New Building', width: 5, height: 5, x: 10, y: 10, dx: 0, dy: 1 });
+    markUnsaved(); renderBuildingsTab(selectedZoneFull);
+}
+function removeBuilding(index) { selectedZoneFull.houses.splice(index, 1); markUnsaved(); renderBuildingsTab(selectedZoneFull); }
+
+function renderExitsTab(d) {
+    const exits = d.exits || [];
+    let html = '';
+    exits.forEach((ex, i) => {
+        const targetName = zones.find(z => z.id === ex.target)?.zone_name || ex.target;
+        html += `<div style="padding:6px 8px;background:#0d1b2a;border:1px solid #1a4a8a;border-radius:4px;margin-bottom:4px;font-size:12px;display:flex;align-items:center;gap:6px">
+            <span style="color:#e94560">-></span>
+            <strong>${esc(targetName)}</strong>
+            <span style="color:#888;font-size:10px;margin-left:auto">from (${ex.x},${ex.y}) to (${ex.tx},${ex.ty})</span>
+        </div>`;
+    });
+    if (!exits.length) html = '<p style="color:#666;text-align:center;margin-top:20px">No exits</p>';
+    document.getElementById('panel-content').innerHTML = html;
+}
+
+function renderSpawnsTab(d) {
+    const spawns = d.spawns || [];
+    let html = '<ul class="item-list">';
+    spawns.forEach((s, i) => {
+        html += `<li onclick="editSpawn(${i})">
+            <span class="npc-dot" style="background:#ef4444"></span>
+            <span class="npc-name">${esc(s.type || 'Unknown')}</span>
+            <span class="npc-type">${s.width ? `${s.width}x${s.height}` : 'pt'} @ (${s.x},${s.y}) ${s.chance}%</span>
+            <button class="btn-remove" onclick="event.stopPropagation();removeSpawn(${i})">x</button>
+        </li>`;
+    });
+    html += '</ul><button class="btn-add" onclick="addSpawn()">+ Add Spawn</button><div id="spawn-editor"></div>';
+    document.getElementById('panel-content').innerHTML = html;
+}
+
+function editSpawn(index) {
+    const s = selectedZoneFull.spawns[index];
+    document.getElementById('spawn-editor').innerHTML = `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #0f3460">
+            <div class="field"><label>Enemy Type</label><input value="${esc(s.type||'')}" onchange="updateSpawn(${index},'type',this.value)"></div>
+            <div class="field-row">
+                <div class="field"><label>X</label><input type="number" value="${s.x||0}" onchange="updateSpawn(${index},'x',parseInt(this.value))"></div>
+                <div class="field"><label>Y</label><input type="number" value="${s.y||0}" onchange="updateSpawn(${index},'y',parseInt(this.value))"></div>
+            </div>
+            <div class="field-row">
+                <div class="field"><label>Width</label><input type="number" value="${s.width||0}" onchange="updateSpawn(${index},'width',parseInt(this.value))"></div>
+                <div class="field"><label>Height</label><input type="number" value="${s.height||0}" onchange="updateSpawn(${index},'height',parseInt(this.value))"></div>
+            </div>
+            <div class="field"><label>Chance (0-255)</label><input type="number" value="${s.chance||100}" onchange="updateSpawn(${index},'chance',parseInt(this.value))"></div>
+        </div>
+    `;
+}
+
+function updateSpawn(index, field, value) { selectedZoneFull.spawns[index][field] = value; markUnsaved(); }
+function addSpawn() {
+    if (!selectedZoneFull.spawns) selectedZoneFull.spawns = [];
+    selectedZoneFull.spawns.push({ type: 'Chicken', x: 5, y: 5, width: 10, height: 10, chance: 100 });
+    markUnsaved(); renderSpawnsTab(selectedZoneFull);
+}
+function removeSpawn(index) { selectedZoneFull.spawns.splice(index, 1); markUnsaved(); renderSpawnsTab(selectedZoneFull); }
+
+function renderQuestsTab(d) {
+    const zoneId = d.id;
+    const related = quests.filter(q => q.location === zoneId || q.target_location === zoneId);
+    let html = `<p style="color:#888;font-size:11px;margin-bottom:6px">${related.length} quests in this zone</p>`;
+    html += '<ul class="item-list">';
+    related.forEach(q => {
+        html += `<li onclick="openQuest('${q.id}')">
+            <span class="npc-dot" style="background:#fbbf24"></span>
+            <span class="npc-name">${esc(q.title || q.id)}</span>
+            <span class="npc-type">Lv.${q.level}</span>
+        </li>`;
+    });
+    html += '</ul>';
+    html += `<details style="margin-top:10px"><summary style="color:#888;cursor:pointer;font-size:11px">All Quests (${quests.length})</summary>`;
+    html += '<ul class="item-list" style="margin-top:6px">';
+    quests.forEach(q => {
+        html += `<li onclick="openQuest('${q.id}')" style="padding:4px 6px">
+            <span class="npc-name" style="font-size:11px">${esc(q.title || q.id)}</span>
+            <span class="npc-type">${q.location} Lv.${q.level}</span>
+        </li>`;
+    });
+    html += '</ul></details>';
+    document.getElementById('panel-content').innerHTML = html;
+}
+
+async function openQuest(questId) {
+    const data = await fetch(`/api/quest/${questId}`).then(r => r.json());
+    document.getElementById('panel-content').innerHTML = `
+        <button onclick="switchTab('quests')" style="background:none;border:none;color:#e94560;cursor:pointer;margin-bottom:6px;font-size:12px">Back</button>
+        <div class="field"><label>Quest ID</label><input value="${data.id||''}" readonly style="opacity:0.6"></div>
+        <div class="field"><label>Title</label><input value="${esc(data.title||'')}" id="q-title"></div>
+        <div class="field-row">
+            <div class="field"><label>Level</label><input type="number" value="${data.level||0}" id="q-level"></div>
+            <div class="field"><label>Location</label><input value="${esc(data.location||'')}" id="q-location"></div>
+        </div>
+        <div class="field"><label>Summary</label><textarea id="q-summary">${esc(data.summary||'')}</textarea></div>
+        <div class="field"><label>Start Script (JSON)</label><textarea id="q-start" style="min-height:100px;font-family:monospace;font-size:10px">${JSON.stringify(data.start_script||[], null, 2)}</textarea></div>
+        <div class="field"><label>Events (JSON)</label><textarea id="q-events" style="min-height:80px;font-family:monospace;font-size:10px">${JSON.stringify(data.events||[], null, 2)}</textarea></div>
+        <button onclick="saveQuest('${questId}')" style="background:#4ade80;color:#000;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;margin-top:6px;width:100%;font-size:12px">Save Quest</button>
+    `;
+}
+
+async function saveQuest(questId) {
+    const updates = {
+        title: document.getElementById('q-title').value,
+        level: parseInt(document.getElementById('q-level').value),
+        location: document.getElementById('q-location').value,
+        summary: document.getElementById('q-summary').value,
+    };
+    try {
+        updates.start_script = JSON.parse(document.getElementById('q-start').value);
+        updates.events = JSON.parse(document.getElementById('q-events').value);
+    } catch(e) { showToast('JSON error: ' + e.message, true); return; }
+    const res = await fetch(`/api/quest/${questId}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(updates) });
+    if (res.ok) showToast('Quest saved!'); else showToast('Error saving quest', true);
+}
+
+// ── Data Updates ─────────────────────────────────────────────────────────
+function updateField(field, value) {
+    if (!selectedZoneFull) return;
+    selectedZoneFull[field] = value;
+    markUnsaved();
+}
+
+function markUnsaved() {
+    hasUnsavedChanges = true;
+    document.getElementById('status-save').textContent = 'Unsaved changes';
+    document.getElementById('status-save').className = 'unsaved';
+}
+
+async function saveChanges() {
+    if (!selectedZoneFull || !hasUnsavedChanges) { showToast('Nothing to save'); return; }
+    const res = await fetch(`/api/zone/${selectedZone}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(selectedZoneFull)
+    });
+    if (res.ok) {
+        hasUnsavedChanges = false;
+        document.getElementById('status-save').textContent = 'Saved';
+        document.getElementById('status-save').className = '';
+        showToast('Zone saved!');
+        zones = await fetch('/api/zones').then(r => r.json());
+        render();
+    } else { showToast('Error saving zone', true); }
+}
+
+// ── Snapshot / Diff / Export ─────────────────────────────────────────────
+async function takeSnapshot() {
+    const res = await fetch('/api/snapshot').then(r => r.json());
+    showToast(`Snapshot taken: ${res.count} zones`);
+}
+
+async function showDiff() {
+    const res = await fetch('/api/diff');
+    if (!res.ok) { showToast('Take a snapshot first', true); return; }
+    const changes = await res.json();
+    const content = document.getElementById('panel-content');
+    if (!changes.length) {
+        content.innerHTML = '<p style="color:#4ade80;text-align:center;margin-top:40px">No changes since snapshot</p>';
+        return;
+    }
+    let html = `<h3 style="color:#e94560;margin-bottom:8px;font-size:13px">${changes.length} zone(s) changed</h3>`;
+    changes.forEach(c => {
+        const name = zones.find(z => z.id === c.zone)?.zone_name || c.zone;
+        html += `<div style="padding:6px 8px;background:#0d1b2a;border:1px solid #1a4a8a;border-radius:4px;margin-bottom:4px;font-size:12px;cursor:pointer" onclick="selectZone('${c.zone}')">
+            <strong>${esc(name)}</strong> <span style="color:#888">(${c.zone})</span><br>
+            <span style="color:#fbbf24;font-size:10px">${c.type}: ${(c.fields || []).join(', ')}</span>
+        </div>`;
+    });
+    content.innerHTML = html;
+    document.getElementById('panel-title').textContent = 'Diff Results';
+    document.getElementById('panel-subtitle').textContent = '';
+}
+
+async function exportAll() {
+    const res = await fetch('/api/export', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) showToast(`Exported ${data.count} zones`);
+    else showToast('Export failed', true);
+}
+
+// ── Changeset Import / Diff / Cherry-pick ───────────────────────────────
+let importedChangeset = null;
+let acceptedChanges = {}; // {zone_id: Set of "x,y" keys}
+
+function importChangesetFile() {
+    const input = document.getElementById('cs-file-input');
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const text = await file.text();
+        try {
+            const cs = JSON.parse(text);
+            const res = await fetch('/api/import-changeset', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: text
+            });
+            const summary = await res.json();
+            importedChangeset = cs;
+            acceptedChanges = {};
+            // Pre-accept all changes
+            for (const [zid, changes] of Object.entries(cs.tile_changes || {})) {
+                acceptedChanges[zid] = new Set(changes.map(c => `${c[0]},${c[1]}`));
+            }
+            document.getElementById('btn-clear-cs').style.display = '';
+            showToast(`Imported: ${summary.author} — ${summary.tile_change_count} tiles, ${summary.annotation_count} notes`);
+            switchTab('changeset');
+            render();
+        } catch (err) {
+            showToast('Invalid changeset: ' + err.message, true);
+        }
+        input.value = '';
+    };
+    input.click();
+}
+
+async function clearChangeset() {
+    importedChangeset = null;
+    acceptedChanges = {};
+    document.getElementById('btn-clear-cs').style.display = 'none';
+    await fetch('/api/clear-changeset', { method: 'POST' });
+    showToast('Changeset cleared');
+    render();
+}
+
+function renderChangesetTab() {
+    const content = document.getElementById('panel-content');
+    if (!importedChangeset) {
+        content.innerHTML = '<p style="color:#666;text-align:center;margin-top:30px">No changeset imported.<br>Click "Import Changeset" to load one.</p>';
+        return;
+    }
+
+    const cs = importedChangeset;
+    const tc = Object.entries(cs.tile_changes || {});
+    const an = Object.entries(cs.annotations || {});
+    let html = `<div style="background:#0d1b2a;padding:8px;border-radius:4px;margin-bottom:8px;font-size:11px">
+        <strong>Author:</strong> ${esc(cs.author || '?')}<br>
+        <strong>Time:</strong> ${cs.timestamp || '?'}<br>
+        <strong>Tiles:</strong> ${tc.reduce((s,[,v])=>s+v.length,0)} changes in ${tc.length} zones<br>
+        <strong>Notes:</strong> ${an.reduce((s,[,v])=>s+v.length,0)} annotations
+    </div>`;
+
+    // Tile changes per zone
+    if (tc.length) {
+        html += '<h4 style="font-size:11px;color:#e94560;margin-bottom:4px">Tile Changes</h4>';
+        for (const [zid, changes] of tc) {
+            const zname = zones.find(z => z.id === zid)?.zone_name || zid;
+            const accepted = acceptedChanges[zid] || new Set();
+            const allAccepted = changes.every(c => accepted.has(`${c[0]},${c[1]}`));
+            html += `<div style="background:#0d1b2a;border:1px solid #1a4a8a;border-radius:4px;padding:6px 8px;margin-bottom:4px">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                    <input type="checkbox" ${allAccepted?'checked':''} onchange="toggleZoneChanges('${zid}',this.checked)">
+                    <strong style="font-size:11px;flex:1;cursor:pointer" onclick="selectZone('${zid}')">${esc(zname)}</strong>
+                    <span style="color:#888;font-size:10px">${changes.length} tiles</span>
+                </div>
+                <div style="max-height:80px;overflow-y:auto;font-size:10px;color:#aaa">
+                    ${changes.slice(0, 20).map(c => {
+                        const key = `${c[0]},${c[1]}`;
+                        const isAcc = accepted.has(key);
+                        return `<label style="display:flex;gap:4px;align-items:center;padding:1px 0;cursor:pointer">
+                            <input type="checkbox" ${isAcc?'checked':''} onchange="toggleTileChange('${zid}',${c[0]},${c[1]},this.checked)" style="margin:0">
+                            (${c[0]},${c[1]}): ${c[2]} -> ${c[3]}
+                        </label>`;
+                    }).join('')}
+                    ${changes.length > 20 ? `<div style="color:#888">...and ${changes.length-20} more</div>` : ''}
+                </div>
+            </div>`;
+        }
+    }
+
+    // Annotations
+    if (an.length) {
+        html += '<h4 style="font-size:11px;color:#4ade80;margin:8px 0 4px">Annotations</h4>';
+        for (const [zid, anns] of an) {
+            const zname = zones.find(z => z.id === zid)?.zone_name || zid;
+            html += `<div style="background:#0d1b2a;border:1px solid #1a4a8a;border-radius:4px;padding:6px 8px;margin-bottom:4px">
+                <strong style="font-size:11px;cursor:pointer" onclick="selectZone('${zid}')">${esc(zname)}</strong>
+                ${anns.map(a => `<div style="font-size:10px;color:#4ade80;padding:2px 0">(${a.x},${a.y}): ${esc(a.text)}</div>`).join('')}
+            </div>`;
+        }
+    }
+
+    html += `<button onclick="applyAccepted()" style="background:#4ade80;color:#000;border:none;padding:8px;border-radius:4px;cursor:pointer;width:100%;margin-top:8px;font-size:12px;font-weight:600">Apply Accepted Changes</button>`;
+    content.innerHTML = html;
+}
+
+function toggleZoneChanges(zid, checked) {
+    if (!importedChangeset) return;
+    const changes = importedChangeset.tile_changes[zid] || [];
+    if (checked) {
+        acceptedChanges[zid] = new Set(changes.map(c => `${c[0]},${c[1]}`));
+    } else {
+        acceptedChanges[zid] = new Set();
+    }
+    renderChangesetTab();
+    render();
+}
+
+function toggleTileChange(zid, x, y, checked) {
+    if (!acceptedChanges[zid]) acceptedChanges[zid] = new Set();
+    const key = `${x},${y}`;
+    if (checked) acceptedChanges[zid].add(key);
+    else acceptedChanges[zid].delete(key);
+    render();
+}
+
+async function applyAccepted() {
+    const payload = {};
+    for (const [zid, keys] of Object.entries(acceptedChanges)) {
+        if (!keys.size) continue;
+        const changes = (importedChangeset.tile_changes[zid] || []).filter(c => keys.has(`${c[0]},${c[1]}`));
+        if (changes.length) payload[zid] = changes;
+    }
+    if (!Object.keys(payload).length) { showToast('No changes accepted', true); return; }
+    const res = await fetch('/api/apply-changes', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.ok) {
+        const total = Object.values(payload).reduce((s,v) => s + v.length, 0);
+        showToast(`Applied ${total} tile changes to ${data.zones_updated} zones`);
+        clearChangeset();
+    } else { showToast('Error applying changes', true); }
+}
+
+// Draw changeset diff overlay on zones
+function drawChangesetOverlay() {
+    if (!importedChangeset) return;
+    ctx.save();
+    for (const [zid, changes] of Object.entries(importedChangeset.tile_changes || {})) {
+        const z = zones.find(z => z.id === zid);
+        if (!z) continue;
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        const accepted = acceptedChanges[zid] || new Set();
+        for (const [x, y, oldIdx, newIdx] of changes) {
+            const px = (off.x + x * s) * TILE_PX;
+            const py = (off.y + y * s) * TILE_PX;
+            const pw = s * TILE_PX, ph = s * TILE_PX;
+            const key = `${x},${y}`;
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = accepted.has(key) ? '#4ade80' : '#ef4444';
+            ctx.fillRect(px, py, pw, ph);
+        }
+    }
+    // Annotations
+    for (const [zid, anns] of Object.entries(importedChangeset.annotations || {})) {
+        const z = zones.find(z => z.id === zid);
+        if (!z) continue;
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        for (const ann of anns) {
+            const px = (off.x + ann.x * s) * TILE_PX;
+            const py = (off.y + ann.y * s) * TILE_PX;
+            const fs = Math.max(6/zoom, Math.min(11/zoom, 200));
+            const pad = 3/zoom;
+            ctx.globalAlpha = 0.9;
+            ctx.fillStyle = '#4ade80';
+            ctx.beginPath(); ctx.arc(px, py, 5/zoom, 0, Math.PI*2); ctx.fill();
+            ctx.font = `${fs}px sans-serif`;
+            const tm = ctx.measureText(ann.text);
+            ctx.fillStyle = 'rgba(74,222,128,0.9)';
+            ctx.beginPath(); ctx.roundRect(px + 6/zoom, py - fs - pad*2, tm.width + pad*2, fs + pad*2, pad); ctx.fill();
+            ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+            ctx.fillText(ann.text, px + 6/zoom + pad, py - fs - pad);
+        }
+    }
+    ctx.restore();
+}
+
+// ── Utilities ────────────────────────────────────────────────────────────
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function toggleConnections() { showConnections = !showConnections; document.getElementById('btn-connections').classList.toggle('active', showConnections); render(); }
+function toggleLabels() { showLabels = !showLabels; document.getElementById('btn-labels').classList.toggle('active', showLabels); render(); }
+function filterZones(query) { searchFilter = query.toLowerCase(); render(); }
+
+function showToast(msg, isError) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = isError ? '#e94560' : '#4ade80';
+    t.style.color = isError ? '#fff' : '#000';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveChanges(); }
+    if (e.key === 'Escape') { selectedZone = null; selectedZoneFull = null; switchTab(currentTab); render(); }
+});
+
+// Start
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Holy Knight"
+description = "A huge blessed knight"
+max_hp = 136
+move_speed = 22.0
+contact_damage = 5
+level = 57
+kingdom = "human"
+size_class = 1
+hostile = true
+attack_type = 12
+attack_damage = 8
+attack_speed = 0.8
+bullet_speed = 85
+bullet_count = 5
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 120.0
+ignores_terrain = false
+shield_hp = 15
+boss_phases = 2
+phase_2_attack = 14
+phase_2_bullet_count = 8
+summon_on_phase_change = true
+summon_phase_count = 3
+use_loy_sprite = true
+loy_tile_index = 40
+sprite_color = Color(0.6, 0.7, 0.9, 1)
+xp_value = 572
+score_value = 1144

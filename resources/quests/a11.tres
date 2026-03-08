@@ -1,0 +1,96 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_t5wsl"]
+
+[resource]
+script = ExtResource("1_t5wsl")
+id = "a11"
+title = "Smashing Ice Cubes"
+level = 41
+location = "nord1"
+target_location = "nord1"
+properties = [{
+"index": 0,
+"name": "Frosties Killed",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Oh yes?",
+"script": [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Sure",
+"script": [{
+"cmd": "startQuest",
+"id": "a11"
+}]
+}, {
+"name": "Nay!",
+"script": []
+}],
+"portrait": 169,
+"text": "Every now and again a Frostie is killing one the villagers! It's getting too much!"
+}]
+}],
+"portrait": 169,
+"text": "We need to thin out the Frostie population, will you help?"
+}]
+events = [{
+"param": "Frostie",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "nord1",
+"script": [{
+"attribute": "session-a11-0",
+"cmd": "if",
+"compare": "12",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Yes Sir!",
+"script": []
+}],
+"portrait": 169,
+"text": "Don't study them, kill them!"
+}]
+}, {
+"attribute": "session-a11-0",
+"cmd": "if",
+"compare": "11",
+"operation": "gt",
+"script": [{
+"cmd": "getItem",
+"count": "3200",
+"name": "Gold"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Diamond Knife"
+}, {
+"cmd": "getExp",
+"value": "2500"
+}, {
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 169,
+"text": "At last, that should buy us a few years. Take these as a reward."
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

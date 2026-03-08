@@ -1,0 +1,129 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_iinog"]
+
+[resource]
+script = ExtResource("1_iinog")
+id = "a15"
+title = "Dragons Egg Delivery"
+level = 21
+location = "nord1"
+target_location = "gomb"
+properties = [{
+"index": 0,
+"name": "Delivered",
+"type": "yesno"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "getItem",
+"count": "1",
+"name": "Dragon Egg"
+}, {
+"cmd": "startQuest",
+"id": "a15"
+}]
+}],
+"portrait": 169,
+"text": "We found a unusual egg here in the snow. We've no idea what it is."
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 169,
+"text": "Could you take it to Tyan in Gombard, he's an expert!"
+}]
+}],
+"portrait": 169,
+"text": "Oh many thanks Hero. Return here afterwards and I'll reward you."
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Dragon Egg"
+}]
+events = [{
+"param": "Tyan",
+"script": [{
+"cmd": "set",
+"id": "",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Tyan",
+"options": [{
+"name": "No Problem",
+"script": [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Dragon Egg"
+}]
+}],
+"portrait": 197,
+"text": "Oh, I'd heard about this. It's a Damya Dragon egg. Very rare. Thanks!"
+}],
+"type": "activate"
+}, {
+"param": "nord1",
+"script": [{
+"attribute": "session-a15-0",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Ok, sorry!",
+"script": []
+}],
+"portrait": 169,
+"text": "Have you given Tyan the egg yet?"
+}]
+}, {
+"attribute": "session-a15-0",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "2000",
+"name": "Gold"
+}, {
+"cmd": "getItem",
+"count": "1",
+"name": "Prong Tome"
+}, {
+"cmd": "getExp",
+"value": "1000"
+}, {
+"cmd": "showDialog",
+"name": "Eski",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 169,
+"text": "Tyan said it's a Damya Dragon egg? Really? Interesting. Here take this."
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

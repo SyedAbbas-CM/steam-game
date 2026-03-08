@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Ghost"
+max_hp = 4
+move_speed = 20.0
+contact_damage = 1
+attack_type = 8
+attack_damage = 1
+attack_speed = 2.0
+bullet_speed = 70.0
+bullet_count = 3
+preferred_distance = 40.0
+teleport_cooldown = 3.0
+sprite_frame = 192
+sprite_color = Color(0.7, 0.7, 1.0, 0.7)
+xp_value = 3
+score_value = 25

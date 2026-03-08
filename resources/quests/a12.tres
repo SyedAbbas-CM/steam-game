@@ -1,0 +1,96 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_xdrxb"]
+
+[resource]
+script = ExtResource("1_xdrxb")
+id = "a12"
+title = "Making a Stand"
+level = 51
+location = "tor4"
+target_location = "tor4"
+properties = [{
+"index": 0,
+"name": "Orc Witches Killed",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Oh yes?",
+"script": [{
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Sure",
+"script": [{
+"cmd": "startQuest",
+"id": "a12"
+}]
+}, {
+"name": "Nay!",
+"script": []
+}],
+"portrait": 239,
+"text": "The Orcs are getting daring, we need to make a statement to them! Time to fight!"
+}]
+}],
+"portrait": 239,
+"text": "Killing off their Witches should let them know. Kill 25 for me?"
+}]
+events = [{
+"param": "Orc Witch",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "tor4",
+"script": [{
+"attribute": "session-a12-0",
+"cmd": "if",
+"compare": "25",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Yes Sir!",
+"script": []
+}],
+"portrait": 239,
+"text": "Don't study them, kill them!"
+}]
+}, {
+"attribute": "session-a12-0",
+"cmd": "if",
+"compare": "24",
+"operation": "gt",
+"script": [{
+"cmd": "getItem",
+"count": "7000",
+"name": "Gold"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Conical Helmet"
+}, {
+"cmd": "getExp",
+"value": "6000"
+}, {
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 239,
+"text": "Here take this reward. That should let them Orcs know!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

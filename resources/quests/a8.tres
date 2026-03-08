@@ -1,0 +1,96 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_3awgk"]
+
+[resource]
+script = ExtResource("1_3awgk")
+id = "a8"
+title = "Ghoul Hunt"
+level = 17
+location = "sthel"
+target_location = "sthel"
+properties = [{
+"index": 0,
+"name": "Ghouls Killed",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Oh yes?",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Sure",
+"script": [{
+"cmd": "startQuest",
+"id": "a8"
+}]
+}, {
+"name": "Nay!",
+"script": []
+}],
+"portrait": 151,
+"text": "The ghouls have been coming out of the ground, causing the Oasis trouble!"
+}]
+}],
+"portrait": 151,
+"text": "We're offering a reward for killing 15 ghouls, you want in?"
+}]
+events = [{
+"param": "Ghoul",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "sthel",
+"script": [{
+"attribute": "session-a8-0",
+"cmd": "if",
+"compare": "15",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Yes Sir!",
+"script": []
+}],
+"portrait": 151,
+"text": "Still trying to find ghouls? How about in the dungeon?"
+}]
+}, {
+"attribute": "session-a8-0",
+"cmd": "if",
+"compare": "14",
+"operation": "gt",
+"script": [{
+"cmd": "getItem",
+"count": "1000",
+"name": "Gold"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Flinger"
+}, {
+"cmd": "getExp",
+"value": "500"
+}, {
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 151,
+"text": "Well done hero. Here's your reward."
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

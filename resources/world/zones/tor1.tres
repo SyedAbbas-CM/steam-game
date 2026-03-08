@@ -1,0 +1,58 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "tor1"
+zone_name = "Toronega Port"
+tileset = 224
+width = 47
+height = 21
+world_pos = Vector2i(64, 32)
+dungeon_base = "Tor-Dungeons"
+description = "The port at the pirate haven of Toronega"
+baked_offset = Vector2i(1180, -376)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "tor5",
+"tx": 0,
+"ty": 3,
+"x": 46,
+"y": 16
+}, {
+"target": "tor2",
+"tx": 22,
+"ty": 1,
+"x": 22,
+"y": 20
+}])
+npcs = Array[Dictionary]([{
+"file": "scripts/tor1-truman.xml",
+"name": "Truman",
+"portrait": 217,
+"tile": 216,
+"type": "scriptfile",
+"x": 18,
+"y": 14
+}, {
+"message": "Arrrrr!",
+"name": "Pirate",
+"portrait": 221,
+"tile": 220,
+"type": "message",
+"x": 30,
+"y": 3
+}, {
+"name": "Captain",
+"portrait": 223,
+"tile": 222,
+"type": "script",
+"x": 33,
+"y": 5
+}])
+signs = Array[Dictionary]([{
+"message": "Toronega Town",
+"x": 23,
+"y": 19
+}])

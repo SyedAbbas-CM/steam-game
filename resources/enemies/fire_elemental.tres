@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Fire Elemental"
+max_hp = 5
+move_speed = 15.0
+contact_damage = 1
+attack_type = 2
+attack_damage = 1
+attack_speed = 1.8
+bullet_speed = 90.0
+bullet_count = 2
+preferred_distance = 45.0
+leaves_trail = true
+trail_type = "fire"
+sprite_frame = 224
+sprite_color = Color(1.0, 0.4, 0.1, 1)
+xp_value = 4
+score_value = 25

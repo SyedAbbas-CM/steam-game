@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "nord-magic"
+shop_type = "magic"
+shop_name = "Abon"
+portrait = 169
+title = "The Frozen Tome"
+welcome = "Welcome magic user to our frosty home. How can I help?"
+nomoney = "You need more money"
+buy_text = "Make good use of it boy!"
+sell_text = "I shall add it to my collection"
+stock = [{ "item_name": "Town Portal", "required_quest": "" }, { "item_name": "Cure", "required_quest": "" }, { "item_name": "Magic Missile", "required_quest": "" }, { "item_name": "Red Potion", "required_quest": "" }, { "item_name": "Blue Potion", "required_quest": "" }, { "item_name": "Purple Potion", "required_quest": "" }, { "item_name": "Turq Potion", "required_quest": "" }, { "item_name": "Orange Potion", "required_quest": "" }, { "item_name": "Green Potion", "required_quest": "" }, { "item_name": "Aqua Potion", "required_quest": "" }, { "item_name": "Gold Potion", "required_quest": "" }, { "item_name": "Pale Potion", "required_quest": "" }]

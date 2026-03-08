@@ -1,0 +1,129 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_5p1q2"]
+
+[resource]
+script = ExtResource("1_5p1q2")
+id = "z5"
+title = "Parot Passion"
+level = 120
+location = "naleg"
+target_location = "talmita"
+properties = [{
+"index": 0,
+"name": "Delivered",
+"type": "yesno"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Par Tak",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Par Tak",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Par Tak",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "getItem",
+"count": "1",
+"name": "Marty"
+}, {
+"cmd": "startQuest",
+"id": "z5"
+}]
+}],
+"portrait": 200,
+"text": "My parrot Marty is on heat, he needs to get it out of his system."
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 200,
+"text": "Can you please take him to see my friend Goodman Durnik in Tal-Mita?"
+}]
+}],
+"portrait": 200,
+"text": "Oh, you are going to make it very happy!"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Marty"
+}]
+events = [{
+"param": "Goodman Durnik",
+"script": [{
+"cmd": "set",
+"id": "",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Goodman Durnik",
+"options": [{
+"name": "No Problem",
+"script": [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Marty"
+}]
+}],
+"portrait": 202,
+"text": "Oh, Marty again is it, I'll introduce him to some lovely birds I know!"
+}],
+"type": "activate"
+}, {
+"param": "naleg",
+"script": [{
+"attribute": "session-z5-0",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Par Tak",
+"options": [{
+"name": "Ok, sorry!",
+"script": []
+}],
+"portrait": 200,
+"text": "Have you delivered Marty yet?"
+}]
+}, {
+"attribute": "session-z5-0",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "5000",
+"name": "Gold"
+}, {
+"cmd": "getItem",
+"count": "1",
+"name": "Moonstone"
+}, {
+"cmd": "getExp",
+"value": "2000"
+}, {
+"cmd": "showDialog",
+"name": "Par Tak",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 200,
+"text": "Oh, you have made marty very happy! Here take this."
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

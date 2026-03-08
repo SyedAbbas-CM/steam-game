@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/fire_elemental.tres" id="2_fire_elemental"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/devil.tres" id="3_devil"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/animal/dragon.tres" id="4_dragon"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/imp.tres" id="5_imp"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/orc.tres" id="6_orc"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/dark_lord.tres" id="7_boss"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Burning Hall"
+theme = "red"
+enemy_pool = [ExtResource("2_fire_elemental"), ExtResource("3_devil"), ExtResource("4_dragon"), ExtResource("5_imp"), ExtResource("6_orc")]
+hazard_tiles = Array[Vector2i]([Vector2i(0, 17), Vector2i(1, 17)])
+decoration_tiles = Array[Vector2i]([Vector2i(11, 16), Vector2i(9, 16)])
+liquid_type = "lava"
+hazard_damage = 2
+hazard_interval = 0.8
+hazard_intensity = 0.5
+trap_density = 0.03
+web_bridge_density = 0.25
+allowed_transitions = Array[int]([0, 1, 2, 3])
+min_floor = 7
+max_floor = 9
+boss_definition = ExtResource("7_boss")
+difficulty_tier = 5
+base_difficulty = 0

@@ -1,0 +1,121 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_j01im"]
+
+[resource]
+script = ExtResource("1_j01im")
+id = "a1"
+title = "3 wishes"
+level = 27
+location = "heim"
+start_script = [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "a1"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 156,
+"text": "A magic lamp was stolen by a genie in the dungeons far north of here"
+}]
+}],
+"portrait": 156,
+"text": "It is sacred to us and we need it returned, will you retrieve it?"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Genie Lamp"
+}]
+events = [{
+"param": "Genie",
+"script": [{
+"attribute": "count-Genie Lamp",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Genie Lamp"
+}, {
+"attribute": "count-Genie Lamp",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 156,
+"text": "You have the lamp, now bring it to Dondheim!"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "heim",
+"script": [{
+"attribute": "count-Genie Lamp",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 156,
+"text": "The lamp must be returned!"
+}]
+}, {
+"attribute": "count-Genie Lamp",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "2223"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Genie Lamp"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Lined Cap"
+}, {
+"cmd": "getItem",
+"count": "3000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 156,
+"text": "The lamp must be returned!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

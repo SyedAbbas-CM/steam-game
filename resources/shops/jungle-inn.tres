@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "jungle-inn"
+shop_type = "inn"
+shop_name = "Tiktak"
+portrait = 306
+title = "TikTak's Tree House"
+welcome = "Hai! You very welcome here at TikTak's! Village shun me, you not!  / /  You buy something today?"
+nomoney = "You try to cheat TikTak! You no gold!"
+buy_text = "Good deal for me! Good deal for you!"
+sell_text = "You give me nice thing, thank you!"
+stock = [{ "item_name": "Apple", "required_quest": "" }, { "item_name": "Meat", "required_quest": "" }, { "item_name": "Chop", "required_quest": "" }, { "item_name": "Trap", "required_quest": "" }, { "item_name": "Fishing Pole", "required_quest": "" }, { "item_name": "Spade", "required_quest": "" }, { "item_name": "Powder Keg", "required_quest": "" }, { "item_name": "Harp Bow", "required_quest": "" }, { "item_name": "Pet Food", "required_quest": "" }]

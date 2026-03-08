@@ -1,0 +1,307 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_6m2np"]
+
+[resource]
+script = ExtResource("1_6m2np")
+id = "q6"
+title = "The Treaty"
+level = 28
+location = "gomb"
+target_location = "aria"
+properties = [{
+"index": 0,
+"name": "Signed at Aria",
+"type": "yesno"
+}, {
+"index": 1,
+"name": "Signed at S'thel",
+"type": "yesno"
+}, {
+"index": 2,
+"name": "Signed at Dondheim",
+"type": "yesno"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Yes",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "getItem",
+"count": "1",
+"name": "Treaty"
+}, {
+"cmd": "startQuest",
+"id": "q6"
+}]
+}],
+"portrait": 200,
+"text": "I'm trying to unite the towns under this treaty. I need the elders to sign it."
+}]
+}, {
+"name": "No",
+"script": []
+}],
+"portrait": 200,
+"text": "Would you take it round to them and get them to sign?"
+}]
+}],
+"portrait": 200,
+"text": "Here take the treaty, return here with the signatures."
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Treaty"
+}]
+events = [{
+"param": "Elder",
+"script": [{
+"attribute": "count-Treaty",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-q6-0",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Great",
+"script": []
+}],
+"portrait": 147,
+"text": "A treaty from Gombard you say, ok I'll sign."
+}, {
+"cmd": "set",
+"id": "",
+"index": "0",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "K'atel",
+"script": [{
+"attribute": "count-Treaty",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-q6-1",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Great",
+"script": []
+}],
+"portrait": 151,
+"text": "Hmm, a treaty, seems ok.. add my mark."
+}, {
+"cmd": "set",
+"id": "",
+"index": "1",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Odin",
+"script": [{
+"attribute": "count-Treaty",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-q6-2",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Um, ok!",
+"script": []
+}],
+"portrait": 156,
+"text": "A treaty! By the gods! A great idea!"
+}, {
+"cmd": "set",
+"id": "",
+"index": "2",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "gomb",
+"script": [{
+"attribute": "count-Treaty",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Ok",
+"script": []
+}],
+"portrait": 200,
+"text": "You've lost the treaty boy! Forget it!"
+}]
+}, {
+"attribute": "count-Treaty",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-q6-0",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "I'm on it!",
+"script": []
+}],
+"portrait": 200,
+"text": "I see you have yet to get a signature from Aria"
+}]
+}, {
+"attribute": "session-q6-1",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "I'm on it!",
+"script": []
+}],
+"portrait": 200,
+"text": "Don't forget to visit S'Thel"
+}]
+}, {
+"attribute": "session-q6-2",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "I'm on it!",
+"script": []
+}],
+"portrait": 200,
+"text": "Make sure you get Odin's signature!"
+}]
+}, {
+"attribute": "session-q6-0",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"attribute": "session-q6-1",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"attribute": "session-q6-2",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Yay!",
+"script": [{
+"cmd": "showDialog",
+"name": "Zeng",
+"options": [{
+"name": "Great!",
+"script": [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Treaty"
+}, {
+"attribute": "class-wizard",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "1",
+"name": "Band of Odin"
+}]
+}, {
+"attribute": "class-archer",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "1",
+"name": "Elven Boots"
+}]
+}, {
+"attribute": "class-warrior",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "1",
+"name": "Crusader Shield"
+}]
+}, {
+"cmd": "getItem",
+"count": "5000",
+"name": "Gold"
+}, {
+"cmd": "getExp",
+"value": "8700"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 200,
+"text": "Well done boy! You have changed Yore forever!"
+}]
+}],
+"portrait": 200,
+"text": "Here take this ancient artefact with my thanks."
+}]
+}]
+}]
+}]
+}],
+"type": "quest"
+}]

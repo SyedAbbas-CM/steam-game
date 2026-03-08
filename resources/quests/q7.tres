@@ -1,0 +1,128 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_idpng"]
+
+[resource]
+script = ExtResource("1_idpng")
+id = "q7"
+title = "Lost Child"
+level = 13
+location = "sthel"
+target_location = "mnt1"
+start_script = [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "q7"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 151,
+"text": "The goblins to the north have stolen a baby, please slay them until it's found!"
+}]
+}],
+"portrait": 151,
+"text": "Return here with the baby!"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Baby"
+}]
+events = [{
+"param": "Goblin",
+"script": [{
+"attribute": "count-Baby",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"attribute": "random-20",
+"cmd": "if",
+"compare": "0",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Baby"
+}, {
+"attribute": "count-Baby",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 151,
+"text": "You have found the baby, now return it to me!"
+}]
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "sthel",
+"script": [{
+"attribute": "count-Baby",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "I shall not fail!",
+"script": []
+}],
+"portrait": 151,
+"text": "The baby is still lost!"
+}]
+}, {
+"attribute": "count-Baby",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "1200"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Baby"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Goif Gloves"
+}, {
+"cmd": "getItem",
+"count": "1000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 151,
+"text": "Hero, your deeds will go down in history / / Take this reward!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

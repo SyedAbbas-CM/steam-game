@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="DropTable" format=3 uid="uid://bw8ney060i3n6"]
+
+[ext_resource type="Script" uid="uid://ckxxjs6aew46j" path="res://scripts/drops/drop_table.gd" id="1"]
+[ext_resource type="Script" uid="uid://dfwdb6umu4hbm" path="res://scripts/drops/drop_entry.gd" id="2"]
+[ext_resource type="Resource" uid="uid://euf81avsrtsg" path="res://resources/equipment/speed_boots.tres" id="3"]
+[ext_resource type="Resource" uid="uid://bvy1h4pse1qk" path="res://resources/equipment/rapid_fire_ring.tres" id="4"]
+[ext_resource type="Resource" uid="uid://crm5gbyoqyyp2" path="res://resources/equipment/spread_amulet.tres" id="5"]
+[ext_resource type="Resource" uid="uid://lth80yklgm84" path="res://resources/equipment/power_gem.tres" id="6"]
+[ext_resource type="Resource" uid="uid://cl7c0w6ybk22q" path="res://resources/equipment/heart_crystal.tres" id="7"]
+
+[sub_resource type="Resource" id="entry_1"]
+script = ExtResource("2")
+item = ExtResource("3")
+weight = 3.0
+
+[sub_resource type="Resource" id="entry_2"]
+script = ExtResource("2")
+item = ExtResource("4")
+weight = 2.0
+
+[sub_resource type="Resource" id="entry_3"]
+script = ExtResource("2")
+item = ExtResource("5")
+
+[sub_resource type="Resource" id="entry_4"]
+script = ExtResource("2")
+item = ExtResource("6")
+weight = 2.0
+
+[sub_resource type="Resource" id="entry_5"]
+script = ExtResource("2")
+item = ExtResource("7")
+weight = 3.0
+
+[resource]
+script = ExtResource("1")
+entries = Array[ExtResource("2")]([SubResource("entry_1"), SubResource("entry_2"), SubResource("entry_3"), SubResource("entry_4"), SubResource("entry_5")])
+drop_chance = 0.35

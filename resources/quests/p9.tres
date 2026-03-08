@@ -1,0 +1,127 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gfb66"]
+
+[resource]
+script = ExtResource("1_gfb66")
+id = "p9"
+title = "Disappearing Domino"
+level = 178
+location = "talnivek"
+start_script = [{
+"cmd": "showDialog",
+"name": "Arwyn",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Arwyn",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "p9"
+}]
+}, {
+"name": "No thanks",
+"script": []
+}],
+"portrait": 159,
+"text": "My last domino has been stolen, I can't play my favorite game! Will you find it for me?"
+}]
+}],
+"portrait": 159,
+"text": "I'm sure one of the creatures that live below have stolen it, I'll reward you if you bring it back to me!"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Domino"
+}]
+events = [{
+"param": "Oily Blob",
+"script": [{
+"attribute": "count-Domino",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"attribute": "random-20",
+"cmd": "if",
+"compare": "0",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Domino"
+}, {
+"attribute": "count-Domino",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Arwyn",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 159,
+"text": "The blobs had it? My god! Well bring it to me now."
+}]
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "talnivek",
+"script": [{
+"attribute": "count-Domino",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Arwyn",
+"options": [{
+"name": "I shall not fail!",
+"script": []
+}],
+"portrait": 159,
+"text": "Have you found my domino yet, I really want a game!"
+}]
+}, {
+"attribute": "count-Domino",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "10000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Domino"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Sword of Nivek"
+}, {
+"cmd": "getItem",
+"count": "5000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Arwyn",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 159,
+"text": "Well, thanks, take this precious sword. I'm off to play!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

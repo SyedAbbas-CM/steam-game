@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "thule-weapon"
+shop_type = "weapon"
+shop_name = "Madito"
+portrait = 330
+title = "The Lost Blade"
+welcome = "A hero here in Thule? Have you come to help us?!"
+nomoney = "You must bring me gold!"
+buy_text = "Glad to make a sale in this bad times!"
+sell_text = "This should be useful. Thank you!"
+stock = [{ "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Hunter Knife", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Explosion Arrow", "required_quest": "" }, { "item_name": "Lightning Shield", "required_quest": "" }]

@@ -1,0 +1,122 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_c6wfi"]
+
+[resource]
+script = ExtResource("1_c6wfi")
+id = "a5"
+title = "Nasty Sting"
+level = 45
+location = "tor4"
+target_location = "tor5"
+start_script = [{
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "a5"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 239,
+"text": "I am losing standing in my kingdom. I need a trinket to show my standing!"
+}]
+}],
+"portrait": 239,
+"text": "Fetch the giant scorpion's stinger for me, and I will reward you."
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Giant Stinger"
+}]
+events = [{
+"param": "Giant Scorpion",
+"script": [{
+"attribute": "count-Giant Stinger",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Giant Stinger"
+}, {
+"attribute": "count-Giant Stinger",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 239,
+"text": "You have it! Now bring it to me so I may it wear around my neck!"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "tor4",
+"script": [{
+"attribute": "count-Giant Stinger",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 239,
+"text": "Have you completed my simple task yet boy?"
+}]
+}, {
+"attribute": "count-Giant Stinger",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "6000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Giant Stinger"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Curved Sword"
+}, {
+"cmd": "getItem",
+"count": "5000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "King",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 239,
+"text": "Have you completed my simple task yet boy?"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

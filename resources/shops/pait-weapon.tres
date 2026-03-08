@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "pait-weapon"
+shop_type = "weapon"
+shop_name = "Shaku"
+portrait = 324
+title = "The Blow Pipe"
+welcome = "Mighty hero you are welcome here! We have fine weapons!"
+nomoney = "You must give gold for weapons!"
+buy_text = "Give gold! Here weapon!"
+sell_text = "I take from you! Here gold!"
+stock = [{ "item_name": "Harp Bow", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Explosion Arrow", "required_quest": "" }, { "item_name": "Lion Blade", "required_quest": "" }]

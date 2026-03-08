@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Fire Ninja"
+description = "A flame magic ninja"
+max_hp = 118
+move_speed = 30.0
+contact_damage = 5
+level = 12
+kingdom = "human"
+size_class = 0
+hostile = true
+attack_type = 11
+attack_damage = 8
+attack_speed = 1.0
+bullet_speed = 80
+bullet_count = 5
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 100.0
+ignores_terrain = false
+shield_hp = 15
+use_loy_sprite = true
+loy_tile_index = 423
+sprite_color = Color(0.6, 0.7, 0.9, 1)
+xp_value = 123
+score_value = 247

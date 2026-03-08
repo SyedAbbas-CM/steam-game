@@ -1,0 +1,122 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_e6h2s"]
+
+[resource]
+script = ExtResource("1_e6h2s")
+id = "z4"
+title = "Squash Squeerg"
+level = 132
+location = "cennyn"
+target_location = "cennyn"
+start_script = [{
+"cmd": "showDialog",
+"name": "Lord Cennyn",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Lord Cennyn",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "z4"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 411,
+"text": "The mighty squeerg beast has been killing our soldiers for many years."
+}]
+}],
+"portrait": 411,
+"text": "If you can kill the beast I will reward you!"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Leaf"
+}]
+events = [{
+"param": "Squeeerg",
+"script": [{
+"attribute": "count-Leaf",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Leaf"
+}, {
+"attribute": "count-Leaf",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Lord Cennyn",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 411,
+"text": "You did it! Return to me for your reward!"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "cennyn",
+"script": [{
+"attribute": "count-Leaf",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Lord Cennyn",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 411,
+"text": "Have you found Squeerg yet!?"
+}]
+}, {
+"attribute": "count-Leaf",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "6000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Leaf"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Tube Boots"
+}, {
+"cmd": "getItem",
+"count": "3000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Lord Cennyn",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 411,
+"text": "Have you found Squeerg yet!?"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

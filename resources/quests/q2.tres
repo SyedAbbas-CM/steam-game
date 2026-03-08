@@ -1,0 +1,114 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_kxjsk"]
+
+[resource]
+script = ExtResource("1_kxjsk")
+id = "q2"
+title = "Deliver the Goods"
+location = "aria"
+properties = [{
+"index": 0,
+"name": "Delivered",
+"type": "yesno"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "getItem",
+"count": "1",
+"name": "Package"
+}, {
+"cmd": "startQuest",
+"id": "q2"
+}]
+}],
+"portrait": 147,
+"text": "I need someone to take this parcel to Yoregot the barman in town, will you help?"
+}]
+}, {
+"name": "Later",
+"script": []
+}],
+"portrait": 147,
+"text": "Return here for your reward"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Package"
+}]
+events = [{
+"param": "Yoregot",
+"script": [{
+"cmd": "set",
+"id": "",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Yoregot",
+"options": [{
+"name": "No Problem",
+"script": [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Package"
+}]
+}],
+"portrait": 146,
+"text": "Thank the Elder for the parcel for me"
+}],
+"type": "activate"
+}, {
+"param": "aria",
+"script": [{
+"attribute": "session-q2-0",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Sorry, no.",
+"script": []
+}],
+"portrait": 147,
+"text": "Have you delivered that package yet?"
+}]
+}, {
+"attribute": "session-q2-0",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "500",
+"name": "Gold"
+}, {
+"cmd": "getExp",
+"value": "400"
+}, {
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "No Problem",
+"script": []
+}],
+"portrait": 147,
+"text": "Thank you hero, that saved me some time!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "moors"
+zone_name = "The Moors"
+tileset = 240
+height = 30
+world_pos = Vector2i(103, 28)
+dungeon_base = "Dungeon-Base"
+description = "The Moors"
+baked_offset = Vector2i(-800, -720)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "airlon",
+"tx": 13,
+"ty": 24,
+"x": 6,
+"y": 0
+}, {
+"target": "clearing",
+"tx": 0,
+"ty": 11,
+"x": 24,
+"y": 19
+}, {
+"target": "ynys",
+"tx": 12,
+"ty": 0,
+"x": 12,
+"y": 29
+}])
+spawns = Array[Dictionary]([{
+"chance": 75,
+"type": "Whitian Ninja",
+"x": 2,
+"y": 2
+}, {
+"chance": 75,
+"type": "Whitian Ninja Elite",
+"x": 2,
+"y": 2
+}])

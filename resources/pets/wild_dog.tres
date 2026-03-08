@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="PetDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/pet_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 2
+pet_type = "Wild Dog"
+search_distance = 10
+wander_distance = 8
+max_level = 35
+owner_level = 45
+cost = 50000
+recover_rate = 0.1
+base_attack = 2
+base_defense = 3
+base_hp = 15
+base_charge = 0
+hp_gain = 2
+attack_gain = 1
+defense_gain = 0.5
+charge_gain = 0
+abilities = [{ "level": 12, "name": "poison", "desc": "Poison Bite" }, { "level": 25, "name": "poison2", "desc": "Poison Mawl" }]
+evolve_level = 0
+evolve_name = ""
+possible_names = PackedStringArray("Barker", "Bingo", "Fido", "Butch", "Hobbo", "Defer")

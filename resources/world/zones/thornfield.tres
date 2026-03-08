@@ -1,0 +1,65 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "thornfield"
+zone_name = "Thornfield"
+tileset = 112
+description = "Wide, flat farmland between Aria's territory and the Ironhide range. Rich soil but exposed."
+baked_offset = Vector2i(-13, -167)
+exits = Array[Dictionary]([{
+"target": "wild1",
+"tx": 25,
+"ty": 1,
+"x": 12,
+"y": 24
+}, {
+"target": "mnt1",
+"tx": 25,
+"ty": 49,
+"x": 12,
+"y": 0
+}])
+npcs = Array[Dictionary]([{
+"file": "",
+"message": "My husband died defending this land. I won't leave it.",
+"name": "Edda",
+"portrait": 160,
+"shop": "",
+"tile": 160,
+"type": "message",
+"x": 12,
+"y": 12
+}])
+signs = Array[Dictionary]([{
+"message": "Thornfield
+The Old Breadbasket",
+"x": 11,
+"y": 23
+}])
+spawns = Array[Dictionary]([{
+"chance": 100,
+"height": 10,
+"type": "Orc",
+"width": 21,
+"x": 2,
+"y": 2
+}, {
+"chance": 60,
+"height": 10,
+"type": "Wild Boar",
+"width": 21,
+"x": 2,
+"y": 12
+}])
+houses = Array[Dictionary]([{
+"dx": 0,
+"dy": 1,
+"height": 5,
+"sign": "Edda's Homestead",
+"width": 5,
+"x": 10,
+"y": 10
+}])

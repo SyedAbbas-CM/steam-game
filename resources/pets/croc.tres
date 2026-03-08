@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="PetDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/pet_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 7
+pet_type = "Croc"
+search_distance = 10
+wander_distance = 8
+max_level = 55
+owner_level = 130
+cost = 35000
+recover_rate = 0.1
+base_attack = 14
+base_defense = 15
+base_hp = 60
+base_charge = 0
+hp_gain = 1
+attack_gain = 2.6
+defense_gain = 2.8
+charge_gain = 1
+abilities = [{ "level": 15, "name": "poison", "desc": "Poison Tear" }, { "level": 30, "name": "fire", "desc": "Fire Breathing" }, { "level": 45, "name": "poison3", "desc": "Clamp of Poisons" }]
+evolve_level = 0
+evolve_name = ""
+possible_names = PackedStringArray("Snapper", "Chomp", "Munch", "Smiler", "TickTock", "Ali")

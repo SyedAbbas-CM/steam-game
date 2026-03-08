@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="mod_0"]
+script = ExtResource("2")
+stat = 0
+flat_bonus = 10.0
+
+[resource]
+script = ExtResource("1")
+item_name = "Bandit Hood"
+description = "A hood and mask"
+slot_type = 1
+modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+rarity = 1

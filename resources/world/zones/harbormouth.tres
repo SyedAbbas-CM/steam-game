@@ -1,0 +1,40 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "harbormouth"
+zone_name = "Harbormouth"
+tileset = 112
+width = 20
+height = 15
+description = "Where the river meets the sea. Marshy delta with fishing shacks."
+baked_offset = Vector2i(104, -21)
+exits = Array[Dictionary]([{
+"target": "gomb",
+"tx": 1,
+"ty": 10,
+"x": 19,
+"y": 7
+}, {
+"target": "for1",
+"tx": 49,
+"ty": 25,
+"x": 0,
+"y": 7
+}])
+signs = Array[Dictionary]([{
+"message": "Harbormouth
+River Delta",
+"x": 9,
+"y": 1
+}])
+spawns = Array[Dictionary]([{
+"chance": 40,
+"height": 11,
+"type": "Snake",
+"width": 16,
+"x": 2,
+"y": 2
+}])

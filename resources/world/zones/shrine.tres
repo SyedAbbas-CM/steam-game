@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "shrine"
+zone_name = "Shrine"
+tileset = 224
+width = 17
+height = 17
+world_pos = Vector2i(4, 52)
+dungeon_base = "Shrine-base"
+dungeon_count = 8
+description = "The ancient shrine to the mighty gods"
+baked_offset = Vector2i(-536, -208)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "sthel",
+"tx": 0,
+"ty": 9,
+"x": 16,
+"y": 8
+}])
+npcs = Array[Dictionary]([{
+"file": "scripts/priestess.xml",
+"name": "Priestess",
+"portrait": 159,
+"tile": 143,
+"type": "scriptfile",
+"x": 13,
+"y": 8
+}])
+signs = Array[Dictionary]([{
+"message": "To the haven of life",
+"x": 8,
+"y": 4
+}, {
+"message": "To the far flung isles",
+"x": 8,
+"y": 12
+}])

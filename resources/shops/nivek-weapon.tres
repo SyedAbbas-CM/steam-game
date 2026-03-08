@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "nivek-weapon"
+shop_type = "weapon"
+shop_name = "Barak"
+portrait = 200
+title = "Bareks Burnished Weapons"
+welcome = "Welcome little one, come on in!"
+nomoney = "I'm a bit slow, but you can't cheat me, no money, no weapons"
+buy_text = "Well done lad, take this and forge your anger!"
+sell_text = "Give it to me, we'll melt it down for scrap!"
+stock = [{ "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Hunter Knife", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Explosion Arrow", "required_quest": "" }, { "item_name": "Lion Blade", "required_quest": "" }]

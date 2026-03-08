@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "peaks"
+zone_name = "The Mighty Peaks"
+tileset = 240
+height = 40
+world_pos = Vector2i(91, 52)
+dungeon_base = "Peaks-Base"
+dungeon_count = 6
+description = "The Mighty Peaks"
+baked_offset = Vector2i(2064, 48)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "plains",
+"tx": 27,
+"ty": 24,
+"x": 8,
+"y": 0
+}, {
+"target": "kor",
+"tx": 12,
+"ty": 0,
+"x": 15,
+"y": 39
+}])
+signs = Array[Dictionary]([{
+"message": "To Kor",
+"x": 16,
+"y": 38
+}])
+spawns = Array[Dictionary]([{
+"chance": 70,
+"type": "Wild Boar",
+"x": 2,
+"y": 3
+}, {
+"chance": 120,
+"type": "Enderman",
+"x": 2,
+"y": 3
+}])

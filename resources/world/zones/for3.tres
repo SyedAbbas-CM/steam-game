@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "for3"
+zone_name = "Hidden Forest"
+tileset = 112
+width = 32
+height = 15
+world_pos = Vector2i(40, 53)
+dungeon_base = "Forest-Dungeons"
+dungeon_count = 7
+baked_offset = Vector2i(4, -112)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "for1",
+"tx": 0,
+"ty": 23,
+"x": 31,
+"y": 1
+}, {
+"target": "for4",
+"tx": 15,
+"ty": 0,
+"x": 23,
+"y": 14
+}])
+spawns = Array[Dictionary]([{
+"chance": 200,
+"type": "Creeper",
+"x": 3,
+"y": 3
+}])

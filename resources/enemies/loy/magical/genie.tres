@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Genie"
+description = "Teleporting trickster that warps around the arena unleashing burst after burst"
+max_hp = 220
+move_speed = 16.0
+contact_damage = 5
+level = 50
+kingdom = "magical"
+size_class = 2
+hostile = true
+attack_type = 8
+attack_damage = 32
+attack_speed = 1.3
+bullet_speed = 55
+bullet_count = 8
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 100.0
+ignores_terrain = true
+teleport_cooldown = 2.0
+boss_phases = 3
+phase_2_attack = 14
+phase_3_attack = 3
+phase_2_bullet_count = 12
+phase_3_bullet_count = 16
+summon_on_phase_change = true
+summon_phase_count = 3
+use_loy_sprite = true
+loy_tile_index = 46
+sprite_color = Color(0.6, 0.4, 1, 1)
+xp_value = 145
+score_value = 290

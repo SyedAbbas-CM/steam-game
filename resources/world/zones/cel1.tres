@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "cel1"
+zone_name = "Cellar"
+tileset = 16
+width = 90
+height = 14
+world_pos = Vector2i(44, 58)
+dungeon_base = "Cellar-Dungeons"
+description = "A dark cellar"
+baked_offset = Vector2i(344, 168)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "for4",
+"tx": 22,
+"ty": 11,
+"x": 1,
+"y": 1
+}])
+npcs = Array[Dictionary]([{
+"name": "Necromancer",
+"portrait": 227,
+"tile": 243,
+"type": "shop",
+"x": 12,
+"y": 7
+}])

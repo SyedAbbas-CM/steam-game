@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Golden Scorpion"
+description = "A large stinging crawler"
+max_hp = 35
+move_speed = 26.0
+contact_damage = 4
+level = 7
+kingdom = "crawler"
+size_class = 0
+hostile = true
+attack_type = 5
+attack_damage = 8
+attack_speed = 1.2
+bullet_speed = 70
+bullet_count = 4
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 90.0
+ignores_terrain = false
+shield_hp = 8
+use_loy_sprite = true
+loy_tile_index = 371
+sprite_color = Color(0.7, 0.8, 0.3, 1)
+xp_value = 76
+score_value = 152

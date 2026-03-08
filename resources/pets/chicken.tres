@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="PetDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/pet_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 1
+pet_type = "Chicken"
+search_distance = 10
+wander_distance = 8
+max_level = 30
+owner_level = 15
+cost = 25000
+recover_rate = 0.1
+base_attack = 1
+base_defense = 2
+base_hp = 10
+base_charge = 0
+hp_gain = 1
+attack_gain = 0.5
+defense_gain = 0.5
+charge_gain = 1
+abilities = [{ "level": 10, "name": "fire", "desc": "Fire Breathing" }, { "level": 25, "name": "poison", "desc": "Poison Peck" }]
+evolve_level = 0
+evolve_name = ""
+possible_names = PackedStringArray("Arnold", "Cluckles", "Kentucy", "Fluffy", "Boris", "Drumstick")

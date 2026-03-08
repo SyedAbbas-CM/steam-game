@@ -1,0 +1,125 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_e4vdg"]
+
+[resource]
+script = ExtResource("1_e4vdg")
+id = "q8"
+title = "Loves Young Dream"
+level = 17
+location = "heim"
+target_location = "sthel"
+properties = [{
+"index": 0,
+"name": "Delivered",
+"type": "yesno"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "getItem",
+"count": "1",
+"name": "Love Letter"
+}, {
+"cmd": "startQuest",
+"id": "q8"
+}]
+}],
+"portrait": 156,
+"text": "My Son has a fancy for the pirate lady over in S'Thel"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 156,
+"text": "Would you deliver this message of love for him?"
+}]
+}],
+"portrait": 156,
+"text": "Thank you, come back and I may reward you!"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Love Letter"
+}]
+events = [{
+"param": "Polini",
+"script": [{
+"cmd": "set",
+"id": "",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Polini",
+"options": [{
+"name": "Cute",
+"script": [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Love Letter"
+}]
+}],
+"portrait": 157,
+"text": "Ohhhh, a note from the lovely Loki! Thank you!"
+}],
+"type": "activate"
+}, {
+"param": "heim",
+"script": [{
+"attribute": "session-q8-0",
+"cmd": "if",
+"compare": "1",
+"operation": "neq",
+"script": [{
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Ok, sorry!",
+"script": []
+}],
+"portrait": 156,
+"text": "Loki is waiting you know?"
+}]
+}, {
+"attribute": "session-q8-0",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getItem",
+"count": "1500",
+"name": "Gold"
+}, {
+"cmd": "getExp",
+"value": "800"
+}, {
+"cmd": "showDialog",
+"name": "Odin",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 156,
+"text": "It's done? Loki will be pleased! Here take this."
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

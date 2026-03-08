@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "crt1"
+zone_name = "Tower Courtyard"
+tileset = 240
+width = 40
+height = 21
+world_pos = Vector2i(42, 24)
+dungeon_base = "Komb-Tower"
+dungeon_count = 5
+baked_offset = Vector2i(88, -580)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "heim",
+"tx": 16,
+"ty": 1,
+"x": 20,
+"y": 20
+}])
+npcs = Array[Dictionary]([{
+"message": "Beward of the tower, there's an evil that lies within",
+"name": "Guard",
+"portrait": 149,
+"tile": 61,
+"type": "message",
+"x": 18,
+"y": 10
+}, {
+"message": "Rumours the tower is enchanted, be wary hero!",
+"name": "Guard",
+"portrait": 149,
+"tile": 61,
+"type": "message",
+"x": 21,
+"y": 15
+}])
+signs = Array[Dictionary]([{
+"message": "Tower of Kobalack - Beware of Evil",
+"x": 21,
+"y": 6
+}])

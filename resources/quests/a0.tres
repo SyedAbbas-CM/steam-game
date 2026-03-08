@@ -1,0 +1,121 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_q6ai4"]
+
+[resource]
+script = ExtResource("1_q6ai4")
+id = "a0"
+title = "Behold!"
+level = 15
+location = "sthel"
+start_script = [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "a0"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 151,
+"text": "Our priestess has need of a beholder tentacle for a potion."
+}]
+}],
+"portrait": 151,
+"text": "Would you retrieve one from the dungeon for me?"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Beholder Tentacle"
+}]
+events = [{
+"param": "Beholder",
+"script": [{
+"attribute": "count-Beholder Tentacle",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Beholder Tentacle"
+}, {
+"attribute": "count-Beholder Tentacle",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 151,
+"text": "Ah, you have it, now return to me!"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "sthel",
+"script": [{
+"attribute": "count-Beholder Tentacle",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 151,
+"text": "It is not a good idea to keep the priestess waiting."
+}]
+}, {
+"attribute": "count-Beholder Tentacle",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "1000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Beholder Tentacle"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Sandals of Hoff"
+}, {
+"cmd": "getItem",
+"count": "1000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "K'atel",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 151,
+"text": "It is not a good idea to keep the priestess waiting."
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

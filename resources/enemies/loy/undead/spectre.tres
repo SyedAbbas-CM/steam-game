@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Spectre"
+description = "A massive demented spirit that floods the room with spiraling death"
+max_hp = 75
+move_speed = 16.0
+contact_damage = 3
+level = 8
+kingdom = "undead"
+size_class = 1
+hostile = true
+attack_type = 14
+attack_damage = 10
+attack_speed = 1.8
+bullet_speed = 45
+bullet_count = 8
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 90.0
+ignores_terrain = true
+use_loy_sprite = true
+loy_tile_index = 45
+sprite_color = Color(0.8, 0.85, 1, 0.8)
+xp_value = 50
+score_value = 100

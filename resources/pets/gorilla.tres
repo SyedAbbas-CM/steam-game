@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="PetDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/pet_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 6
+pet_type = "Gorilla"
+search_distance = 10
+wander_distance = 8
+max_level = 50
+owner_level = 125
+cost = 35000
+recover_rate = 0.1
+base_attack = 15
+base_defense = 13
+base_hp = 55
+base_charge = 0
+hp_gain = 1
+attack_gain = 2.5
+defense_gain = 2.5
+charge_gain = 1
+abilities = []
+evolve_level = 0
+evolve_name = ""
+possible_names = PackedStringArray("Alfie", "Patrick", "Rupert", "Caeser", "Frank", "Kong")

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="PlayerClass" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/player_class.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+class_name_str = "Wizard"
+description = "A magical glass cannon. Homing projectiles, high damage spells, and a devastating meteor strike that damages all enemies on screen."
+base_hp = 30
+base_speed = 35.0
+base_damage = 2.0
+resource_type = "charge"
+resource_max = 40
+starting_weapon_pattern = "homing"
+bullet_count = 1
+bullet_speed = 90.0
+attack_speed = 0.4
+preferred_range = 50.0
+ability_name = "Meteor"
+ability_description = "Screen-wide AoE that damages all enemies"
+ability_cost = 20
+loy_tile_index = 161
+sprite_color = Color(0.8, 0.8, 1, 1)

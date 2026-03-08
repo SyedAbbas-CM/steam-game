@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="MutationDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/mutation_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+mutation_id = "pierce"
+mutation_name = "Piercing Rounds"
+description = "Bullets pass through enemies"
+type = 0
+tier = 1
+strength = 1.0
+max_stacks = 3
+tags = ["projectile"]

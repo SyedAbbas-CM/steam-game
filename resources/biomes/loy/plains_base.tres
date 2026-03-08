@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Plains Base"
+theme = "green"
+enemy_pool = [ExtResource("2")]
+liquid_type = "poison"
+hazard_damage = 1
+min_floor = 1
+max_floor = 1
+room_count = 25
+map_width = 40
+map_height = 40
+chest_count = 5
+min_monsters = 1
+max_monsters = 3
+has_locked_doors = true
+loy_level_id = "Plains-Base"
+loy_tileset_offset = 176
+floor_count = 1

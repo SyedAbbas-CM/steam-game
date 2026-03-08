@@ -1,0 +1,122 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_ggouf"]
+
+[resource]
+script = ExtResource("1_ggouf")
+id = "a6"
+title = "Newt Replacement"
+level = 48
+location = "paititi"
+target_location = "jungle2"
+start_script = [{
+"cmd": "showDialog",
+"name": "Ken",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Ken",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "a6"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 327,
+"text": "We try to brew the tribal stew, but we just don't get eye of newt."
+}]
+}],
+"portrait": 327,
+"text": "You go get the eye of the poisonous frog for us instead?"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Eye of Frog"
+}]
+events = [{
+"param": "Giant Frog",
+"script": [{
+"attribute": "count-Eye of Frog",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Eye of Frog"
+}, {
+"attribute": "count-Eye of Frog",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Ken",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 327,
+"text": "Oh goodie! Bring it right back now will you? We're hungry!"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "paititi",
+"script": [{
+"attribute": "count-Eye of Frog",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Ken",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 327,
+"text": "We hungry! We hungry! Bring us the eye!"
+}]
+}, {
+"attribute": "count-Eye of Frog",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "4000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Eye of Frog"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Shadow Boots"
+}, {
+"cmd": "getItem",
+"count": "10000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Ken",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 327,
+"text": "We hungry! We hungry! Bring us the eye!"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

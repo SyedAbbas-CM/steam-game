@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "crossroads"
+zone_name = "The Crossroads"
+tileset = 112
+width = 15
+height = 15
+description = "Where the old kingdom's trade roads meet. A crumbling plaza with stone markers."
+baked_offset = Vector2i(22, -87)
+exits = Array[Dictionary]([{
+"target": "wild1",
+"tx": 25,
+"ty": 1,
+"x": 7,
+"y": 14
+}])
+signs = Array[Dictionary]([{
+"message": "North: Mountains
+South: Aria
+East: Forest
+West: Valley",
+"x": 7,
+"y": 7
+}])

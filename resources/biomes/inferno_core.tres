@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/fire_elemental.tres" id="2_fire_elemental"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/animal/dragon.tres" id="3_dragon"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/devil.tres" id="4_devil"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/ogre.tres" id="5_ogre"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/rock_troll.tres" id="6_rock_troll"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/magical/hydra.tres" id="7_boss"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Inferno Core"
+theme = "red"
+enemy_pool = [ExtResource("2_fire_elemental"), ExtResource("3_dragon"), ExtResource("4_devil"), ExtResource("5_ogre"), ExtResource("6_rock_troll")]
+hazard_tiles = Array[Vector2i]([Vector2i(0, 17), Vector2i(0, 18)])
+decoration_tiles = Array[Vector2i]([])
+liquid_type = "lava"
+hazard_damage = 3
+hazard_interval = 0.6
+hazard_intensity = 0.55
+trap_density = 0.05
+web_bridge_density = 0.3
+allowed_transitions = Array[int]([0, 1, 2, 3])
+min_floor = 12
+max_floor = 15
+boss_definition = ExtResource("7_boss")
+difficulty_tier = 5
+base_difficulty = 10

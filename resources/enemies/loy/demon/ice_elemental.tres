@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Ice Elemental"
+description = "Frozen spirit that blankets the area with spiraling frost shards"
+max_hp = 85
+move_speed = 16.0
+contact_damage = 3
+level = 9
+kingdom = "demon"
+size_class = 0
+hostile = true
+attack_type = 14
+attack_damage = 12
+attack_speed = 1.8
+bullet_speed = 50
+bullet_count = 6
+preferred_distance = 0.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 80.0
+ignores_terrain = false
+use_loy_sprite = true
+loy_tile_index = 104
+sprite_color = Color(0.5, 0.8, 1, 1)
+xp_value = 55
+score_value = 110

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Drt-5"
+tileset = 8
+chests = 5
+width = 40
+height = 40
+rooms = 20
+min_monsters = 2
+max_monsters = 5
+aggro_chance = 0
+requires_key = true
+legend = ""
+monster_pool = [{ "type": "Orc", "chance": 1 }, { "type": "Orc Warrior", "chance": 1 }, { "type": "Orc Witchdoctor", "chance": 1 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 4, "items": [{ "name": "Gold", "chance": 4, "min": 20, "max": 150 }, { "name": "Blue Potion", "chance": 1, "min": 1, "max": 1 }, { "name": "Trap", "chance": 1, "min": 1, "max": 5 }] }]

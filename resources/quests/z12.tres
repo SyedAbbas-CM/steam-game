@@ -1,0 +1,122 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_ljoth"]
+
+[resource]
+script = ExtResource("1_ljoth")
+id = "z12"
+title = "Giant Problems"
+level = 134
+location = "talmita"
+target_location = "talmita"
+start_script = [{
+"cmd": "showDialog",
+"name": "Chief Komba",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Chief Komba",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "z12"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 158,
+"text": "Please help us! A giant lives beneath this place and ventures up only to torture us!"
+}]
+}],
+"portrait": 158,
+"text": "Please hero, slay the giant and save our settlement"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Ancient Scrolls"
+}]
+events = [{
+"param": "Giant Guard",
+"script": [{
+"attribute": "count-Ancient Scrolls",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Ancient Scrolls"
+}, {
+"attribute": "count-Ancient Scrolls",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Chief Komba",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 158,
+"text": "Well done hero!!! Return to me for your reward!"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "talmita",
+"script": [{
+"attribute": "count-Ancient Scrolls",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Chief Komba",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 158,
+"text": "Have you found him yet?"
+}]
+}, {
+"attribute": "count-Ancient Scrolls",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "4000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Ancient Scrolls"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Dual Swords"
+}, {
+"cmd": "getItem",
+"count": "3000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Chief Komba",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 158,
+"text": "Have you found him yet?"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]

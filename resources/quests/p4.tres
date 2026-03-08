@@ -1,0 +1,121 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_uqen7"]
+
+[resource]
+script = ExtResource("1_uqen7")
+id = "p4"
+title = "Resist the Raiseling"
+level = 156
+location = "ynys"
+start_script = [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Ok",
+"script": [{
+"cmd": "startQuest",
+"id": "p4"
+}]
+}, {
+"name": "No way",
+"script": []
+}],
+"portrait": 151,
+"text": "There is an evil demon said to reside on the island south of here."
+}]
+}],
+"portrait": 151,
+"text": "As a hero you are duty bound to slay evil, will you?"
+}]
+cancel_script = [{
+"cmd": "takeItem",
+"count": "5",
+"name": "Tankard"
+}]
+events = [{
+"param": "Raiseling",
+"script": [{
+"attribute": "count-Tankard",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "getItem",
+"count": "",
+"name": "Tankard"
+}, {
+"attribute": "count-Tankard",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Right away!",
+"script": []
+}],
+"portrait": 151,
+"text": "You have slain him, please return with whatever he was holding for your reward"
+}]
+}]
+}],
+"type": "kill"
+}, {
+"param": "ynys",
+"script": [{
+"attribute": "count-Tankard",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "I'll get it",
+"script": []
+}],
+"portrait": 151,
+"text": "Have you slain the evil yet?"
+}]
+}, {
+"attribute": "count-Tankard",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getExp",
+"value": "10000"
+}, {
+"cmd": "takeItem",
+"count": "5",
+"name": "Tankard"
+}, {
+"cmd": "getItem",
+"count": "",
+"name": "Horned Guard"
+}, {
+"cmd": "getItem",
+"count": "5000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Gasdan",
+"options": [{
+"name": "Thanks",
+"script": []
+}],
+"portrait": 151,
+"text": "Have you slain the evil yet?"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"type": "quest"
+}]
