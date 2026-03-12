@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Red Potion"
+loy_tile_index = 80
 description = "A vial of red liquid (+8HP) (Heals 8 HP)"
-slot_type = 3
+slot_type = 10
 rarity = 0
+buy_price = 50
+sell_value = 12

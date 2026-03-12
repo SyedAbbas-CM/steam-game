@@ -16,7 +16,12 @@ flat_bonus = 4.0
 [resource]
 script = ExtResource("1")
 item_name = "Spectral Blade"
+loy_tile_index = 395
 description = "Vapourous Sword"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 532
+sell_value = 133
+bullet_sprite_index = 120
+weapon_range = 2.5

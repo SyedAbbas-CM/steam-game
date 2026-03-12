@@ -11,7 +11,12 @@ flat_bonus = 3.0
 [resource]
 script = ExtResource("1")
 item_name = "Tooth Dagger"
+loy_tile_index = 212
 description = "A mighty tooth dagger"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 39
+sell_value = 9
+bullet_sprite_index = 120
+weapon_range = 1.5

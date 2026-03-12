@@ -11,7 +11,10 @@ flat_bonus = 7.0
 [resource]
 script = ExtResource("1")
 item_name = "Iron Helm"
+loy_tile_index = 193
 description = "A full face helm"
-slot_type = 1
+slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
+buy_price = 136
+sell_value = 34

@@ -11,7 +11,12 @@ flat_bonus = 3.0
 [resource]
 script = ExtResource("1")
 item_name = "Composite Bow"
+loy_tile_index = 91
 description = "A tightly strung mechanical bow"
-slot_type = 0
+slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 39
+sell_value = 9
+bullet_sprite_index = 96
+weapon_range = 5.0

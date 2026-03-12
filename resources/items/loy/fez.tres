@@ -11,7 +11,10 @@ flat_bonus = 13.0
 [resource]
 script = ExtResource("1")
 item_name = "Fez"
+loy_tile_index = 496
 description = "A red felt hat"
-slot_type = 1
+slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 404
+sell_value = 101

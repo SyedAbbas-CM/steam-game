@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Fish"
+loy_tile_index = 236
 description = "A tasty looking fish (Heals 3 HP)"
-slot_type = 3
+slot_type = 10
 rarity = 0
+buy_price = 25
+sell_value = 6

@@ -1,0 +1,165 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+commands = [{
+"cmd": "showDialog",
+"name": "Yoregot",
+"portrait": 146,
+"text": "Welcome to the Crooked Beak! Best ale in all of Yore. What'll it be?",
+"options": [{
+"name": "Buy supplies",
+"script": [{
+"cmd": "openShop",
+"shop": "aria-inn"
+}]
+}, {
+"name": "What's the news?",
+"script": [{
+"cmd": "showDialog",
+"name": "Yoregot",
+"portrait": 146,
+"text": "Travelers speak of golden creatures appearing in the dungeons. Rare beasts that shimmer like coins. They say killing one brings a fortune!",
+"options": [{
+"name": "What else?",
+"script": [{
+"cmd": "showDialog",
+"name": "Yoregot",
+"portrait": 146,
+"text": "The orcs to the east are gathering in numbers. And darker rumors still... whispers of a demon lord stirring in the deep places of the world.",
+"options": [{
+"name": "Troubling",
+"script": []
+}]
+}]
+}, {
+"name": "Thanks",
+"script": []
+}]
+}]
+}, {
+"name": "About this place",
+"script": [{
+"cmd": "showDialog",
+"name": "Yoregot",
+"portrait": 146,
+"text": "The Crooked Beak? Named after old Corvus, a raven with a bent beak who roosted here for twelve years. Some folk say he was a wizard's familiar, watching over the village.",
+"options": [{
+"name": "A wizard?",
+"script": [{
+"cmd": "showDialog",
+"name": "Yoregot",
+"portrait": 146,
+"text": "Who knows? Yore is full of mysteries. My grandmother swore the bird spoke to her once, but she was fond of her own ale, if you catch my meaning.",
+"options": [{
+"name": "Ha!",
+"script": []
+}]
+}]
+}, {
+"name": "Interesting",
+"script": []
+}]
+}]
+}, {
+"name": "Ghost problem?",
+"script": [{
+"attribute": "quest-sq3-complete",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Yoregot",
+"portrait": 146,
+"text": "Business is booming again thanks to you! No more ghost stories keeping the patrons away. Drink's on the house anytime, hero!",
+"options": [{
+"name": "Cheers!",
+"script": []
+}]
+}]
+}, {
+"attribute": "quest-sq3-active",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"attribute": "session-sq3-0",
+"cmd": "if",
+"compare": "14",
+"operation": "gt",
+"script": [{
+"cmd": "getItem",
+"count": "1000",
+"name": "Gold"
+}, {
+"cmd": "getExp",
+"value": "600"
+}, {
+"cmd": "getItem",
+"name": "Green Potion",
+"count": "1"
+}, {
+"cmd": "showDialog",
+"name": "Yoregot",
+"portrait": 146,
+"text": "Fifteen ghosts banished! My patrons can sleep easy again. Here's 1000 gold and a Green Potion from my private stock!",
+"options": [{
+"name": "Cheers, Yoregot",
+"script": []
+}]
+}, {
+"cmd": "completeQuest",
+"id": "sq3"
+}]
+}, {
+"attribute": "session-sq3-0",
+"cmd": "if",
+"compare": "15",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Yoregot",
+"portrait": 146,
+"text": "Still seeing ghosts out by the graveyard? I need 15 of them gone before my patrons will stop sleeping with the lights on!",
+"options": [{
+"name": "I'll keep hunting",
+"script": []
+}]
+}]
+}]
+}, {
+"attribute": "quest-sq3-complete",
+"cmd": "ifNot",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"attribute": "quest-sq3-active",
+"cmd": "ifNot",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Yoregot",
+"portrait": 146,
+"text": "Aye, it's terrible! My patrons keep reporting ghost sightings near the graveyard. Half of them won't come back until someone deals with it. Can you kill 15 ghosts?",
+"options": [{
+"name": "I'll handle it",
+"script": [{
+"cmd": "startQuest",
+"id": "sq3"
+}]
+}, {
+"name": "Not my problem",
+"script": []
+}]
+}]
+}]
+}]
+}, {
+"name": "Just passing through",
+"script": []
+}]
+}]

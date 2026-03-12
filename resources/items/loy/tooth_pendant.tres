@@ -11,7 +11,10 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Tooth Pendant"
+loy_tile_index = 405
 description = "A animal tooth pendant"
-slot_type = 2
+slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 316
+sell_value = 79

@@ -16,7 +16,10 @@ flat_bonus = 12.0
 [resource]
 script = ExtResource("1")
 item_name = "Ninja Gi"
+loy_tile_index = 270
 description = "Ninja robes"
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 404
+sell_value = 101

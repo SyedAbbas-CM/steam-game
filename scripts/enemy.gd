@@ -19,9 +19,28 @@ var _beam_timer: float = 0.0
 var _beam_angle: float = 0.0
 var _spiral_angle: float = 0.0
 var _los_check_timer: float = 0.0
+var _chase_timer: float = 0.0  # how long we've been chasing
+const CHASE_TIMEOUT = 8.0  # give up after this many seconds
+var _wander_timer: float = 0.0  # time until next wander direction change
+var _wander_dir: Vector2 = Vector2.ZERO  # current wander direction
+var _stuck_timer: float = 0.0  # detect if stuck on wall
+var _last_pos: Vector2 = Vector2.ZERO
 var _loy_sprite: Sprite2D  # separate sprite for LoY characters
 var _current_phase: int = 1
 var _max_hp: int = 0
+var _animator: SpriteAnimator
+var _nav: RefCounted  # DungeonNav A* navigation (set by dungeon manager)
+var _path_timer: float = 0.0  # throttle pathfinding queries
+var _cached_next_pos: Vector2 = Vector2.ZERO
+
+# Boss HP bar
+var _hp_bar_bg: ColorRect
+var _hp_bar_fill: ColorRect
+
+# Boss HP regen
+var _time_since_hit: float = 0.0
+var _regen_accum: float = 0.0
+var _is_boss_or_large: bool = false
 
 var bullet_scene: PackedScene
 var pickup_scene: PackedScene
@@ -71,7 +90,45 @@ func setup(def: EnemyDefinition) -> void:
 		$Sprite2D.modulate.a = 0.7
 		collision_mask = 1  # ghosts phase through walls but still collide with player
 
+	# Boss/Large HP bar
+	_is_boss_or_large = def.size_class >= EnemyDefinition.SizeClass.LARGE
+	if _is_boss_or_large:
+		_create_boss_hp_bar()
+
 	state = State.IDLE
+
+func _create_boss_hp_bar() -> void:
+	# Use a top-level Node2D to avoid inheriting enemy scale
+	var bar_anchor = Node2D.new()
+	bar_anchor.top_level = true  # ignores parent transform
+	bar_anchor.z_index = 10
+	add_child(bar_anchor)
+
+	var bar_w = 20.0  # fixed world pixels
+	var bar_h = 2.0
+
+	_hp_bar_bg = ColorRect.new()
+	_hp_bar_bg.color = Color(0.15, 0.15, 0.15, 0.9)
+	_hp_bar_bg.size = Vector2(bar_w, bar_h)
+	_hp_bar_bg.position = Vector2(-bar_w / 2, 6)
+	bar_anchor.add_child(_hp_bar_bg)
+
+	_hp_bar_fill = ColorRect.new()
+	_hp_bar_fill.color = Color(0.1, 0.8, 0.15)
+	_hp_bar_fill.size = Vector2(bar_w, bar_h)
+	_hp_bar_fill.position = Vector2(-bar_w / 2, 6)
+	bar_anchor.add_child(_hp_bar_fill)
+
+func _update_boss_hp_bar() -> void:
+	if _hp_bar_fill and _max_hp > 0:
+		var ratio = clampf(float(hp) / float(_max_hp), 0.0, 1.0)
+		var bar_w = 20.0
+		_hp_bar_fill.size.x = bar_w * ratio
+		# Green when healthy, red when low
+		_hp_bar_fill.color = Color(0.1 + 0.8 * (1.0 - ratio), 0.8 * ratio, 0.1)
+	# Keep bar following enemy position
+	if _hp_bar_bg:
+		_hp_bar_bg.get_parent().global_position = global_position
 
 func _setup_loy_sprite(tile_index: int) -> void:
 	var tex_path = LoySpriteIndex.get_char_texture_path(tile_index)
@@ -96,6 +153,19 @@ func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 
+	# Boss HP regen (1% max HP/sec after 3s without taking damage)
+	_time_since_hit += delta
+	if _is_boss_or_large and _time_since_hit > 3.0 and hp < _max_hp:
+		_regen_accum += delta
+		if _regen_accum >= 1.0:
+			_regen_accum -= 1.0
+			hp = mini(hp + maxi(1, _max_hp / 100), _max_hp)
+			_update_boss_hp_bar()
+
+	# Keep HP bar following enemy
+	if _hp_bar_bg:
+		_hp_bar_bg.get_parent().global_position = global_position
+
 	var to_player = player.global_position - global_position
 	var dist = to_player.length()
 	var dir = to_player.normalized() if dist > 0 else Vector2.ZERO
@@ -105,34 +175,88 @@ func _physics_process(delta: float) -> void:
 	elif dir.x > 0:
 		$Sprite2D.flip_h = false
 
-	var aggro_range = 60.0
+	var aggro_range = 100.0
 	if definition:
-		aggro_range = definition.aggro_range if definition.aggro_range > 0 else 60.0
+		aggro_range = definition.aggro_range if definition.aggro_range > 0 else 100.0
 	# Player stealth reduces aggro range
 	if is_instance_valid(player) and player.get_node_or_null("EquipmentManager"):
 		var stealth_val = player.equipment_manager.get_stealth()
 		if stealth_val > 0:
 			aggro_range *= (1.0 - clampf(stealth_val / 100.0, 0.0, 0.8))
 
+	# Leash check: overworld enemies must stay near their spawn zone
+	if has_meta("spawn_pos") and has_meta("leash_radius"):
+		var _sp = get_meta("spawn_pos") as Vector2
+		var _lr = get_meta("leash_radius") as float
+		if _lr > 0 and global_position.distance_to(_sp) > _lr + 200:
+			# Too far from spawn — return home
+			state = State.IDLE
+			velocity = Vector2.ZERO
+			_chase_timer = 0.0
+			global_position = global_position.move_toward(_sp, speed * delta * 2)
+			move_and_slide()
+			return
+
+	# Passive-until-hit: don't aggro until damaged
+	var is_passive = has_meta("passive_until_hit") and get_meta("passive_until_hit")
+	var should_wander = has_meta("behavior") and get_meta("behavior") == "wander"
+
 	match state:
 		State.IDLE:
-			velocity = Vector2.ZERO
-			# Throttle aggro check (not every frame)
-			_los_check_timer -= delta
-			if _los_check_timer <= 0:
-				_los_check_timer = 0.3 + randf() * 0.2  # stagger checks
-				if dist < aggro_range and _has_line_of_sight():
-					state = State.CHASE
+			_chase_timer = 0.0
+			# Wander behavior: move randomly within leash radius
+			if should_wander or is_passive:
+				_wander_timer -= delta
+				if _wander_timer <= 0:
+					_wander_timer = 2.0 + randf() * 4.0
+					if randf() < 0.6:  # 60% chance to pick a direction, 40% stand still
+						_wander_dir = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
+					else:
+						_wander_dir = Vector2.ZERO
+				velocity = _wander_dir * speed * 0.3
+				if _wander_dir.x < 0:
+					$Sprite2D.flip_h = true
+				elif _wander_dir.x > 0:
+					$Sprite2D.flip_h = false
+			else:
+				velocity = Vector2.ZERO
+			# Aggro check (skip if passive)
+			if not is_passive:
+				_los_check_timer -= delta
+				if _los_check_timer <= 0:
+					_los_check_timer = 0.3 + randf() * 0.2
+					if dist < aggro_range and _has_line_of_sight():
+						state = State.CHASE
+						_last_pos = global_position
 		State.CHASE:
-			_do_chase(dir, dist, delta)
+			_chase_timer += delta
+			if _chase_timer > CHASE_TIMEOUT:
+				state = State.IDLE
+				velocity = Vector2.ZERO
+				_chase_timer = 0.0
+			else:
+				_do_chase(dir, dist, delta)
 		State.ATTACK:
 			_do_attack(dir)
 		State.COOLDOWN:
 			cooldown_timer -= delta
-			if definition and definition.preferred_distance > 0 and dist < definition.preferred_distance * 0.7:
-				velocity = -dir * speed * 0.5
+			var pref = definition.preferred_distance if definition else 0.0
+			if pref > 0:
+				# Ranged enemy — maintain distance during cooldown
+				if dist < pref * 0.5:
+					velocity = -dir * speed * 0.5  # back off
+				elif dist > pref * 1.5:
+					velocity = dir * speed * 0.3  # drift closer
+				else:
+					# Strafe gently at range
+					var cd_strafe = dir.rotated(PI / 2) * (1.0 if fmod(Time.get_ticks_msec() / 800.0, 2.0) < 1.0 else -1.0)
+					velocity = cd_strafe * speed * 0.3
 			else:
-				velocity = Vector2.ZERO
+				# Melee enemy — keep advancing
+				if dist > 20.0:
+					velocity = dir * speed * 0.4
+				else:
+					velocity = Vector2.ZERO
 			if cooldown_timer <= 0:
 				state = State.CHASE
 		State.CHARGING:
@@ -181,21 +305,73 @@ func _get_active_bullet_count() -> int:
 		return definition.phase_2_bullet_count
 	return definition.bullet_count
 
+func _steer_around_walls(desired_dir: Vector2) -> Vector2:
+	# Cast rays ahead to detect walls and steer around them
+	if desired_dir.length_squared() < 0.01:
+		return desired_dir
+	var space = get_world_2d().direct_space_state
+	var look_dist = 12.0  # how far ahead to check
+
+	# Check straight ahead
+	var query = PhysicsRayQueryParameters2D.create(global_position, global_position + desired_dir * look_dist, 16)
+	query.exclude = [get_rid()]
+	var result = space.intersect_ray(query)
+	if result.is_empty():
+		return desired_dir  # no wall ahead, go straight
+
+	# Wall ahead — try left and right rotations to find open path
+	for angle in [0.6, -0.6, 1.0, -1.0, 1.4, -1.4]:
+		var test_dir = desired_dir.rotated(angle)
+		query = PhysicsRayQueryParameters2D.create(global_position, global_position + test_dir * look_dist, 16)
+		query.exclude = [get_rid()]
+		result = space.intersect_ray(query)
+		if result.is_empty():
+			return test_dir.normalized()
+
+	# All directions blocked — just try perpendicular
+	return desired_dir.rotated(PI / 2)
+
 func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
-	# Lose aggro if player is far away
-	if dist > 120.0:
+	# Lose aggro if player is very far away
+	if dist > 200.0:
 		velocity = Vector2.ZERO
 		state = State.IDLE
+		_chase_timer = 0.0
 		return
 
 	var pref_dist = definition.preferred_distance if definition else 0.0
+	var move_dir = dir
 
-	if pref_dist > 0 and dist < pref_dist * 0.8:
-		velocity = -dir * speed * 0.6
-	elif pref_dist > 0 and dist < pref_dist * 1.2:
-		velocity = dir.rotated(PI / 2) * speed * 0.3
+	# Use A* pathfinding if available (dungeon) and not a ghost
+	var use_astar = _nav and _nav.is_ready() and not (definition and definition.ignores_terrain)
+	if use_astar and dist > 16.0:
+		_path_timer -= delta
+		if _path_timer <= 0:
+			_path_timer = 0.25 + randf() * 0.15  # re-path every ~0.3s, staggered
+			_cached_next_pos = _nav.get_next_position(global_position, player.global_position)
+		if _cached_next_pos != Vector2.ZERO:
+			var to_next = _cached_next_pos - global_position
+			if to_next.length_squared() > 1.0:
+				move_dir = to_next.normalized()
 	else:
-		velocity = dir * speed
+		# Fallback: steering-based wall avoidance (overworld or ghosts)
+		if not (definition and definition.ignores_terrain):
+			move_dir = _steer_around_walls(dir)
+
+	if pref_dist > 0:
+		# Ranged enemy — tries to maintain preferred distance
+		if dist < pref_dist * 0.5:
+			var strafe = dir.rotated(PI / 2) * (1.0 if randf() > 0.5 else -1.0)
+			velocity = (-dir * 0.7 + strafe * 0.3).normalized() * speed * 0.8
+		elif dist < pref_dist * 1.3:
+			var strafe_dir = dir.rotated(PI / 2) * (1.0 if fmod(Time.get_ticks_msec() / 1000.0, 2.0) < 1.0 else -1.0)
+			velocity = strafe_dir * speed * 0.5
+		else:
+			var approach_mult = clampf((dist - pref_dist) / pref_dist, 0.3, 1.0)
+			velocity = move_dir * speed * approach_mult
+	else:
+		# Melee/no-preference enemy — chase with pathfinding
+		velocity = move_dir * speed * 1.2
 
 	attack_timer -= delta
 	if attack_timer <= 0 and dist < 120:
@@ -241,8 +417,18 @@ func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
 					_enter_stealth()
 				else:
 					state = State.ATTACK
+			EnemyDefinition.AttackType.STRAFE_RUN:
+				# Charge perpendicular while shooting
+				_shoot_strafe_run(dir)
+				var strafe_dir = dir.rotated(PI / 2.0 * (1.0 if randf() > 0.5 else -1.0))
+				charge_dir = strafe_dir
+				charge_timer = 0.4
+				attack_timer = shoot_interval * 0.5
+				state = State.CHARGING
 			_:
 				# RANGED, BURST, SUMMON, SLAM, SPIRAL, POISON_SHOT, SHIELD, BEAM, SPLIT
+				# VOLLEY, CROSS_SHOT, WAVE_SHOT, GATLING, MORTAR, NOVA, ZIGZAG
+				# SHOTGUN_BLAST, HELIX, METEOR_SHOWER, BOOMERANG_SHOT, MINEFIELD
 				state = State.ATTACK
 
 func _do_attack(dir: Vector2) -> void:
@@ -258,7 +444,7 @@ func _do_attack(dir: Vector2) -> void:
 			charge_dir = dir
 			charge_timer = 0.2
 			state = State.CHARGING
-			attack_timer = shoot_interval * 0.4
+			attack_timer = shoot_interval * 0.25
 			return  # charging handles cooldown
 		EnemyDefinition.AttackType.RANGED:
 			_shoot_single(dir)
@@ -277,7 +463,7 @@ func _do_attack(dir: Vector2) -> void:
 		EnemyDefinition.AttackType.TELEPORT:
 			_shoot_single(dir)
 		EnemyDefinition.AttackType.SPIRAL:
-			_shoot_spiral()
+			_shoot_spiral(dir)
 		EnemyDefinition.AttackType.POISON_SHOT:
 			_shoot_single(dir)
 		EnemyDefinition.AttackType.STEALTH:
@@ -289,9 +475,51 @@ func _do_attack(dir: Vector2) -> void:
 			_shoot_single(dir)  # also fires bullets during beam
 		EnemyDefinition.AttackType.SPLIT:
 			_shoot_single(dir)
+		EnemyDefinition.AttackType.VOLLEY:
+			_shoot_volley(dir)
+		EnemyDefinition.AttackType.CROSS_SHOT:
+			_shoot_cross(dir)
+		EnemyDefinition.AttackType.WAVE_SHOT:
+			_shoot_wave(dir)
+		EnemyDefinition.AttackType.GATLING:
+			_shoot_gatling(dir)
+		EnemyDefinition.AttackType.MORTAR:
+			_shoot_mortar(dir)
+		EnemyDefinition.AttackType.NOVA:
+			_shoot_nova(dir)
+		EnemyDefinition.AttackType.ZIGZAG:
+			_shoot_zigzag(dir)
+		EnemyDefinition.AttackType.SHOTGUN_BLAST:
+			_shoot_shotgun(dir)
+		EnemyDefinition.AttackType.HELIX:
+			_shoot_helix(dir)
+		EnemyDefinition.AttackType.METEOR_SHOWER:
+			_shoot_meteor_shower(dir)
+		EnemyDefinition.AttackType.BOOMERANG_SHOT:
+			_shoot_boomerang(dir)
+		EnemyDefinition.AttackType.STRAFE_RUN:
+			_shoot_strafe_run(dir)
+		EnemyDefinition.AttackType.MINEFIELD:
+			_shoot_minefield()
+		EnemyDefinition.AttackType.RETURNING_VOLLEY:
+			_shoot_returning(dir)
+		EnemyDefinition.AttackType.SEEKING_MINES:
+			_shoot_seeking_mines()
+		EnemyDefinition.AttackType.DETONATOR:
+			_shoot_detonator(dir)
+		EnemyDefinition.AttackType.SPLITTER:
+			_shoot_splitter(dir)
+		EnemyDefinition.AttackType.SINE_BARRAGE:
+			_shoot_sine_barrage(dir)
+		EnemyDefinition.AttackType.HOMING_SALVO:
+			_shoot_homing_salvo(dir)
+		EnemyDefinition.AttackType.TELEGRAPH_EXPLOSION:
+			_shoot_telegraph_explosion()
+		EnemyDefinition.AttackType.ORBIT_LAUNCH:
+			_shoot_orbit_launch(dir)
 
-	attack_timer = shoot_interval * 0.4  # aggressive fire rate
-	cooldown_timer = 0.15
+	attack_timer = shoot_interval * 0.25  # very aggressive fire rate
+	cooldown_timer = 0.1
 	state = State.COOLDOWN
 
 func _check_contact_damage() -> void:
@@ -462,7 +690,7 @@ func _maybe_leave_trail(delta: float) -> void:
 	get_tree().current_scene.add_child(hazard)
 	timer.start()
 
-func _shoot_spiral() -> void:
+func _shoot_spiral(dir: Vector2) -> void:
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	if not bullets_container:
 		return
@@ -473,8 +701,8 @@ func _shoot_spiral() -> void:
 		count = 6
 	var bspeed = definition.bullet_speed if definition else 60.0
 	for i in range(count):
-		var angle = _spiral_angle + (TAU / count) * i
-		_spawn_bullet(bullets_container, Vector2.RIGHT.rotated(angle), bspeed)
+		var angle = dir.angle() + _spiral_angle + (TAU / count) * i
+		_spawn_bullet(bullets_container, Vector2.from_angle(angle), bspeed)
 	_spiral_angle += 0.4  # offset each volley for spiral effect
 
 func _enter_stealth() -> void:
@@ -497,12 +725,14 @@ func _shoot_single(dir: Vector2) -> void:
 	if count == 1:
 		_spawn_bullet(bullets_container, dir, bspeed)
 	else:
+		# Always fire one bullet directly at the player, spread others around it
 		var spread = 0.3
-		for i in range(count):
-			var angle_offset = (float(i) / (count - 1) - 0.5) * spread * 2
+		_spawn_bullet(bullets_container, dir, bspeed)  # center shot aimed at player
+		for i in range(1, count):
+			var angle_offset = (float(i) / count - 0.5) * spread * 2
 			_spawn_bullet(bullets_container, dir.rotated(angle_offset), bspeed)
 
-func _shoot_ring(_dir: Vector2) -> void:
+func _shoot_ring(dir: Vector2) -> void:
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	if not bullets_container:
 		return
@@ -510,12 +740,12 @@ func _shoot_ring(_dir: Vector2) -> void:
 	if count <= 0:
 		return
 	if count < 4:
-		count = 8  # ring needs at least 8 for good coverage
+		count = 8
 	var bspeed = definition.bullet_speed if definition else 70.0
+	var base_angle = dir.angle()  # center ring on player direction
 	for i in range(count):
-		var angle = (TAU / count) * i
-		var ring_dir = Vector2.RIGHT.rotated(angle)
-		_spawn_bullet(bullets_container, ring_dir, bspeed)
+		var angle = base_angle + (TAU / count) * i
+		_spawn_bullet(bullets_container, Vector2.from_angle(angle), bspeed)
 
 func _spawn_bullet(container: Node, dir: Vector2, spd: float) -> void:
 	var bullet = bullet_scene.instantiate()
@@ -524,6 +754,461 @@ func _spawn_bullet(container: Node, dir: Vector2, spd: float) -> void:
 	bullet.is_player_bullet = false
 	bullet.speed = spd
 	container.add_child(bullet)
+
+func _spawn_bullet_at(container: Node, pos: Vector2, dir: Vector2, spd: float) -> void:
+	var bullet = bullet_scene.instantiate()
+	bullet.global_position = pos
+	bullet.direction = dir
+	bullet.is_player_bullet = false
+	bullet.speed = spd
+	container.add_child(bullet)
+
+func _spawn_behavior_bullet(container: Node, dir: Vector2, spd: float, bhv: int) -> void:
+	var bullet = bullet_scene.instantiate()
+	bullet.global_position = global_position
+	bullet.direction = dir
+	bullet.is_player_bullet = false
+	bullet.speed = spd
+	bullet.behavior = bhv
+	bullet._origin_pos = global_position
+	bullet._origin_entity = self
+	container.add_child(bullet)
+
+## VOLLEY: Fires an arc of bullets upward that rain down — delayed spread
+func _shoot_volley(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 4)
+	var bspeed = (definition.bullet_speed if definition else 70.0) * 0.8
+	var spread = 0.6
+	for i in range(count):
+		var t = float(i) / (count - 1) - 0.5
+		var angle = t * spread
+		var spd = bspeed * randf_range(0.7, 1.3)
+		# Stagger fire times for volley feel
+		get_tree().create_timer(i * 0.06).timeout.connect(
+			func():
+				if is_instance_valid(self) and hp > 0:
+					var bc = get_tree().get_first_node_in_group("bullets")
+					if bc:
+						_spawn_bullet(bc, dir.rotated(angle), spd)
+		)
+
+## CROSS_SHOT: Fires in 4 cardinal directions (+ pattern) with multiple bullets per arm
+func _shoot_cross(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var bspeed = definition.bullet_speed if definition else 75.0
+	var count_per_arm = maxi(_get_active_bullet_count() / 4, 1)
+	for arm in range(4):
+		var arm_dir = dir.rotated(arm * PI / 2.0)
+		for b in range(count_per_arm):
+			var spd = bspeed * (1.0 - b * 0.2)
+			_spawn_bullet(bullets_container, arm_dir, maxf(spd, 20.0))
+
+## WAVE_SHOT: Sine-wave spread — bullets fan out then converge in a wave pattern
+func _shoot_wave(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 5)
+	var bspeed = definition.bullet_speed if definition else 65.0
+	var perp = dir.rotated(PI / 2.0)
+	for i in range(count):
+		var t = float(i) / (count - 1)
+		var wave_offset = sin(t * PI * 2.0) * 8.0
+		var spawn_pos = global_position + perp * wave_offset
+		_spawn_bullet_at(bullets_container, spawn_pos, dir, bspeed)
+
+## GATLING: Rapid stream of bullets with random jitter — suppressive fire
+func _shoot_gatling(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 5)
+	var bspeed = (definition.bullet_speed if definition else 90.0) * 1.2
+	for i in range(count):
+		get_tree().create_timer(i * 0.04).timeout.connect(
+			func():
+				if is_instance_valid(self) and hp > 0:
+					var bc = get_tree().get_first_node_in_group("bullets")
+					if bc:
+						var jitter = randf_range(-0.12, 0.12)
+						_spawn_bullet(bc, dir.rotated(jitter), bspeed * randf_range(0.85, 1.15))
+		)
+
+## MORTAR: Lobs slow bullets in high arc that speed up — artillery style
+func _shoot_mortar(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 3)
+	var bspeed = (definition.bullet_speed if definition else 50.0) * 0.5
+	for i in range(count):
+		var spread = randf_range(-0.3, 0.3)
+		var spd = bspeed * randf_range(0.8, 1.5)
+		_spawn_bullet(bullets_container, dir.rotated(spread), spd)
+	# Also fire a burst at player's position after delay
+	get_tree().create_timer(0.5).timeout.connect(
+		func():
+			if is_instance_valid(self) and is_instance_valid(player) and hp > 0:
+				var bc = get_tree().get_first_node_in_group("bullets")
+				if bc:
+					var to_player = (player.global_position - global_position).normalized()
+					for j in range(3):
+						var jitter = randf_range(-0.15, 0.15)
+						_spawn_bullet(bc, to_player.rotated(jitter), bspeed * 2.5)
+	)
+
+## NOVA: Double ring burst — inner ring fast, outer ring slow with offset
+func _shoot_nova(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 6)
+	var bspeed = definition.bullet_speed if definition else 70.0
+	var base_angle = dir.angle()  # center on player direction
+	# Inner ring: fast, one bullet aimed at player
+	var inner = maxi(count / 2, 4)
+	for i in range(inner):
+		var angle = base_angle + (TAU / inner) * i
+		_spawn_bullet(bullets_container, Vector2.from_angle(angle), bspeed * 1.5)
+	# Outer ring: slow, offset by half step, delayed
+	get_tree().create_timer(0.15).timeout.connect(
+		func():
+			if is_instance_valid(self) and hp > 0:
+				var bc = get_tree().get_first_node_in_group("bullets")
+				if bc:
+					var outer = count
+					var half_step = TAU / outer / 2.0
+					for j in range(outer):
+						var angle = base_angle + (TAU / outer) * j + half_step
+						_spawn_bullet(bc, Vector2.from_angle(angle), bspeed * 0.6)
+	)
+
+## ZIGZAG: Alternating left-right angled shots for a weaving bullet wall
+func _shoot_zigzag(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 5)
+	var bspeed = definition.bullet_speed if definition else 75.0
+	var zigzag_angle = 0.35
+	for i in range(count):
+		var side = 1.0 if i % 2 == 0 else -1.0
+		var bullet_dir = dir.rotated(zigzag_angle * side)
+		get_tree().create_timer(i * 0.06).timeout.connect(
+			func():
+				if is_instance_valid(self) and hp > 0:
+					var bc = get_tree().get_first_node_in_group("bullets")
+					if bc:
+						_spawn_bullet(bc, bullet_dir, bspeed)
+		)
+
+## SHOTGUN_BLAST: Wide random cone burst — devastating at close range
+func _shoot_shotgun(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 5)
+	var bspeed = definition.bullet_speed if definition else 80.0
+	var cone = 0.6  # wide cone
+	for i in range(count):
+		var angle = randf_range(-cone / 2.0, cone / 2.0)
+		var spd = bspeed * randf_range(0.6, 1.4)
+		_spawn_bullet(bullets_container, dir.rotated(angle), spd)
+
+## HELIX: Two intertwined spiraling bullet streams
+var _helix_angle: float = 0.0
+func _shoot_helix(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var bspeed = definition.bullet_speed if definition else 70.0
+	# Two streams offset by PI
+	for stream in range(2):
+		var offset_angle = _helix_angle + stream * PI
+		var bullet_dir = dir.rotated(sin(offset_angle) * 0.5)
+		var perp = dir.rotated(PI / 2.0)
+		var spawn_pos = global_position + perp * cos(offset_angle) * 6.0
+		_spawn_bullet_at(bullets_container, spawn_pos, bullet_dir, bspeed)
+	_helix_angle += 0.8
+
+## METEOR_SHOWER: Cluster of bullets with wildly varying speeds — chaotic rain
+func _shoot_meteor_shower(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 6)
+	var bspeed = definition.bullet_speed if definition else 60.0
+	for i in range(count):
+		var angle = randf_range(-0.2, 0.2)
+		var spd = bspeed * randf_range(0.3, 2.0)
+		var delay_time = randf_range(0.0, 0.2)
+		get_tree().create_timer(delay_time).timeout.connect(
+			func():
+				if is_instance_valid(self) and hp > 0:
+					var bc = get_tree().get_first_node_in_group("bullets")
+					if bc:
+						_spawn_bullet(bc, dir.rotated(angle), spd)
+		)
+
+## BOOMERANG_SHOT: Wide arc of bullets — outer ones faster, creating a curving pincer
+func _shoot_boomerang(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 5)
+	var bspeed = definition.bullet_speed if definition else 75.0
+	var arc = 0.9  # very wide
+	for i in range(count):
+		var t = float(i) / maxf(count - 1, 1) - 0.5  # -0.5 to 0.5
+		var angle = t * arc
+		# Outer bullets are faster — creates pincer effect
+		var speed_mult = 0.6 + abs(t) * 1.6
+		_spawn_bullet(bullets_container, dir.rotated(angle), bspeed * speed_mult)
+
+## STRAFE_RUN: Fires a spread while moving perpendicular — hit-and-run style
+func _shoot_strafe_run(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 4)
+	var bspeed = (definition.bullet_speed if definition else 80.0) * 1.1
+	for i in range(count):
+		get_tree().create_timer(i * 0.08).timeout.connect(
+			func():
+				if is_instance_valid(self) and is_instance_valid(player) and hp > 0:
+					var bc = get_tree().get_first_node_in_group("bullets")
+					if bc:
+						# Re-aim at player each shot — tracks during strafe
+						var aim = (player.global_position - global_position).normalized()
+						var jitter = randf_range(-0.1, 0.1)
+						_spawn_bullet(bc, aim.rotated(jitter), bspeed)
+		)
+
+## MINEFIELD: Drops slow-moving bullets in all directions around self — area denial
+func _shoot_minefield() -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 8)
+	var bspeed = (definition.bullet_speed if definition else 50.0) * 0.3  # very slow
+	for i in range(count):
+		var angle = (TAU / count) * i + randf() * 0.3
+		var spawn_offset = Vector2.RIGHT.rotated(angle) * randf_range(4.0, 12.0)
+		_spawn_bullet_at(bullets_container, global_position + spawn_offset, Vector2.RIGHT.rotated(angle), bspeed)
+
+## RETURNING_VOLLEY: Fires bullets that curve back toward the enemy after traveling a distance
+func _shoot_returning(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 4)
+	var bspeed = definition.bullet_speed if definition else 70.0
+	var spread = 0.5
+	for i in range(count):
+		var t = float(i) / maxf(count - 1, 1) - 0.5
+		var angle = t * spread
+		var b = bullet_scene.instantiate()
+		b.global_position = global_position
+		b.direction = dir.rotated(angle)
+		b.is_player_bullet = false
+		b.speed = bspeed * randf_range(0.8, 1.2)
+		b.behavior = b.BulletBehavior.RETURNING
+		b._origin_pos = global_position
+		b._origin_entity = self
+		b._max_travel = randf_range(40.0, 70.0)
+		b.lifetime = 5.0
+		bullets_container.add_child(b)
+
+## SEEKING_MINES: Drops slow homing mines that drift toward the player
+func _shoot_seeking_mines() -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 3)
+	var bspeed = (definition.bullet_speed if definition else 50.0) * 0.2
+	for i in range(count):
+		var angle = (TAU / count) * i + randf() * 0.4
+		var spawn_offset = Vector2.RIGHT.rotated(angle) * randf_range(6.0, 14.0)
+		var b = bullet_scene.instantiate()
+		b.global_position = global_position + spawn_offset
+		b.direction = Vector2.RIGHT.rotated(angle)
+		b.is_player_bullet = false
+		b.speed = bspeed
+		b.behavior = b.BulletBehavior.SEEKING_MINE
+		b._origin_pos = global_position
+		b.lifetime = 8.0
+		bullets_container.add_child(b)
+
+## DETONATOR: Fires bullets that decelerate and explode into sub-bullets when stopped
+func _shoot_detonator(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 3)
+	var bspeed = (definition.bullet_speed if definition else 80.0) * 1.2
+	for i in range(count):
+		var spread = randf_range(-0.2, 0.2)
+		var b = bullet_scene.instantiate()
+		b.global_position = global_position
+		b.direction = dir.rotated(spread)
+		b.is_player_bullet = false
+		b.speed = bspeed
+		b.behavior = b.BulletBehavior.DECELERATING
+		b._origin_pos = global_position
+		b._decel_rate = randf_range(60.0, 120.0)
+		b.lifetime = 4.0
+		bullets_container.add_child(b)
+
+## SPLITTER: Fires bullets that split into multiple sub-bullets after a delay
+func _shoot_splitter(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 2)
+	var bspeed = definition.bullet_speed if definition else 65.0
+	for i in range(count):
+		var spread = float(i) / maxf(count - 1, 1) - 0.5
+		var b = bullet_scene.instantiate()
+		b.global_position = global_position
+		b.direction = dir.rotated(spread * 0.4)
+		b.is_player_bullet = false
+		b.speed = bspeed
+		b.behavior = b.BulletBehavior.SPLITTING
+		b._origin_pos = global_position
+		b._split_count = randi_range(3, 6)
+		b.lifetime = 4.0
+		bullets_container.add_child(b)
+
+## SINE_BARRAGE: Fires sine-wave bullets that oscillate while traveling — hard to dodge
+func _shoot_sine_barrage(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 4)
+	var bspeed = definition.bullet_speed if definition else 70.0
+	for i in range(count):
+		var spread = float(i) / maxf(count - 1, 1) - 0.5
+		var b = bullet_scene.instantiate()
+		b.global_position = global_position
+		b.direction = dir.rotated(spread * 0.3)
+		b.is_player_bullet = false
+		b.speed = bspeed * randf_range(0.8, 1.1)
+		b.behavior = b.BulletBehavior.SINE_WAVE
+		b._origin_pos = global_position
+		b._base_direction = b.direction
+		b._sine_amplitude = randf_range(4.0, 10.0)
+		b._sine_frequency = randf_range(6.0, 12.0)
+		b.lifetime = 4.0
+		bullets_container.add_child(b)
+
+## HOMING_SALVO: Fires bullets that home toward the player — missile volley
+func _shoot_homing_salvo(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 3)
+	var bspeed = (definition.bullet_speed if definition else 60.0) * 0.7
+	for i in range(count):
+		get_tree().create_timer(i * 0.1).timeout.connect(
+			func():
+				if not is_instance_valid(self) or hp <= 0:
+					return
+				var bc = get_tree().get_first_node_in_group("bullets")
+				if not bc:
+					return
+				# Fire in a wide arc — homing will correct course
+				var spread_angle = randf_range(-0.8, 0.8)
+				var b = bullet_scene.instantiate()
+				b.global_position = global_position
+				b.direction = dir.rotated(spread_angle)
+				b.is_player_bullet = false
+				b.speed = bspeed * randf_range(0.9, 1.3)
+				b.behavior = b.BulletBehavior.HOMING_ENEMY
+				b._origin_pos = global_position
+				b.lifetime = 5.0
+				bc.add_child(b)
+		)
+
+## TELEGRAPH_EXPLOSION: Spawns a warning marker at player's position, then explodes after delay
+func _shoot_telegraph_explosion() -> void:
+	if not is_instance_valid(player):
+		return
+	var target_pos = player.global_position
+	# Visual telegraph: flash a warning at the target location
+	var marker = Sprite2D.new()
+	var img = Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	for y in range(16):
+		for x in range(16):
+			var dx = x - 8.0
+			var dy = y - 8.0
+			if dx * dx + dy * dy < 64.0:
+				img.set_pixel(x, y, Color(1.0, 0.2, 0.0, 0.5))
+	marker.texture = ImageTexture.create_from_image(img)
+	marker.global_position = target_pos
+	marker.z_index = -1
+	get_tree().current_scene.add_child(marker)
+	# Blink the marker
+	var tween = create_tween()
+	tween.tween_property(marker, "modulate:a", 0.2, 0.3)
+	tween.tween_property(marker, "modulate:a", 1.0, 0.3)
+	tween.tween_property(marker, "modulate:a", 0.2, 0.2)
+	tween.tween_property(marker, "modulate:a", 1.0, 0.2)
+	# Explode after delay
+	get_tree().create_timer(1.0).timeout.connect(
+		func():
+			if is_instance_valid(marker):
+				marker.queue_free()
+			# Spawn ring of bullets at the telegraph position
+			var bc = get_tree().get_first_node_in_group("bullets")
+			if not bc:
+				return
+			var ring_count = 12
+			var bspeed = definition.bullet_speed if definition else 70.0
+			for j in range(ring_count):
+				var angle = (TAU / ring_count) * j
+				var b = bullet_scene.instantiate()
+				b.global_position = target_pos
+				b.direction = Vector2.RIGHT.rotated(angle)
+				b.is_player_bullet = false
+				b.speed = bspeed * 0.8
+				b.lifetime = 3.0
+				bc.add_child(b)
+			# Direct damage in radius
+			if is_instance_valid(player):
+				if player.global_position.distance_to(target_pos) < 20.0:
+					if player.has_method("take_damage"):
+						var dmg = definition.attack_damage if definition else 2
+						player.take_damage(dmg)
+	)
+
+## ORBIT_LAUNCH: Spawns bullets that orbit around the enemy then launch outward
+func _shoot_orbit_launch(dir: Vector2) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var count = maxi(_get_active_bullet_count(), 4)
+	var bspeed = definition.bullet_speed if definition else 70.0
+	for i in range(count):
+		var angle = (TAU / count) * i
+		var orbit_offset = Vector2.RIGHT.rotated(angle) * 12.0
+		var b = bullet_scene.instantiate()
+		b.global_position = global_position + orbit_offset
+		b.direction = dir  # launch direction after orbit completes
+		b.is_player_bullet = false
+		b.speed = bspeed
+		b.behavior = b.BulletBehavior.ORBITING
+		b._origin_pos = global_position
+		b._origin_entity = self
+		b._orbit_center = global_position
+		b._orbit_radius = 12.0
+		b._orbit_time = randf_range(0.4, 0.8)
+		b.lifetime = 5.0
+		bullets_container.add_child(b)
 
 func _has_line_of_sight() -> bool:
 	if not is_instance_valid(player):
@@ -535,18 +1220,58 @@ func _has_line_of_sight() -> bool:
 	return result.is_empty()  # no wall between us = has LOS
 
 func take_damage(amount: int) -> void:
-	# Getting hit always aggros
+	# Passive enemies become hostile when hit
+	if has_meta("passive_until_hit") and get_meta("passive_until_hit"):
+		set_meta("passive_until_hit", false)
+	# Getting hit always aggros and resets chase timer
 	if state == State.IDLE:
 		state = State.CHASE
+	_chase_timer = 0.0
 	hp -= amount
+	_time_since_hit = 0.0
+	# Floating damage number
+	var scene_root = get_tree().current_scene
+	if scene_root and amount > 0:
+		FloatingText.spawn_damage(scene_root, global_position, amount, Color(1.0, 1.0, 0.3))
 	var orig_color = definition.sprite_color if definition else Color.WHITE
 	$Sprite2D.modulate = Color.WHITE * 3
 	var tween = create_tween()
 	tween.tween_property($Sprite2D, "modulate", orig_color, 0.1)
+	_update_boss_hp_bar()
 	if hp <= 0:
 		_die()
 		return
 	_check_phase_transition()
+
+func apply_status(status_name: String, duration: float) -> void:
+	# Apply visual tint for status effects
+	var color = Color.WHITE
+	match status_name:
+		"BURNING": color = Color(1.0, 0.5, 0.2)
+		"SLOWED": color = Color(0.4, 0.6, 1.0)
+		"POISONED": color = Color(0.3, 0.8, 0.2)
+	$Sprite2D.modulate = color
+	# Slow enemies when slowed
+	if status_name == "SLOWED":
+		speed *= 0.5
+	# Damage over time for burning/poison
+	if status_name == "BURNING" or status_name == "POISONED":
+		var tick_dmg = maxi(1, _max_hp / 20)
+		var ticks = int(duration / 0.5)
+		for i in range(ticks):
+			get_tree().create_timer(0.5 * (i + 1)).timeout.connect(
+				func():
+					if is_instance_valid(self) and hp > 0:
+						take_damage(tick_dmg)
+			)
+	# Restore after duration
+	get_tree().create_timer(duration).timeout.connect(
+		func():
+			if is_instance_valid(self):
+				$Sprite2D.modulate = definition.sprite_color if definition else Color.WHITE
+				if status_name == "SLOWED" and definition:
+					speed = definition.move_speed
+	)
 
 func take_damage_from_front(amount: int, from_dir: Vector2) -> void:
 	# Shield enemies block frontal damage
@@ -625,13 +1350,54 @@ func _die() -> void:
 		if player.has_method("gain_xp"):
 			player.gain_xp(definition.xp_value)
 
+	# Notify quest system
+	if definition:
+		var qm = get_node_or_null("/root/QuestManager")
+		if qm:
+			qm.on_enemy_killed(definition.enemy_name)
+
+	# Floating text for XP/gold
+	var xp_val = definition.xp_value if definition else 0
+	var gold_val = definition.score_value if definition else 5
+	var scene_root = get_tree().current_scene
+	if scene_root:
+		if xp_val > 0:
+			FloatingText.spawn(scene_root, global_position + Vector2(0, -8), "+%d XP" % xp_val, Color(0.5, 1.0, 0.5))
+		if gold_val > 0:
+			FloatingText.spawn(scene_root, global_position + Vector2(0, 4), "+%d Gold" % gold_val, Color(1.0, 0.85, 0.2))
+
+	# Gold drops as a gold pickup (not in a bag)
+	var gold = definition.score_value if definition else 5
+	if gold > 0:
+		var pickup = pickup_scene.instantiate()
+		pickup.gold_amount = gold
+		pickup.global_position = global_position + Vector2(randf_range(-2, 2), randf_range(-2, 2))
+		get_tree().current_scene.add_child(pickup)
+
+	# Items drop in a loot bag (only if items rolled)
+	var bag_items: Array[EquipmentItem] = []
 	if drop_table:
-		var dropped_item = drop_table.roll()
-		if dropped_item:
-			var pickup = pickup_scene.instantiate()
-			pickup.item = dropped_item
-			pickup.global_position = global_position
-			get_tree().current_scene.add_child(pickup)
+		var drop_chance = 0.15
+		if definition and definition.size_class == 1:
+			drop_chance = 0.40
+		elif definition and definition.size_class >= 2:
+			drop_chance = 0.70
+		if randf() < drop_chance:
+			var roll_count = 1
+			if definition and definition.xp_value > 20:
+				roll_count = 2
+			if definition and definition.size_class > 0:
+				roll_count = 3
+			for i in range(roll_count):
+				var dropped = drop_table.roll()
+				if dropped:
+					bag_items.append(dropped.duplicate())
+
+	if not bag_items.is_empty():
+		var bag = LootBag.new()
+		bag.items = bag_items
+		bag.global_position = global_position + Vector2(randf_range(-2, 2), randf_range(-2, 2))
+		get_tree().current_scene.add_child(bag)
 	queue_free()
 
 func _explode_on_death() -> void:

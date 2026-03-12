@@ -1,0 +1,117 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "q15"
+title = "Yoregot's Special Brew"
+summary = "Yoregot needs 3 Apples and 3 Meat for his famous brew. Collect them and deliver to him."
+level = 4
+location = "aria"
+properties = [{
+"index": 0,
+"name": "Delivered",
+"type": "yesno"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "Yoregot at the Crooked Beak needs ingredients for his special brew. Can you gather 3 Apples and 3 Meat and bring them to him?",
+"options": [{
+"name": "I'll find them",
+"script": [{
+"cmd": "startQuest",
+"id": "q15"
+}]
+}, {
+"name": "Not now",
+"script": []
+}]
+}]
+events = [{
+"type": "activate",
+"param": "Yoregot",
+"script": [{
+"attribute": "count-Apple",
+"cmd": "if",
+"compare": "2",
+"operation": "gt",
+"script": [{
+"attribute": "count-Meat",
+"cmd": "if",
+"compare": "2",
+"operation": "gt",
+"script": [{
+"cmd": "takeItem",
+"name": "Apple",
+"count": "3"
+}, {
+"cmd": "takeItem",
+"name": "Meat",
+"count": "3"
+}, {
+"cmd": "set",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Yoregot",
+"portrait": 146,
+"text": "Perfect! These are just what I needed. Here, take this potion I brewed. The Elder will have your gold reward too!",
+"options": [{
+"name": "Thanks!",
+"script": []
+}]
+}, {
+"cmd": "getItem",
+"name": "Red Potion",
+"count": "1"
+}]
+}]
+}, {
+"attribute": "session-q15-0",
+"cmd": "if",
+"compare": "0",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Yoregot",
+"portrait": 146,
+"text": "I still need 3 Apples and 3 Meat for my brew. Check the shops or hunt for them!",
+"options": [{
+"name": "I'll keep looking",
+"script": []
+}]
+}]
+}]
+}, {
+"type": "quest",
+"param": "aria",
+"script": [{
+"attribute": "session-q15-0",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "getItem",
+"count": "500",
+"name": "Gold"
+}, {
+"cmd": "getExp",
+"value": "400"
+}, {
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "Yoregot tells me you brought him everything he needed. Fine work! Here is 500 gold.",
+"options": [{
+"name": "Thanks",
+"script": []
+}]
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}]

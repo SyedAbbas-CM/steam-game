@@ -16,7 +16,12 @@ flat_bonus = 4.0
 [resource]
 script = ExtResource("1")
 item_name = "Corlion"
+loy_tile_index = 441
 description = "An ancient wand like artifact"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 468
+sell_value = 117
+bullet_sprite_index = 110
+weapon_range = 3.0

@@ -11,6 +11,7 @@ var player: Node2D = null
 var companion_index: int = 0
 var bullet_scene: PackedScene
 var can_shoot: bool = true
+var _animator: SpriteAnimator
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var shoot_timer: Timer = $ShootTimer

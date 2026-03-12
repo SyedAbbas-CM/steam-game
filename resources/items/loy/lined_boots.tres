@@ -16,7 +16,10 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Lined Boots"
+loy_tile_index = 354
 description = "Fur lined boots"
-slot_type = 2
+slot_type = 6
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 1
+buy_price = 96
+sell_value = 24

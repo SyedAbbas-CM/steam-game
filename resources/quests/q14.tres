@@ -1,0 +1,111 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "q14"
+title = "Jimbob's Lost Pickaxe"
+summary = "Jimbob lost his pickaxe in the dungeons. Clear 10 enemies down there to search for it."
+level = 2
+location = "aria"
+properties = [{
+"index": 0,
+"name": "Enemies Cleared",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "Poor Jimbob lost his pickaxe deep in the dungeons. He needs someone to clear out 10 monsters so he can retrieve it. Will you help?",
+"options": [{
+"name": "For Jimbob!",
+"script": [{
+"cmd": "startQuest",
+"id": "q14"
+}]
+}, {
+"name": "Not now",
+"script": []
+}]
+}]
+events = [{
+"type": "kill",
+"param": "Skeleton",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}, {
+"type": "kill",
+"param": "Ghost",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}, {
+"type": "kill",
+"param": "Ghoul",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}, {
+"type": "kill",
+"param": "Skeleton Archer",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}, {
+"type": "kill",
+"param": "Zombie",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}, {
+"type": "quest",
+"param": "aria",
+"script": [{
+"attribute": "session-q14-0",
+"cmd": "if",
+"compare": "10",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "Keep clearing those dungeon monsters for Jimbob!",
+"options": [{
+"name": "Will do!",
+"script": []
+}]
+}]
+}, {
+"attribute": "session-q14-0",
+"cmd": "if",
+"compare": "9",
+"operation": "gt",
+"script": [{
+"cmd": "getItem",
+"count": "400",
+"name": "Gold"
+}, {
+"cmd": "getExp",
+"value": "300"
+}, {
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "Jimbob found his pickaxe! He's overjoyed. Here's 400 gold for your trouble.",
+"options": [{
+"name": "Happy to help",
+"script": []
+}]
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}]

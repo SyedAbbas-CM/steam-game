@@ -11,7 +11,12 @@ flat_bonus = 22.0
 [resource]
 script = ExtResource("1")
 item_name = "Goif Bow"
+loy_tile_index = 48
 description = "A bow made of precious metal"
-slot_type = 0
+slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 476
+sell_value = 119
+bullet_sprite_index = 96
+weapon_range = 5.0

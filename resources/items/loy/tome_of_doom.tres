@@ -11,7 +11,10 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Tome of Doom"
+loy_tile_index = 151
 description = "An old tattered book"
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
+buy_price = 88
+sell_value = 22

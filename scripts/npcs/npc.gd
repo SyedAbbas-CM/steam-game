@@ -16,6 +16,7 @@ var _interact_label: Label
 var _player_nearby: bool = false
 var _chars_texture: Texture2D
 var _chars2_texture: Texture2D
+var _animator: SpriteAnimator
 
 func _ready() -> void:
 	collision_layer = 0
@@ -96,6 +97,10 @@ func interact() -> void:
 	if not qm:
 		return
 
+	# Notify quest system of NPC activation (for delivery quests)
+	if npc_name != "":
+		qm.on_npc_activated(npc_name)
+
 	match npc_type:
 		"scriptfile":
 			if script_file != "":
@@ -140,7 +145,8 @@ func _show_simple_dialogue() -> void:
 			"trainer":
 				text = "Train hard, adventurer. Strength comes from practice."
 			"craft":
-				text = "I can craft items for you, if you bring the materials."
+				_open_enchant_station()
+				return
 			"pets":
 				text = "Looking for a loyal companion? I might be able to help."
 			"maps":
@@ -156,22 +162,57 @@ func _offer_zone_quests() -> void:
 	var qm = get_node_or_null("/root/QuestManager")
 	if not qm:
 		return
-	for quest_id in qm.definitions:
-		var quest = qm.definitions[quest_id] as QuestDefinition
-		if quest.location == zone_id and not qm.is_quest_active(quest_id) and not qm.is_quest_completed(quest_id):
-			qm.offer_quest(quest_id)
-			return
+
+	# Get player level for filtering
+	var player_level = 1
+	var player = get_tree().get_first_node_in_group("player")
+	if player:
+		var ls = player.get_node_or_null("LevelSystem") as LevelSystem
+		if ls:
+			player_level = ls.level
+
+	# First: check if player has any active quests to report on in this zone
 	for quest_id in qm.active_quests:
 		if not qm.active_quests[quest_id].get("active", false):
 			continue
 		var quest = qm.definitions.get(quest_id) as QuestDefinition
-		if quest and quest.target_location == zone_id:
+		if quest and (quest.target_location == zone_id or quest.location == zone_id):
 			qm.on_zone_entered(zone_id)
 			return
-	qm.show_dialogue_requested.emit(npc_name, portrait_tile, "Welcome, adventurer. The land needs heroes.", ["Ok"])
+
+	# Collect all available quests for this zone
+	var available: Array = []
+	for quest_id in qm.definitions:
+		var quest = qm.definitions[quest_id] as QuestDefinition
+		if quest.location != zone_id:
+			continue
+		if qm.is_quest_active(quest_id) or qm.is_quest_completed(quest_id):
+			continue
+		available.append(quest)
+
+	# Sort by level (lowest first) so starter quests come before endgame ones
+	available.sort_custom(func(a: QuestDefinition, b: QuestDefinition) -> bool:
+		return a.level < b.level
+	)
+
+	# Offer the first quest the player is high enough level for
+	# Allow quests up to 5 levels above player to give something to work toward
+	for quest in available:
+		if quest.level <= player_level + 5:
+			qm.offer_quest(quest.id)
+			return
+
+	# If nothing matches level, just offer the lowest-level one available
+	if available.size() > 0:
+		qm.offer_quest(available[0].id)
+		return
+
+	# No quests at all — show default elder dialogue
+	var greeting = "All is well in %s. You've done great work, adventurer!" % zone_id if zone_id != "" else "Welcome, adventurer. The land needs heroes."
+	qm._waiting_for_dialogue = true
+	qm.show_dialogue_requested.emit(npc_name, portrait_tile, greeting, ["Ok"])
 
 func _open_shop() -> void:
-	# Find ShopUI in the scene tree
 	var shop_ui: ShopUI = null
 	for child in get_tree().root.get_children():
 		for sub in child.get_children():
@@ -182,3 +223,18 @@ func _open_shop() -> void:
 		shop_ui.open_shop(shop_id)
 	else:
 		_show_simple_dialogue()
+
+func _open_enchant_station() -> void:
+	var enchant_ui: EnchantUI = null
+	for child in get_tree().root.get_children():
+		for sub in child.get_children():
+			if sub is EnchantUI:
+				enchant_ui = sub
+				break
+	if enchant_ui:
+		enchant_ui.open()
+	else:
+		# Create one dynamically if not in scene
+		enchant_ui = EnchantUI.new()
+		get_tree().current_scene.add_child(enchant_ui)
+		enchant_ui.open()

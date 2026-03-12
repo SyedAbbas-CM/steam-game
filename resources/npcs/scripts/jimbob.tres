@@ -7,10 +7,167 @@ script = ExtResource("1_6ffy5")
 commands = [{
 "cmd": "showDialog",
 "name": "Jimbob",
-"options": [{
-"name": "How Odd!",
-"script": []
-}],
 "portrait": 153,
-"text": "The dungeons in Yore are crazy, always changing, it's worth visiting them over and over!"
+"text": "Hey there! I spend most of my time exploring the dungeons beneath town. They're wild, I tell you!",
+"options": [{
+"name": "About the dungeons",
+"script": [{
+"cmd": "showDialog",
+"name": "Jimbob",
+"portrait": 153,
+"text": "The floors shift and change every time you enter! Ancient magic, they say. No two visits are ever the same. The deeper you go, the tougher the monsters.",
+"options": [{
+"name": "How deep?",
+"script": [{
+"cmd": "showDialog",
+"name": "Jimbob",
+"portrait": 153,
+"text": "Seven levels under Aria, at least! Each one nastier than the last. I once made it to floor five before a Bone Guard chased me all the way back up.",
+"options": [{
+"name": "Yikes!",
+"script": []
+}]
+}]
+}, {
+"name": "Good to know",
+"script": []
+}]
+}]
+}, {
+"name": "Any tips?",
+"script": [{
+"cmd": "showDialog",
+"name": "Jimbob",
+"portrait": 153,
+"text": "Always check every room for chests. And if you see something golden shimmering in the dark... don't run! Those rare golden enemies drop serious loot.",
+"options": [{
+"name": "Golden enemies?",
+"script": [{
+"cmd": "showDialog",
+"name": "Jimbob",
+"portrait": 153,
+"text": "Aye! Golden Goblins, Golden Skeletons... they're tough but worth five times the reward. I've only seen one myself. Nearly got me, but the gold was worth it!",
+"options": [{
+"name": "I'll watch for them",
+"script": []
+}]
+}]
+}, {
+"name": "Thanks!",
+"script": []
+}]
+}]
+}, {
+"name": "Need a hand?",
+"script": [{
+"attribute": "quest-sq1-complete",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Jimbob",
+"portrait": 153,
+"text": "Those potions you brought me were incredible! I mixed them with cave moss and made a paste that glows in the dark. Totally useless, but fun!",
+"options": [{
+"name": "Classic Jimbob",
+"script": []
+}]
+}]
+}, {
+"attribute": "quest-sq1-active",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"attribute": "count-Red Potion",
+"cmd": "if",
+"compare": "4",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Jimbob",
+"portrait": 153,
+"text": "You've got them! Hand over those 5 Red Potions!",
+"options": [{
+"name": "Here you go",
+"script": [{
+"cmd": "takeItem",
+"name": "Red Potion",
+"count": "5"
+}, {
+"cmd": "set",
+"id": "sq1",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "getItem",
+"count": "600",
+"name": "Gold"
+}, {
+"cmd": "getExp",
+"value": "400"
+}, {
+"cmd": "showDialog",
+"name": "Jimbob",
+"portrait": 153,
+"text": "Perfect! I'm going to mix them with cave moss and see what happens. Here's 600 gold for your trouble!",
+"options": [{
+"name": "Don't blow yourself up",
+"script": []
+}]
+}, {
+"cmd": "completeQuest",
+"id": "sq1"
+}]
+}]
+}]
+}, {
+"attribute": "count-Red Potion",
+"cmd": "if",
+"compare": "5",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Jimbob",
+"portrait": 153,
+"text": "Still looking for those Red Potions? I need 5 total. Check the dungeon chests, they drop them pretty often!",
+"options": [{
+"name": "I'll keep looking",
+"script": []
+}]
+}]
+}]
+}, {
+"attribute": "quest-sq1-complete",
+"cmd": "ifNot",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"attribute": "quest-sq1-active",
+"cmd": "ifNot",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Jimbob",
+"portrait": 153,
+"text": "Actually, yeah! I've been experimenting with alchemy. I need 5 Red Potions for a new concoction. Can you bring me some from the dungeons?",
+"options": [{
+"name": "Sure, I'll find some",
+"script": [{
+"cmd": "startQuest",
+"id": "sq1"
+}]
+}, {
+"name": "Maybe later",
+"script": []
+}]
+}]
+}]
+}]
+}, {
+"name": "See you around",
+"script": []
+}]
 }]

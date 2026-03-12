@@ -29,6 +29,7 @@ func show_rewards(reward_list: Array[Dictionary], title: String = "Choose a Rewa
 
 func _create_card(reward: Dictionary, index: int) -> Button:
 	var btn = Button.new()
+	btn.focus_mode = Control.FOCUS_NONE
 	btn.custom_minimum_size = Vector2(90, 60)
 	btn.text = reward.get("name", "???") + "\n" + reward.get("description", "")
 

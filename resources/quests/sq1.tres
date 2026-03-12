@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sq1"
+title = "Potion Hoarder"
+summary = "Jimbob wants 5 Red Potions for his experiments. Find them in dungeon chests and bring them to him."
+level = 5
+location = "aria"
+properties = [{
+"index": 0,
+"name": "Delivered",
+"type": "yesno"
+}]
+start_script = []
+events = []

@@ -16,7 +16,12 @@ flat_bonus = 3.0
 [resource]
 script = ExtResource("1")
 item_name = "Blade of Ages"
+loy_tile_index = 376
 description = "A glowed winged blade"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 516
+sell_value = 129
+bullet_sprite_index = 120
+weapon_range = 2.5

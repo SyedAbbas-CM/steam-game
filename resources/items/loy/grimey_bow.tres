@@ -5,6 +5,11 @@
 [resource]
 script = ExtResource("1")
 item_name = "Grimey Bow"
+loy_tile_index = 388
 description = "A bow covered in slime"
-slot_type = 0
+slot_type = 1
 rarity = 0
+buy_price = 15
+sell_value = 3
+bullet_sprite_index = 96
+weapon_range = 5.0

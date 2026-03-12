@@ -16,7 +16,12 @@ flat_bonus = 3.0
 [resource]
 script = ExtResource("1")
 item_name = "Double Clawn"
+loy_tile_index = 450
 description = "Two steel claws on a wooden spike"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 460
+sell_value = 115
+bullet_sprite_index = 121
+weapon_range = 1.2

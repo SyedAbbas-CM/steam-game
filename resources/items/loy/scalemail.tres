@@ -11,7 +11,10 @@ flat_bonus = 8.0
 [resource]
 script = ExtResource("1")
 item_name = "Scalemail"
+loy_tile_index = 167
 description = "Heavy-weight scale mail"
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
+buy_price = 144
+sell_value = 36

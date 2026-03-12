@@ -3,7 +3,7 @@ extends RefCounted
 
 # Generate a floor as a dictionary of grid_pos -> RoomData
 # Returns: { "rooms": Dictionary (Vector2i -> RoomData), "start": Vector2i, "stairs": Vector2i }
-static func generate_floor_map(floor_number: int, room_override: int = -1, biome: DungeonBiome = null) -> Dictionary:
+static func generate_floor_map(floor_number: int, room_override: int = -1, biome: DungeonBiome = null, total_floors: int = 5) -> Dictionary:
 	var room_count: int
 	if room_override > 0:
 		room_count = mini(room_override, 40)
@@ -111,10 +111,12 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 
 		if pos == start_pos:
 			room.type = RoomData.RoomType.COMBAT
-			room.enemy_count = 3 + floor_number
+			room.enemy_count = 0  # entrance room is safe — no enemies
+			room.has_stairs_up = true  # start room always has stairs up
 		elif pos == stairs_pos:
 			room.has_stairs_down = true
-			if floor_number % 3 == 0:
+			if floor_number >= total_floors:
+				# Final floor: true area boss
 				room.type = RoomData.RoomType.BOSS
 				room.enemy_count = 1
 			else:
@@ -124,9 +126,11 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 			room.type = _roll_room_type(floor_number)
 			match room.type:
 				RoomData.RoomType.COMBAT:
-					room.enemy_count = 4 + floor_number * 2
+					room.enemy_count = 5 + floor_number * 2
 				RoomData.RoomType.ELITE:
-					room.enemy_count = 2
+					room.enemy_count = 3
+				RoomData.RoomType.TREASURE, RoomData.RoomType.SHRINE:
+					room.enemy_count = 3 + floor_number  # guarded reward rooms
 				_:
 					room.enemy_count = 0
 
@@ -134,7 +138,13 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 		var base_diff = biome.base_difficulty if biome else 0
 		var effective_floor = floor_number + base_diff
 		var hp_mult = 1.0 + (effective_floor - 1) * 0.15
-		var dmg_mult = 1.0 + (effective_floor - 1) * 0.10
+		var dmg_mult = 1.0 + (effective_floor - 1) * 0.1
+		if room.type == RoomData.RoomType.BOSS:
+			hp_mult *= 5.0
+			dmg_mult *= 2.0
+		elif room.type == RoomData.RoomType.ELITE:
+			hp_mult *= 3.0
+			dmg_mult *= 1.5
 		room.enemy_hp_mult = hp_mult
 		room.enemy_damage_mult = dmg_mult
 
@@ -153,14 +163,18 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 				room.connections[dir_name] = neighbor
 
 		# Assign transition types per connection
+		# POC: Force all transitions OPEN — KEY_LOCKED/BREAKABLE systems need polish
 		for dir_name in room.connections:
-			room.transition_types[dir_name] = _roll_transition_type(room.type, pos == start_pos, biome)
+			room.transition_types[dir_name] = RoomData.TransitionType.OPEN
 
 		# 10% of combat rooms become dirt rooms
 		if room.type == RoomData.RoomType.COMBAT and pos != start_pos and randf() < 0.10:
 			room.is_dirt_room = true
 
 		rooms[pos] = room
+
+	# Ensure start→stairs path is fully reachable (all OPEN transitions)
+	_ensure_reachable_path(rooms, start_pos, stairs_pos, directions)
 
 	return { "rooms": rooms, "start": start_pos, "stairs": stairs_pos }
 
@@ -182,13 +196,18 @@ static func _dir_to_name(dir: Vector2i) -> String:
 
 static func _roll_room_type(floor_number: int) -> RoomData.RoomType:
 	var roll = randf()
-	if roll < 0.55:
+	# Higher floors = more combat, less free loot
+	var combat_chance = 0.60 + floor_number * 0.02  # 60% base, grows per floor
+	combat_chance = minf(combat_chance, 0.80)
+	var elite_chance = 0.05 + floor_number * 0.01  # elites more common deeper
+	elite_chance = minf(elite_chance, 0.12)
+	if roll < combat_chance:
 		return RoomData.RoomType.COMBAT
-	elif roll < 0.70:
+	elif roll < combat_chance + 0.10:
 		return RoomData.RoomType.TREASURE
-	elif roll < 0.85:
+	elif roll < combat_chance + 0.18:
 		return RoomData.RoomType.SHRINE
-	elif roll < 0.95:
+	elif roll < combat_chance + 0.22:
 		return RoomData.RoomType.SHOP
 	else:
 		return RoomData.RoomType.ELITE
@@ -235,14 +254,57 @@ static func _roll_transition_type(room_type: RoomData.RoomType, is_start: bool, 
 		_:
 			pass
 
-	var allowed: Array[int] = [0, 1, 2, 3]
+	# 75% chance OPEN, 25% chance non-open transition
+	if randf() < 0.75:
+		return RoomData.TransitionType.OPEN
+
+	var allowed: Array[int] = [1, 2, 3]  # non-open types
 	if biome and biome.allowed_transitions.size() > 0:
 		allowed = []
 		for t in biome.allowed_transitions:
-			allowed.append(t)
+			if t != 0:  # skip OPEN, already handled above
+				allowed.append(t)
 
 	if allowed.size() == 0:
 		return RoomData.TransitionType.OPEN
 
 	var pick = allowed[randi() % allowed.size()]
 	return pick as RoomData.TransitionType
+
+static func _ensure_reachable_path(rooms: Dictionary, start: Vector2i, stairs: Vector2i, directions: Array) -> void:
+	# BFS from start to stairs — find shortest path through room connections
+	var came_from: Dictionary = {}
+	came_from[start] = start
+	var queue: Array[Vector2i] = [start]
+	var idx = 0
+	while idx < queue.size():
+		var pos = queue[idx]
+		idx += 1
+		if pos == stairs:
+			break
+		var room = rooms[pos] as RoomData
+		for dir_name in room.connections:
+			var neighbor = room.connections[dir_name]
+			if not came_from.has(neighbor):
+				came_from[neighbor] = pos
+				queue.append(neighbor)
+
+	if not came_from.has(stairs):
+		# Shouldn't happen with a connected grid, but bail safely
+		return
+
+	# Trace path back from stairs to start and force all transitions OPEN
+	var current = stairs
+	while current != start:
+		var prev = came_from[current]
+		# Force transition from prev→current to OPEN
+		var room_prev = rooms[prev] as RoomData
+		for dir_name in room_prev.connections:
+			if room_prev.connections[dir_name] == current:
+				room_prev.transition_types[dir_name] = RoomData.TransitionType.OPEN
+		# Force reverse transition current→prev to OPEN
+		var room_curr = rooms[current] as RoomData
+		for dir_name in room_curr.connections:
+			if room_curr.connections[dir_name] == prev:
+				room_curr.transition_types[dir_name] = RoomData.TransitionType.OPEN
+		current = prev

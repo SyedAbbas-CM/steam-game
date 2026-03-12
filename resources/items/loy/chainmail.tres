@@ -11,7 +11,10 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Chainmail"
+loy_tile_index = 169
 description = "Light chain mail"
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
+buy_price = 120
+sell_value = 30

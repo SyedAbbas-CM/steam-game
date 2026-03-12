@@ -18,6 +18,8 @@ var grid_pos: Vector2i = Vector2i.ZERO
 var connections: Dictionary = {}  # "north"/"south"/"east"/"west" -> neighbor grid_pos
 # Whether this room has stairs down to next floor
 var has_stairs_down: bool = false
+# Whether this room has stairs up to previous floor (or overworld)
+var has_stairs_up: bool = false
 
 # Room shape
 var shape: RoomShape = RoomShape.RECTANGLE

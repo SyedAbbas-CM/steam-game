@@ -5,6 +5,11 @@
 [resource]
 script = ExtResource("1")
 item_name = "Dagger"
+loy_tile_index = 180
 description = "A simple dagger"
 slot_type = 0
 rarity = 0
+buy_price = 15
+sell_value = 3
+bullet_sprite_index = 120
+weapon_range = 1.5

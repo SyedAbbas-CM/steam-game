@@ -115,6 +115,7 @@ func show_dialogue(npc_name: String, portrait: int, text: String, options: Array
 	# Add option buttons
 	for i in range(options.size()):
 		var btn = Button.new()
+		btn.focus_mode = Control.FOCUS_NONE
 		btn.text = options[i]
 		btn.add_theme_font_size_override("font_size", 20)
 		var btn_style = StyleBoxFlat.new()

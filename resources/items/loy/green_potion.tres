@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Green Potion"
+loy_tile_index = 85
 description = "Regenerates some magical charge (+12C)"
-slot_type = 3
+slot_type = 10
 rarity = 0
+buy_price = 200
+sell_value = 50

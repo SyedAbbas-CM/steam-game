@@ -11,7 +11,12 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Mighty Axe"
+loy_tile_index = 204
 description = "A heavy axe"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 31
+sell_value = 7
+bullet_sprite_index = 123
+weapon_range = 2.0

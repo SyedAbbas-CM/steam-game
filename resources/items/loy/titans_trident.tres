@@ -16,7 +16,12 @@ flat_bonus = 8.0
 [resource]
 script = ExtResource("1")
 item_name = "Titan's Trident"
+loy_tile_index = 464
 description = "A golden trident"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 644
+sell_value = 161
+bullet_sprite_index = 110
+weapon_range = 3.0

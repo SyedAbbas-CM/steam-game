@@ -14,7 +14,7 @@ signal xp_gained(amount: int, total: int)
 # Per-level auto-gains (added per level above 1)
 const LEVEL_BONUSES: Dictionary = {
 	StatModifier.StatType.MAX_HP: 3.0,
-	StatModifier.StatType.MOVE_SPEED: 0.5,
+	StatModifier.StatType.MOVE_SPEED: 1.5,
 	StatModifier.StatType.ATTACK_DAMAGE: 0.15,
 	StatModifier.StatType.ATTACK_SPEED: -0.003,  # negative = faster
 	StatModifier.StatType.BULLET_SPEED: 1.0,
@@ -64,7 +64,8 @@ const ALLOCATION_CATEGORIES: Dictionary = {
 }
 
 func xp_to_next_level() -> int:
-	return 50 + level * 30
+	# Early levels are fast, scales up gradually
+	return 100 + (level - 1) * 50
 
 func gain_xp(amount: int, xp_mult: float = 1.0) -> void:
 	if level >= MAX_LEVEL:

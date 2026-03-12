@@ -34,6 +34,10 @@ var player_xp: int = 0
 var stat_points_unspent: int = 0
 var stat_allocations: Dictionary = {}  # "vitality" -> count
 
+# Equipment persistence
+var equipped_items: Dictionary = {}  # slot_type(int) -> item_path(String)
+var inventory_items: Array[String] = []  # array of item resource paths
+
 const SAVE_PATH = "user://save_data.tres"
 
 static func load_game() -> SaveData:

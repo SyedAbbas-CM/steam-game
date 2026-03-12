@@ -13,6 +13,7 @@ var active_quests: Dictionary = {}  # quest_id -> {active, values: Dictionary}
 var completed_quests: Array[String] = []
 var npc_scripts: Dictionary = {}  # script_name -> Array[Dictionary] (commands)
 var current_zone: String = ""
+var _item_cache: Dictionary = {}  # item_name -> resource_path
 
 # Script execution state
 var _script_queue: Array = []
@@ -22,6 +23,7 @@ var _pending_option_scripts: Array = []  # scripts for each dialogue option
 func _ready() -> void:
 	_load_quest_definitions()
 	_load_npc_scripts()
+	_load_item_cache()
 	_load_state()
 
 func _load_quest_definitions() -> void:
@@ -52,6 +54,75 @@ func _load_npc_scripts() -> void:
 				npc_scripts[script_name] = res.get("commands") if res.get("commands") else []
 		fname = dir.get_next()
 	print("QuestManager: Loaded " + str(npc_scripts.size()) + " NPC scripts")
+
+func _load_item_cache() -> void:
+	var dir = DirAccess.open("res://resources/items/loy/")
+	if not dir:
+		return
+	dir.list_dir_begin()
+	var fname = dir.get_next()
+	while fname != "":
+		if fname.ends_with(".tres"):
+			var path = "res://resources/items/loy/" + fname
+			var item = load(path) as EquipmentItem
+			if item:
+				_item_cache[item.item_name] = path
+		fname = dir.get_next()
+	print("QuestManager: Cached " + str(_item_cache.size()) + " item names")
+
+func _get_player() -> Node:
+	return get_tree().get_first_node_in_group("player")
+
+func _get_equipment_manager() -> EquipmentManager:
+	var p = _get_player()
+	if p:
+		return p.get_node_or_null("EquipmentManager") as EquipmentManager
+	return null
+
+func _count_item_in_inventory(item_name: String) -> int:
+	var em = _get_equipment_manager()
+	if not em:
+		return 0
+	var count = 0
+	for item in em.inventory:
+		if item and item.item_name == item_name:
+			count += 1
+	return count
+
+func _remove_item_from_inventory(item_name: String, amount: int) -> int:
+	var em = _get_equipment_manager()
+	if not em:
+		return 0
+	var removed = 0
+	# Iterate backwards to safely remove
+	for i in range(em.inventory.size() - 1, -1, -1):
+		if removed >= amount:
+			break
+		if em.inventory[i] and em.inventory[i].item_name == item_name:
+			em.inventory.remove_at(i)
+			removed += 1
+	if removed > 0:
+		em.inventory_changed.emit()
+	return removed
+
+func _add_item_to_inventory(item_name: String, amount: int) -> int:
+	var em = _get_equipment_manager()
+	if not em:
+		return 0
+	if not _item_cache.has(item_name):
+		print("QuestManager: Unknown item '%s'" % item_name)
+		return 0
+	var path = _item_cache[item_name]
+	var base = load(path) as EquipmentItem
+	if not base:
+		return 0
+	var added = 0
+	for _i in range(amount):
+		if em.add_to_inventory(base.duplicate()):
+			added += 1
+		else:
+			break  # inventory full
+	return added
 
 func _load_state() -> void:
 	var gm = get_node_or_null("/root/GameManager")
@@ -132,6 +203,17 @@ func on_zone_entered(zone_id: String) -> void:
 			if event.get("type") == "quest" and event.get("param") == zone_id:
 				_execute_script(event.get("script", []), quest_id)
 
+func on_npc_activated(npc_name: String) -> void:
+	for quest_id in active_quests:
+		if not active_quests[quest_id].get("active", false):
+			continue
+		if not definitions.has(quest_id):
+			continue
+		var quest = definitions[quest_id]
+		for event in quest.events:
+			if event.get("type") == "activate" and event.get("param") == npc_name:
+				_execute_script(event.get("script", []), quest_id)
+
 func offer_quest(quest_id: String) -> void:
 	if not definitions.has(quest_id):
 		return
@@ -198,11 +280,14 @@ func _execute_script(commands: Array, context_quest_id: String) -> void:
 				start_quest(qid)
 
 			"completeQuest":
-				if context_quest_id != "":
-					complete_quest(context_quest_id)
+				var qid = cmd.get("id", context_quest_id)
+				if qid != "":
+					complete_quest(qid)
 
 			"set":
 				var qid = cmd.get("id", context_quest_id)
+				if qid == "":
+					qid = context_quest_id
 				var idx = int(cmd.get("index", "0"))
 				var val = int(cmd.get("value", "0"))
 				set_quest_value(qid, idx, val)
@@ -223,21 +308,33 @@ func _execute_script(commands: Array, context_quest_id: String) -> void:
 			"getItem":
 				var item_name = cmd.get("name", "")
 				var count = int(cmd.get("count", "1"))
+				if count <= 0:
+					count = 1
 				if item_name == "Gold":
 					var gm = get_node_or_null("/root/GameManager")
 					if gm:
 						gm.add_gold(count)
-				# TODO: add actual items to inventory
+				else:
+					var added = _add_item_to_inventory(item_name, count)
+					if added > 0:
+						print("QuestManager: Gave %d x %s" % [added, item_name])
 
 			"takeItem":
 				var item_name = cmd.get("name", "")
-				# TODO: remove items from inventory
-				pass
+				var count = int(cmd.get("count", "1"))
+				if count <= 0:
+					count = 1
+				var removed = _remove_item_from_inventory(item_name, count)
+				if removed > 0:
+					print("QuestManager: Took %d x %s" % [removed, item_name])
 
 			"getExp":
-				var _value = int(cmd.get("value", "0"))
-				# TODO: XP system
-				pass
+				var value = int(cmd.get("value", "0"))
+				if value > 0:
+					var p = _get_player()
+					if p and p.has_method("gain_xp"):
+						p.gain_xp(value)
+						print("QuestManager: Awarded %d XP" % value)
 
 			"giveGold":
 				var amount = int(cmd.get("count", "0"))
@@ -254,6 +351,22 @@ func _execute_script(commands: Array, context_quest_id: String) -> void:
 			"spawn":
 				pass  # TODO: spawn enemy
 
+			"offerZoneQuests":
+				var zone = cmd.get("zone", current_zone)
+				_offer_zone_quests_for(zone)
+
+			"openShop":
+				var sid = cmd.get("shop", "")
+				if sid != "":
+					var shop_ui: ShopUI = null
+					for child in get_tree().root.get_children():
+						for sub in child.get_children():
+							if sub is ShopUI:
+								shop_ui = sub
+								break
+					if shop_ui:
+						shop_ui.open_shop(sid)
+
 		i += 1
 
 func _check_condition(attribute: String, compare: int, operation: String, quest_id: String) -> bool:
@@ -265,6 +378,8 @@ func _check_condition(attribute: String, compare: int, operation: String, quest_
 			return value < compare
 		"eq":
 			return value == compare
+		"neq":
+			return value != compare
 		"gte":
 			return value >= compare
 		"lte":
@@ -282,16 +397,32 @@ func _resolve_attribute(attribute: String, quest_id: String) -> int:
 
 	# count-ITEMNAME format (count items in inventory)
 	if attribute.begins_with("count-"):
-		var _item_name = attribute.substr(6)
-		# TODO: check inventory
+		var item_name = attribute.substr(6)
+		return _count_item_in_inventory(item_name)
+
+	# hasFreeSlot - check if inventory has space
+	if attribute == "hasFreeSlot":
+		var em = _get_equipment_manager()
+		if em:
+			return 1 if em.inventory.size() < em.MAX_INVENTORY else 0
 		return 0
 
 	# stat-level format
 	if attribute.begins_with("stat-"):
 		var stat_name = attribute.substr(5)
 		if stat_name == "level":
-			return 1  # TODO: player level system
+			var p = _get_player()
+			if p:
+				var ls = p.get_node_or_null("LevelSystem") as LevelSystem
+				if ls:
+					return ls.level
+			return 1
 		return 0
+
+	# quest-QUESTID-active
+	if attribute.begins_with("quest-") and attribute.ends_with("-active"):
+		var qid = attribute.substr(6, attribute.length() - 13)
+		return 1 if is_quest_active(qid) else 0
 
 	# quest-QUESTID-complete
 	if attribute.begins_with("quest-") and attribute.ends_with("-complete"):
@@ -304,3 +435,47 @@ func _resolve_attribute(attribute: String, quest_id: String) -> int:
 
 func on_dialogue_choice(index: int) -> void:
 	dialogue_option_chosen.emit(index)
+
+func _offer_zone_quests_for(zone: String) -> void:
+	var player_level = 1
+	var player = get_tree().get_first_node_in_group("player")
+	if player:
+		var ls = player.get_node_or_null("LevelSystem") as LevelSystem
+		if ls:
+			player_level = ls.level
+
+	# Check active quests in this zone first
+	for quest_id in active_quests:
+		if not active_quests[quest_id].get("active", false):
+			continue
+		var quest = definitions.get(quest_id) as QuestDefinition
+		if quest and (quest.target_location == zone or quest.location == zone):
+			on_zone_entered(zone)
+			return
+
+	# Collect available quests
+	var available: Array = []
+	for quest_id in definitions:
+		var quest = definitions[quest_id] as QuestDefinition
+		if quest.location != zone:
+			continue
+		if is_quest_active(quest_id) or is_quest_completed(quest_id):
+			continue
+		available.append(quest)
+
+	available.sort_custom(func(a: QuestDefinition, b: QuestDefinition) -> bool:
+		return a.level < b.level
+	)
+
+	for quest in available:
+		if quest.level <= player_level + 5:
+			offer_quest(quest.id)
+			return
+
+	if available.size() > 0:
+		offer_quest(available[0].id)
+		return
+
+	# No quests available
+	_waiting_for_dialogue = true
+	show_dialogue_requested.emit("Elder", 147, "All is well in the village. You've done great work, adventurer!", ["Ok"])

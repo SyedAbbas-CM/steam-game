@@ -11,7 +11,10 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Leather Gloves"
+loy_tile_index = 181
 description = "Gloves made out of touch leather"
-slot_type = 2
+slot_type = 7
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 23
+sell_value = 5

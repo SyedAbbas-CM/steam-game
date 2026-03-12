@@ -11,7 +11,10 @@ flat_bonus = 3.0
 [resource]
 script = ExtResource("1")
 item_name = "Pointy Boots"
+loy_tile_index = 36
 description = "Shiny purple boots"
-slot_type = 2
+slot_type = 6
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 324
+sell_value = 81

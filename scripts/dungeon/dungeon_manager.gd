@@ -24,6 +24,7 @@ var biomes: Array[DungeonBiome] = []
 var level_data: Array[DungeonLevelData] = []
 var dungeon_levels: Array[DungeonLevelData] = []
 var current_level: DungeonLevelData
+var _item_pool: ItemPool
 
 # Room state: grid_pos -> { "visited", "alive", "cleared", "liquid_mask", "web_positions" }
 var room_states: Dictionary = {}
@@ -55,6 +56,7 @@ const LIQUID_TILES = {
 const SPIDER_WEB_FULL = Vector2i(5, 19)
 
 var wall_body: StaticBody2D
+var nav: DungeonNav  # A* navigation for enemies
 
 func _ready() -> void:
 	add_to_group("dungeon_manager")
@@ -69,75 +71,105 @@ func _ready() -> void:
 
 func _load_biomes() -> void:
 	var t0 = Time.get_ticks_msec()
-	var dir = DirAccess.open("res://resources/biomes/")
-	if not dir:
-		return
-	dir.list_dir_begin()
-	var fname = dir.get_next()
-	while fname != "":
-		if fname.ends_with(".tres") and not fname.begins_with("."):
-			var res = load("res://resources/biomes/" + fname) as DungeonBiome
-			if res:
-				biomes.append(res)
-		fname = dir.get_next()
+	var search_dirs = ["res://resources/biomes/", "res://resources/biomes/loy/"]
+	for dir_path in search_dirs:
+		var dir = DirAccess.open(dir_path)
+		if not dir:
+			continue
+		dir.list_dir_begin()
+		var fname = dir.get_next()
+		while fname != "":
+			if fname.ends_with(".tres") and not fname.begins_with("."):
+				var res = load(dir_path + fname) as DungeonBiome
+				if res:
+					biomes.append(res)
+			fname = dir.get_next()
 	biomes.sort_custom(func(a: DungeonBiome, b: DungeonBiome) -> bool: return a.min_floor < b.min_floor)
 	print("TIMING: loaded %d biomes in %d ms" % [biomes.size(), Time.get_ticks_msec() - t0])
 
 var _levels_loaded_for: String = ""  # tracks which dungeon we loaded levels for
 
-func _load_level_data_for(dungeon_name: String) -> void:
-	# Only load levels matching the dungeon name (not all 199)
-	if _levels_loaded_for == dungeon_name and level_data.size() > 0:
+func _load_level_data_for(level_id: String) -> void:
+	# Only load levels matching the level ID prefix (not all 199)
+	# e.g. "Aria-Dungeons" → prefix "aria" → matches aria_dungeons, aria_2, aria_3, aria_crypt, etc.
+	if _levels_loaded_for == level_id and level_data.size() > 0:
 		return
-	_levels_loaded_for = dungeon_name
+	_levels_loaded_for = level_id
 	level_data.clear()
 	var t0 = Time.get_ticks_msec()
 	var dir = DirAccess.open("res://resources/levels/")
 	if not dir:
 		return
-	# Normalize: "Aria-Dungeons" → "aria_dungeons"
-	var dname = dungeon_name.to_lower().replace(" ", "_").replace("-", "_")
+	# Extract area prefix: "Aria-Dungeons" → "Aria" → "aria"
+	# "chidden1" (no dash) → "chidden1"
+	var prefix: String
+	if "-" in level_id:
+		prefix = level_id.substr(0, level_id.find("-")).to_lower()
+	else:
+		prefix = level_id.to_lower()
+	if prefix == "":
+		print("WARNING: empty level prefix from level_id='%s', skipping level load" % level_id)
+		return
 	dir.list_dir_begin()
 	var fname = dir.get_next()
 	while fname != "":
 		if fname.ends_with(".tres"):
 			var fbase = fname.get_basename().to_lower()
-			if dname == "" or fbase.begins_with(dname) or fbase == dname:
+			if fbase.begins_with(prefix):
 				var res = load("res://resources/levels/" + fname) as DungeonLevelData
 				if res and res.id != "":
 					level_data.append(res)
 		fname = dir.get_next()
-	print("TIMING: Loaded %d level definitions for '%s' (slug='%s') in %d ms" % [level_data.size(), dungeon_name, dname, Time.get_ticks_msec() - t0])
+	print("TIMING: Loaded %d level definitions for '%s' (prefix='%s') in %d ms" % [level_data.size(), level_id, prefix, Time.get_ticks_msec() - t0])
 
 func start_run() -> void:
 	var t0 = Time.get_ticks_msec()
+	_item_pool = ItemPool.new()
 	run_state = RunState.new()
 	run_state.run_id = str(randi())
 	run_state.current_floor = 1
 
-	dungeon_levels = _find_level_chain(starting_biome_name)
-	print("TIMING: _find_level_chain took %d ms" % (Time.get_ticks_msec() - t0))
+	# Find the biome first so we can use its loy_level_id for the level chain
+	current_biome = _find_biome_by_name(starting_biome_name)
+	if current_biome:
+		print("Dungeon: Biome = '%s', enemy_pool size = %d, loy_level_id = '%s'" % [
+			current_biome.biome_name, current_biome.enemy_pool.size(), current_biome.loy_level_id])
+	else:
+		print("Dungeon: WARNING - No biome found for starting_biome_name='%s'" % starting_biome_name)
+
+	# Use loy_level_id to find the correct level chain (e.g. "Aria-Dungeons" → all "Aria-*" levels)
+	var level_id = current_biome.loy_level_id if current_biome else starting_biome_name
+	dungeon_levels = _find_level_chain(level_id)
+	print("TIMING: _find_level_chain('%s') found %d levels in %d ms" % [level_id, dungeon_levels.size(), Time.get_ticks_msec() - t0])
 	if dungeon_levels.size() > 0:
 		current_level = dungeon_levels[0]
 	else:
 		current_level = null
 
-	current_biome = _get_biome_for_floor(1)
-	if current_biome:
-		print("Dungeon: Biome = '%s', enemy_pool size = %d" % [current_biome.biome_name, current_biome.enemy_pool.size()])
-	else:
-		print("Dungeon: WARNING - No biome found for starting_biome_name='%s'" % starting_biome_name)
 	_generate_floor(1)
 	print("TIMING: TOTAL start_run took %d ms" % (Time.get_ticks_msec() - t0))
 	floor_changed.emit(1)
 
-func _find_level_chain(dungeon_name: String) -> Array[DungeonLevelData]:
-	_load_level_data_for(dungeon_name)  # lazy load only matching levels
+func _find_biome_by_name(biome_name: String) -> DungeonBiome:
+	if biome_name == "":
+		return null
+	# Match by display name first
+	for b in biomes:
+		if b.biome_name == biome_name:
+			return b
+	# Match by loy_level_id (dungeon_base values are often level IDs like "Aria-Dungeons")
+	for b in biomes:
+		if b.loy_level_id == biome_name:
+			return b
+	return null
+
+func _find_level_chain(level_id: String) -> Array[DungeonLevelData]:
+	_load_level_data_for(level_id)
 	var chain: Array[DungeonLevelData] = []
-	if dungeon_name == "":
+	if level_id == "":
 		return chain
 	for ld in level_data:
-		chain.append(ld)  # already filtered during load
+		chain.append(ld)
 	chain.sort_custom(func(a: DungeonLevelData, b: DungeonLevelData) -> bool:
 		return a.id.naturalnocasecmp_to(b.id) < 0
 	)
@@ -153,16 +185,18 @@ func _get_biome_for_floor(floor_num: int) -> DungeonBiome:
 	var level = _get_level_for_floor(floor_num)
 	if level:
 		current_level = level
-	if floor_num == 1 and starting_biome_name != "":
-		for b in biomes:
-			if b.biome_name == starting_biome_name:
-				return b
+	# Always use the starting biome for the entire dungeon run
+	if current_biome:
+		return current_biome
+	# Fallback: match by floor range
 	for b in biomes:
 		if floor_num >= b.min_floor and floor_num <= b.max_floor:
 			return b
 	if biomes.size() > 0:
 		return biomes[(floor_num - 1) % biomes.size()]
 	return null
+
+var _add_stairs_down_to_start: bool = false  # set when going up a floor
 
 func _generate_floor(floor_num: int) -> void:
 	var t0 = Time.get_ticks_msec()
@@ -174,11 +208,18 @@ func _generate_floor(floor_num: int) -> void:
 		room_override = level.rooms
 
 	var t1 = Time.get_ticks_msec()
-	var map = FloorGenerator.generate_floor_map(floor_num, room_override, current_biome)
+	var map = FloorGenerator.generate_floor_map(floor_num, room_override, current_biome, get_total_floors())
 	print("TIMING: generate_floor_map took %d ms (%d rooms)" % [Time.get_ticks_msec() - t1, map["rooms"].size()])
 	run_state.floor_map = map["rooms"]
 	run_state.current_grid_pos = map["start"]
 	run_state.stairs_pos = map["stairs"]
+
+	# When player went upstairs, the start room also needs stairs down
+	if _add_stairs_down_to_start:
+		var start_room = run_state.floor_map.get(map["start"]) as RoomData
+		if start_room:
+			start_room.has_stairs_down = true
+		_add_stairs_down_to_start = false
 
 	# Determine theme row
 	var theme_row = 0
@@ -196,10 +237,12 @@ func _generate_floor(floor_num: int) -> void:
 		_paint_room(grid_pos, room_data, theme_row)
 		_create_room_trigger(grid_pos, room_data)
 
+		# Start room and shop rooms are auto-cleared (no enemies to fight)
+		var auto_cleared = room_data.type == RoomData.RoomType.SHOP or room_data.enemy_count == 0
 		room_states[grid_pos] = {
 			"visited": grid_pos == map["start"],
 			"alive": 0,
-			"cleared": room_data.type == RoomData.RoomType.SHOP,
+			"cleared": auto_cleared,
 			"enemies": [],
 			"liquid_mask": [],
 			"web_positions": [],
@@ -221,17 +264,26 @@ func _generate_floor(floor_num: int) -> void:
 	_create_all_transitions(theme_row)
 	print("TIMING: transitions took %d ms" % (Time.get_ticks_msec() - t1))
 
+	# Cleanup: erase any wall tile that overlaps a floor tile (prevents blocked corridors)
+	for cell in floor_layer.get_used_cells():
+		wall_layer.erase_cell(cell)
+
 	# Generate wall collisions (row-merged for performance)
 	t1 = Time.get_ticks_msec()
 	_generate_wall_collisions()
-	print("TIMING: wall collisions took %d ms" % (Time.get_ticks_msec() - t1))
+	_generate_deco_collisions()
+	print("TIMING: wall + deco collisions took %d ms" % (Time.get_ticks_msec() - t1))
+
+	# Build A* navigation grid for enemies
+	t1 = Time.get_ticks_msec()
+	nav = DungeonNav.new()
+	nav.build(floor_layer, deco_layer, SOLID_DECO_ROWS)
+	print("TIMING: A* nav grid took %d ms" % (Time.get_ticks_msec() - t1))
 
 	# Place player at start room center
 	var start_world = _grid_to_world_center(map["start"])
 	player.global_position = start_world
 
-	# Place equipment bag near player
-	_spawn_dungeon_bag(start_world + Vector2(16, 16))
 
 	# Pre-spawn enemies in rooms near the start (within 2 grid steps)
 	# Other rooms spawn when player gets within 2 rooms
@@ -242,7 +294,7 @@ func _generate_floor(floor_num: int) -> void:
 		var dist_to_start = abs(grid_pos.x - start.x) + abs(grid_pos.y - start.y)
 		match room_data.type:
 			RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.BOSS:
-				if dist_to_start <= 2:
+				if dist_to_start > 0 and dist_to_start <= 2:
 					room_states[grid_pos]["visited"] = true
 					_spawn_room_enemies(grid_pos, room_data)
 	print("TIMING: spawn nearby enemies took %d ms" % (Time.get_ticks_msec() - t1))
@@ -250,15 +302,6 @@ func _generate_floor(floor_num: int) -> void:
 
 	room_changed.emit(0, run_state.floor_map[map["start"]])
 
-var _dungeon_bag: Node2D
-
-func _spawn_dungeon_bag(pos: Vector2) -> void:
-	if _dungeon_bag:
-		_dungeon_bag.queue_free()
-	var bag_scene = preload("res://scenes/objects/equipment_bag.tscn")
-	_dungeon_bag = bag_scene.instantiate()
-	_dungeon_bag.global_position = pos
-	add_child(_dungeon_bag)
 
 func _clear_floor() -> void:
 	floor_layer.clear()
@@ -280,6 +323,10 @@ func _clear_floor() -> void:
 		child.queue_free()
 	for child in hazard_container.get_children():
 		child.queue_free()
+
+	_nearby_stairs = null
+	_hide_stairs_prompt()
+	_nearby_interact_areas.clear()
 
 func _generate_wall_collisions() -> void:
 	if wall_body:
@@ -345,6 +392,19 @@ func _add_wall_shape(x_start: int, x_end: int, y: int) -> void:
 	)
 	wall_body.add_child(shape)
 
+# Decoration atlas rows that are solid objects (not flat floor decor)
+const SOLID_DECO_ROWS = [0, 1, 2, 3]  # barrels, furniture, chairs, stone pots
+
+func _generate_deco_collisions() -> void:
+	# Add collision shapes for solid decoration tiles (barrels, chairs, tables, etc.)
+	for cell in deco_layer.get_used_cells():
+		var source_id = deco_layer.get_cell_source_id(cell)
+		if source_id != 1:  # only source 1 = dungeon features
+			continue
+		var atlas = deco_layer.get_cell_atlas_coords(cell)
+		if atlas.y in SOLID_DECO_ROWS:
+			_add_wall_shape(cell.x, cell.x, cell.y)
+
 func _grid_to_tile_origin(grid_pos: Vector2i) -> Vector2i:
 	return Vector2i(
 		grid_pos.x * GRID_CELL_W,
@@ -380,6 +440,7 @@ func _paint_room(grid_pos: Vector2i, room_data: RoomData, theme_row: int) -> voi
 	var dirt_tile = Vector2i(12, theme_row)
 	var trap_tile = Vector2i(13, theme_row)
 	var stairs_down = Vector2i(8, theme_row)
+	var stairs_up = Vector2i(7, theme_row)
 
 	# Paint floor and walls using floor mask
 	for y in range(h):
@@ -415,6 +476,17 @@ func _paint_room(grid_pos: Vector2i, room_data: RoomData, theme_row: int) -> voi
 			cy = h / 2
 			if mask[cy][cx]:
 				deco_layer.set_cell(origin + Vector2i(cx, cy), 0, stairs_down)
+
+	# Stairs up (placed offset from center so they don't overlap stairs down)
+	if room_data.has_stairs_up:
+		var cx = w / 2 + 2
+		var cy = h / 2
+		if cx > 0 and cx < w and cy > 0 and cy < h and mask[cy][cx]:
+			deco_layer.set_cell(origin + Vector2i(cx, cy), 0, stairs_up)
+		else:
+			cx = w / 2 - 2
+			if cx > 0 and cx < w and mask[cy][cx]:
+				deco_layer.set_cell(origin + Vector2i(cx, cy), 0, stairs_up)
 
 	# Biome-driven liquid flows
 	if current_biome and current_biome.liquid_type != "" and current_biome.hazard_intensity > 0:
@@ -476,16 +548,12 @@ func _pick_wall_tile(mask: Array, x: int, y: int, w: int, h: int,
 	var has_floor_left = (x - 1 >= 0 and mask[y][x - 1])
 
 	if has_floor_below:
-		if randf() < 0.15:
+		if randf() < 0.05:
 			return wall_cracked
 		return wall_roof
-	elif has_floor_right:
-		if randf() < 0.2:
-			return wall_candle
-		return wall_tile
-	elif has_floor_left:
-		if randf() < 0.2:
-			return wall_candle_2
+	elif has_floor_right or has_floor_left:
+		if randf() < 0.03:
+			return wall_candle if has_floor_right else wall_candle_2
 		return wall_tile
 	else:
 		return wall_tile
@@ -681,11 +749,17 @@ func _paint_room_decorations(origin: Vector2i, mask: Array, w: int, h: int, room
 			continue
 		if exit_positions.has(pos) or placed_positions.has(pos):
 			continue
-		# Don't place on stairs
+		# Don't place on stairs down
 		if room_data.has_stairs_down:
 			var cx = w / 2
 			var cy = h / 2 - 2
 			if pos == Vector2i(cx, cy) or pos == Vector2i(cx, h / 2):
+				continue
+		# Don't place on stairs up
+		if room_data.has_stairs_up:
+			var cx2 = w / 2 + 2
+			var cy2 = h / 2
+			if pos == Vector2i(cx2, cy2) or pos == Vector2i(w / 2 - 2, cy2):
 				continue
 		# Don't overlap existing deco tiles
 		if deco_layer.get_cell_source_id(origin + pos) != -1:
@@ -763,29 +837,29 @@ func _paint_corridor(from_grid: Vector2i, to_grid: Vector2i, direction: String, 
 		_open_exit_wall(to_origin, to_exit, to_room.floor_mask, to_room.shape_width, to_room.shape_height, floor_tile)
 
 func _open_exit_wall(origin: Vector2i, exit_point: Vector2i, mask: Array, w: int, h: int, floor_tile: Vector2i) -> void:
-	# Clear wall tiles and paint floor at the exit opening (3 tiles wide, 3 tiles deep)
-	# This ensures circle/irregular rooms don't have multi-layer walls blocking corridors
-	var is_vertical = exit_point.x == 0 or exit_point.x == w - 1
-	var depth_dir: int  # direction to carve inward
-	if is_vertical:
-		depth_dir = 1 if exit_point.x == 0 else -1
+	# Carve a 3-wide, 5-deep opening from the room edge inward to guarantee corridor connectivity.
+	# Also carve outward 2 tiles to bridge any gap between room edge and corridor start.
+	var is_east_west = exit_point.x == 0 or exit_point.x == w - 1
+	var inward_dir: int
+	if is_east_west:
+		inward_dir = 1 if exit_point.x == 0 else -1
 	else:
-		depth_dir = 1 if exit_point.y == 0 else -1
+		inward_dir = 1 if exit_point.y == 0 else -1
 
-	for depth in range(3):  # carve 3 tiles deep from the edge
-		for offset in range(-1, 2):  # 3 tiles wide
+	# Carve inward (into the room) and outward (into the corridor gap)
+	for depth in range(-2, 6):
+		for offset in range(-1, 2):
 			var tx: int
 			var ty: int
-			if is_vertical:
-				tx = exit_point.x + depth * depth_dir
+			if is_east_west:
+				tx = exit_point.x + depth * inward_dir
 				ty = exit_point.y + offset
 			else:
 				tx = exit_point.x + offset
-				ty = exit_point.y + depth * depth_dir
-			if tx >= 0 and tx < w and ty >= 0 and ty < h:
-				var tile_pos = origin + Vector2i(tx, ty)
-				wall_layer.erase_cell(tile_pos)
-				floor_layer.set_cell(tile_pos, 0, floor_tile)
+				ty = exit_point.y + depth * inward_dir
+			var tile_pos = origin + Vector2i(tx, ty)
+			wall_layer.erase_cell(tile_pos)
+			floor_layer.set_cell(tile_pos, 0, floor_tile)
 
 func _get_corridor_liquid(from_grid: Vector2i, to_grid: Vector2i) -> Array:
 	# Returns liquid tile array if both rooms have liquid, else empty
@@ -962,6 +1036,8 @@ func _create_interact_transition(tiles: Array[Vector2i], wall_tile: Vector2i, fr
 	transition_container.add_child(prompt)
 
 var _nearby_interact_areas: Array = []
+var _nearby_stairs: Area2D = null  # stairs trigger player is standing near
+var _interact_prompt: Label = null  # "Press E" prompt for stairs
 
 func _on_interact_area_entered(body: Node2D, area: Area2D) -> void:
 	if body.is_in_group("player"):
@@ -980,6 +1056,25 @@ func _on_interact_area_exited(body: Node2D, area: Area2D) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact"):
+		# Stairs take priority
+		if _nearby_stairs and is_instance_valid(_nearby_stairs):
+			if _nearby_stairs.is_in_group("stairs_down_trigger"):
+				var gp = _nearby_stairs.get_meta("grid_pos")
+				var st = room_states.get(gp)
+				if st and st["cleared"]:
+					_go_next_floor()
+					get_viewport().set_input_as_handled()
+					return
+			elif _nearby_stairs.is_in_group("stairs_up_trigger"):
+				var gp = _nearby_stairs.get_meta("grid_pos")
+				if run_state.current_floor <= 1:
+					run_state.end_time = Time.get_ticks_msec()
+					run_ended.emit(run_state)
+				else:
+					_go_prev_floor()
+				get_viewport().set_input_as_handled()
+				return
+		# Then check interact transitions
 		for area in _nearby_interact_areas:
 			if is_instance_valid(area):
 				_open_interact_transition(area)
@@ -1029,6 +1124,8 @@ func _create_room_trigger(grid_pos: Vector2i, room_data: RoomData) -> void:
 		var stairs_trigger = Area2D.new()
 		stairs_trigger.collision_layer = 0
 		stairs_trigger.collision_mask = 1
+		stairs_trigger.add_to_group("stairs_down_trigger")
+		stairs_trigger.set_meta("grid_pos", grid_pos)
 		var origin = _grid_to_tile_origin(grid_pos)
 		var cx = room_data.shape_width / 2
 		var cy = room_data.shape_height / 2 - 2
@@ -1038,11 +1135,37 @@ func _create_room_trigger(grid_pos: Vector2i, room_data: RoomData) -> void:
 		stairs_trigger.position = Vector2(stair_tile.x * TILE_SIZE + 4, stair_tile.y * TILE_SIZE + 4)
 		var stair_shape = CollisionShape2D.new()
 		var stair_rect = RectangleShape2D.new()
-		stair_rect.size = Vector2(TILE_SIZE, TILE_SIZE)
+		stair_rect.size = Vector2(TILE_SIZE * 2, TILE_SIZE * 2)
 		stair_shape.shape = stair_rect
 		stairs_trigger.add_child(stair_shape)
-		stairs_trigger.body_entered.connect(_on_stairs_entered.bind(grid_pos))
+		stairs_trigger.body_entered.connect(_on_stairs_proximity.bind(stairs_trigger, true))
+		stairs_trigger.body_exited.connect(_on_stairs_proximity.bind(stairs_trigger, false))
 		room_triggers.add_child(stairs_trigger)
+
+	if room_data.has_stairs_up:
+		var up_trigger = Area2D.new()
+		up_trigger.collision_layer = 0
+		up_trigger.collision_mask = 1
+		up_trigger.add_to_group("stairs_up_trigger")
+		up_trigger.set_meta("grid_pos", grid_pos)
+		var up_origin = _grid_to_tile_origin(grid_pos)
+		var uw = room_data.shape_width
+		var uh = room_data.shape_height
+		var ucx = uw / 2 + 2
+		var ucy = uh / 2
+		var umask = room_data.floor_mask
+		if not (ucx > 0 and ucx < uw and ucy > 0 and ucy < uh and umask[ucy][ucx]):
+			ucx = uw / 2 - 2
+		var stair_tile = up_origin + Vector2i(ucx, ucy)
+		up_trigger.position = Vector2(stair_tile.x * TILE_SIZE + 4, stair_tile.y * TILE_SIZE + 4)
+		var up_shape = CollisionShape2D.new()
+		var up_rect = RectangleShape2D.new()
+		up_rect.size = Vector2(TILE_SIZE * 2, TILE_SIZE * 2)
+		up_shape.shape = up_rect
+		up_trigger.add_child(up_shape)
+		up_trigger.body_entered.connect(_on_stairs_proximity.bind(up_trigger, true))
+		up_trigger.body_exited.connect(_on_stairs_proximity.bind(up_trigger, false))
+		room_triggers.add_child(up_trigger)
 
 func _on_room_trigger_entered(body: Node2D, grid_pos: Vector2i) -> void:
 	if not body.is_in_group("player"):
@@ -1092,6 +1215,8 @@ func _visit_room(grid_pos: Vector2i) -> void:
 		RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.BOSS:
 			_spawn_room_enemies(grid_pos, room_data)
 		RoomData.RoomType.TREASURE, RoomData.RoomType.SHRINE:
+			# Guarded reward rooms — spawn enemies that must be cleared first
+			_spawn_room_enemies(grid_pos, room_data)
 			_spawn_chest_loot(grid_pos)
 			reward_requested.emit(room_data)
 		_:
@@ -1103,6 +1228,8 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 	var enemy_scene = preload("res://scenes/enemy.tscn")
 
 	var count = room_data.enemy_count
+	if count == 0:
+		return  # Room explicitly has no enemies (e.g. start room)
 	if current_level:
 		count = randi_range(current_level.min_monsters, maxi(current_level.max_monsters, 1))
 		count = maxi(count, 1)
@@ -1149,51 +1276,99 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 		else:
 			def = fallback_def.duplicate()
 
+		print("  SPAWNED: '%s' (tile=%d, kingdom=%s) from %s" % [
+			def.enemy_name, def.loy_tile_index, def.kingdom,
+			"loy_pool" if loy_pool.size() > 0 else ("biome_pool" if pool.size() > 0 else "fallback")])
 		def.max_hp = int(def.max_hp * room_data.enemy_hp_mult)
+		def.attack_damage = maxi(1, int(def.attack_damage * room_data.enemy_damage_mult))
 
 		if room_data.type == RoomData.RoomType.ELITE:
-			# Mini-boss: LARGE, 2 phases, escalated attacks
-			def.max_hp = int(def.max_hp * 3)
-			def.move_speed *= 1.2
+			# Mini-boss: LARGE, 2 phases, escalated attacks, spawns minions
+			def.max_hp = int(def.max_hp * 4)
+			def.move_speed *= 1.3
+			def.attack_speed *= 0.8  # faster attacks
 			def.size_class = EnemyDefinition.SizeClass.LARGE
-			def.bullet_count += 2
+			def.bullet_count += 3
+			def.bullet_speed *= 1.2
 			def.boss_phases = 2
-			if def.attack_type == EnemyDefinition.AttackType.RANGED:
-				def.phase_2_attack = EnemyDefinition.AttackType.BURST
-			elif def.attack_type == EnemyDefinition.AttackType.BURST:
-				def.phase_2_attack = EnemyDefinition.AttackType.SPIRAL
-			else:
-				def.phase_2_attack = EnemyDefinition.AttackType.BURST
-			def.phase_2_bullet_count = def.bullet_count + 2
+			def.summon_on_phase_change = true
+			def.summon_phase_count = 2  # 2 minions per phase change
+			# Pick weakest enemy from pool as minion
+			if not def.summon_definition:
+				def.summon_definition = _get_weakest_enemy(loy_pool, pool)
+			# Pick more dangerous phase 2 attack types
+			var elite_phase2 = [
+				EnemyDefinition.AttackType.BURST,
+				EnemyDefinition.AttackType.SPIRAL,
+				EnemyDefinition.AttackType.NOVA,
+				EnemyDefinition.AttackType.CROSS_SHOT,
+				EnemyDefinition.AttackType.GATLING,
+				EnemyDefinition.AttackType.SHOTGUN_BLAST,
+				EnemyDefinition.AttackType.HELIX,
+				EnemyDefinition.AttackType.STRAFE_RUN,
+			]
+			if def.phase_2_attack == EnemyDefinition.AttackType.NONE:
+				def.phase_2_attack = elite_phase2[randi() % elite_phase2.size()]
+			def.phase_2_bullet_count = def.bullet_count + 3
 			def.sprite_color = def.sprite_color.lightened(0.3)
 		elif room_data.type == RoomData.RoomType.BOSS:
 			# Full boss: 3 phases, minion summoning, huge HP
-			def.max_hp = int(def.max_hp * 8)
-			def.move_speed *= 0.8
-			def.attack_speed *= 0.6
-			def.bullet_count += 4
+			def.max_hp = int(def.max_hp * 10)
+			def.move_speed *= 0.85
+			def.attack_speed *= 0.5  # much faster attacks
+			def.bullet_count += 6
+			def.bullet_speed *= 1.3
 			def.size_class = EnemyDefinition.SizeClass.BOSS
 			def.boss_phases = 3
 			def.summon_on_phase_change = true
-			def.summon_phase_count = 3
-			# Set phase attacks if not already configured
+			def.summon_phase_count = 4
+			# Randomize phase attacks from dangerous pool
+			var boss_phase2 = [
+				EnemyDefinition.AttackType.BURST,
+				EnemyDefinition.AttackType.NOVA,
+				EnemyDefinition.AttackType.CROSS_SHOT,
+				EnemyDefinition.AttackType.VOLLEY,
+				EnemyDefinition.AttackType.SHOTGUN_BLAST,
+				EnemyDefinition.AttackType.HELIX,
+				EnemyDefinition.AttackType.METEOR_SHOWER,
+			]
+			var boss_phase3 = [
+				EnemyDefinition.AttackType.SPIRAL,
+				EnemyDefinition.AttackType.NOVA,
+				EnemyDefinition.AttackType.GATLING,
+				EnemyDefinition.AttackType.ZIGZAG,
+				EnemyDefinition.AttackType.METEOR_SHOWER,
+				EnemyDefinition.AttackType.MINEFIELD,
+				EnemyDefinition.AttackType.BOOMERANG_SHOT,
+			]
 			if def.phase_2_attack == EnemyDefinition.AttackType.NONE:
-				def.phase_2_attack = EnemyDefinition.AttackType.BURST
-				def.phase_2_bullet_count = 10
+				def.phase_2_attack = boss_phase2[randi() % boss_phase2.size()]
+				def.phase_2_bullet_count = 12
 			if def.phase_3_attack == EnemyDefinition.AttackType.NONE:
-				def.phase_3_attack = EnemyDefinition.AttackType.SPIRAL
-				def.phase_3_bullet_count = 12
-			# Set summon definition to random biome enemy for minion spawning
-			if not def.summon_definition and pool.size() > 0:
-				def.summon_definition = pool[randi() % pool.size()]
+				def.phase_3_attack = boss_phase3[randi() % boss_phase3.size()]
+				def.phase_3_bullet_count = 16
+			# Set summon definition to weakest enemy for minion spawning
+			if not def.summon_definition:
+				def.summon_definition = _get_weakest_enemy(loy_pool, pool)
 			def.sprite_color = def.sprite_color.lightened(0.5)
 
 		if room_data.type == RoomData.RoomType.COMBAT:
 			def = _try_make_rare(def)
+			# Combat rooms get harder on later floors: +1 bullet every 3 floors
+			def.bullet_count += run_state.current_floor / 3
+			# Deeper floors: faster bullets
+			def.bullet_speed *= 1.0 + run_state.current_floor * 0.05
+
+		# Assign runtime loot table
+		if _item_pool and not def.drop_table:
+			var is_elite = room_data.type == RoomData.RoomType.ELITE or room_data.type == RoomData.RoomType.BOSS
+			var bd = current_biome.base_difficulty if current_biome else 0
+			def.drop_table = _item_pool.create_drop_table(run_state.current_floor, is_elite, bd)
 
 		var enemy = enemy_scene.instantiate()
 		enemy.global_position = spawn_pos
 		enemy.setup(def)
+		enemy._nav = nav  # give enemy A* navigation
 		enemy.set_meta("grid_pos", grid_pos)
 		enemy.tree_exited.connect(_on_enemy_died.bind(grid_pos))
 		enemy_container.add_child(enemy)
@@ -1254,6 +1429,21 @@ func _get_loy_enemy_pool() -> Array:
 	if not current_level or current_level.monster_pool.size() == 0:
 		return []
 	return current_level.monster_pool
+
+func _get_weakest_enemy(loy_pool: Array, biome_pool: Array) -> EnemyDefinition:
+	# Find the enemy with lowest max_hp from available pools
+	var weakest: EnemyDefinition = null
+	# Check loy_pool first (level monster_pool)
+	for entry in loy_pool:
+		var def = _load_enemy_by_name(str(entry.get("type", "")))
+		if def and (not weakest or def.max_hp < weakest.max_hp):
+			weakest = def
+	# Fallback to biome pool
+	if not weakest:
+		for def in biome_pool:
+			if not weakest or def.max_hp < weakest.max_hp:
+				weakest = def
+	return weakest
 
 func _pick_weighted_enemy(pool: Array) -> EnemyDefinition:
 	var total_weight = 0
@@ -1407,64 +1597,114 @@ func _open_key_locked_transitions(grid_pos: Vector2i) -> void:
 				child.queue_free()
 	_generate_wall_collisions()
 
-func _on_stairs_entered(body: Node2D, grid_pos: Vector2i) -> void:
+func _on_stairs_proximity(body: Node2D, trigger: Area2D, entered: bool) -> void:
 	if not body.is_in_group("player"):
 		return
-	var state = room_states.get(grid_pos)
-	if state and not state["cleared"]:
-		return
-	_go_next_floor()
+	if entered:
+		_nearby_stairs = trigger
+		_show_stairs_prompt(trigger)
+	else:
+		if _nearby_stairs == trigger:
+			_nearby_stairs = null
+			_hide_stairs_prompt()
+
+func _show_stairs_prompt(trigger: Area2D) -> void:
+	_hide_stairs_prompt()
+	_interact_prompt = Label.new()
+	_interact_prompt.text = "Press E"
+	_interact_prompt.add_theme_font_size_override("font_size", 6)
+	_interact_prompt.add_theme_color_override("font_color", Color.WHITE)
+	_interact_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_interact_prompt.position = trigger.position + Vector2(-16, -12)
+	add_child(_interact_prompt)
+
+func _hide_stairs_prompt() -> void:
+	if _interact_prompt and is_instance_valid(_interact_prompt):
+		_interact_prompt.queue_free()
+		_interact_prompt = null
+
+func _go_prev_floor() -> void:
+	run_state.current_floor -= 1
+	current_level = _get_level_for_floor(run_state.current_floor)
+	current_biome = _get_biome_for_floor(run_state.current_floor)
+	# Flag so start room gets stairs down when floor is generated
+	_add_stairs_down_to_start = true
+	_generate_floor(run_state.current_floor)
+	floor_changed.emit(run_state.current_floor)
+
+func get_total_floors() -> int:
+	if dungeon_levels.size() > 0:
+		return dungeon_levels.size()
+	if current_biome and current_biome.floor_count > 1:
+		return current_biome.floor_count
+	return 5  # default fallback
 
 func _go_next_floor() -> void:
 	run_state.current_floor += 1
 	run_state.floors_cleared += 1
+
+	# Check if dungeon is complete
+	if run_state.current_floor > get_total_floors():
+		run_state.end_time = Time.get_ticks_msec()
+		run_ended.emit(run_state)
+		return
+
 	current_level = _get_level_for_floor(run_state.current_floor)
 	current_biome = _get_biome_for_floor(run_state.current_floor)
 	_generate_floor(run_state.current_floor)
 	floor_changed.emit(run_state.current_floor)
 
 func _spawn_chest_loot(grid_pos: Vector2i) -> void:
-	if not current_level or current_level.chest_loot.size() == 0:
-		run_state.run_gold += int(20 + run_state.current_floor * 10)
-		return
-
 	var center = _grid_to_world_center(grid_pos)
 	var pickup_scene = preload("res://scenes/pickup.tscn")
-	var chest_def = current_level.chest_loot[0]
-	var min_items = int(chest_def.get("min_items", 1))
-	var max_items = int(chest_def.get("max_items", 2))
-	var item_count = randi_range(min_items, max_items)
-	var item_pool = chest_def.get("items", []) as Array
+	var bd = current_biome.base_difficulty if current_biome else 0
 
-	if item_pool.size() == 0:
-		run_state.run_gold += int(20 + run_state.current_floor * 10)
-		return
+	# Use LoY loot table if available
+	if current_level and current_level.chest_loot.size() > 0:
+		var chest_def = current_level.chest_loot[0]
+		var min_items = int(chest_def.get("min_items", 1))
+		var max_items = int(chest_def.get("max_items", 2))
+		var item_count = randi_range(min_items, max_items)
+		var loy_pool = chest_def.get("items", []) as Array
 
-	for i in range(item_count):
-		var rolled_item = _roll_chest_item(item_pool)
-		if rolled_item == "":
-			continue
+		if loy_pool.size() > 0:
+			for i in range(item_count):
+				var rolled_item = _roll_chest_item(loy_pool)
+				if rolled_item == "":
+					continue
+				if rolled_item == "Gold":
+					var entry = _find_pool_entry(loy_pool, "Gold")
+					var gold_min = int(entry.get("min", 5))
+					var gold_max = int(entry.get("max", 20))
+					run_state.run_gold += randi_range(gold_min, gold_max)
+					continue
+				var safe_name = rolled_item.to_lower().replace(" ", "_")
+				var item_path = "res://resources/items/loy/" + safe_name + ".tres"
+				if not ResourceLoader.exists(item_path):
+					continue
+				var item = load(item_path) as EquipmentItem
+				if not item:
+					continue
+				var pickup = pickup_scene.instantiate()
+				pickup.item = item.duplicate()
+				var offset = Vector2(randf_range(-16, 16), randf_range(-16, 16))
+				pickup.global_position = center + offset
+				add_child(pickup)
+			return
 
-		if rolled_item == "Gold":
-			var entry = _find_pool_entry(item_pool, "Gold")
-			var gold_min = int(entry.get("min", 5))
-			var gold_max = int(entry.get("max", 20))
-			run_state.run_gold += randi_range(gold_min, gold_max)
-			continue
+	# Fallback: generate level-appropriate random items + gold
+	var gold_amount = int(15 + (run_state.current_floor + bd) * 8)
+	run_state.run_gold += gold_amount
 
-		var safe_name = rolled_item.to_lower().replace(" ", "_")
-		var item_path = "res://resources/items/loy/" + safe_name + ".tres"
-		if not ResourceLoader.exists(item_path):
-			continue
-		var item = load(item_path) as EquipmentItem
-		if not item:
-			continue
-
-		var pickup = pickup_scene.instantiate()
-		pickup.item = item.duplicate()
-		var offset = Vector2(randf_range(-16, 16), randf_range(-16, 16))
-		pickup.global_position = center + offset
-		add_child(pickup)
+	if _item_pool:
+		var item_count = randi_range(1, 2)
+		var items = _item_pool.get_random_items(item_count, run_state.current_floor, bd)
+		for item in items:
+			var pickup = pickup_scene.instantiate()
+			pickup.item = item.duplicate()
+			var offset = Vector2(randf_range(-16, 16), randf_range(-16, 16))
+			pickup.global_position = center + offset
+			add_child(pickup)
 
 func _roll_chest_item(pool: Array) -> String:
 	var total_weight = 0

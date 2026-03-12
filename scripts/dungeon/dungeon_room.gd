@@ -57,17 +57,19 @@ func _spawn_enemies() -> void:
 			def = fallback_def.duplicate()
 
 		def.max_hp = int(def.max_hp * room_data.enemy_hp_mult)
+		def.attack_damage = maxi(1, int(def.attack_damage * room_data.enemy_damage_mult))
 
 		if room_data.type == RoomData.RoomType.ELITE:
 			def.max_hp = int(def.max_hp * 3)
 			def.move_speed *= 1.2
 			def.sprite_color = def.sprite_color.lightened(0.3)
 		elif room_data.type == RoomData.RoomType.BOSS:
-			def.max_hp = int(def.max_hp * 6)
-			def.move_speed *= 0.8
-			def.attack_speed *= 0.6
-			def.bullet_count += 4
+			def.max_hp = int(def.max_hp * 10)
+			def.move_speed *= 0.7
+			def.attack_speed *= 0.5
+			def.bullet_count += 6
 			def.sprite_color = def.sprite_color.lightened(0.5)
+			def.size_class = 2  # BOSS size
 
 		enemy.setup(def)
 		enemy.tree_exited.connect(_on_enemy_died)

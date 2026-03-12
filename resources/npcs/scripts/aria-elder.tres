@@ -1,0 +1,82 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+commands = [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "Welcome to JohnBurn Village, adventurer. How may I help you?",
+"options": [{
+"name": "Quests",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "aria"
+}]
+}, {
+"name": "About Aria",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "This village was founded by John Burn, a retired knight who sought peace after the Great War. We built our home here on the central plains of Yore.",
+"options": [{
+"name": "The crypts?",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "Beneath the graveyard lie ancient crypts, older than the village itself. The undead stir there constantly. We pay adventurers to keep them in check.",
+"options": [{
+"name": "The Crooked Beak?",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "Ah, Yoregot's inn! Named after a raven that nested on the roof when it was first built. The bird stayed for years. Some say it was magical.",
+"options": [{
+"name": "Interesting",
+"script": []
+}]
+}]
+}, {
+"name": "I see",
+"script": []
+}]
+}]
+}, {
+"name": "I see",
+"script": []
+}]
+}]
+}, {
+"name": "How do I advance?",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "To prove yourself worthy, you must reach Level 10, complete all quests in the village, and donate 10,000 gold to the town coffers. Then greater responsibilities await.",
+"options": [{
+"name": "What responsibilities?",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "In time, you may lead the defense of our lands. Build fortifications, recruit soldiers, and reclaim territories lost to darkness. But first, prove your worth here.",
+"options": [{
+"name": "I'll work on it",
+"script": []
+}]
+}]
+}, {
+"name": "Understood",
+"script": []
+}]
+}]
+}, {
+"name": "Nevermind",
+"script": []
+}]
+}]

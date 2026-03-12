@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Skaven Claw"
+loy_tile_index = 239
 description = "A blood claw (enchant +1 ATK vermin)"
-slot_type = 3
+slot_type = 10
 rarity = 2
+buy_price = 25
+sell_value = 6

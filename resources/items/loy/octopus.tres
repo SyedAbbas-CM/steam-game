@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Octopus"
+loy_tile_index = 507
 description = "A dark red squid (+30 charge/rage/zen)"
-slot_type = 3
+slot_type = 10
 rarity = 0
+buy_price = 25
+sell_value = 6

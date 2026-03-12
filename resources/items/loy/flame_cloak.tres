@@ -11,7 +11,10 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Flame Cloak"
+loy_tile_index = 432
 description = "Cloak infused with fire magic"
-slot_type = 2
+slot_type = 9
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 340
+sell_value = 85

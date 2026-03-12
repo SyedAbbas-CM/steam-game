@@ -11,7 +11,12 @@ flat_bonus = 7.0
 [resource]
 script = ExtResource("1")
 item_name = "Spiked Club"
+loy_tile_index = 364
 description = "A club with steel spikes"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
+buy_price = 136
+sell_value = 34
+bullet_sprite_index = 123
+weapon_range = 2.0

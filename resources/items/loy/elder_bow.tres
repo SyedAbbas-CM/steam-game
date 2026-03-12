@@ -11,7 +11,12 @@ flat_bonus = 25.0
 [resource]
 script = ExtResource("1")
 item_name = "Elder Bow"
+loy_tile_index = 285
 description = "A jewel encrusted bow"
-slot_type = 0
+slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 500
+sell_value = 125
+bullet_sprite_index = 96
+weapon_range = 5.0

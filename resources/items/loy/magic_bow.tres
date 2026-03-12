@@ -11,7 +11,12 @@ flat_bonus = 10.0
 [resource]
 script = ExtResource("1")
 item_name = "Magic Bow"
+loy_tile_index = 93
 description = "A bow glowing with magical energy"
-slot_type = 0
+slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 380
+sell_value = 95
+bullet_sprite_index = 96
+weapon_range = 5.0

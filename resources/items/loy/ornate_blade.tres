@@ -16,7 +16,12 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Ornate Blade"
+loy_tile_index = 425
 description = "Fire ceremonial sword"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 556
+sell_value = 139
+bullet_sprite_index = 120
+weapon_range = 2.5

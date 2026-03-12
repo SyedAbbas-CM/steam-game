@@ -11,7 +11,10 @@ flat_bonus = 4.0
 [resource]
 script = ExtResource("1")
 item_name = "Explosion Arrow"
+loy_tile_index = 10
 description = "An explosive arrow"
-slot_type = 1
+slot_type = 11
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 47
+sell_value = 11

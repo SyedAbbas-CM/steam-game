@@ -16,7 +16,10 @@ flat_bonus = 7.0
 [resource]
 script = ExtResource("1")
 item_name = "Book of Chevron"
+loy_tile_index = 337
 description = "The musings of chevron "
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 396
+sell_value = 99

@@ -11,7 +11,10 @@ flat_bonus = 4.0
 [resource]
 script = ExtResource("1")
 item_name = "Scarlet Robes"
+loy_tile_index = 114
 description = "Mystic robes"
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 332
+sell_value = 83

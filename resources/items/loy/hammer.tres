@@ -11,7 +11,12 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Hammer"
+loy_tile_index = 277
 description = "A well crafted hammer"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 23
+sell_value = 5
+bullet_sprite_index = 123
+weapon_range = 2.0

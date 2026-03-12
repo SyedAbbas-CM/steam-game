@@ -11,7 +11,12 @@ flat_bonus = 4.0
 [resource]
 script = ExtResource("1")
 item_name = "Staff of Mord"
+loy_tile_index = 189
 description = "A magical staff "
-slot_type = 0
+slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 47
+sell_value = 11
+bullet_sprite_index = 111
+weapon_range = 4.0

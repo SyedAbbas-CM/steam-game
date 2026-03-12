@@ -16,7 +16,10 @@ flat_bonus = 6.0
 [resource]
 script = ExtResource("1")
 item_name = "The One Ring"
+loy_tile_index = 478
 description = "A simple thick gold ring"
-slot_type = 2
+slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 396
+sell_value = 99

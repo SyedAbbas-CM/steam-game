@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton_archer.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/bone_guard.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/ghoul.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/bone_giant.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="6"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/ghast.tres" id="7"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Aria Crypt"
+theme = "grey"
+enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6")]
+min_floor = 1
+max_floor = 3
+room_count = 30
+map_width = 60
+map_height = 60
+chest_count = 8
+min_monsters = 0
+max_monsters = 4
+has_locked_doors = true
+boss_name = "Ghast"
+boss_definition = ExtResource("7")
+loy_level_id = "Aria-Crypt"
+loy_tileset_offset = 40
+floor_count = 3
+base_difficulty = 5

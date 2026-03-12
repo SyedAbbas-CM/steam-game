@@ -16,7 +16,12 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Phoenix Blade"
+loy_tile_index = 273
 description = "A wide bladed sword"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 452
+sell_value = 113
+bullet_sprite_index = 120
+weapon_range = 2.5

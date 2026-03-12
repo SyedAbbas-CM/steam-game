@@ -1,0 +1,106 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "q17"
+title = "Into the Deep"
+summary = "Dark energy pulses from the deep crypt. Descend and slay 25 of the stronger undead lurking below."
+level = 6
+location = "aria"
+properties = [{
+"index": 0,
+"name": "Crypt Enemies Slain",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "The dark energy grows stronger. You must descend into the deep crypt and destroy whatever you find. Bone Guards, Bone Giants, their archers... slay 25 of them.",
+"options": [{
+"name": "Into the deep",
+"script": [{
+"cmd": "startQuest",
+"id": "q17"
+}]
+}, {
+"name": "I need more time",
+"script": []
+}]
+}]
+events = [{
+"type": "kill",
+"param": "Bone Guard",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}, {
+"type": "kill",
+"param": "Bone Giant",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}, {
+"type": "kill",
+"param": "Skeleton Archer",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}, {
+"type": "quest",
+"param": "aria",
+"script": [{
+"attribute": "session-q17-0",
+"cmd": "if",
+"compare": "25",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "The darkness still festers below. Keep clearing the crypt!",
+"options": [{
+"name": "I'll press on",
+"script": []
+}]
+}]
+}, {
+"attribute": "session-q17-0",
+"cmd": "if",
+"compare": "24",
+"operation": "gt",
+"script": [{
+"cmd": "getItem",
+"count": "1200",
+"name": "Gold"
+}, {
+"cmd": "getExp",
+"value": "800"
+}, {
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "You've done well, but scouts report a massive Bone Giant has claimed the deepest chamber. It commands the others. This must end. Here is 1200 gold.",
+"options": [{
+"name": "A Bone Giant leader?",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "Some call it the Bone King. It sits on a throne of skulls in the lowest crypt. While it lives, the dead will keep rising. You must destroy it.",
+"options": [{
+"name": "I'll find it",
+"script": []
+}]
+}]
+}]
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}]

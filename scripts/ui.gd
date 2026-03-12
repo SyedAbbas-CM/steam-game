@@ -23,12 +23,13 @@ func _on_hp_changed(new_hp: int) -> void:
 func _on_stats_changed() -> void:
 	if not equipment_manager:
 		return
-	var count = equipment_manager.equipped_items.size()
+	var items = equipment_manager.get_equipped_items()
+	var count = items.size()
 	if count == 0:
 		items_label.text = ""
 		return
 
-	var last_item = equipment_manager.equipped_items[-1]
+	var last_item = items[-1]
 	items_label.text = "+" + last_item.item_name + " (" + str(count) + " items)"
 
 	# Flash the text briefly

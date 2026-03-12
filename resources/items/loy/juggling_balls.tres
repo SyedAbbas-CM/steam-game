@@ -11,7 +11,12 @@ flat_bonus = 18.0
 [resource]
 script = ExtResource("1")
 item_name = "Juggling Balls"
+loy_tile_index = 288
 description = "Magical balls of pain!"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 444
+sell_value = 111
+bullet_sprite_index = 110
+weapon_range = 3.0

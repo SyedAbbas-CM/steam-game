@@ -16,7 +16,10 @@ flat_bonus = 8.0
 [resource]
 script = ExtResource("1")
 item_name = "Golden Fused Boots"
+loy_tile_index = 322
 description = "Magical golden boots"
-slot_type = 2
+slot_type = 6
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 380
+sell_value = 95

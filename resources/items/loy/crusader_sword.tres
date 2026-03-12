@@ -16,7 +16,12 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Crusader Sword"
+loy_tile_index = 2
 description = "A gleaming fine crafted blade"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 396
+sell_value = 99
+bullet_sprite_index = 120
+weapon_range = 2.5

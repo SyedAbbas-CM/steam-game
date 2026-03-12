@@ -1,20 +1,17 @@
-[gd_resource type="Resource" script_class="DungeonBiome" load_steps=10 format=3]
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
-[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/blob.tres" id="2"]
-[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/cobra.tres" id="3"]
-[ext_resource type="Resource" path="res://resources/enemies/loy/orc/kobold.tres" id="4"]
-[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="5"]
-[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton_archer.tres" id="6"]
-[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/cobra.tres" id="7"]
-[ext_resource type="Resource" path="res://resources/enemies/loy/crawler/spider.tres" id="8"]
-[ext_resource type="Resource" path="res://resources/enemies/loy/undead/spectre.tres" id="9"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton_archer.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/ghoul.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/bone_guard.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/spectre.tres" id="6"]
 
 [resource]
 script = ExtResource("1")
 biome_name = "Aria Dungeons"
 theme = "grey"
-enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8")]
+enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5")]
 min_floor = 1
 max_floor = 10
 room_count = 35
@@ -25,7 +22,7 @@ min_monsters = 0
 max_monsters = 3
 has_locked_doors = true
 boss_name = "Spectre"
-boss_definition = ExtResource("9")
+boss_definition = ExtResource("6")
 loy_level_id = "Aria-Dungeons"
 loy_tileset_offset = 0
 floor_count = 10

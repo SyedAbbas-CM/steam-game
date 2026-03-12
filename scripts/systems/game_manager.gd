@@ -127,6 +127,8 @@ func _save_player_level() -> void:
 	var player = get_tree().get_first_node_in_group("player")
 	if player and player.get_node_or_null("LevelSystem"):
 		save_level_data(player.get_node("LevelSystem"))
+	if player and player.get_node_or_null("EquipmentManager"):
+		save_equipment(player.get_node("EquipmentManager"))
 
 func load_level_data(level_system: LevelSystem) -> void:
 	if not save_data or not level_system:
@@ -135,3 +137,41 @@ func load_level_data(level_system: LevelSystem) -> void:
 	level_system.xp = save_data.player_xp
 	level_system.unspent_stat_points = save_data.stat_points_unspent
 	level_system.allocated = save_data.stat_allocations.duplicate()
+
+func save_equipment(equip_mgr: EquipmentManager) -> void:
+	if not save_data or not equip_mgr:
+		return
+	# Save all inventory items (equipped ones live in inventory too)
+	save_data.inventory_items.clear()
+	for item in equip_mgr.inventory:
+		if item and item.resource_path != "":
+			save_data.inventory_items.append(item.resource_path)
+	# Save which inventory indices are equipped (inv_index -> slot_type)
+	save_data.equipped_items.clear()
+	for slot_type in equip_mgr.equipped:
+		var eq_item = equip_mgr.equipped[slot_type] as EquipmentItem
+		if eq_item:
+			var idx = equip_mgr.inventory.find(eq_item)
+			if idx >= 0:
+				save_data.equipped_items[idx] = int(slot_type)
+	save_data.save_game()
+
+func load_equipment(equip_mgr: EquipmentManager) -> bool:
+	if not save_data or not equip_mgr:
+		return false
+	if save_data.inventory_items.is_empty():
+		return false
+	# Restore inventory first
+	for path in save_data.inventory_items:
+		var res = load(path) as EquipmentItem
+		if res:
+			equip_mgr.inventory.append(res.duplicate())
+	# Mark equipped items by index
+	for idx_key in save_data.equipped_items:
+		var inv_idx = int(idx_key)
+		var slot_type = int(save_data.equipped_items[idx_key]) as EquipmentItem.SlotType
+		if inv_idx >= 0 and inv_idx < equip_mgr.inventory.size():
+			equip_mgr.equipped[slot_type] = equip_mgr.inventory[inv_idx]
+	equip_mgr.stats_changed.emit()
+	equip_mgr.inventory_changed.emit()
+	return true

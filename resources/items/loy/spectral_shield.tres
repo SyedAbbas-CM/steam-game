@@ -16,7 +16,10 @@ flat_bonus = 21.0
 [resource]
 script = ExtResource("1")
 item_name = "Spectral Shield"
+loy_tile_index = 394
 description = "A pale glowing shield"
-slot_type = 1
+slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 484
+sell_value = 121

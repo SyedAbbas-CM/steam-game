@@ -62,6 +62,7 @@ func _build_ui() -> void:
 	center.add_child(btn_hbox)
 
 	return_btn = Button.new()
+	return_btn.focus_mode = Control.FOCUS_NONE
 	return_btn.text = "Return to Town"
 	return_btn.custom_minimum_size = Vector2(90, 22)
 	return_btn.add_theme_font_size_override("font_size", 8)
@@ -69,6 +70,7 @@ func _build_ui() -> void:
 	btn_hbox.add_child(return_btn)
 
 	retry_btn = Button.new()
+	retry_btn.focus_mode = Control.FOCUS_NONE
 	retry_btn.text = "Try Again"
 	retry_btn.custom_minimum_size = Vector2(90, 22)
 	retry_btn.add_theme_font_size_override("font_size", 8)

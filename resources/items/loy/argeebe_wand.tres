@@ -16,7 +16,12 @@ flat_bonus = 8.0
 [resource]
 script = ExtResource("1")
 item_name = "Argeebe Wand"
+loy_tile_index = 445
 description = "A wand encrusted with colourful gems"
-slot_type = 0
+slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 532
+sell_value = 133
+bullet_sprite_index = 111
+weapon_range = 4.0

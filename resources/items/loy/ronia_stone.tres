@@ -16,7 +16,12 @@ flat_bonus = 9.0
 [resource]
 script = ExtResource("1")
 item_name = "Ronia Stone"
+loy_tile_index = 504
 description = "The powerful magical gem mounted on a golden shaft"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 556
+sell_value = 139
+bullet_sprite_index = 110
+weapon_range = 3.0

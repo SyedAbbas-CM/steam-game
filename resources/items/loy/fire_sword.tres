@@ -16,7 +16,12 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Fire Sword"
+loy_tile_index = 27
 description = "A fiery hot blade"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 436
+sell_value = 109
+bullet_sprite_index = 104
+weapon_range = 2.5

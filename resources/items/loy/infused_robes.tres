@@ -11,7 +11,10 @@ flat_bonus = 3.0
 [resource]
 script = ExtResource("1")
 item_name = "Infused Robes"
+loy_tile_index = 113
 description = "Charge inducing robes"
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 324
+sell_value = 81

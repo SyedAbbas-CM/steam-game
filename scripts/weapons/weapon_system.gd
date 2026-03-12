@@ -70,13 +70,27 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	bullet.pierce_count = equipment_manager.get_pierce_count()
 	bullet.lifetime = equipment_manager.get_bullet_lifetime()
 
+	# Apply weapon-specific bullet sprite and range
+	bullet.bullet_sprite_index = equipment_manager.get_bullet_sprite_index()
+	var wrange = equipment_manager.get_weapon_range()
+	if wrange > 0.0:
+		# Convert range to lifetime: lifetime = range / speed (in seconds)
+		bullet.lifetime = wrange / maxf(bullet.speed, 1.0) * 100.0
+
 	# Apply bullet modifiers from equipment
-	for item in equipment_manager.equipped_items:
+	for item in equipment_manager.get_equipped_items():
 		for bmod in item.bullet_modifiers:
 			match bmod.type:
 				BulletModifier.ModType.HOMING:
 					bullet.homing_strength = bmod.strength
 				BulletModifier.ModType.PIERCE:
 					bullet.pierce_count += int(bmod.strength)
+
+	# Apply enchantment from equipped weapon
+	var weapon = equipment_manager.get_equipped_weapon()
+	if weapon and weapon.enchantment:
+		bullet.enchant_type = weapon.enchantment.type
+		bullet.enchant_proc_chance = weapon.enchantment.proc_chance
+		bullet.enchant_bonus_damage = weapon.enchantment.bonus_damage
 
 	container.add_child(bullet)

@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Invisibility"
+loy_tile_index = 102
 description = "Turn the caster invisible for 10 turns"
-slot_type = 3
+slot_type = 10
 rarity = 2
+buy_price = 25
+sell_value = 6

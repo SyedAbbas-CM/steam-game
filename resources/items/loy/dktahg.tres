@@ -16,7 +16,12 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Dktahg"
+loy_tile_index = 451
 description = "A three bladed dagger"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 492
+sell_value = 123
+bullet_sprite_index = 110
+weapon_range = 3.0

@@ -5,10 +5,10 @@
 [resource]
 script = ExtResource("1")
 id = "aria"
-zone_name = "Aria Town"
+zone_name = "JohnBurn Village"
 tileset = 112
 world_pos = Vector2i(29, 66)
-dungeon_base = "Dusty Cellar"
+dungeon_base = "Aria-Dungeons"
 dungeon_count = 7
 description = "The friendly town of Aria nestled in Yore's central plains. A happy place"
 baked_offset = Vector2i(-12, -12)
@@ -38,43 +38,48 @@ npcs = Array[Dictionary]([{
 "portrait": 149,
 "tile": 133,
 "type": "scriptfile",
-"x": 11,
-"y": 1
+"x": 10,
+"y": 0
 }, {
+"file": "scripts/arnie.xml",
 "name": "Arnie",
 "portrait": 145,
+"shop": "aria-weapon",
 "tile": 129,
-"type": "shop",
+"type": "scriptfile",
 "x": 5,
-"y": 5
+"y": 4
 }, {
+"file": "scripts/aria-elder.xml",
 "name": "Elder",
 "portrait": 147,
 "tile": 131,
-"type": "elder",
+"type": "scriptfile",
 "x": 19,
-"y": 5
+"y": 7
 }, {
+"file": "scripts/yoregot.xml",
 "name": "Yoregot",
 "portrait": 146,
+"shop": "aria-inn",
 "tile": 130,
-"type": "shop",
+"type": "scriptfile",
 "x": 6,
-"y": 17
+"y": 16
 }, {
 "name": "Old Man",
 "portrait": 160,
 "tile": 134,
 "type": "tips",
-"x": 4,
-"y": 14
+"x": 6,
+"y": 15
 }, {
 "file": "tips2.xml",
 "name": "Hawkeye",
 "portrait": 171,
 "tile": 170,
 "type": "scriptfile",
-"x": 7,
+"x": 6,
 "y": 15
 }, {
 "file": "scripts/jimbob.xml",

@@ -11,7 +11,12 @@ flat_bonus = 6.0
 [resource]
 script = ExtResource("1")
 item_name = "Razor Knife"
+loy_tile_index = 228
 description = "A thin twisted blade"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
+buy_price = 128
+sell_value = 32
+bullet_sprite_index = 120
+weapon_range = 1.5

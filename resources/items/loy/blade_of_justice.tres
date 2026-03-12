@@ -16,7 +16,12 @@ flat_bonus = 7.0
 [resource]
 script = ExtResource("1")
 item_name = "Blade of Justice"
+loy_tile_index = 437
 description = "A blade blessed by Plinati"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 612
+sell_value = 153
+bullet_sprite_index = 105
+weapon_range = 2.5

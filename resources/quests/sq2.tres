@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sq2"
+title = "Arnie's Challenge"
+summary = "Arnie wants proof of your fighting skill. Kill 8 Ghouls to earn his respect and access to better gear."
+level = 6
+location = "aria"
+properties = [{
+"index": 0,
+"name": "Ghouls Killed",
+"type": "number"
+}]
+start_script = []
+events = [{
+"type": "kill",
+"param": "Ghoul",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}]

@@ -11,7 +11,10 @@ flat_bonus = 8.0
 [resource]
 script = ExtResource("1")
 item_name = "Round Shield"
+loy_tile_index = 199
 description = "A well made small shield"
-slot_type = 1
+slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 364
+sell_value = 91

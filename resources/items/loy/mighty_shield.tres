@@ -11,7 +11,10 @@ flat_bonus = 9.0
 [resource]
 script = ExtResource("1")
 item_name = "Mighty Shield"
+loy_tile_index = 187
 description = "A bright glowing shield"
-slot_type = 1
+slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 372
+sell_value = 93

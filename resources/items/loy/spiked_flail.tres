@@ -11,7 +11,12 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Spiked Flail"
+loy_tile_index = 278
 description = "A spiked ball attached to a chain"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 31
+sell_value = 7
+bullet_sprite_index = 102
+weapon_range = 3.5

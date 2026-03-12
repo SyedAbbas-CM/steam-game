@@ -5,6 +5,11 @@
 [resource]
 script = ExtResource("1")
 item_name = "Dirty Staff"
+loy_tile_index = 389
 description = "A dirty staff"
-slot_type = 0
+slot_type = 2
 rarity = 0
+buy_price = 15
+sell_value = 3
+bullet_sprite_index = 111
+weapon_range = 4.0

@@ -2,7 +2,7 @@ class_name PlayerStats
 extends Resource
 
 @export var max_hp: int = 30
-@export var move_speed: float = 240.0
+@export var move_speed: float = 100.0
 @export var attack_damage: int = 1
 @export var attack_speed: float = 0.2
 @export var bullet_speed: float = 600.0

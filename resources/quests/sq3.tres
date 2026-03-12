@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sq3"
+title = "Ghost Stories"
+summary = "Yoregot's inn patrons are spooked by ghost sightings near the graveyard. Kill 15 Ghosts to put their fears to rest."
+level = 7
+location = "aria"
+properties = [{
+"index": 0,
+"name": "Ghosts Banished",
+"type": "number"
+}]
+start_script = []
+events = [{
+"type": "kill",
+"param": "Ghost",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}]

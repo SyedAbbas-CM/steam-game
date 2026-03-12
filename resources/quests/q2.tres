@@ -6,6 +6,7 @@
 script = ExtResource("1_kxjsk")
 id = "q2"
 title = "Deliver the Goods"
+level = 1
 location = "aria"
 properties = [{
 "index": 0,

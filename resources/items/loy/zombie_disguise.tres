@@ -11,7 +11,10 @@ flat_bonus = 12.0
 [resource]
 script = ExtResource("1")
 item_name = "Zombie Disguise"
+loy_tile_index = 401
 description = "A leather jacket covered in body parts"
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
+buy_price = 176
+sell_value = 44

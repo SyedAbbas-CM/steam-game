@@ -6,6 +6,7 @@
 script = ExtResource("1_8mohw")
 id = "q1"
 title = "Them Bones"
+level = 1
 location = "aria"
 properties = [{
 "index": 0,

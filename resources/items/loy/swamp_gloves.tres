@@ -11,7 +11,10 @@ flat_bonus = 4.0
 [resource]
 script = ExtResource("1")
 item_name = "Swamp Gloves"
+loy_tile_index = 375
 description = "Gloves of reed and swamp gunk"
-slot_type = 2
+slot_type = 7
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
+buy_price = 112
+sell_value = 28

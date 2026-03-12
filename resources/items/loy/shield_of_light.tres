@@ -11,7 +11,10 @@ flat_bonus = 26.0
 [resource]
 script = ExtResource("1")
 item_name = "Shield of Light"
+loy_tile_index = 454
 description = "A block shield enlaid with a glowing stone"
-slot_type = 1
+slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 508
+sell_value = 127

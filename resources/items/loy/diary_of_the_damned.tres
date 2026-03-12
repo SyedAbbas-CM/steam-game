@@ -16,7 +16,10 @@ flat_bonus = 9.0
 [resource]
 script = ExtResource("1")
 item_name = "Diary of the Damned"
+loy_tile_index = 149
 description = "Evil writings of the undead"
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 436
+sell_value = 109

@@ -22,11 +22,10 @@ func _build_ui() -> void:
 	add_child(dimmer)
 
 	_panel = PanelContainer.new()
-	_panel.anchors_preset = Control.PRESET_CENTER
-	_panel.offset_left = -200
-	_panel.offset_right = 200
-	_panel.offset_top = -150
-	_panel.offset_bottom = 150
+	_panel.anchor_left = 0.2
+	_panel.anchor_right = 0.8
+	_panel.anchor_top = 0.1
+	_panel.anchor_bottom = 0.9
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.1, 0.1, 0.15, 0.95)
 	style.border_color = Color(0.6, 0.5, 0.3)
@@ -55,6 +54,7 @@ func _build_ui() -> void:
 
 	_close_btn = Button.new()
 	_close_btn.text = "X"
+	_close_btn.focus_mode = Control.FOCUS_NONE
 	_close_btn.pressed.connect(toggle)
 	header.add_child(_close_btn)
 
@@ -69,7 +69,6 @@ func _build_ui() -> void:
 
 func toggle() -> void:
 	visible = !visible
-	get_tree().paused = visible
 	if visible:
 		_refresh()
 

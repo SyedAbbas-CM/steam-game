@@ -11,7 +11,10 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Cloak"
+loy_tile_index = 129
 description = "A simple woolen cloak"
-slot_type = 2
+slot_type = 9
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 23
+sell_value = 5

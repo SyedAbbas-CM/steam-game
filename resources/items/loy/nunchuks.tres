@@ -16,7 +16,12 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Nunchuks"
+loy_tile_index = 268
 description = "Solid wood chuks"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 436
+sell_value = 109
+bullet_sprite_index = 110
+weapon_range = 3.0

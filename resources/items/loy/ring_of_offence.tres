@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Ring of Offence"
+loy_tile_index = 157
 description = "A magic ring"
-slot_type = 2
+slot_type = 8
 rarity = 1
+buy_price = 80
+sell_value = 20

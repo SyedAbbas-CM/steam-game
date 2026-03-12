@@ -11,7 +11,10 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Frost Arrow"
+loy_tile_index = 111
 description = "A freezing arrow"
-slot_type = 1
+slot_type = 11
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 55
+sell_value = 13

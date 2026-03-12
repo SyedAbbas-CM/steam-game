@@ -11,7 +11,10 @@ flat_bonus = 10.0
 [resource]
 script = ExtResource("1")
 item_name = "Plate Armor"
+loy_tile_index = 170
 description = "Full plate"
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 380
+sell_value = 95

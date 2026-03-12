@@ -5,6 +5,14 @@
 [resource]
 script = ExtResource("1")
 item_name = "Staff"
+loy_tile_index = 94
 description = "A magical staff"
-slot_type = 0
+slot_type = 2
 rarity = 0
+buy_price = 15
+sell_value = 3
+bullet_sprite_index = 111
+weapon_range = 4.0
+ability_id = "frost_nova"
+ability_mp_cost = 10.0
+ability_cooldown = 6.0

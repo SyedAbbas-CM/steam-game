@@ -11,7 +11,10 @@ flat_bonus = 3.0
 [resource]
 script = ExtResource("1")
 item_name = "Steel Gauntlets"
+loy_tile_index = 144
 description = "A pair of solid steel gauntlets"
-slot_type = 2
+slot_type = 7
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 39
+sell_value = 9

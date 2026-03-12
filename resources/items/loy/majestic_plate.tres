@@ -11,7 +11,10 @@ flat_bonus = 17.0
 [resource]
 script = ExtResource("1")
 item_name = "Majestic Plate"
+loy_tile_index = 326
 description = "Emblazened Armor"
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 436
+sell_value = 109

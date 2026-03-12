@@ -16,7 +16,12 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Cutlass"
+loy_tile_index = 415
 description = "Pirate sword"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 548
+sell_value = 137
+bullet_sprite_index = 110
+weapon_range = 3.0

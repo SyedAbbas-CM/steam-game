@@ -11,7 +11,12 @@ flat_bonus = 7.0
 [resource]
 script = ExtResource("1")
 item_name = "Flinger"
+loy_tile_index = 377
 description = "A tribal arrow thrower"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 356
+sell_value = 89
+bullet_sprite_index = 110
+weapon_range = 3.0

@@ -16,7 +16,10 @@ flat_bonus = 8.0
 [resource]
 script = ExtResource("1")
 item_name = "Book of Majesty"
+loy_tile_index = 321
 description = "The knowledge of kings"
-slot_type = 1
+slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 420
+sell_value = 105

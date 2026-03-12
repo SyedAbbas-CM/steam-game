@@ -11,7 +11,10 @@ flat_bonus = 18.0
 [resource]
 script = ExtResource("1")
 item_name = "Titan Helm"
+loy_tile_index = 138
 description = "A plain metal crafted by the gods"
-slot_type = 1
+slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 444
+sell_value = 111

@@ -11,7 +11,12 @@ flat_bonus = 8.0
 [resource]
 script = ExtResource("1")
 item_name = "Crossbow"
+loy_tile_index = 225
 description = "A sturdy crossbow"
-slot_type = 0
+slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 364
+sell_value = 91
+bullet_sprite_index = 96
+weapon_range = 5.0

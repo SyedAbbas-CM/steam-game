@@ -10,29 +10,42 @@ var floor_number: int = 1
 var _triggered: bool = false
 var _blink_count: int = 0
 const BLINK_TOTAL = 6
-const BLINK_INTERVAL = 0.2  # 6 blinks * 0.2s = 1.2s total
+const BLINK_INTERVAL = 0.15
 const BULLET_COUNT = 8
 const TILE_SIZE = 8
+const PROXIMITY_RANGE = 24.0  # ~3 tiles (8px each)
 
 func _ready() -> void:
 	collision_layer = 0
-	collision_mask = 1  # detect player
+	collision_mask = 1 | 4  # detect player (1) + player bullets (4)
 	monitoring = true
 
+	# Proximity detection shape (3 tile radius)
 	var shape = CollisionShape2D.new()
-	var rect = RectangleShape2D.new()
-	rect.size = Vector2(TILE_SIZE, TILE_SIZE)
-	shape.shape = rect
+	var circle = CircleShape2D.new()
+	circle.radius = PROXIMITY_RANGE
+	shape.shape = circle
 	add_child(shape)
 
 	body_entered.connect(_on_body_entered)
+	area_entered.connect(_on_area_entered)
 
 func _on_body_entered(body: Node2D) -> void:
 	if _triggered:
 		return
-	if body.collision_layer & 1:  # player
+	# Player proximity trigger
+	if body.collision_layer & 1:
 		_triggered = true
 		_start_blink()
+
+func _on_area_entered(area: Area2D) -> void:
+	if _triggered:
+		return
+	# Player bullet hits trap — instant trigger
+	if area.collision_layer & 4:
+		_triggered = true
+		area.queue_free()  # consume the bullet
+		_explode()
 
 func _start_blink() -> void:
 	_blink_count = 0
@@ -62,7 +75,7 @@ func _explode() -> void:
 	# Erase the trap tile permanently
 	deco_layer.erase_cell(origin + tile_pos)
 
-	# Spawn bullet ring
+	# Spawn bullet ring that hurts both player and enemies
 	var bullet_scene = preload("res://scenes/bullet.tscn")
 	var damage = 1 + floor_number / 3
 
@@ -72,9 +85,10 @@ func _explode() -> void:
 		bullet.global_position = global_position
 		bullet.direction = Vector2.from_angle(angle)
 		bullet.speed = 60.0
-		bullet.is_player_bullet = false
 		bullet.damage = damage
-		bullet.lifetime = 2.0
+		bullet.lifetime = 1.5
+		bullet.is_player_bullet = false
+		bullet.hits_all = true  # neutral: damages both player and enemies
 		get_tree().current_scene.add_child(bullet)
 
 	queue_free()

@@ -16,7 +16,12 @@ flat_bonus = 32.0
 [resource]
 script = ExtResource("1")
 item_name = "Poisoned Spike"
+loy_tile_index = 449
 description = "A thin spike run with poison"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 692
+sell_value = 173
+bullet_sprite_index = 106
+weapon_range = 3.5

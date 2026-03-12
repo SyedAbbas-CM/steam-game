@@ -11,7 +11,10 @@ flat_bonus = 3.0
 [resource]
 script = ExtResource("1")
 item_name = "Reinforced Shield"
+loy_tile_index = 372
 description = "A wooden shield with iron strips"
-slot_type = 1
+slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 39
+sell_value = 9

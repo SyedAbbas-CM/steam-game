@@ -12,12 +12,36 @@ commands = [{
 "script": [{
 "cmd": "showDialog",
 "name": "Guard",
+"portrait": 149,
+"text": "Halt! You may not pass until you have reached Level 6.",
 "options": [{
+"name": "Why Level 6?",
+"script": [{
+"cmd": "showDialog",
+"name": "Guard",
+"portrait": 149,
+"text": "Three years ago, a band of Level 4 adventurers marched into the wilds. None returned. The Elder decreed that only those of proven strength may leave the village.",
+"options": [{
+"name": "What's out there?",
+"script": [{
+"cmd": "showDialog",
+"name": "Guard",
+"portrait": 149,
+"text": "Wild beasts, orc raiders, and worse. The wilds of Yore are no place for the unprepared. Train in the dungeons below town first.",
+"options": [{
+"name": "I'll train harder",
+"script": []
+}]
+}]
+}, {
 "name": "I'll be back",
 "script": []
-}],
-"portrait": 149,
-"text": "You may not pass until you have reached / Level 6 whelp!"
+}]
+}]
+}, {
+"name": "I'll be back",
+"script": []
+}]
 }]
 }, {
 "attribute": "stat-level",
@@ -27,16 +51,33 @@ commands = [{
 "script": [{
 "cmd": "showDialog",
 "name": "Guard",
-"options": [{
-"name": "Thanks",
-"script": []
-}],
 "portrait": 149,
-"text": "Good luck in your travels adventurer!"
-}, {
+"text": "You've proven yourself, adventurer. The road ahead is open to you.",
+"options": [{
+"name": "What's out there?",
+"script": [{
+"cmd": "showDialog",
+"name": "Guard",
+"portrait": 149,
+"text": "Farmlands to the east, the Valley of Bones to the north. Beyond that, orc territory and the frozen wastes. Stick to the roads when you can.",
+"options": [{
+"name": "Thanks for the warning",
+"script": [{
 "cmd": "moveToMap",
 "map": "wild1",
 "x": "25",
 "y": "48"
+}]
+}]
+}]
+}, {
+"name": "Let me through",
+"script": [{
+"cmd": "moveToMap",
+"map": "wild1",
+"x": "25",
+"y": "48"
+}]
+}]
 }]
 }]

@@ -11,7 +11,10 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Bandana"
+loy_tile_index = 45
 description = "A face hiding bandana"
-slot_type = 1
+slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
+buy_price = 88
+sell_value = 22

@@ -11,7 +11,12 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Bandit Shiv"
+loy_tile_index = 44
 description = "An evil looking short blade"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
+buy_price = 120
+sell_value = 30
+bullet_sprite_index = 120
+weapon_range = 1.5

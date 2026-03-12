@@ -16,7 +16,12 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Blade of Virtue"
+loy_tile_index = 435
 description = "A blade blessed by Valtiry"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 564
+sell_value = 141
+bullet_sprite_index = 120
+weapon_range = 2.5

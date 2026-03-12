@@ -11,7 +11,12 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Short Bow"
+loy_tile_index = 90
 description = "A powerful short bow"
-slot_type = 0
+slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 31
+sell_value = 7
+bullet_sprite_index = 96
+weapon_range = 5.0

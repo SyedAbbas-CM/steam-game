@@ -5,6 +5,14 @@
 [resource]
 script = ExtResource("1")
 item_name = "Sword"
+loy_tile_index = 86
 description = "A light-weight short sword"
 slot_type = 0
 rarity = 0
+buy_price = 15
+sell_value = 3
+bullet_sprite_index = 120
+weapon_range = 2.5
+ability_id = "shield_bash"
+ability_mp_cost = 8.0
+ability_cooldown = 5.0

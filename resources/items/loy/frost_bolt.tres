@@ -11,7 +11,12 @@ flat_bonus = 9.0
 [resource]
 script = ExtResource("1")
 item_name = "Frost Bolt"
+loy_tile_index = 107
 description = "Casts a bolt of ice towards the opponent"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 80
+sell_value = 20
+bullet_sprite_index = 105
+weapon_range = 3.0

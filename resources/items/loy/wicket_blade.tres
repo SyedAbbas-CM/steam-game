@@ -16,7 +16,12 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Wicket Blade"
+loy_tile_index = 7
 description = "A thin glowing sword"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 412
+sell_value = 103
+bullet_sprite_index = 120
+weapon_range = 2.5

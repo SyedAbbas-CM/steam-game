@@ -11,7 +11,10 @@ flat_bonus = 6.0
 [resource]
 script = ExtResource("1")
 item_name = "Obsiadian Gloves"
+loy_tile_index = 359
 description = "Dark stone like gloves"
-slot_type = 2
+slot_type = 7
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 348
+sell_value = 87

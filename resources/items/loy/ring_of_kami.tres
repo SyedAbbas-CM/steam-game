@@ -11,7 +11,10 @@ flat_bonus = 4.0
 [resource]
 script = ExtResource("1")
 item_name = "Ring of Kami"
+loy_tile_index = 29
 description = "A powerful ring"
-slot_type = 2
+slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 332
+sell_value = 83

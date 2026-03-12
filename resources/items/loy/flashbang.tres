@@ -11,7 +11,12 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Flashbang"
+loy_tile_index = 99
 description = "Bright flash used to stun monsters in melee"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 23
+sell_value = 5
+bullet_sprite_index = 110
+weapon_range = 3.0

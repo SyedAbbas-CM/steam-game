@@ -11,7 +11,10 @@ flat_bonus = 10.0
 [resource]
 script = ExtResource("1")
 item_name = "Goif Helm"
+loy_tile_index = 135
 description = "A magic helmet"
-slot_type = 1
+slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
+buy_price = 160
+sell_value = 40

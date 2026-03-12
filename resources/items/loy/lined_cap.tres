@@ -16,7 +16,10 @@ flat_bonus = 7.0
 [resource]
 script = ExtResource("1")
 item_name = "Lined Cap"
+loy_tile_index = 355
 description = "A lined leather spiked cap"
-slot_type = 1
+slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 1
+buy_price = 152
+sell_value = 38

@@ -11,7 +11,12 @@ flat_bonus = 24.0
 [resource]
 script = ExtResource("1")
 item_name = "Harp Bow"
+loy_tile_index = 272
 description = "A thick set martial bow"
-slot_type = 0
+slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 492
+sell_value = 123
+bullet_sprite_index = 96
+weapon_range = 5.0

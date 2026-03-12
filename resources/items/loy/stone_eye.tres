@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Stone Eye"
+loy_tile_index = 247
 description = "Piece of a statue (enchant +1 ATK crawler)"
-slot_type = 3
+slot_type = 10
 rarity = 2
+buy_price = 25
+sell_value = 6

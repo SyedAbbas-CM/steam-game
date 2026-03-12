@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Graphite Ring"
+loy_tile_index = 172
 description = "A heavy stone ring"
-slot_type = 2
+slot_type = 8
 rarity = 2
+buy_price = 300
+sell_value = 75

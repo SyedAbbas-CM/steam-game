@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Push"
+loy_tile_index = 251
 description = "Push an opponent away 2 spaces"
-slot_type = 3
+slot_type = 10
 rarity = 0
+buy_price = 25
+sell_value = 6

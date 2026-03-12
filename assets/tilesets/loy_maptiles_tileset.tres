@@ -1,10 +1,6 @@
-[gd_resource type="TileSet" load_steps=2 format=3]
+[gd_resource type="TileSet" format=3 uid="uid://c5tr7utchpxdm"]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/loy/maptiles.png" id="1_source"]
-
-[resource]
-tile_shape = 0
-tile_size = Vector2i(32, 32)
+[ext_resource type="Texture2D" uid="uid://dow3smh3xtn8b" path="res://assets/sprites/loy/maptiles.png" id="1_source"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_1"]
 texture = ExtResource("1_source")
@@ -265,3 +261,9 @@ texture_region_size = Vector2i(32, 32)
 13:15/0 = 0
 14:15/0 = 0
 15:15/0 = 0
+
+[resource]
+tile_size = Vector2i(32, 32)
+custom_data_layer_0/name = "name"
+custom_data_layer_0/type = 4
+sources/0 = SubResource("TileSetAtlasSource_1")

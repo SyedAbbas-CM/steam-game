@@ -16,7 +16,12 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Chaos Spear"
+loy_tile_index = 379
 description = "A magical evil spear"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 508
+sell_value = 127
+bullet_sprite_index = 102
+weapon_range = 3.5

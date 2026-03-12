@@ -1,0 +1,137 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+commands = [{
+"cmd": "showDialog",
+"name": "Arnie",
+"portrait": 145,
+"text": "Welcome to Arnie's! Finest weapons and armor in all of Aria. What can I do for you?",
+"options": [{
+"name": "Browse wares",
+"script": [{
+"cmd": "openShop",
+"shop": "aria-weapon"
+}]
+}, {
+"name": "About yourself",
+"script": [{
+"cmd": "showDialog",
+"name": "Arnie",
+"portrait": 145,
+"text": "Been a smith for thirty years. My father taught me, and his father before him. I forge everything myself from ore mined in the northern mountains.",
+"options": [{
+"name": "Special stock?",
+"script": [{
+"cmd": "showDialog",
+"name": "Arnie",
+"portrait": 145,
+"text": "Aye, I keep my best gear for proven heroes. Complete enough quests around here and I might show you the good stuff. Can't waste fine steel on greenhorns!",
+"options": [{
+"name": "Fair enough",
+"script": []
+}]
+}]
+}, {
+"name": "Interesting",
+"script": []
+}]
+}]
+}, {
+"name": "Prove myself",
+"script": [{
+"attribute": "quest-sq2-complete",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Arnie",
+"portrait": 145,
+"text": "You've already proven yourself, warrior! My best gear is available to you anytime.",
+"options": [{
+"name": "Thanks, Arnie",
+"script": []
+}]
+}]
+}, {
+"attribute": "quest-sq2-active",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"attribute": "session-sq2-0",
+"cmd": "if",
+"compare": "7",
+"operation": "gt",
+"script": [{
+"cmd": "getItem",
+"count": "800",
+"name": "Gold"
+}, {
+"cmd": "getExp",
+"value": "500"
+}, {
+"cmd": "showDialog",
+"name": "Arnie",
+"portrait": 145,
+"text": "Eight Ghouls! Now that's a fighter I can respect. Here's 800 gold, and from now on I'll show you my finest stock. You've earned it!",
+"options": [{
+"name": "Thanks, Arnie",
+"script": []
+}]
+}, {
+"cmd": "completeQuest",
+"id": "sq2"
+}]
+}, {
+"attribute": "session-sq2-0",
+"cmd": "if",
+"compare": "8",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Arnie",
+"portrait": 145,
+"text": "Still hunting Ghouls? You need 8 kills to earn my respect. They lurk in the deeper dungeon levels.",
+"options": [{
+"name": "I'll get them",
+"script": []
+}]
+}]
+}]
+}, {
+"attribute": "quest-sq2-complete",
+"cmd": "ifNot",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"attribute": "quest-sq2-active",
+"cmd": "ifNot",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Arnie",
+"portrait": 145,
+"text": "You want my best gear? Prove you can handle it. Kill 8 Ghouls in the dungeons and I'll know you're the real deal.",
+"options": [{
+"name": "Challenge accepted",
+"script": [{
+"cmd": "startQuest",
+"id": "sq2"
+}]
+}, {
+"name": "Not right now",
+"script": []
+}]
+}]
+}]
+}]
+}, {
+"name": "Nevermind",
+"script": []
+}]
+}]

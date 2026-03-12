@@ -16,7 +16,12 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Diamond Knife"
+loy_tile_index = 363
 description = "A fine knife reflecting light at opponents"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 388
+sell_value = 97
+bullet_sprite_index = 120
+weapon_range = 1.5

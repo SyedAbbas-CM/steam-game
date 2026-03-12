@@ -5,6 +5,11 @@
 [resource]
 script = ExtResource("1")
 item_name = "Drain"
+loy_tile_index = 313
 description = "Drain a magic users charge"
 slot_type = 0
 rarity = 1
+buy_price = 80
+sell_value = 20
+bullet_sprite_index = 110
+weapon_range = 3.0

@@ -16,7 +16,12 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Task Spear"
+loy_tile_index = 203
 description = "A long hunting spear"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 380
+sell_value = 95
+bullet_sprite_index = 102
+weapon_range = 3.5

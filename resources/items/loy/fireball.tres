@@ -11,7 +11,12 @@ flat_bonus = 4.0
 [resource]
 script = ExtResource("1")
 item_name = "Fireball"
+loy_tile_index = 95
 description = "Casts a ball of fire towards the opponent"
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
+buy_price = 47
+sell_value = 11
+bullet_sprite_index = 104
+weapon_range = 3.0

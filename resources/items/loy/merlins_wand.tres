@@ -11,7 +11,12 @@ flat_bonus = 6.0
 [resource]
 script = ExtResource("1")
 item_name = "Merlins Wand"
+loy_tile_index = 40
 description = "A magical wand "
-slot_type = 0
+slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 2
+buy_price = 348
+sell_value = 87
+bullet_sprite_index = 111
+weapon_range = 4.0

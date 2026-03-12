@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Anger"
+loy_tile_index = 315
 description = "Magically increase rage"
-slot_type = 3
+slot_type = 10
 rarity = 2
+buy_price = 25
+sell_value = 6

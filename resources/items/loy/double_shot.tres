@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Double Shot"
+loy_tile_index = 223
 description = "Shoot two arrows at once (need special arrows)"
-slot_type = 4
+slot_type = 11
 rarity = 0
+buy_price = 15
+sell_value = 3

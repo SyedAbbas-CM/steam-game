@@ -16,7 +16,12 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Zidian Wand"
+loy_tile_index = 362
 description = "A bright stone wand"
-slot_type = 0
+slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 436
+sell_value = 109
+bullet_sprite_index = 111
+weapon_range = 4.0

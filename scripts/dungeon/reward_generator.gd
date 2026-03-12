@@ -26,33 +26,24 @@ static func generate_treasure_rewards(floor_num: int) -> Array[Dictionary]:
 		"rarity": 0
 	})
 
-	# Option 2: Troop tokens
-	var tokens = 1 + floor_num / 2
+	# Option 2: More gold
+	var big_gold = gold_amount * 2
 	rewards.append({
-		"type": "troop_tokens",
-		"name": str(tokens) + " Troop Tokens",
-		"description": "Recruit soldiers",
-		"amount": tokens,
-		"rarity": 0
+		"type": "gold",
+		"name": str(big_gold) + " Gold",
+		"description": "A big pile",
+		"amount": big_gold,
+		"rarity": 1
 	})
 
-	# Option 3: Random equipment or companion
-	if randf() < 0.4:
-		rewards.append({
-			"type": "companion",
-			"name": "Archer Companion",
-			"description": "Shoots nearby enemies",
-			"companion_id": "archer",
-			"rarity": 1
-		})
-	else:
-		rewards.append({
-			"type": "gold",
-			"name": str(gold_amount * 2) + " Gold",
-			"description": "A big pile",
-			"amount": gold_amount * 2,
-			"rarity": 1
-		})
+	# Option 3: Companion
+	rewards.append({
+		"type": "companion",
+		"name": "Archer Companion",
+		"description": "Shoots nearby enemies",
+		"companion_id": "archer",
+		"rarity": 1
+	})
 
 	return rewards
 

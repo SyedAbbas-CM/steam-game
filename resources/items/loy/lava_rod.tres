@@ -5,6 +5,9 @@
 [resource]
 script = ExtResource("1")
 item_name = "Lava Rod"
+loy_tile_index = 319
 description = "A fishing rod"
-slot_type = 3
+slot_type = 10
 rarity = 1
+buy_price = 25
+sell_value = 6

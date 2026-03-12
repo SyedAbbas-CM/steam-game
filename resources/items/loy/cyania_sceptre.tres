@@ -16,7 +16,12 @@ flat_bonus = 8.0
 [resource]
 script = ExtResource("1")
 item_name = "Cyania Sceptre"
+loy_tile_index = 503
 description = "The ancient sceptre of the cyanians"
-slot_type = 0
+slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
+buy_price = 540
+sell_value = 135
+bullet_sprite_index = 110
+weapon_range = 3.0
