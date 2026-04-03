@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/spider.tres" id="2_spider"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Swarm Mother"
+description = "Giant spider that summons swarms of smaller spiders and lays poison mines."
+max_hp = 18
+move_speed = 8.0
+contact_damage = 2
+armor = 1
+kingdom = "crawler"
+size_class = 1
+attack_type = 46
+attack_damage = 2
+attack_speed = 3.0
+bullet_speed = 50.0
+bullet_count = 3
+preferred_distance = 40.0
+summon_count = 3
+summon_definition = ExtResource("2_spider")
+bomb_aoe_radius = 12.0
+bomb_flight_time = 0.5
+boss_phases = 2
+phase_2_attack = 6
+phase_2_bullet_count = 0
+leaves_trail = true
+trail_type = "web"
+use_loy_sprite = true
+loy_tile_index = 22
+sprite_color = Color(0.5, 0.7, 0.3, 1)
+xp_value = 12
+score_value = 80

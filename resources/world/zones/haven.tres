@@ -1,0 +1,200 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "haven"
+zone_name = "Ravenhollow"
+tileset = 112
+world_pos = Vector2i(29, 66)
+dungeon_base = "Haven-Dungeons"
+dungeon_count = 7
+description = "A fortified refugee village — the last safe haven in the Ashfields. Smoke rises from chimneys and guards watch the walls."
+baked_offset = Vector2i(-12, -12)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "barrows",
+"tx": 10,
+"ty": 1,
+"x": 11,
+"y": 24
+}, {
+"target": "wastes",
+"tx": 25,
+"ty": 48,
+"x": 11,
+"y": 0
+}, {
+"target": "duskfarm",
+"tx": 1,
+"ty": 20,
+"x": 24,
+"y": 21
+}])
+npcs = Array[Dictionary]([{
+"file": "scripts/aria-guard.xml",
+"name": "Guard",
+"portrait": 149,
+"tile": 133,
+"type": "scriptfile",
+"x": 10,
+"y": 0
+}, {
+"file": "scripts/arnie.xml",
+"name": "Arnie",
+"portrait": 145,
+"shop": "haven-weapon",
+"tile": 129,
+"type": "scriptfile",
+"x": 5,
+"y": 5
+}, {
+"file": "scripts/aria-elder.xml",
+"name": "Elder",
+"portrait": 147,
+"tile": 131,
+"type": "scriptfile",
+"x": 19,
+"y": 6
+}, {
+"file": "scripts/yoregot.xml",
+"name": "Corvus",
+"portrait": 146,
+"shop": "haven-inn",
+"tile": 130,
+"type": "alchemist",
+"x": 6,
+"y": 16
+}, {
+"name": "Old Man",
+"portrait": 160,
+"tile": 134,
+"type": "blacksmith",
+"x": 6,
+"y": 16
+}, {
+"file": "tips2.xml",
+"name": "Hawkeye",
+"portrait": 171,
+"tile": 170,
+"type": "scriptfile",
+"x": 6,
+"y": 16
+}, {
+"file": "scripts/jimbob.xml",
+"name": "Jimbob",
+"portrait": 153,
+"tile": 137,
+"type": "scriptfile",
+"x": 12,
+"y": 8
+}, {
+"name": "Morin",
+"portrait": 144,
+"tile": 128,
+"type": "spellcraft",
+"x": 20,
+"y": 18
+}, {
+"file": "scripts/solmund.xml",
+"name": "Solmund",
+"portrait": 163,
+"tile": 162,
+"type": "scriptfile",
+"x": 22,
+"y": 3
+}, {
+"file": "scripts/muraad.xml",
+"name": "Muraad",
+"portrait": 165,
+"tile": 164,
+"type": "scriptfile",
+"x": 14,
+"y": 18
+}, {
+"file": "scripts/heshem.xml",
+"name": "Heshem",
+"portrait": 167,
+"tile": 166,
+"type": "scriptfile",
+"x": 8,
+"y": 12
+}, {
+"file": "scripts/wahid.xml",
+"name": "Wahid",
+"portrait": 169,
+"tile": 168,
+"type": "scriptfile",
+"x": 18,
+"y": 17
+}, {
+"file": "scripts/aldric.xml",
+"name": "Aldric",
+"portrait": 155,
+"tile": 154,
+"type": "scriptfile",
+"x": 16,
+"y": 6
+}, {
+"file": "scripts/navid.xml",
+"name": "Navid",
+"portrait": 173,
+"tile": 172,
+"type": "scriptfile",
+"x": 4,
+"y": 19
+}, {
+"file": "scripts/telos.xml",
+"name": "Telos",
+"portrait": 161,
+"tile": 135,
+"type": "scriptfile",
+"x": 3,
+"y": 9
+}])
+signs = Array[Dictionary]([{
+"message": "To the The Barrows",
+"x": 10,
+"y": 23
+}])
+spawns = Array[Dictionary]([{
+"chance": 100,
+"type": "Chicken",
+"x": 2,
+"y": 4,
+"width": 8,
+"height": 8
+}, {
+"chance": 80,
+"type": "Fairy",
+"x": 12,
+"y": 6,
+"width": 6,
+"height": 6
+}])
+houses = Array[Dictionary]([{
+"height": 7,
+"sign": "Welcome to Arnie's / / Weapons and Armor bought and sold for fair prices",
+"width": 7,
+"x": 2,
+"y": 2
+}, {
+"height": 8,
+"sign": "Town Hall / / Official Business Only!",
+"width": 9,
+"x": 15,
+"y": 3
+}, {
+"height": 6,
+"sign": "The Crooked Beak / / Good Food. Great Ale. Come one, come all!",
+"width": 7,
+"x": 3,
+"y": 13
+}, {
+"height": 6,
+"sign": "The Shrowded Orb / / Mystic items and advice. Non-believers welcome.",
+"width": 6,
+"x": 17,
+"y": 15
+}])

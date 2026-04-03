@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "FireCave-2"
+tileset = 56
+chests = 4
+width = 50
+height = 40
+rooms = 24
+min_monsters = 4
+max_monsters = 7
+aggro_chance = 30
+requires_key = false
+legend = ""
+recommended_level = 17
+monster_pool = [{ "type": "Fire Elemental", "chance": 4 }, { "type": "Devil", "chance": 4 }, { "type": "Fire Empling", "chance": 3 }, { "type": "Fire Lurker", "chance": 2 }, { "type": "Lava Lurker", "chance": 3 }, { "type": "Magma Golem", "chance": 2 }, { "type": "Lava Serpent", "chance": 3 }, { "type": "Ash Phantom", "chance": 3 }, { "type": "Volcanic Worm", "chance": 3 }, { "type": "Magma Slinger", "chance": 4 }, { "type": "Blazing Charger", "chance": 3 }, { "type": "Fire Spitter", "chance": 3 }, { "type": "Flame Dancer", "chance": 2 }, { "type": "Fire Ninja", "chance": 2 }, { "type": "Ember Swarm", "chance": 2 }, { "type": "Cinder Bomber", "chance": 2 }, { "type": "Magma Mine Layer", "chance": 2 }]
+fixed_monsters = [{ "type": "Hellfire Sentinel", "count": 1 }]
+chest_loot = [{ "min_items": 1, "max_items": 4, "trap_chance": 15, "items": [{ "name": "Red Potion", "chance": 3, "min": 1, "max": 2 }, { "name": "Big Red Potion", "chance": 2, "min": 1, "max": 1 }, { "name": "Gold", "chance": 5, "min": 100, "max": 300 }, { "name": "Steel Sword", "chance": 1, "min": 1, "max": 1 }] }]

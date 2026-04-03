@@ -7,8 +7,8 @@ script = ExtResource("1_urgaf")
 id = "a2"
 title = "The Mighty Horn"
 level = 30
-location = "nord1"
-target_location = "heim"
+location = "grimhold"
+target_location = "ashheim"
 start_script = [{
 "cmd": "showDialog",
 "name": "Eski",
@@ -69,7 +69,7 @@ events = [{
 }],
 "type": "kill"
 }, {
-"param": "nord1",
+"param": "grimhold",
 "script": [{
 "attribute": "count-Mintoaur Horn",
 "cmd": "if",

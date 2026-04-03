@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Mystic"
 description = "A mystical guardian"
-max_hp = 65
+max_hp = 52
 move_speed = 28.7
 contact_damage = 5
 level = 15

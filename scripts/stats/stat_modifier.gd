@@ -25,6 +25,10 @@ enum StatType {
 	PICKUP_RADIUS,
 	COOLDOWN_REDUCTION,
 	STEALTH,
+	MAX_STAMINA,
+	STAMINA_REGEN,
+	TENACITY,
+	THORNS,
 }
 
 @export var stat: StatType

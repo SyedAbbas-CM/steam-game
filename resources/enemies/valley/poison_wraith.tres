@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Poison Wraith"
+description = "Ghostly figure that leaves poison trails and fires toxic shots."
+max_hp = 26
+move_speed = 21.0
+contact_damage = 2
+level = 5
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 15
+attack_damage = 2
+attack_speed = 1.6
+bullet_speed = 65.0
+bullet_count = 2
+preferred_distance = 45.0
+aggro_range = 80.0
+ignores_terrain = true
+leaves_trail = true
+trail_type = "poison"
+poison_chance = 0.4
+use_loy_sprite = true
+loy_tile_index = 24
+sprite_color = Color(0.3, 0.6, 0.2, 0.8)
+xp_value = 32
+score_value = 64

@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Flame Dancer"
+description = "A graceful fire elemental that weaves helix patterns of flame as it pirouettes through combat"
+max_hp = 36
+move_speed = 30.0
+contact_damage = 2
+level = 6
+kingdom = "demon"
+size_class = 0
+hostile = true
+attack_type = 24
+attack_damage = 3
+attack_speed = 1.9
+bullet_speed = 65
+bullet_count = 4
+preferred_distance = 35.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 85.0
+ignores_terrain = false
+use_loy_sprite = true
+loy_tile_index = 102
+sprite_color = Color(1.0, 0.55, 0.3, 1)
+xp_value = 20
+score_value = 42

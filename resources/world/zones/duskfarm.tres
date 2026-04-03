@@ -1,0 +1,86 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "duskfarm"
+zone_name = "Hollow Fields"
+tileset = 112
+world_pos = Vector2i(35, 65)
+dungeon_base = "Duskfarm-Dungeons"
+dungeon_count = 6
+description = "Blighted farmland stretching to the horizon. Crops wither in ashen soil and scarecrows stand crooked in the fog."
+baked_offset = Vector2i(108, -8)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "haven",
+"tx": 24,
+"ty": 21,
+"x": 0,
+"y": 20
+}, {
+"target": "embermaw",
+"tx": 0,
+"ty": 10,
+"x": 24,
+"y": 10
+}])
+npcs = Array[Dictionary]([{
+"message": "Welcome to the farm hero, don't forget to try digging and fishing - that can be fun!",
+"name": "Dafydd",
+"portrait": 281,
+"quest": "q_fire_beast",
+"tile": 280,
+"type": "scriptfile",
+"x": 14,
+"y": 2
+}, {
+"name": "Blaidd",
+"portrait": 283,
+"shop": "maps",
+"tile": 282,
+"type": "maps",
+"x": 14,
+"y": 16
+}, {
+"message": "My poppa always say, watch your stats - they're what give you special abilities! Or something, I never really listen!",
+"name": "Plentyn",
+"portrait": 312,
+"tile": 312,
+"type": "message",
+"x": 9,
+"y": 11
+}, {
+"name": "Mabion",
+"portrait": 285,
+"shop": "haven-weapon",
+"tile": 284,
+"type": "pets",
+"x": 22,
+"y": 12
+}])
+signs = Array[Dictionary]([{
+"message": "Hollow Fields Farm",
+"x": 2,
+"y": 19
+}, {
+"message": "Spuds",
+"x": 4,
+"y": 2
+}, {
+"message": "Turnips",
+"x": 20,
+"y": 2
+}])
+spawns = Array[Dictionary]([{
+"chance": 130,
+"type": "Sheep",
+"x": 1,
+"y": 1
+}, {
+"chance": 130,
+"type": "Cow",
+"x": 1,
+"y": 1
+}])

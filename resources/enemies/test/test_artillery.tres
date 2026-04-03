@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Test Artillery"
+description = "Single massive bomb with huge AOE and bullet ring explosion"
+max_hp = 6
+move_speed = 6.0
+contact_damage = 1
+level = 3
+kingdom = "mecha"
+hostile = true
+attack_type = 52
+attack_damage = 2
+attack_speed = 4.0
+bullet_speed = 40.0
+bullet_count = 1
+preferred_distance = 120.0
+aggro_range = 500.0
+bomb_aoe_radius = 20.0
+bomb_flight_time = 1.0
+use_loy_sprite = true
+loy_tile_index = 56
+sprite_color = Color(0.4, 0.3, 0.3, 1)
+xp_value = 5
+score_value = 10

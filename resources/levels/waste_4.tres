@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Waste-4"
+tileset = 0
+chests = 5
+width = 40
+height = 40
+rooms = 20
+min_monsters = 1
+max_monsters = 5
+aggro_chance = 0
+requires_key = false
+legend = ""
+recommended_level = 12
+monster_pool = [{ "type": "Mummy", "chance": 3 }, { "type": "Vampire", "chance": 2 }, { "type": "Dire Wolf", "chance": 3 }, { "type": "Feral Bear", "chance": 2 }, { "type": "Swamp Thing", "chance": 2 }, { "type": "Wight", "chance": 3 }, { "type": "Banshee", "chance": 2 }, { "type": "Ghost", "chance": 2 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 4, "trap_chance": 5, "items": [{ "name": "Gold", "chance": 50, "min": 10, "max": 30 }, { "name": "Town Portal", "chance": 5, "min": 1, "max": 1 }, { "name": "Steel Helmet", "chance": 1, "min": 1, "max": 1 }, { "name": "Blue Potion", "chance": 50, "min": 1, "max": 1 }, { "name": "Green Potion", "chance": 50, "min": 1, "max": 1 }] }]

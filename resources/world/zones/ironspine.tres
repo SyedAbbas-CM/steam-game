@@ -1,0 +1,69 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "ironspine"
+zone_name = "The Ironspine"
+tileset = 240
+width = 50
+height = 50
+world_pos = Vector2i(26, 32)
+dungeon_base = "Iron-Dungeons"
+dungeon_count = 5
+baked_offset = Vector2i(-116, -452)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "frostpass",
+"tx": 59,
+"ty": 20,
+"x": 0,
+"y": 8
+}, {
+"target": "wastes",
+"tx": 13,
+"ty": 3,
+"x": 25,
+"y": 49
+}, {
+"target": "ashheim",
+"tx": 1,
+"ty": 16,
+"x": 49,
+"y": 10
+}, {
+"target": "giantmaw",
+"tx": 15,
+"ty": 28,
+"x": 10,
+"y": 0
+}])
+signs = Array[Dictionary]([{
+"message": "City of Ashheim",
+"x": 48,
+"y": 11
+}, {
+"message": "To Ravenhollow",
+"x": 24,
+"y": 48
+}, {
+"message": "To the Ironspine",
+"x": 9,
+"y": 1
+}, {
+"message": "To Grimhold",
+"x": 1,
+"y": 7
+}])
+spawns = Array[Dictionary]([{
+"chance": 150,
+"type": "Bear",
+"x": 3,
+"y": 5
+}, {
+"chance": 200,
+"type": "Bandit",
+"x": 3,
+"y": 5
+}])

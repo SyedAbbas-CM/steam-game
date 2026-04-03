@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Test Whip Lash"
+description = "Fast sweeping arc of bullets fired in rapid sequence"
+max_hp = 5
+move_speed = 20.0
+contact_damage = 1
+level = 3
+kingdom = "demon"
+hostile = true
+attack_type = 53
+attack_damage = 1
+attack_speed = 2.5
+bullet_speed = 80.0
+bullet_count = 10
+preferred_distance = 35.0
+aggro_range = 70.0
+use_loy_sprite = true
+loy_tile_index = 102
+sprite_color = Color(0.9, 0.3, 0.3, 1)
+xp_value = 5
+score_value = 10

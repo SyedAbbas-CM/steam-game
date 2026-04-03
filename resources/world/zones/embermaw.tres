@@ -1,0 +1,77 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "embermaw"
+zone_name = "The Embermaw"
+tileset = 112
+width = 25
+height = 25
+world_pos = Vector2i(36, 65)
+dungeon_base = "Ember-Dungeons"
+dungeon_count = 3
+description = "A volcanic fissure torn open during the Sundering. Magma pulses deep below and demonic whispers echo from the depths."
+baked_offset = Vector2i(208, -8)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "duskfarm",
+"tx": 24,
+"ty": 10,
+"x": 0,
+"y": 10
+}, {
+"target": "warcamp",
+"tx": 25,
+"ty": 5,
+"x": 0,
+"y": 5
+}])
+npcs = Array[Dictionary]([])
+signs = Array[Dictionary]([{
+"message": "The Embermaw - Beware! Intense heat ahead.",
+"x": 2,
+"y": 10
+}])
+spawns = Array[Dictionary]([{
+"chance": 100,
+"type": "Fire Empling",
+"x": 10,
+"y": 10
+}, {
+"chance": 100,
+"type": "Imp",
+"x": 15,
+"y": 8
+}, {
+"chance": 80,
+"type": "Scorch Hound",
+"x": 8,
+"y": 14
+}, {
+"chance": 80,
+"type": "Flame Sprite",
+"x": 18,
+"y": 6
+}, {
+"chance": 60,
+"type": "Molten Crawler",
+"x": 12,
+"y": 18
+}, {
+"chance": 60,
+"type": "Cinder Bomber",
+"x": 20,
+"y": 14
+}, {
+"chance": 50,
+"type": "Drake",
+"x": 6,
+"y": 5
+}, {
+"chance": 40,
+"type": "Ember Swarm",
+"x": 16,
+"y": 16
+}])

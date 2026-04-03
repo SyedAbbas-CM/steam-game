@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Wild Dog"
 description = "Rabid beast that lunges with blinding speed"
-max_hp = 18
+max_hp = 14
 move_speed = 27.0
 contact_damage = 2
 level = 2

@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Dark Balrog"
 description = "A summoned evil"
-max_hp = 60
+max_hp = 48
 move_speed = 26.7
 contact_damage = 5
 level = 23

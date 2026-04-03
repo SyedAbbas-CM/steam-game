@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Duskfarm-4"
+tileset = 56
+chests = 3
+width = 45
+height = 35
+rooms = 16
+min_monsters = 4
+max_monsters = 6
+aggro_chance = 10
+requires_key = false
+legend = ""
+recommended_level = 13
+monster_pool = [{ "type": "Root Strangler", "chance": 4 }, { "type": "Mycelium Bomber", "chance": 4 }, { "type": "Giant Weevil", "chance": 3 }, { "type": "Burrower", "chance": 3 }, { "type": "Ember Rat", "chance": 4 }, { "type": "Imp", "chance": 3 }, { "type": "Flame Sprite", "chance": 3 }, { "type": "Molten Crawler", "chance": 2 }, { "type": "Scorch Hound", "chance": 2 }, { "type": "Cinder Bomber", "chance": 2 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 5, "items": [{ "name": "Red Potion", "chance": 4, "min": 1, "max": 1 }, { "name": "Gold", "chance": 5, "min": 8, "max": 20 }, { "name": "Town Portal", "chance": 1, "min": 1, "max": 1 }] }]

@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Automaton"
 description = "A mechanised fighting machine"
-max_hp = 405
+max_hp = 324
 move_speed = 19.6
 contact_damage = 5
 level = 14

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CraftingRecipe" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/crafting_recipe.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "poison_flask"
+recipe_name = "Poison Flask"
+recipe_type = "alchemist"
+ingredients = Array[Dictionary]([{{
+"item_name": "Wild Mushroom",
+"count": 2
+}}, {{
+"item_name": "Venom Sac",
+"count": 1
+}}])
+gold_cost = 50
+result_item_path = "res://resources/items/crafted/poison_flask.tres"
+result_count = 1
+required_level = 5

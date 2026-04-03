@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Lurker"
 description = "A tentacled underwater beast"
-max_hp = 118
+max_hp = 94
 move_speed = 29.7
 contact_damage = 5
 level = 11

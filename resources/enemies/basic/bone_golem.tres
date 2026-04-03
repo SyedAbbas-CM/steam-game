@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Bone Golem"
+description = "A hulking construct of fused bones. Slams the ground and shrugs off damage."
+max_hp = 60
+move_speed = 8.0
+contact_damage = 2
+level = 2
+kingdom = "undead"
+size_class = 2
+hostile = true
+attack_type = 7
+attack_damage = 3
+attack_speed = 2.0
+bullet_speed = 50.0
+bullet_count = 1
+preferred_distance = 14.0
+aggro_range = 70.0
+slam_radius = 28.0
+armor = 1
+use_loy_sprite = true
+loy_tile_index = 111
+sprite_color = Color(0.75, 0.7, 0.6, 1)
+xp_value = 40
+score_value = 50

@@ -9,6 +9,7 @@
 [resource]
 script = ExtResource("1")
 biome_name = "Heim Dungeons"
+base_difficulty = 5
 theme = "brown"
 enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4")]
 min_floor = 1

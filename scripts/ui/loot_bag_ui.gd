@@ -93,6 +93,19 @@ func hide_bag(bag: LootBag) -> void:
 	if _current_bag == bag:
 		_current_bag = null
 		_panel.visible = false
+		# Check if player is near another loot bag and show it
+		_show_next_nearby_bag()
+
+func _show_next_nearby_bag() -> void:
+	var player = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
+	if not player:
+		return
+	for bag in get_tree().get_nodes_in_group("loot_bag"):
+		if not is_instance_valid(bag) or bag.is_queued_for_deletion():
+			continue
+		if bag._player_nearby and not bag.items.is_empty():
+			show_bag(bag)
+			return
 
 func is_open() -> bool:
 	return _panel.visible
@@ -188,11 +201,15 @@ func _on_item_clicked(bag_index: int) -> void:
 
 	var item = _current_bag.items[bag_index]
 	if _equipment_manager.add_to_inventory(item):
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("collect_b", -4.0)
 		_current_bag.items.remove_at(bag_index)
 		if _current_bag.items.is_empty():
 			_current_bag.queue_free()
 			_current_bag = null
 			_panel.visible = false
+			_show_next_nearby_bag()
 		else:
 			_refresh()
 
@@ -208,11 +225,16 @@ func _on_take_all() -> void:
 			_current_bag.items.remove_at(i)
 			taken += 1
 		i -= 1
+	if taken > 0:
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("collect_a", -3.0)
 
 	if _current_bag.items.is_empty():
 		_current_bag.queue_free()
 		_current_bag = null
 		_panel.visible = false
+		_show_next_nearby_bag()
 	else:
 		_refresh()
 

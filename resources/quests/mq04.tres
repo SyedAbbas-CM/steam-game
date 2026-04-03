@@ -1,0 +1,53 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq04"
+title = "Blood in the Grass"
+summary = "Your mark burns in the wilds. A destroyed caravan — survivors saw black-robed figures heading south."
+level = 5
+location = "haven"
+target_location = "wastes"
+prerequisite = "mq03"
+start_script = [{
+"cmd": "showDialog",
+"name": "Scholar Vela",
+"options": [{
+"name": "I'll investigate.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 162,
+"text": "Travelers coming from the wilds speak of a destroyed caravan. Your mark may react to the corruption there. Go see what happened."
+}]
+events = [{
+"param": "wastes",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Help them",
+"script": [{
+"cmd": "showDialog",
+"name": "Wounded Trader",
+"options": [{
+"name": "South. The valley.",
+"script": [{
+"cmd": "getExp",
+"value": "300"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "Black robes... they came from nowhere. Took nothing. Just... touched people. And they stopped moving. Headed south... toward the valley..."
+}]
+}],
+"portrait": 0,
+"text": "Your arm erupts in pain. The brand glows with sickly light. Ahead, an overturned caravan. Bodies. A survivor crawls toward you."
+}],
+"type": "zone_enter"
+}]

@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Crypt Rat"
+description = "Tiny fast rat. Weak but hard to hit."
+max_hp = 5
+move_speed = 32.0
+contact_damage = 1
+level = 1
+kingdom = "crawler"
+size_class = 0
+hostile = true
+attack_type = 1
+attack_damage = 1
+attack_speed = 1.5
+bullet_speed = 40.0
+bullet_count = 1
+preferred_distance = 8.0
+charge_speed = 60.0
+charge_duration = 0.2
+aggro_range = 50.0
+use_loy_sprite = true
+loy_tile_index = 15
+sprite_color = Color(0.65, 0.55, 0.45, 1)
+xp_value = 2
+score_value = 3

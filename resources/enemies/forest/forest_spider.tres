@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Forest Spider"
+description = "Large spider that dashes and leaves web trails to slow prey."
+max_hp = 36
+move_speed = 25.0
+contact_damage = 3
+level = 7
+kingdom = "crawler"
+size_class = 0
+hostile = true
+attack_type = 5
+attack_damage = 2
+attack_speed = 1.6
+bullet_speed = 70.0
+bullet_count = 1
+preferred_distance = 20.0
+charge_speed = 120.0
+charge_duration = 0.3
+aggro_range = 80.0
+leaves_trail = true
+trail_type = "web"
+use_loy_sprite = true
+loy_tile_index = 22
+sprite_color = Color(0.35, 0.5, 0.2, 1)
+xp_value = 45
+score_value = 90

@@ -6,17 +6,23 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 9.0
+flat_bonus = 5.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 4
+flat_bonus = 0.1
 
 [resource]
 script = ExtResource("1")
 item_name = "Frost Bolt"
 loy_tile_index = 107
 description = "Casts a bolt of ice towards the opponent"
-slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+slot_type = 2
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 0
-buy_price = 80
-sell_value = 20
-bullet_sprite_index = 105
-weapon_range = 3.0
+buy_price = 121
+sell_value = 30
+bullet_sprite_index = 185
+weapon_range = 4.0
+weapon_type = "staff"

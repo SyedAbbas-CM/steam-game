@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 13.0
+flat_bonus = 17.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 14
+flat_bonus = 5.0
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Demonic Axe"
 loy_tile_index = 5
 description = "A bloody axe"
 slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 404
-sell_value = 101
-bullet_sprite_index = 123
-weapon_range = 2.0
+buy_price = 996
+sell_value = 249
+bullet_sprite_index = 144
+weapon_range = 1.3
+weapon_type = "axe"

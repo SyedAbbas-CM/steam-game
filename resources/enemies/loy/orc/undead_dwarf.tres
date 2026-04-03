@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Undead Dwarf"
 description = "A zombie dwarf"
-max_hp = 204
+max_hp = 163
 move_speed = 21.8
 contact_damage = 5
 level = 14

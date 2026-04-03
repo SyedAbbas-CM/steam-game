@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="DungeonBiome" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton_archer.tres" id="2"]
@@ -7,12 +7,20 @@
 [ext_resource type="Resource" path="res://resources/enemies/loy/undead/bone_giant.tres" id="5"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="6"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/undead/ghast.tres" id="7"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/risen_corpse.tres" id="8"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/phantom.tres" id="9"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/bone_charger.tres" id="10"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/shield_skeleton.tres" id="11"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/bone_crawler.tres" id="12"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/crypt_guardian.tres" id="13"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/ghoul_brute.tres" id="14"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/death_rattle.tres" id="15"]
 
 [resource]
 script = ExtResource("1")
 biome_name = "Aria Crypt"
 theme = "grey"
-enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6")]
+enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12"), ExtResource("13"), ExtResource("14"), ExtResource("15")]
 min_floor = 1
 max_floor = 3
 room_count = 30

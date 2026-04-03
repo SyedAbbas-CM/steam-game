@@ -1,0 +1,75 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "wastes"
+zone_name = "The Withered Wastes"
+tileset = 112
+width = 50
+height = 50
+world_pos = Vector2i(28, 54)
+dungeon_base = "Waste-Dungeons"
+dungeon_count = 5
+baked_offset = Vector2i(-68, -232)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "haven",
+"tx": 11,
+"ty": 3,
+"x": 25,
+"y": 49
+}, {
+"target": "ironspine",
+"tx": 25,
+"ty": 48,
+"x": 13,
+"y": 0
+}, {
+"target": "ashvale",
+"tx": 58,
+"ty": 20,
+"x": 0,
+"y": 25
+}, {
+"target": "rotgrove",
+"tx": 1,
+"ty": 12,
+"x": 49,
+"y": 20
+}, {
+"target": "wardens",
+"tx": 9,
+"ty": 1,
+"x": 8,
+"y": 49
+}])
+signs = Array[Dictionary]([{
+"message": "To Ravenhollow",
+"x": 24,
+"y": 48
+}, {
+"message": "To The Mirage",
+"x": 1,
+"y": 26
+}, {
+"message": "To Rotgrove",
+"x": 48,
+"y": 19
+}, {
+"message": "To The Warden's Camp",
+"x": 7,
+"y": 48
+}])
+spawns = Array[Dictionary]([{
+"chance": 150,
+"type": "Thief",
+"x": 3,
+"y": 3
+}, {
+"chance": 150,
+"type": "Wild Dog",
+"x": 3,
+"y": 3
+}])

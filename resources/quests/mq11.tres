@@ -1,0 +1,110 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq11"
+title = "The Gathering"
+summary = "Bring the 3 fragments to the Sage in Cennyn. She needs 3 elders to perform the binding ritual."
+level = 14
+location = "cenneth"
+target_location = "cenneth"
+prerequisite_list = Array[String](["mq08", "mq10"])
+properties = [{
+"index": 0,
+"name": "Elders Gathered",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "What do they need?",
+"script": [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "I'll gather them.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 163,
+"text": "The Fortress of Kor needs proof the Tide is real — show him your brand. Talmita needs her Sun Disc recovered from the Peaks. And Paititi's shrine must be cleansed of corruption."
+}]
+}],
+"portrait": 163,
+"text": "Three fragments... yes. But I cannot bind them alone. I need the three elders: The Fortress of Kor the Ironbound, Talmita the Sun Speaker, and the Guardian of Paititi."
+}]
+events = [{
+"param": "Elder The Fortress of Kor",
+"script": [{
+"attribute": "session-mq11-0",
+"cmd": "if",
+"compare": "3",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder The Fortress of Kor",
+"options": [{
+"name": "Show the brand",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder The Fortress of Kor",
+"options": [{
+"name": "Thank you.",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}],
+"portrait": 150,
+"text": "...By the old gods. That's the Seal Mark. I'll come. Tell Elowen I'm ready."
+}]
+}],
+"portrait": 150,
+"text": "The Hollow Tide? Stories to frighten children. Show me proof."
+}]
+}],
+"type": "activate"
+}, {
+"param": "cenneth",
+"script": [{
+"attribute": "session-mq11-0",
+"cmd": "if",
+"compare": "2",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "On my way.",
+"script": [{
+"cmd": "getExp",
+"value": "800"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 163,
+"text": "All three are here. The binding ritual will take time. But first — the shrine in Paititi and the relic in the Peaks must be secured. Go."
+}]
+}, {
+"attribute": "session-mq11-0",
+"cmd": "if",
+"compare": "3",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "I will.",
+"script": []
+}],
+"portrait": 163,
+"text": "We still need more elders. Keep searching."
+}]
+}],
+"type": "quest"
+}]

@@ -1,0 +1,67 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "duskwatch"
+zone_name = "Duskwatch"
+tileset = 240
+world_pos = Vector2i(106, 68)
+dungeon_base = "Duskwatch-Dungeons"
+dungeon_count = 6
+description = "A border watchtower settlement keeping vigil against the darkness. The garrison is dangerously thin."
+baked_offset = Vector2i(-800, -480)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "briarmarsh",
+"tx": 7,
+"ty": 0,
+"x": 3,
+"y": 24
+}])
+npcs = Array[Dictionary]([{
+"name": "Tangy",
+"portrait": 153,
+"tile": 137,
+"shop": "duskwatch-weapon",
+"type": "shop",
+"x": 15,
+"y": 21
+}, {
+"name": "Arwyn",
+"portrait": 159,
+"tile": 143,
+"type": "elder",
+"x": 21,
+"y": 22
+}, {
+"name": "Galgamesh",
+"portrait": 205,
+"tile": 189,
+"shop": "duskwatch-inn",
+"type": "shop",
+"x": 3,
+"y": 9
+}, {
+"name": "Barak",
+"portrait": 200,
+"tile": 184,
+"shop": "duskwatch-magic",
+"type": "shop",
+"x": 3,
+"y": 4
+}, {
+"file": "scripts/nivek-flow.xml",
+"name": "Flow",
+"portrait": 219,
+"tile": 218,
+"type": "scriptfile",
+"x": 23,
+"y": 6
+}])
+signs = Array[Dictionary]([{
+"message": "To Brackwater",
+"x": 17,
+"y": 8
+}])

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "mirage-weapon"
+shop_type = "weapon"
+shop_name = "Metak"
+portrait = 156
+title = "Metak's Meat Market"
+welcome = "This is my shop. Be Good! / /  What do you want?"
+nomoney = "No money? Stop wasting my time!"
+buy_text = "Come back soon!"
+sell_text = "You got a good deal there!"
+stock = [{ "item_name": "Longsword", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Dagger", "required_quest": "" }, { "item_name": "Staff", "required_quest": "" }, { "item_name": "Boots", "required_quest": "" }, { "item_name": "Cloak", "required_quest": "" }, { "item_name": "Knee High Boots", "required_quest": "" }, { "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Ridged Dagger", "required_quest": "" }, { "item_name": "Wooden Shield", "required_quest": "" }, { "item_name": "Steel Shield", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Kite Shield", "required_quest": "" }, { "item_name": "Fire Arrow", "required_quest": "" }, { "item_name": "Head Dress", "required_quest": "a4" }, { "item_name": "Diamond Knife", "required_quest": "a11" }, { "item_name": "Troll Club", "required_quest": "a13" }, { "item_name": "Prong Tome", "required_quest": "a15" }, { "item_name": "Tiger Cloak", "required_quest": "a19" }]

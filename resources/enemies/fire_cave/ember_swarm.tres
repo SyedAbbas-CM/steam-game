@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/ember_mite.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Ember Swarm"
+description = "A roiling mass of living embers that splits into smaller mites when destroyed"
+max_hp = 44
+move_speed = 22.0
+contact_damage = 3
+level = 6
+kingdom = "demon"
+size_class = 0
+hostile = true
+attack_type = 10
+attack_damage = 3
+attack_speed = 2.3
+bullet_speed = 55
+bullet_count = 2
+preferred_distance = 25.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 80.0
+ignores_terrain = false
+split_count = 3
+split_definition = ExtResource("2")
+use_loy_sprite = true
+loy_tile_index = 442
+sprite_color = Color(1.0, 0.5, 0.15, 1)
+xp_value = 25
+score_value = 50

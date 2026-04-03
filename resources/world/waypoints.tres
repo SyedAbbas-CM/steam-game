@@ -1,0 +1,60 @@
+[gd_resource type="Resource" format=3]
+
+[resource]
+metadata/waypoints = [{
+"name": "Darl_woods_Army_Spawn1",
+"x": 276,
+"y": -1
+}, {
+"name": "Darl_woods_army_spawn_2",
+"x": 406,
+"y": -47
+}, {
+"name": "StagingGrounds_ArmySpawn1",
+"x": 265,
+"y": 37
+}, {
+"name": "StagingGround_ArmySpawn2",
+"x": 321,
+"y": 39
+}, {
+"name": "Farm_ArmySpawn1",
+"x": 124,
+"y": 64
+}, {
+"name": "Farm_ArmySpawn2",
+"x": 224,
+"y": 45
+}, {
+"name": "HighWay_ArmySpawn2",
+"x": 254,
+"y": -70
+}, {
+"name": "HighWay_ArmySpawn1",
+"x": 137,
+"y": -58
+}, {
+"name": "Wilderness_ArmySpawn1",
+"x": 106,
+"y": -47
+}, {
+"name": "Wilderness_ArmySpawn2",
+"x": -24,
+"y": -53
+}, {
+"name": "Wilderness_ArmySpawn3",
+"x": -15,
+"y": -206
+}, {
+"name": "Wilderness_ArmySpawn4",
+"x": -57,
+"y": -135
+}, {
+"name": "Graveyard_ArmySpawn1",
+"x": 32,
+"y": 125
+}, {
+"name": "Graveyard_ArmySpawn2",
+"x": 32,
+"y": 217
+}]

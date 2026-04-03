@@ -7,16 +7,25 @@ var _label: Label
 
 ## Spawn reward text (XP, gold) — small and subtle
 static func spawn(parent: Node, pos: Vector2, text: String, color: Color = Color.WHITE) -> void:
-	_create(parent, pos, text, color, 5, -12, 0.9)
+	var s = _ow_scale(parent)
+	_create(parent, pos, text, color, int(5 * s), -12 * s, 0.9)
 
 ## Spawn damage number — always red, punchier with slight random X offset
 static func spawn_damage(parent: Node, pos: Vector2, amount: int, _color: Color = Color.RED) -> void:
-	var offset_x = randf_range(-3, 3)
-	var ft = _create(parent, pos + Vector2(offset_x, -4), str(amount), Color(1.0, 0.2, 0.15), 6, -14, 0.7)
+	var s = _ow_scale(parent)
+	var offset_x = randf_range(-3, 3) * s
+	var ft = _create(parent, pos + Vector2(offset_x, -4 * s), str(amount), Color(1.0, 0.2, 0.15), int(6 * s), -14 * s, 0.7)
 	if ft:
 		ft._label.scale = Vector2(1.2, 1.2)
 		var shrink = ft.create_tween()
 		shrink.tween_property(ft._label, "scale", Vector2(1.0, 1.0), 0.12)
+
+## Returns 2.0 in overworld (bigger tiles), 1.0 in dungeon
+static func _ow_scale(parent: Node) -> float:
+	var tree = parent.get_tree()
+	if tree and tree.current_scene and tree.current_scene.name == "Overworld":
+		return 2.0
+	return 1.0
 
 static func _create(parent: Node, pos: Vector2, text: String, color: Color, font_size: int, float_dist: float, duration: float) -> FloatingText:
 	var ft = FloatingText.new()

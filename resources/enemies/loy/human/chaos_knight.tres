@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Chaos Knight"
 description = "A mighty warrior with burning eyes"
-max_hp = 94
+max_hp = 75
 move_speed = 29.3
 contact_damage = 5
 level = 17

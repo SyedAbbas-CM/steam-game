@@ -121,35 +121,67 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 				room.enemy_count = 1
 			else:
 				room.type = RoomData.RoomType.ELITE
-				room.enemy_count = 2
+				var base_elite = clampi(3 + floor_number / 3, 3, 5)
+				room.enemy_count = base_elite + randi_range(0, 1)
 		else:
 			room.type = _roll_room_type(floor_number)
 			match room.type:
 				RoomData.RoomType.COMBAT:
 					room.enemy_count = 5 + floor_number * 2
+					# 10% chance to include an elite in normal combat rooms
+					if randf() < 0.10:
+						room.set_meta("has_rare_elite", true)
 				RoomData.RoomType.ELITE:
-					room.enemy_count = 3
+					var base_elite = clampi(3 + floor_number / 3, 3, 6)
+					room.enemy_count = base_elite + randi_range(0, 1)
 				RoomData.RoomType.TREASURE, RoomData.RoomType.SHRINE:
 					room.enemy_count = 3 + floor_number  # guarded reward rooms
 				_:
 					room.enemy_count = 0
 
 		room.difficulty_tier = floor_number
-		var base_diff = biome.base_difficulty if biome else 0
-		var effective_floor = floor_number + base_diff
-		var hp_mult = 1.0 + (effective_floor - 1) * 0.15
-		var dmg_mult = 1.0 + (effective_floor - 1) * 0.1
+		# Base mults are 1.0 — all real scaling comes from recommended_level in dungeon_manager
+		var hp_mult = 1.0
+		var dmg_mult = 1.0
 		if room.type == RoomData.RoomType.BOSS:
-			hp_mult *= 5.0
-			dmg_mult *= 2.0
+			hp_mult = 5.0
+			dmg_mult = 1.5
 		elif room.type == RoomData.RoomType.ELITE:
-			hp_mult *= 3.0
-			dmg_mult *= 1.5
+			hp_mult = 4.0
+			dmg_mult = 1.3
 		room.enemy_hp_mult = hp_mult
 		room.enemy_damage_mult = dmg_mult
 
-		# Assign room shape
+		# Assign encounter type for combat rooms
+		if room.type == RoomData.RoomType.COMBAT and room.enemy_count > 0 and pos != start_pos:
+			room.encounter_type = _roll_encounter_type()
+			# Apply encounter modifiers
+			match room.encounter_type:
+				RoomData.EncounterType.AMBUSH:
+					room.enemy_count = int(room.enemy_count * 2)
+				RoomData.EncounterType.HORDE:
+					room.enemy_count = int(room.enemy_count * 3)
+					room.enemy_hp_mult *= 0.5
+				RoomData.EncounterType.GAUNTLET:
+					room.enemy_count = int(ceili(room.enemy_count * 1.5))
+				RoomData.EncounterType.REST:
+					room.enemy_count = 0
+				RoomData.EncounterType.ARENA:
+					room.enemy_count = int(room.enemy_count * 2)
+					room.enemy_hp_mult *= 1.5
+
+		# Assign room shape (encounter type may override)
 		room.shape = _roll_room_shape(room.type, pos == start_pos)
+		match room.encounter_type:
+			RoomData.EncounterType.AMBUSH, RoomData.EncounterType.REST:
+				room.shape = RoomData.RoomShape.TINY
+			RoomData.EncounterType.GAUNTLET:
+				room.shape = RoomData.RoomShape.WIDE_RECT
+			RoomData.EncounterType.ARENA:
+				room.shape = RoomData.RoomShape.ARENA
+			RoomData.EncounterType.HORDE:
+				var horde_shapes = [RoomData.RoomShape.RECTANGLE, RoomData.RoomShape.CIRCLE]
+				room.shape = horde_shapes[randi() % horde_shapes.size()]
 		var shape_data = RoomShapeGenerator.generate_shape(room.shape)
 		room.shape_width = shape_data["width"]
 		room.shape_height = shape_data["height"]
@@ -173,10 +205,118 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 
 		rooms[pos] = room
 
+	# Early floor guarantee: at least 1 TREASURE + 1 SHRINE on floors 1-3
+	if floor_number <= 3:
+		_guarantee_room_types(rooms, start_pos, stairs_pos, floor_number)
+
 	# Ensure start→stairs path is fully reachable (all OPEN transitions)
 	_ensure_reachable_path(rooms, start_pos, stairs_pos, directions)
 
 	return { "rooms": rooms, "start": start_pos, "stairs": stairs_pos }
+
+# Generate a linear test arena: one room per fixed_monsters entry in a straight line
+# room_scale: 1 = normal size, 2 = double-sized rooms (needs larger grid cells)
+# branch_monsters: optional second hall going north from the start room
+static func generate_linear_arena(fixed_monsters: Array, biome: DungeonBiome = null, room_scale: int = 1, branch_monsters: Array = []) -> Dictionary:
+	var room_count = fixed_monsters.size() + 1  # +1 for start room
+	var rooms: Dictionary = {}
+	var start_pos = Vector2i.ZERO
+
+	# Scaled room dimensions
+	var base_w = 17
+	var base_h = 15
+	var scaled_w = base_w * room_scale
+	var scaled_h = base_h * room_scale
+	# Grid cell must fit scaled room + corridor gap
+	var cell_w = scaled_w + 6
+	var cell_h = scaled_h + 6
+
+	for i in range(room_count):
+		var pos = Vector2i(i, 0)  # straight horizontal line
+		var room = RoomData.new()
+		room.grid_pos = pos
+
+		if i == 0:
+			room.type = RoomData.RoomType.COMBAT
+			room.enemy_count = 0
+			room.has_stairs_up = true
+		else:
+			room.type = RoomData.RoomType.COMBAT
+			room.enemy_count = 1
+			room.fixed_enemy_name = str(fixed_monsters[i - 1].get("type", ""))
+			if i == room_count - 1:
+				room.has_stairs_down = true
+
+		room.difficulty_tier = 1
+		room.enemy_hp_mult = 1.0
+		room.enemy_damage_mult = 1.0
+
+		if room_scale > 1:
+			room.shape = RoomData.RoomShape.RECTANGLE
+			var shape_data = RoomShapeGenerator._rect(scaled_w, scaled_h)
+			room.shape_width = shape_data["width"]
+			room.shape_height = shape_data["height"]
+			room.floor_mask = shape_data["mask"]
+		else:
+			room.shape = RoomData.RoomShape.RECTANGLE
+			var shape_data = RoomShapeGenerator.generate_shape(room.shape)
+			room.shape_width = shape_data["width"]
+			room.shape_height = shape_data["height"]
+			room.floor_mask = shape_data["mask"]
+
+		# Connect to neighbors
+		if i > 0:
+			room.connections["west"] = Vector2i(i - 1, 0)
+		if i < room_count - 1:
+			room.connections["east"] = Vector2i(i + 1, 0)
+		for dir_name in room.connections:
+			room.transition_types[dir_name] = RoomData.TransitionType.OPEN
+
+		rooms[pos] = room
+
+	# North branch: rooms going upward from start room (y goes negative = up)
+	if branch_monsters.size() > 0:
+		# Connect start room to first branch room
+		rooms[start_pos].connections["north"] = Vector2i(0, -1)
+		rooms[start_pos].transition_types["north"] = RoomData.TransitionType.OPEN
+
+		for j in range(branch_monsters.size()):
+			var bpos = Vector2i(0, -(j + 1))  # go north (negative y)
+			var broom = RoomData.new()
+			broom.grid_pos = bpos
+			broom.type = RoomData.RoomType.COMBAT
+			broom.enemy_count = 1
+			broom.fixed_enemy_name = str(branch_monsters[j].get("type", ""))
+			broom.difficulty_tier = 1
+			broom.enemy_hp_mult = 1.0
+			broom.enemy_damage_mult = 1.0
+
+			if room_scale > 1:
+				broom.shape = RoomData.RoomShape.RECTANGLE
+				var shape_data = RoomShapeGenerator._rect(scaled_w, scaled_h)
+				broom.shape_width = shape_data["width"]
+				broom.shape_height = shape_data["height"]
+				broom.floor_mask = shape_data["mask"]
+			else:
+				broom.shape = RoomData.RoomShape.RECTANGLE
+				var shape_data = RoomShapeGenerator.generate_shape(broom.shape)
+				broom.shape_width = shape_data["width"]
+				broom.shape_height = shape_data["height"]
+				broom.floor_mask = shape_data["mask"]
+
+			# Connect south to previous room
+			broom.connections["south"] = Vector2i(0, -(j)) if j > 0 else start_pos
+			# Connect north to next room
+			if j < branch_monsters.size() - 1:
+				broom.connections["north"] = Vector2i(0, -(j + 2))
+			broom.transition_types["south"] = RoomData.TransitionType.OPEN
+			if broom.connections.has("north"):
+				broom.transition_types["north"] = RoomData.TransitionType.OPEN
+
+			rooms[bpos] = broom
+
+	var stairs_pos = Vector2i(room_count - 1, 0)
+	return { "rooms": rooms, "start": start_pos, "stairs": stairs_pos, "grid_cell_w": cell_w, "grid_cell_h": cell_h }
 
 # Legacy function for backwards compatibility
 static func generate_floor(floor_number: int) -> Array[RoomData]:
@@ -308,3 +448,46 @@ static func _ensure_reachable_path(rooms: Dictionary, start: Vector2i, stairs: V
 			if room_curr.connections[dir_name] == prev:
 				room_curr.transition_types[dir_name] = RoomData.TransitionType.OPEN
 		current = prev
+
+static func _guarantee_room_types(rooms: Dictionary, start_pos: Vector2i, stairs_pos: Vector2i, floor_number: int) -> void:
+	var has_treasure = false
+	var has_shrine = false
+	var combat_rooms: Array[Vector2i] = []
+	for pos in rooms:
+		var room = rooms[pos] as RoomData
+		if pos == start_pos or pos == stairs_pos:
+			continue
+		if room.type == RoomData.RoomType.TREASURE:
+			has_treasure = true
+		elif room.type == RoomData.RoomType.SHRINE:
+			has_shrine = true
+		elif room.type == RoomData.RoomType.COMBAT and room.enemy_count > 0:
+			combat_rooms.append(pos)
+	combat_rooms.shuffle()
+	if not has_treasure and combat_rooms.size() > 0:
+		var pos = combat_rooms.pop_back()
+		var room = rooms[pos] as RoomData
+		room.type = RoomData.RoomType.TREASURE
+		room.enemy_count = 3 + floor_number
+		room.shape = _roll_room_shape(RoomData.RoomType.TREASURE, false)
+	if not has_shrine and combat_rooms.size() > 0:
+		var pos = combat_rooms.pop_back()
+		var room = rooms[pos] as RoomData
+		room.type = RoomData.RoomType.SHRINE
+		room.enemy_count = 3 + floor_number
+		room.shape = _roll_room_shape(RoomData.RoomType.SHRINE, false)
+
+static func _roll_encounter_type() -> RoomData.EncounterType:
+	var roll = randf()
+	if roll < 0.40:
+		return RoomData.EncounterType.STANDARD
+	elif roll < 0.55:
+		return RoomData.EncounterType.AMBUSH
+	elif roll < 0.70:
+		return RoomData.EncounterType.HORDE
+	elif roll < 0.80:
+		return RoomData.EncounterType.GAUNTLET
+	elif roll < 0.90:
+		return RoomData.EncounterType.REST
+	else:
+		return RoomData.EncounterType.ARENA

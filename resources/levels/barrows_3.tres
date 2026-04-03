@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Barrows-3"
+tileset = 16
+chests = 4
+width = 50
+height = 35
+rooms = 18
+min_monsters = 5
+max_monsters = 8
+aggro_chance = 0
+requires_key = false
+legend = "Crypt Lord"
+recommended_level = 7
+monster_pool = [{ "type": "Wailing Spirit", "chance": 4 }, { "type": "Bone Rattler", "chance": 4 }, { "type": "Poltergeist", "chance": 4 }, { "type": "Banshee", "chance": 4 }, { "type": "Grave Wraith", "chance": 3 }, { "type": "Shade", "chance": 3 }, { "type": "Phantom", "chance": 3 }, { "type": "Shield Skeleton", "chance": 3 }, { "type": "Bone Acolyte", "chance": 2 }, { "type": "Tombstone Golem", "chance": 2 }, { "type": "Bone Guard", "chance": 2 }, { "type": "Mummy", "chance": 2 }, { "type": "Vampire", "chance": 1 }, { "type": "Ghost", "chance": 1 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 5, "items": [{ "name": "Red Potion", "chance": 3, "min": 1, "max": 1 }, { "name": "Blue Potion", "chance": 1, "min": 1, "max": 1 }, { "name": "Gold", "chance": 5, "min": 10, "max": 30 }] }]

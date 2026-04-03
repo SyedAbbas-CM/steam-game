@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Lizard Fighter"
 description = "A scaly lizard humanoid warrior"
-max_hp = 280
+max_hp = 224
 move_speed = 23.3
 contact_damage = 5
 level = 19

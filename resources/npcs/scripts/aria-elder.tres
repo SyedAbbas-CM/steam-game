@@ -8,12 +8,12 @@ commands = [{
 "cmd": "showDialog",
 "name": "Elder",
 "portrait": 147,
-"text": "Welcome to JohnBurn Village, adventurer. How may I help you?",
+"text": "Welcome to Ravenhollow, adventurer. How may I help you?",
 "options": [{
 "name": "Quests",
 "script": [{
 "cmd": "offerZoneQuests",
-"zone": "aria"
+"zone": "haven"
 }]
 }, {
 "name": "About Aria",
@@ -21,7 +21,7 @@ commands = [{
 "cmd": "showDialog",
 "name": "Elder",
 "portrait": 147,
-"text": "This village was founded by John Burn, a retired knight who sought peace after the Great War. We built our home here on the central plains of Yore.",
+"text": "This village was founded by John Burn, a retired knight who sought peace after the Great War. We built our home here on the central plains of Ashenmoor.",
 "options": [{
 "name": "The crypts?",
 "script": [{
@@ -35,7 +35,7 @@ commands = [{
 "cmd": "showDialog",
 "name": "Elder",
 "portrait": 147,
-"text": "Ah, Yoregot's inn! Named after a raven that nested on the roof when it was first built. The bird stayed for years. Some say it was magical.",
+"text": "Ah, Corvus's inn! Named after a raven that nested on the roof when it was first built. The bird stayed for years. Some say it was magical.",
 "options": [{
 "name": "Interesting",
 "script": []

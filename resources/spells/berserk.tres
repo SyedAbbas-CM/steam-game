@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "berserk"
+spell_name = "Berserk"
+description = "+50% damage, +25% speed, -30% armor for 8s"
+effect_type = 9
+delivery = 2
+magnitude = 50
+duration = 8.0
+mp_cost = 20.0
+cooldown = 15.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

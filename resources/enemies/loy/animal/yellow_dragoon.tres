@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Yellow Dragoon"
 description = "A fire breathing winged beast"
-max_hp = 109
+max_hp = 87
 move_speed = 34.2
 contact_damage = 5
 level = 26

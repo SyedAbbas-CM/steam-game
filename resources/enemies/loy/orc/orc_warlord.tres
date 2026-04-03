@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Orc Warlord"
 description = "A massive sword wielding orc"
-max_hp = 126
+max_hp = 101
 move_speed = 19.4
 contact_damage = 5
 level = 6

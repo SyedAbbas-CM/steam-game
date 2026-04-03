@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Test Seeking"
+description = "Drops slow homing mines that drift toward player"
+max_hp = 4
+move_speed = 16.0
+contact_damage = 1
+level = 2
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 30
+attack_damage = 1
+attack_speed = 3.5
+bullet_speed = 40
+bullet_count = 3
+preferred_distance = 45.0
+aggro_range = 70.0
+use_loy_sprite = true
+loy_tile_index = 366
+sprite_color = Color(0.8, 0.3, 0.6, 1)
+xp_value = 5
+score_value = 10

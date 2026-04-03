@@ -2,10 +2,12 @@ class_name RoomData
 extends Resource
 
 enum RoomType { COMBAT, TREASURE, SHRINE, ELITE, BOSS, SHOP }
-enum RoomShape { RECTANGLE, WIDE_RECT, TALL_RECT, CIRCLE, L_SHAPE_NE, L_SHAPE_NW, L_SHAPE_SE, L_SHAPE_SW, IRREGULAR }
+enum RoomShape { RECTANGLE, WIDE_RECT, TALL_RECT, CIRCLE, L_SHAPE_NE, L_SHAPE_NW, L_SHAPE_SE, L_SHAPE_SW, IRREGULAR, TINY, ARENA }
 enum TransitionType { OPEN, BREAKABLE_WALL, KEY_LOCKED, INTERACT_OPEN }
+enum EncounterType { STANDARD, AMBUSH, HORDE, GAUNTLET, REST, ARENA }
 
 @export var type: RoomType = RoomType.COMBAT
+var encounter_type: EncounterType = EncounterType.STANDARD
 @export var enemy_count: int = 3
 @export var enemy_hp_mult: float = 1.0
 @export var enemy_damage_mult: float = 1.0
@@ -36,3 +38,6 @@ var keys_needed: int = 0
 
 # Dirt room: entire floor uses dirt tiles instead of normal floor
 var is_dirt_room: bool = false
+
+# Fixed enemy for test arenas — overrides pool selection
+var fixed_enemy_name: String = ""

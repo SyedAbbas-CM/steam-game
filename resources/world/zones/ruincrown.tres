@@ -1,0 +1,52 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "ruincrown"
+zone_name = "Ruincrown"
+tileset = 112
+width = 30
+height = 30
+description = "Shattered ruins of the old capital city. Grand spires lie toppled and the throne room is open to the sky."
+baked_offset = Vector2i(-99999, -99999)
+exits = Array[Dictionary]([{
+"target": "wastes",
+"tx": 25,
+"ty": 1,
+"x": 15,
+"y": 29
+}])
+signs = Array[Dictionary]([{
+"message": "We who guard the deep
+so the world may sleep",
+"x": 14,
+"y": 14
+}])
+spawns = Array[Dictionary]([{
+"chance": 60,
+"height": 24,
+"type": "Spectre",
+"width": 24,
+"x": 3,
+"y": 3
+}, {
+"chance": 40,
+"height": 24,
+"type": "Skeleton",
+"width": 24,
+"x": 3,
+"y": 3
+}])
+houses = Array[Dictionary]([{
+"dx": 0,
+"dy": 1,
+"height": 8,
+"sign": "Throne Room
+
+The seat of power lies broken",
+"width": 8,
+"x": 11,
+"y": 11
+}])

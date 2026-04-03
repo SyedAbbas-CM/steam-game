@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Zomboid"
 description = "An undead warrior"
-max_hp = 118
+max_hp = 94
 move_speed = 24.7
 contact_damage = 5
 level = 9

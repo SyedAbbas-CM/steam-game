@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Ettin"
 description = "A basic warrior of the Ettin Nation"
-max_hp = 51
+max_hp = 41
 move_speed = 18.8
 contact_damage = 3
 level = 4

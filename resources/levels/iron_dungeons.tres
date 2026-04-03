@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Iron-Dungeons"
+tileset = 24
+chests = 6
+width = 40
+height = 50
+rooms = 25
+min_monsters = 1
+max_monsters = 4
+aggro_chance = 0
+requires_key = true
+legend = ""
+recommended_level = 22
+monster_pool = [{ "type": "Goblin", "chance": 5 }, { "type": "Kobold", "chance": 4 }, { "type": "Mine Bat", "chance": 4 }, { "type": "Rock Hurler", "chance": 3 }, { "type": "Goblin Bomber", "chance": 2 }, { "type": "Goblin Shaman", "chance": 2 }]
+fixed_monsters = [{ "type": "Skull", "count": 1 }]
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 5, "items": [{ "name": "Gold", "chance": 20, "min": 50, "max": 100 }, { "name": "Town Portal", "chance": 5, "min": 1, "max": 1 }, { "name": "Ruby", "chance": 5, "min": 1, "max": 1 }, { "name": "Mace", "chance": 1, "min": 1, "max": 1 }] }]

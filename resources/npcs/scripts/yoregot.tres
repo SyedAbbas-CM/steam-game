@@ -6,9 +6,9 @@
 script = ExtResource("1")
 commands = [{
 "cmd": "showDialog",
-"name": "Yoregot",
+"name": "Corvus",
 "portrait": 146,
-"text": "Welcome to the Crooked Beak! Best ale in all of Yore. What'll it be?",
+"text": "Welcome to the Crooked Beak! Best ale in all of Ashenmoor. What'll it be?",
 "options": [{
 "name": "Buy supplies",
 "script": [{
@@ -19,14 +19,14 @@ commands = [{
 "name": "What's the news?",
 "script": [{
 "cmd": "showDialog",
-"name": "Yoregot",
+"name": "Corvus",
 "portrait": 146,
 "text": "Travelers speak of golden creatures appearing in the dungeons. Rare beasts that shimmer like coins. They say killing one brings a fortune!",
 "options": [{
 "name": "What else?",
 "script": [{
 "cmd": "showDialog",
-"name": "Yoregot",
+"name": "Corvus",
 "portrait": 146,
 "text": "The orcs to the east are gathering in numbers. And darker rumors still... whispers of a demon lord stirring in the deep places of the world.",
 "options": [{
@@ -43,16 +43,16 @@ commands = [{
 "name": "About this place",
 "script": [{
 "cmd": "showDialog",
-"name": "Yoregot",
+"name": "Corvus",
 "portrait": 146,
 "text": "The Crooked Beak? Named after old Corvus, a raven with a bent beak who roosted here for twelve years. Some folk say he was a wizard's familiar, watching over the village.",
 "options": [{
 "name": "A wizard?",
 "script": [{
 "cmd": "showDialog",
-"name": "Yoregot",
+"name": "Corvus",
 "portrait": 146,
-"text": "Who knows? Yore is full of mysteries. My grandmother swore the bird spoke to her once, but she was fond of her own ale, if you catch my meaning.",
+"text": "Who knows? Ashenmoor is full of mysteries. My grandmother swore the bird spoke to her once, but she was fond of her own ale, if you catch my meaning.",
 "options": [{
 "name": "Ha!",
 "script": []
@@ -72,7 +72,7 @@ commands = [{
 "operation": "eq",
 "script": [{
 "cmd": "showDialog",
-"name": "Yoregot",
+"name": "Corvus",
 "portrait": 146,
 "text": "Business is booming again thanks to you! No more ghost stories keeping the patrons away. Drink's on the house anytime, hero!",
 "options": [{
@@ -103,11 +103,11 @@ commands = [{
 "count": "1"
 }, {
 "cmd": "showDialog",
-"name": "Yoregot",
+"name": "Corvus",
 "portrait": 146,
 "text": "Fifteen ghosts banished! My patrons can sleep easy again. Here's 1000 gold and a Green Potion from my private stock!",
 "options": [{
-"name": "Cheers, Yoregot",
+"name": "Cheers, Corvus",
 "script": []
 }]
 }, {
@@ -121,7 +121,7 @@ commands = [{
 "operation": "lt",
 "script": [{
 "cmd": "showDialog",
-"name": "Yoregot",
+"name": "Corvus",
 "portrait": 146,
 "text": "Still seeing ghosts out by the graveyard? I need 15 of them gone before my patrons will stop sleeping with the lights on!",
 "options": [{
@@ -142,7 +142,7 @@ commands = [{
 "operation": "eq",
 "script": [{
 "cmd": "showDialog",
-"name": "Yoregot",
+"name": "Corvus",
 "portrait": 146,
 "text": "Aye, it's terrible! My patrons keep reporting ghost sightings near the graveyard. Half of them won't come back until someone deals with it. Can you kill 15 ghosts?",
 "options": [{

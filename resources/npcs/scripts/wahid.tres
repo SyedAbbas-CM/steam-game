@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+commands = [{
+"cmd": "showDialog",
+"name": "Wahid",
+"portrait": 169,
+"text": "Do you see it? The thread connecting the baker's bread to the stars above? No? Look harder. Everything is one thing wearing different masks.",
+"options": [{
+"name": "That's... odd",
+"script": [{
+"cmd": "showDialog",
+"name": "Wahid",
+"portrait": 169,
+"text": "Odd to you, obvious to me. The sword in your hand and the hand that holds it — where does one end and the other begin? The boundary is something you invented.",
+"options": [{
+"name": "Are you alright?",
+"script": [{
+"cmd": "showDialog",
+"name": "Wahid",
+"portrait": 169,
+"text": "Better than alright. When you stop seeing yourself as separate from the world, loneliness becomes impossible. I am the town, the dungeon, the monster, and you. All at once.",
+"options": [{
+"name": "I see",
+"script": []
+}]
+}]
+}, {
+"name": "Tell me more",
+"script": [{
+"cmd": "showDialog",
+"name": "Wahid",
+"portrait": 169,
+"text": "You kill a skeleton in the dungeon. Its bones were once a person. That person ate grain from these fields. The grain grew from the same rain that fills your waterskin. You and that skeleton? Cousins.",
+"options": [{
+"name": "Farewell",
+"script": []
+}]
+}]
+}]
+}]
+}, {
+"name": "One thing?",
+"script": [{
+"cmd": "showDialog",
+"name": "Wahid",
+"portrait": 169,
+"text": "One. The appearance of many is just... ripples on water. Different shapes, same substance. When you fight in the dungeon, you're really fighting yourself. When you heal, you heal everything.",
+"options": [{
+"name": "Interesting",
+"script": []
+}]
+}]
+}, {
+"name": "Farewell",
+"script": []
+}]
+}]

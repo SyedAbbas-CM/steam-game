@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
-flat_bonus = 1.0
+flat_bonus = 7.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 13
+flat_bonus = 0.1
 
 [resource]
 script = ExtResource("1")
@@ -14,7 +19,7 @@ item_name = "Ring of Defence"
 loy_tile_index = 158
 description = "An emerald ring"
 slot_type = 8
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 1
-buy_price = 88
-sell_value = 22
+buy_price = 277
+sell_value = 69

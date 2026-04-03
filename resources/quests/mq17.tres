@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq17"
+title = "The Broken Seal"
+summary = "The seal chamber is shattered. The Hollow King awaits. Use the Seal Key to weaken him. 3-phase fight."
+level = 22
+location = "thule"
+target_location = "hellgate"
+prerequisite = "mq16"
+boss_dungeon = "end"
+boss_enemy_path = "res://resources/enemies/quest/hollow_king.tres"
+start_script = [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Face him.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 0,
+"text": "The seal chamber. Shattered stone, rivers of black ichor, and in the center — a throne. He sits there, waiting. The Hollow King. The one who broke the world to escape death."
+}]
+events = [{
+"param": "The Hollow King",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "What cost?",
+"script": [{
+"cmd": "getExp",
+"value": "5000"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "The Hollow King falls. The corruption convulses, searching for a new anchor. The broken seal pulses — it can be remade, but at a cost."
+}],
+"type": "boss_killed"
+}]

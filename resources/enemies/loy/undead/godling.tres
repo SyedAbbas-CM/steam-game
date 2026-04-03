@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Godling"
 description = "A reanimated statue"
-max_hp = 108
+max_hp = 86
 move_speed = 27.4
 contact_damage = 5
 level = 18

@@ -36,11 +36,35 @@ static func is_equippable(slot: SlotType) -> bool:
 @export var loy_tile_index: int = -1  # index into tiles.png (32x32 tiles, 16x16 grid) for item icon
 @export var bullet_sprite_index: int = -1  # index into lofi_obj.png (8x8 tiles, 16x16 grid). -1 = default
 @export var weapon_range: float = 0.0  # effective range override (0 = use default bullet_lifetime)
+@export var weapon_type: String = ""  # sword, dagger, axe, club, hammer, flail, spear, throwing, bow, short_bow, crossbow, staff
+
+# Tracks original .tres path for save/load (set when duplicating)
+var source_path: String = ""
 
 @export_group("Ability")
 @export var ability_id: String = ""  # e.g., "shield_bash", "arrow_rain", "frost_nova"
 @export var ability_mp_cost: float = 0.0
 @export var ability_cooldown: float = 5.0
+
+@export_group("Consumable")
+@export var heal_hp: int = 0
+@export var heal_mp: int = 0
+@export var use_effect: String = ""  # special effect: "town_portal", etc.
+
+## Create a copy that remembers its original .tres path for save/load
+func make_copy() -> EquipmentItem:
+	var copy = duplicate() as EquipmentItem
+	copy.source_path = resource_path if resource_path != "" else source_path
+	return copy
+
+func get_weapon_type() -> String:
+	if weapon_type != "":
+		return weapon_type
+	match slot_type:
+		SlotType.WEAPON_MELEE: return "sword"
+		SlotType.WEAPON_RANGED: return "bow"
+		SlotType.WEAPON_MAGIC: return "staff"
+	return ""
 
 func get_display_name() -> String:
 	if enchantment:

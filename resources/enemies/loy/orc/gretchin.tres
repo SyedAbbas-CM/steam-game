@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Gretchin"
 description = "A volcano dwelling orcan"
-max_hp = 105
+max_hp = 84
 move_speed = 19.1
 contact_damage = 5
 level = 5

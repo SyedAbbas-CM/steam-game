@@ -1,0 +1,60 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "rotgate"
+zone_name = "Rotgate"
+tileset = 112
+width = 15
+height = 20
+description = "A crumbling gate to the marshes. The ironwork is rusted through and the guards abandoned their posts long ago."
+baked_offset = Vector2i(-99999, -99999)
+exits = Array[Dictionary]([{
+"target": "ashplains",
+"tx": 25,
+"ty": 24,
+"x": 7,
+"y": 0
+}, {
+"target": "miredeep",
+"tx": 25,
+"ty": 1,
+"x": 7,
+"y": 19
+}])
+npcs = Array[Dictionary]([{
+"file": "",
+"message": "The swamp beyond is dangerous. Zomboids and worse lurk in the mire.",
+"name": "Gate Guard",
+"portrait": 149,
+"shop": "",
+"tile": 149,
+"type": "message",
+"x": 7,
+"y": 10
+}])
+signs = Array[Dictionary]([{
+"message": "Rotgate
+Last outpost before the swamp",
+"x": 6,
+"y": 1
+}])
+houses = Array[Dictionary]([{
+"dx": 1,
+"dy": 0,
+"height": 4,
+"sign": "Guardhouse",
+"width": 4,
+"x": 3,
+"y": 8
+}, {
+"dx": -1,
+"dy": 0,
+"height": 4,
+"sign": "Supply Shed",
+"width": 4,
+"x": 8,
+"y": 8
+}])

@@ -7,7 +7,7 @@ script = ExtResource("1_q6ai4")
 id = "a0"
 title = "Behold!"
 level = 15
-location = "sthel"
+location = "mirage"
 start_script = [{
 "cmd": "showDialog",
 "name": "K'atel",
@@ -68,7 +68,7 @@ events = [{
 }],
 "type": "kill"
 }, {
-"param": "sthel",
+"param": "mirage",
 "script": [{
 "attribute": "count-Beholder Tentacle",
 "cmd": "if",

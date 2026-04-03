@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "mana_surge"
+spell_name = "Mana Surge"
+description = "Spend 30 stamina to restore 30% MP"
+effect_type = 6
+delivery = 2
+magnitude = 30
+duration = 0.0
+mp_cost = 0.0
+cooldown = 20.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

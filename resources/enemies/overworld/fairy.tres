@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Fairy"
+description = "A gentle fairy drifting through the village"
+max_hp = 2
+move_speed = 18.0
+contact_damage = 0
+level = 1
+kingdom = "magical"
+size_class = 0
+hostile = false
+attack_type = 0
+attack_damage = 0
+attack_speed = 0.0
+bullet_speed = 0
+bullet_count = 0
+preferred_distance = 0.0
+charge_speed = 0.0
+charge_duration = 0.0
+aggro_range = 0.0
+ignores_terrain = false
+use_loy_sprite = true
+loy_tile_index = 89
+sprite_color = Color(0.7, 1.0, 0.9, 1)
+xp_value = 1
+score_value = 1

@@ -1,0 +1,169 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq20"
+title = "The Tide Recedes"
+summary = "Visit 5 zones to see the aftermath of your choices. The world remembers."
+level = 22
+location = "haven"
+target_location = "haven"
+prerequisite = "mq19"
+properties = [{
+"index": 0,
+"name": "Zones Visited",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "I will.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 147,
+"text": "The land is healing. But every village tells a different story of what happened. Perhaps you should see for yourself what your choices wrought."
+}]
+events = [{
+"param": "wastes",
+"script": [{
+"attribute": "session-mq20-0",
+"cmd": "if",
+"compare": "5",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Good.",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}],
+"portrait": 0,
+"text": "The wilds are green again. Traders pass through without fear. Children play near the road. The caravan wreckage has been cleared."
+}]
+}],
+"type": "zone_enter"
+}, {
+"param": "frostpass",
+"script": [{
+"attribute": "session-mq20-0",
+"cmd": "if",
+"compare": "5",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Rest now.",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}],
+"portrait": 0,
+"text": "The black ice has melted. The soldiers' bodies were recovered and buried with honor. The frozen temple stands empty but clean."
+}]
+}],
+"type": "zone_enter"
+}, {
+"param": "ashheim",
+"script": [{
+"attribute": "session-mq20-0",
+"cmd": "if",
+"compare": "5",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Warden Aldric",
+"options": [{
+"name": "Stay strong.",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}],
+"portrait": 148,
+"text": "The garrison stands. Because of you. Whatever comes next, Heim remembers."
+}]
+}],
+"type": "zone_enter"
+}, {
+"param": "cenneth",
+"script": [{
+"attribute": "session-mq20-0",
+"cmd": "if",
+"compare": "5",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "We all did.",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}],
+"portrait": 163,
+"text": "The ritual circle still hums with power. The fragments are spent, but the binding holds. You did well."
+}]
+}],
+"type": "zone_enter"
+}, {
+"param": "thule",
+"script": [{
+"attribute": "session-mq20-0",
+"cmd": "if",
+"compare": "5",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Commander Rhis",
+"options": [{
+"name": "I'm honored.",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}],
+"portrait": 149,
+"text": "Ultima Thule rebuilds. The catacombs are sealed — properly this time. Your name is carved above the gate."
+}]
+}],
+"type": "zone_enter"
+}, {
+"param": "haven",
+"script": [{
+"attribute": "session-mq20-0",
+"cmd": "if",
+"compare": "4",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Thank you.",
+"script": [{
+"cmd": "getExp",
+"value": "5000"
+}, {
+"cmd": "getItem",
+"count": "5000",
+"name": "Gold"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 147,
+"text": "You've seen the world you saved. Every village, every face — they owe their lives to you. The Hollow Tide is ended. Your story... is just beginning."
+}]
+}],
+"type": "quest"
+}]

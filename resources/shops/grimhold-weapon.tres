@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "grimhold-weapon"
+shop_type = "weapon"
+shop_name = "Moe"
+portrait = 169
+title = "Moe's Armory"
+welcome = "Looking for arms and armor? You've come to the right place!"
+nomoney = "You don't have the gold!"
+buy_text = "Good choice!"
+sell_text = "Thanks for your business."
+stock = [{ "item_name": "Short Sword", "required_quest": "" }, { "item_name": "Bow", "required_quest": "" }, { "item_name": "Buckler", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Leather Armour", "required_quest": "" }, { "item_name": "Boots", "required_quest": "" }, { "item_name": "Bandana", "required_quest": "" }]

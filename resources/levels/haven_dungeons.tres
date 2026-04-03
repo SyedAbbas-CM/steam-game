@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Haven-Dungeons"
+tileset = 0
+chests = 1
+width = 35
+height = 25
+rooms = 8
+min_monsters = 3
+max_monsters = 5
+aggro_chance = 0
+requires_key = false
+legend = "Bone Golem"
+recommended_level = 1
+monster_pool = [{ "type": "Risen Corpse", "chance": 10 }, { "type": "Bone Crawler", "chance": 8 }, { "type": "Skeleton", "chance": 6 }, { "type": "Crypt Rat", "chance": 5 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 1, "trap_chance": 0, "items": [{ "name": "Apple", "chance": 6, "min": 1, "max": 1 }, { "name": "Red Potion", "chance": 2, "min": 1, "max": 1 }, { "name": "Gold", "chance": 2, "min": 1, "max": 3 }] }]

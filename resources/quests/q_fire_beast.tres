@@ -1,0 +1,99 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_q6ai4"]
+
+[resource]
+script = ExtResource("1_q6ai4")
+id = "q_fire_beast"
+title = "The Fire Beast"
+summary = "A fearsome beast lurks in the The Embermaw east of Hollow Fields. Defeat it to protect the farmlands."
+level = 10
+location = "haven"
+target_location = "embermaw"
+start_script = [{
+"cmd": "showDialog",
+"name": "Dafydd",
+"options": [{
+"name": "I'll slay it!",
+"script": [{
+"cmd": "showDialog",
+"name": "Dafydd",
+"options": [{
+"name": "On my way",
+"script": [{
+"cmd": "startQuest",
+"id": "q_fire_beast"
+}]
+}],
+"portrait": 281,
+"text": "The The Embermaw are east of here. Be careful - the beast commands fire itself. Defeat it and I'll reward you handsomely!"
+}]
+}, {
+"name": "Not now",
+"script": []
+}],
+"portrait": 281,
+"text": "Hero! A terrible Fire Beast has taken over the caves to the east. Its minions are threatening our farm. Will you help us?"
+}]
+cancel_script = []
+events = [{
+"param": "Fire Beast",
+"script": [{
+"cmd": "set",
+"attribute": "fire_beast_slain",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "System",
+"options": [{
+"name": "Continue",
+"script": []
+}],
+"portrait": 0,
+"text": "The Fire Beast has been slain! Return to Dafydd at Hollow Fields for your reward."
+}],
+"type": "kill"
+}, {
+"param": "duskfarm",
+"script": [{
+"attribute": "fire_beast_slain",
+"cmd": "if",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "getExp",
+"value": "1500"
+}, {
+"cmd": "getItem",
+"count": "2000",
+"name": "Gold"
+}, {
+"cmd": "showDialog",
+"name": "Dafydd",
+"options": [{
+"name": "Thanks!",
+"script": []
+}],
+"portrait": 281,
+"text": "You did it! The Fire Beast is no more! The farm is safe again. Please accept this reward for your bravery!"
+}, {
+"cmd": "completeQuest"
+}]
+}, {
+"attribute": "fire_beast_slain",
+"cmd": "ifNot",
+"compare": "1",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Dafydd",
+"options": [{
+"name": "I'll get it done",
+"script": []
+}],
+"portrait": 281,
+"text": "Please hurry hero, the Fire Beast still threatens our farm!"
+}]
+}],
+"type": "quest"
+}]

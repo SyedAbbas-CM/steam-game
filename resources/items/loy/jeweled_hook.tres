@@ -1,17 +1,22 @@
-[gd_resource type="Resource" script_class="EquipmentItem" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
 
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
-stat = 2
-flat_bonus = 15.0
+stat = 0
+flat_bonus = 2.0
 
 [sub_resource type="Resource" id="mod_1"]
 script = ExtResource("2")
-stat = 0
-flat_bonus = 2.0
+stat = 2
+flat_bonus = 16.0
+
+[sub_resource type="Resource" id="mod_2"]
+script = ExtResource("2")
+stat = 3
+flat_bonus = 0.15
 
 [resource]
 script = ExtResource("1")
@@ -19,9 +24,10 @@ item_name = "Jeweled Hook"
 loy_tile_index = 448
 description = "Thin steel hook encrusted with magical gems"
 slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])
 rarity = 2
-buy_price = 436
-sell_value = 109
-bullet_sprite_index = 110
-weapon_range = 3.0
+buy_price = 926
+sell_value = 231
+bullet_sprite_index = 224
+weapon_range = 1.0
+weapon_type = "dagger"

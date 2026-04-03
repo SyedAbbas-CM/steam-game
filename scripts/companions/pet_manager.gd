@@ -12,17 +12,10 @@ func _ready() -> void:
 	_load_state()
 
 func _load_pet_definitions() -> void:
-	var dir = DirAccess.open("res://resources/pets/")
-	if not dir:
-		return
-	dir.list_dir_begin()
-	var fname = dir.get_next()
-	while fname != "":
-		if fname.ends_with(".tres"):
-			var pet = load("res://resources/pets/" + fname) as PetDefinition
-			if pet and pet.pet_type != "":
-				all_pet_defs[pet.pet_type] = pet
-		fname = dir.get_next()
+	for path in ResourceRegistry.pets():
+		var pet = load(path) as PetDefinition
+		if pet and pet.pet_type != "":
+			all_pet_defs[pet.pet_type] = pet
 	print("PetManager: Loaded " + str(all_pet_defs.size()) + " pet definitions")
 
 func _load_state() -> void:
@@ -55,6 +48,9 @@ func buy_pet(pet_type: String) -> bool:
 		"xp": 0,
 		"active": false,
 	})
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("bonus", -3.0, 0.0)
 	save_state()
 	return true
 
@@ -96,6 +92,9 @@ func add_pet_xp(amount: int) -> void:
 		# Check for evolution
 		if def.evolve_level > 0 and level >= def.evolve_level and def.evolve_name != "":
 			pet["name"] = def.evolve_name
+			var sfx_ev = get_node_or_null("/root/SFXManager")
+			if sfx_ev:
+				sfx_ev.play("1up_b", 0.0, 0.0)
 			print("Pet evolved into " + def.evolve_name + "!")
 
 	save_state()
@@ -129,4 +128,7 @@ func spawn_active_pet(parent: Node2D, near_position: Vector2) -> Node2D:
 	parent.add_child(companion)
 	companion.setup(comp_def, 0)
 	active_pet_node = companion
+	var sfx_sp = get_node_or_null("/root/SFXManager")
+	if sfx_sp:
+		sfx_sp.play("select_b", -4.0, 0.0)
 	return companion

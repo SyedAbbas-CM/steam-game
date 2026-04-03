@@ -15,6 +15,7 @@ max_monsters = 3
 aggro_chance = 10
 requires_key = true
 legend = ""
+recommended_level = 20
 monster_pool = [{ "type": "Savage", "chance": 5 }, { "type": "Savage Archer", "chance": 1 }]
 fixed_monsters = []
 chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 0, "items": [{ "name": "Orange Potion", "chance": 1, "min": 1, "max": 1 }, { "name": "Gold", "chance": 1, "min": 100, "max": 250 }] }]

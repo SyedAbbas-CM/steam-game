@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Red Dragon"
 description = "The fiery red dragon"
-max_hp = 312
+max_hp = 250
 move_speed = 30.6
 contact_damage = 5
 level = 14

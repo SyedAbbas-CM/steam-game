@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
-flat_bonus = 3.0
+flat_bonus = 7.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 12
+flat_bonus = 2.0
 
 [resource]
 script = ExtResource("1")
@@ -14,7 +19,7 @@ item_name = "Amulet of the Sun"
 loy_tile_index = 296
 description = "A bone and gem necklace"
 slot_type = 8
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 1
-buy_price = 104
-sell_value = 26
+buy_price = 312
+sell_value = 78

@@ -4,28 +4,27 @@
 
 [resource]
 script = ExtResource("1")
-
 enemy_name = "Skeleton Archer"
-description = "A skeleton with deadly aim and a rapid bow"
-max_hp = 4
-move_speed = 22.6
+description = "A swift skeletal marksman that fires rapid arrows from a distance"
+max_hp = 11
+move_speed = 15.0
 contact_damage = 1
 level = 2
 kingdom = "undead"
 size_class = 0
 hostile = true
 attack_type = 2
-attack_damage = 1
-attack_speed = 2.46
-bullet_speed = 67
+attack_damage = 2
+attack_speed = 1.6
+bullet_speed = 90.0
 bullet_count = 1
-preferred_distance = 55.0
+preferred_distance = 65.0
 charge_speed = 80.0
 charge_duration = 0.3
 aggro_range = 85.0
-ignores_terrain = false
+bullet_sprite_index = 248
 use_loy_sprite = true
 loy_tile_index = 3
 sprite_color = Color(0.8, 0.85, 1, 1)
-xp_value = 10
-score_value = 20
+xp_value = 6
+score_value = 10

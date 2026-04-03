@@ -8,13 +8,18 @@ script = ExtResource("2")
 stat = 0
 flat_bonus = 18.0
 
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 17
+flat_bonus = 0.15
+
 [resource]
 script = ExtResource("1")
 item_name = "Snake Shield"
 loy_tile_index = 271
 description = "A magical shield"
 slot_type = 5
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 444
-sell_value = 111
+buy_price = 926
+sell_value = 231

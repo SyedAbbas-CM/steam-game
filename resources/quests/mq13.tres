@@ -1,0 +1,83 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq13"
+title = "The Relic of Talmita"
+summary = "Retrieve the Sun Disc from the Peaks dungeon. Bandits consumed by the Tide guard it."
+level = 16
+location = "cenneth"
+target_location = "stormcrag"
+prerequisite = "mq11"
+start_script = [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "Consider it done.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 163,
+"text": "Talmita's Sun Disc was stolen and taken to the mountain peaks. The thieves who took it are likely already lost to the Tide. Retrieve it."
+}]
+events = [{
+"param": "stormcrag",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Take the Sun Disc",
+"script": [{
+"cmd": "set",
+"id": "mq13",
+"index": "0",
+"value": "1"
+}]
+}],
+"portrait": 0,
+"text": "The hollowed bandits collapse. Among their hoard, the Sun Disc gleams — untouched by corruption. Talmita will be pleased."
+}],
+"type": "boss_killed"
+}, {
+"param": "cenneth",
+"script": [{
+"attribute": "session-mq13-0",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Talmita",
+"options": [{
+"name": "We'll need it.",
+"script": [{
+"cmd": "getExp",
+"value": "1000"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "The Sun Disc... I can feel its warmth again. You have my gratitude and my presence at the ritual."
+}]
+}, {
+"attribute": "session-mq13-0",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "On my way.",
+"script": []
+}],
+"portrait": 163,
+"text": "The Sun Disc is in the peaks. Clear the dungeon there."
+}]
+}],
+"type": "quest"
+}]

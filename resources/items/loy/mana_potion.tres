@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Mana Potion"
+loy_tile_index = 124
+description = "Restores magical energy (+10 MP)"
+slot_type = 10
+rarity = 0
+buy_price = 40
+sell_value = 10
+heal_mp = 10

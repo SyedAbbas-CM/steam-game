@@ -8,13 +8,18 @@ script = ExtResource("2")
 stat = 0
 flat_bonus = 17.0
 
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 12
+flat_bonus = 4.0
+
 [resource]
 script = ExtResource("1")
 item_name = "Flare Helm"
 loy_tile_index = 137
 description = "A helm embued with fire magic"
 slot_type = 3
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 436
-sell_value = 109
+buy_price = 978
+sell_value = 244

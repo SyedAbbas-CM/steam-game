@@ -17,6 +17,7 @@ extends Resource
 @export_group("Hazard Configuration")
 @export var hazard_intensity: float = 0.0  # 0.0-1.0, fraction of room floor that becomes liquid
 @export var trap_density: float = 0.02  # fraction of floor tiles becoming spike traps
+@export var advanced_trap_density: float = 0.01  # fraction of floor tiles becoming advanced traps
 @export var web_bridge_density: float = 0.0  # fraction of liquid tiles covered by walkable spider webs
 @export var allowed_transitions: Array[int] = [0, 1, 2, 3]  # RoomData.TransitionType values allowed
 

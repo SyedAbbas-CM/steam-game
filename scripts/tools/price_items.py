@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Auto-price all 385 LoY items based on rarity and modifier strength.
+Auto-price all LoY items based on rarity and modifier strength.
 Adds buy_price and sell_value fields to each .tres file.
+Shop markup is 2.5x on top of buy_price, so a 100g item costs 250g in shops.
 """
 import os
 import re
@@ -9,12 +10,13 @@ import glob
 
 ITEM_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'items', 'loy')
 
-# Known consumable prices
+# Known consumable prices (these are base prices, shop will 2.5x them)
 CONSUMABLE_PRICES = {
-    'apple': 10, 'meat': 25, 'red_potion': 50, 'blue_potion': 75,
-    'trap': 30, 'fishing_pole': 40, 'spade': 35, 'powder_keg': 60,
-    'pet_food': 20, 'aqua_potion': 100, 'attack_elixir': 150,
-    'defense_elixir': 150, 'speed_elixir': 150, 'green_potion': 200,
+    'apple': 15, 'meat': 40, 'chop': 40, 'red_potion': 80, 'blue_potion': 120,
+    'fish': 15, 'lava_fish': 60, 'gold_fish': 250, 'fire_fish': 40, 'octopus': 50,
+    'trap': 50, 'fishing_pole': 80, 'spade': 60, 'powder_keg': 100,
+    'pet_food': 30, 'aqua_potion': 200, 'attack_elixir': 300,
+    'defense_elixir': 300, 'speed_elixir': 300, 'green_potion': 400,
 }
 
 def get_field(content, field):
@@ -25,7 +27,6 @@ def set_field(content, field, value):
     pattern = rf'^({field}\s*=\s*).+$'
     new_content, count = re.subn(pattern, rf'\g<1>{value}', content, flags=re.MULTILINE)
     if count == 0:
-        # Add field before the last line or at end of [resource] section
         content = content.rstrip() + f'\n{field} = {value}\n'
         return content
     return new_content
@@ -54,21 +55,21 @@ def main():
         # Check for consumable fixed price
         if name in CONSUMABLE_PRICES:
             buy_price = CONSUMABLE_PRICES[name]
-        elif slot == 3:  # CONSUMABLE
-            buy_price = 25
+        elif slot == 10:  # CONSUMABLE
+            buy_price = 40
         else:
             # Price based on rarity + modifier strength
             mod_strength = count_modifier_strength(content)
-            base_price = {0: 15, 1: 80, 2: 300}.get(rarity, 15)
-            buy_price = int(base_price + mod_strength * 8)
+            base_price = {0: 30, 1: 150, 2: 600}.get(rarity, 30)
+            buy_price = int(base_price + mod_strength * 18)
 
             # Clamp to reasonable ranges per rarity
             if rarity == 0:
-                buy_price = max(10, min(buy_price, 80))
+                buy_price = max(20, min(buy_price, 200))
             elif rarity == 1:
-                buy_price = max(50, min(buy_price, 300))
+                buy_price = max(100, min(buy_price, 800))
             elif rarity == 2:
-                buy_price = max(200, min(buy_price, 1500))
+                buy_price = max(400, min(buy_price, 3500))
 
         sell_value = max(1, buy_price // 4)
 

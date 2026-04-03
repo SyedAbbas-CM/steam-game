@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Fawn"
 description = "Hooven ginger beast"
-max_hp = 16
+max_hp = 8
 move_speed = 22.3
 contact_damage = 1
 level = 1

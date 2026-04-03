@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Beholder"
 description = "Floating eyeball that sweeps a devastating beam across the room, then spirals"
-max_hp = 115
+max_hp = 92
 move_speed = 43.6
 contact_damage = 4
 level = 50

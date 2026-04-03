@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Wight"
+description = "Risen warrior. Strong shield blocks shots while draining life on contact."
+max_hp = 30
+move_speed = 19.0
+contact_damage = 3
+level = 4
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 12
+attack_damage = 2
+attack_speed = 1.8
+bullet_speed = 65.0
+bullet_count = 2
+preferred_distance = 40.0
+aggro_range = 75.0
+shield_hp = 5
+drains_resource = true
+use_loy_sprite = true
+loy_tile_index = 31
+sprite_color = Color(0.6, 0.7, 0.5, 1)
+xp_value = 25
+score_value = 50

@@ -1,8 +1,8 @@
 class_name VirtualJoystick
 extends Control
 
-@export var stick_radius: float = 30.0
-@export var dead_zone: float = 0.15
+@export var stick_radius: float = 120.0
+@export var dead_zone: float = 0.08
 
 var _pressed: bool = false
 var _touch_index: int = -1
@@ -30,7 +30,7 @@ func _ready() -> void:
 
 	# Nub (inner circle)
 	nub_circle = ColorRect.new()
-	nub_circle.size = Vector2(16, 16)
+	nub_circle.size = Vector2(64, 64)
 	nub_circle.color = Color(1, 1, 1, 0.4)
 	add_child(nub_circle)
 	_center_nub()
@@ -38,21 +38,27 @@ func _ready() -> void:
 func _center_nub() -> void:
 	nub_circle.position = base_circle.position + Vector2(stick_radius, stick_radius) - nub_circle.size / 2.0
 
+func owns_touch(index: int) -> bool:
+	return _pressed and _touch_index == index
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		if event.pressed and _is_in_zone(event.position):
 			_pressed = true
 			_touch_index = event.index
 			_update_nub(event.position)
+			get_viewport().set_input_as_handled()
 		elif not event.pressed and event.index == _touch_index:
 			_reset()
+			get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag:
 		if event.index == _touch_index and _pressed:
 			_update_nub(event.position)
+			get_viewport().set_input_as_handled()
 
 func _is_in_zone(pos: Vector2) -> bool:
 	var local = pos - global_position
-	return local.x >= -20 and local.x <= size.x + 20 and local.y >= -20 and local.y <= size.y + 20
+	return local.x >= -40 and local.x <= size.x + 40 and local.y >= -40 and local.y <= size.y + 40
 
 func _update_nub(screen_pos: Vector2) -> void:
 	var center = global_position + base_circle.position + Vector2(stick_radius, stick_radius)

@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Crystal Golem"
+description = "Animated mineral construct with a frontal crystal shield. Fires shards."
+max_hp = 40
+move_speed = 12.0
+contact_damage = 3
+level = 5
+kingdom = "magical"
+size_class = 0
+hostile = true
+attack_type = 12
+attack_damage = 2
+attack_speed = 1.8
+bullet_speed = 70.0
+bullet_count = 3
+preferred_distance = 40.0
+aggro_range = 70.0
+shield_hp = 8
+death_bullet_pattern = 3
+use_loy_sprite = true
+loy_tile_index = 56
+sprite_color = Color(0.6, 0.8, 0.9, 1)
+xp_value = 32
+score_value = 64

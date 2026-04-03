@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Bone Titan"
+description = "A massive skeletal warrior assembled from dozens of corpses. Slams the ground creating shockwaves that push you back."
+max_hp = 48
+move_speed = 14.0
+contact_damage = 4
+level = 5
+kingdom = "undead"
+size_class = 1
+hostile = true
+attack_type = 7
+attack_damage = 5
+attack_speed = 2.5
+bullet_speed = 40.0
+bullet_count = 6
+preferred_distance = 0.0
+aggro_range = 60.0
+slam_radius = 25.0
+use_loy_sprite = true
+loy_tile_index = 28
+sprite_color = Color(0.9, 0.85, 0.7, 1)
+xp_value = 25
+score_value = 50

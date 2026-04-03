@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "frost_nova"
+spell_name = "Frost Nova"
+description = "AoE freeze around player"
+effect_type = 1
+delivery = 1
+magnitude = 8
+duration = 3.0
+mp_cost = 20.0
+cooldown = 6.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

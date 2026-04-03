@@ -8,13 +8,18 @@ script = ExtResource("2")
 stat = 0
 flat_bonus = 15.0
 
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 13
+flat_bonus = 0.15
+
 [resource]
 script = ExtResource("1")
 item_name = "Notch's Hat"
 loy_tile_index = 489
 description = "The hat of the sage Notch"
 slot_type = 3
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 420
-sell_value = 105
+buy_price = 872
+sell_value = 218

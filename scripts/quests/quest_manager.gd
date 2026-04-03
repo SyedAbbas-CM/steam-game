@@ -15,10 +15,15 @@ var npc_scripts: Dictionary = {}  # script_name -> Array[Dictionary] (commands)
 var current_zone: String = ""
 var _item_cache: Dictionary = {}  # item_name -> resource_path
 
+# Zone data for quest objective position resolution
+var _zone_lookup: Dictionary = {}  # zone_id -> LoyZoneData
+var _enemy_zone_map: Dictionary = {}  # enemy_name -> [zone_ids] (zones where enemy spawns)
+
 # Script execution state
 var _script_queue: Array = []
 var _waiting_for_dialogue: bool = false
 var _pending_option_scripts: Array = []  # scripts for each dialogue option
+var _zone_script_running: bool = false  # re-entry guard for on_zone_entered
 
 func _ready() -> void:
 	_load_quest_definitions()
@@ -27,47 +32,25 @@ func _ready() -> void:
 	_load_state()
 
 func _load_quest_definitions() -> void:
-	var dir = DirAccess.open("res://resources/quests/")
-	if not dir:
-		return
-	dir.list_dir_begin()
-	var fname = dir.get_next()
-	while fname != "":
-		if fname.ends_with(".tres"):
-			var quest = load("res://resources/quests/" + fname) as QuestDefinition
-			if quest and quest.id != "":
-				definitions[quest.id] = quest
-		fname = dir.get_next()
+	for path in ResourceRegistry.quests():
+		var quest = load(path) as QuestDefinition
+		if quest and quest.id != "":
+			definitions[quest.id] = quest
 	print("QuestManager: Loaded " + str(definitions.size()) + " quest definitions")
 
 func _load_npc_scripts() -> void:
-	var dir = DirAccess.open("res://resources/npcs/scripts/")
-	if not dir:
-		return
-	dir.list_dir_begin()
-	var fname = dir.get_next()
-	while fname != "":
-		if fname.ends_with(".tres"):
-			var res = load("res://resources/npcs/scripts/" + fname)
-			if res and res is Resource:
-				var script_name = fname.get_basename()
-				npc_scripts[script_name] = res.get("commands") if res.get("commands") else []
-		fname = dir.get_next()
+	for path in ResourceRegistry.npc_scripts():
+		var res = load(path)
+		if res and res is Resource:
+			var script_name = path.get_file().get_basename()
+			npc_scripts[script_name] = res.get("commands") if res.get("commands") else []
 	print("QuestManager: Loaded " + str(npc_scripts.size()) + " NPC scripts")
 
 func _load_item_cache() -> void:
-	var dir = DirAccess.open("res://resources/items/loy/")
-	if not dir:
-		return
-	dir.list_dir_begin()
-	var fname = dir.get_next()
-	while fname != "":
-		if fname.ends_with(".tres"):
-			var path = "res://resources/items/loy/" + fname
-			var item = load(path) as EquipmentItem
-			if item:
-				_item_cache[item.item_name] = path
-		fname = dir.get_next()
+	for path in ResourceRegistry.items_loy():
+		var item = load(path) as EquipmentItem
+		if item:
+			_item_cache[item.item_name] = path
 	print("QuestManager: Cached " + str(_item_cache.size()) + " item names")
 
 func _get_player() -> Node:
@@ -118,7 +101,7 @@ func _add_item_to_inventory(item_name: String, amount: int) -> int:
 		return 0
 	var added = 0
 	for _i in range(amount):
-		if em.add_to_inventory(base.duplicate()):
+		if em.add_to_inventory(base.make_copy()):
 			added += 1
 		else:
 			break  # inventory full
@@ -137,7 +120,12 @@ func save_state() -> void:
 	if gm and gm.save_data:
 		gm.save_data.quest_states = active_quests.duplicate(true)
 		gm.save_data.completed_quests = completed_quests.duplicate()
-		gm.save_data.save_game()
+		gm.save_data.save_to_slot()
+
+func reload_from_save() -> void:
+	active_quests.clear()
+	completed_quests.clear()
+	_load_state()
 
 # --- Quest API ---
 
@@ -154,6 +142,9 @@ func start_quest(quest_id: String) -> void:
 	quest_started.emit(quest_id)
 	save_state()
 	print("Quest started: " + quest_id)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("ding", -2.0, 0.0)
 
 func complete_quest(quest_id: String) -> void:
 	if active_quests.has(quest_id):
@@ -163,6 +154,9 @@ func complete_quest(quest_id: String) -> void:
 	quest_completed.emit(quest_id)
 	save_state()
 	print("Quest completed: " + quest_id)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("1up_a", 0.0, 0.0)
 
 func get_quest_value(quest_id: String, index: int) -> int:
 	if not active_quests.has(quest_id):
@@ -189,10 +183,38 @@ func on_enemy_killed(enemy_name: String) -> void:
 		var quest = definitions[quest_id]
 		for event in quest.events:
 			if event.get("type") == "kill" and event.get("param") == enemy_name:
-				_execute_script(event.get("script", []), quest_id)
+				await _execute_script(event.get("script", []), quest_id)
+
+func on_boss_killed(boss_name: String) -> void:
+	for quest_id in active_quests:
+		if not active_quests[quest_id].get("active", false):
+			continue
+		if not definitions.has(quest_id):
+			continue
+		var quest = definitions[quest_id]
+		for event in quest.events:
+			if event.get("type") == "boss_killed" and event.get("param") == boss_name:
+				await _execute_script(event.get("script", []), quest_id)
 
 func on_zone_entered(zone_id: String) -> void:
 	current_zone = zone_id
+	# Process zone_enter events automatically (for investigate/discover quests)
+	for quest_id in active_quests:
+		if not active_quests[quest_id].get("active", false):
+			continue
+		if not definitions.has(quest_id):
+			continue
+		var quest = definitions[quest_id]
+		for event in quest.events:
+			if event.get("type") == "zone_enter" and event.get("param") == zone_id:
+				_execute_script(event.get("script", []), quest_id)
+
+func check_zone_quests(zone_id: String) -> void:
+	## Run "quest" type event scripts for active quests in this zone.
+	## Called from NPC interaction / offerZoneQuests, NOT automatically on zone entry.
+	if _zone_script_running:
+		return
+	_zone_script_running = true
 	for quest_id in active_quests:
 		if not active_quests[quest_id].get("active", false):
 			continue
@@ -201,7 +223,8 @@ func on_zone_entered(zone_id: String) -> void:
 		var quest = definitions[quest_id]
 		for event in quest.events:
 			if event.get("type") == "quest" and event.get("param") == zone_id:
-				_execute_script(event.get("script", []), quest_id)
+				await _execute_script(event.get("script", []), quest_id)
+	_zone_script_running = false
 
 func on_npc_activated(npc_name: String) -> void:
 	for quest_id in active_quests:
@@ -214,12 +237,37 @@ func on_npc_activated(npc_name: String) -> void:
 			if event.get("type") == "activate" and event.get("param") == npc_name:
 				_execute_script(event.get("script", []), quest_id)
 
+func _prerequisites_met(quest: QuestDefinition) -> bool:
+	# Check single prerequisite
+	if quest.prerequisite != "" and not is_quest_completed(quest.prerequisite):
+		return false
+	# Check prerequisite list (AND logic — all must be completed)
+	for prereq_id in quest.prerequisite_list:
+		if not is_quest_completed(prereq_id):
+			return false
+	return true
+
+func get_quest_boss_override(dungeon_prefix: String) -> String:
+	## Returns boss_enemy_path if an active quest targets this dungeon prefix.
+	for quest_id in active_quests:
+		if not active_quests[quest_id].get("active", false):
+			continue
+		if not definitions.has(quest_id):
+			continue
+		var quest = definitions[quest_id] as QuestDefinition
+		if quest.boss_dungeon != "" and quest.boss_enemy_path != "":
+			if dungeon_prefix.begins_with(quest.boss_dungeon) or quest.boss_dungeon == dungeon_prefix:
+				return quest.boss_enemy_path
+	return ""
+
 func offer_quest(quest_id: String) -> void:
 	if not definitions.has(quest_id):
 		return
 	if is_quest_active(quest_id) or is_quest_completed(quest_id):
 		return
-	var quest = definitions[quest_id]
+	var quest = definitions[quest_id] as QuestDefinition
+	if not _prerequisites_met(quest):
+		return
 	_execute_script(quest.start_script, quest_id)
 
 func run_npc_script(script_name: String) -> void:
@@ -436,6 +484,80 @@ func _resolve_attribute(attribute: String, quest_id: String) -> int:
 func on_dialogue_choice(index: int) -> void:
 	dialogue_option_chosen.emit(index)
 
+# --- Quest Objective Positions ---
+
+func set_zone_data(zones: Array) -> void:
+	_zone_lookup.clear()
+	_enemy_zone_map.clear()
+	for zone in zones:
+		var z = zone as LoyZoneData
+		if not z or z.id == "":
+			continue
+		_zone_lookup[z.id] = z
+		for spawn in z.spawns:
+			var etype = str(spawn.get("type", ""))
+			if etype != "":
+				if not _enemy_zone_map.has(etype):
+					_enemy_zone_map[etype] = []
+				if z.id not in _enemy_zone_map[etype]:
+					_enemy_zone_map[etype].append(z.id)
+
+func _zone_center_world_pos(zone: LoyZoneData) -> Vector2:
+	if zone.baked_offset == Vector2i(-99999, -99999):
+		return Vector2.ZERO
+	var s = zone.baked_scale if zone.baked_scale > 0 else 1
+	var w = (zone.width if zone.width > 0 else 25) * s
+	var h = (zone.height if zone.height > 0 else 25) * s
+	var cx = (zone.baked_offset.x + w / 2.0) * 32.0
+	var cy = (zone.baked_offset.y + h / 2.0) * 32.0
+	return Vector2(cx, cy)
+
+func get_quest_objective_position(quest_id: String) -> Vector2:
+	## Returns world position of the current objective for the given quest.
+	## Returns Vector2.ZERO if no position can be resolved.
+	if not definitions.has(quest_id):
+		return Vector2.ZERO
+	var quest = definitions[quest_id] as QuestDefinition
+
+	# Check kill events — find zone where target spawns
+	for event in quest.events:
+		var etype = event.get("type", "")
+		if etype == "kill":
+			var enemy_name = event.get("param", "")
+			if _enemy_zone_map.has(enemy_name):
+				var zone_ids = _enemy_zone_map[enemy_name]
+				# Prefer the quest's own location zone if it has spawns
+				if quest.location in zone_ids and _zone_lookup.has(quest.location):
+					return _zone_center_world_pos(_zone_lookup[quest.location])
+				# Otherwise use first zone
+				for zid in zone_ids:
+					if _zone_lookup.has(zid):
+						return _zone_center_world_pos(_zone_lookup[zid])
+
+	# Check zone/quest events — point to the zone
+	for event in quest.events:
+		var etype = event.get("type", "")
+		if etype == "quest":
+			var zone_id = event.get("param", "")
+			if _zone_lookup.has(zone_id):
+				return _zone_center_world_pos(_zone_lookup[zone_id])
+
+	# Fallback: target_location
+	if quest.target_location != "" and _zone_lookup.has(quest.target_location):
+		return _zone_center_world_pos(_zone_lookup[quest.target_location])
+
+	# Fallback: quest location
+	if quest.location != "" and _zone_lookup.has(quest.location):
+		return _zone_center_world_pos(_zone_lookup[quest.location])
+
+	return Vector2.ZERO
+
+func get_first_active_quest_id() -> String:
+	for quest_id in active_quests:
+		if active_quests[quest_id].get("active", false):
+			return quest_id
+	return ""
+
 func _offer_zone_quests_for(zone: String) -> void:
 	var player_level = 1
 	var player = get_tree().get_first_node_in_group("player")
@@ -450,16 +572,18 @@ func _offer_zone_quests_for(zone: String) -> void:
 			continue
 		var quest = definitions.get(quest_id) as QuestDefinition
 		if quest and (quest.target_location == zone or quest.location == zone):
-			on_zone_entered(zone)
+			check_zone_quests(zone)
 			return
 
-	# Collect available quests
+	# Collect available quests (prerequisite-filtered)
 	var available: Array = []
 	for quest_id in definitions:
 		var quest = definitions[quest_id] as QuestDefinition
 		if quest.location != zone:
 			continue
 		if is_quest_active(quest_id) or is_quest_completed(quest_id):
+			continue
+		if not _prerequisites_met(quest):
 			continue
 		available.append(quest)
 
@@ -478,4 +602,4 @@ func _offer_zone_quests_for(zone: String) -> void:
 
 	# No quests available
 	_waiting_for_dialogue = true
-	show_dialogue_requested.emit("Elder", 147, "All is well in the village. You've done great work, adventurer!", ["Ok"])
+	show_dialogue_requested.emit("Elder", 147, "The shadows have thinned here... for now. Stay vigilant.", ["Ok"])

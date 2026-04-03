@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "cenneth-weapon"
+shop_type = "weapon"
+shop_name = "Damoc"
+portrait = 150
+title = "Blessed Weapons"
+welcome = "Welcome to Blessed Weapons, armory to the Fallen Swords"
+nomoney = "To take a weapon you must make an offering"
+buy_text = "May the gods favor you hero!"
+sell_text = "I shall pass these to another follow, well met hero."
+stock = [{ "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Hunter Knife", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Explosion Arrow", "required_quest": "" }, { "item_name": "Lightning Shield", "required_quest": "" }]

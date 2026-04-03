@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "frostpass"
+zone_name = "Frostbite Pass"
+tileset = 144
+width = 60
+height = 24
+world_pos = Vector2i(15, 31)
+dungeon_base = "Frost-Dungeons"
+dungeon_count = 5
+baked_offset = Vector2i(-376, -500)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "ironspine",
+"tx": 0,
+"ty": 8,
+"x": 59,
+"y": 20
+}, {
+"target": "grimhold",
+"tx": 22,
+"ty": 24,
+"x": 11,
+"y": 0
+}])
+signs = Array[Dictionary]([{
+"message": "To Ashheim",
+"x": 58,
+"y": 21
+}, {
+"message": "To Grimhold",
+"x": 12,
+"y": 1
+}])
+spawns = Array[Dictionary]([{
+"chance": 150,
+"type": "Polar Bear",
+"x": 3,
+"y": 3
+}])

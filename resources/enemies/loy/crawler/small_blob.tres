@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Small Blob"
 description = "A tiny blob fragment that mindlessly charges at anything nearby"
-max_hp = 3
+max_hp = 2
 move_speed = 28.9
 contact_damage = 1
 level = 1

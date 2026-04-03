@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Faabian"
 description = "Master of darkness who fills the arena with cascading rings of shadow bullets"
-max_hp = 720
+max_hp = 576
 move_speed = 32.6
 contact_damage = 6
 level = 50

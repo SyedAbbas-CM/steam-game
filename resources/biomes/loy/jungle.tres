@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1")
 biome_name = "Jungle"
+base_difficulty = 10
 theme = "green"
 enemy_pool = [ExtResource("2")]
 liquid_type = "poison"

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "arrow_rain"
+spell_name = "Arrow Rain"
+description = "Fire arrows in a wide spread"
+effect_type = 0
+delivery = 0
+magnitude = 10
+duration = 0.0
+mp_cost = 15.0
+cooldown = 5.0
+bullet_count = 8
+bullet_behavior = 0
+is_starter = true

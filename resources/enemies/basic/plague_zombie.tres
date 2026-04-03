@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Plague Zombie"
+description = "A bloated zombie that vomits poison. Slow but leaves toxic pools and bursts on death."
+max_hp = 16
+move_speed = 13.0
+contact_damage = 2
+level = 3
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 15
+attack_damage = 2
+attack_speed = 3.0
+bullet_speed = 45
+bullet_count = 1
+preferred_distance = 25.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 55.0
+ignores_terrain = false
+poison_chance = 0.5
+leaves_trail = true
+trail_type = "poison"
+explodes_on_death = true
+explode_radius = 15.0
+use_loy_sprite = true
+loy_tile_index = 69
+sprite_color = Color(0.5, 0.7, 0.4, 1)
+xp_value = 7
+score_value = 12

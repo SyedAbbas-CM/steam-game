@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Silver Ifrit"
 description = "A spirit from the dark lands of yore"
-max_hp = 210
+max_hp = 168
 move_speed = 26.8
 contact_damage = 5
 level = 16

@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "wardens"
+zone_name = "The Warden's Camp"
+tileset = 112
+width = 20
+height = 20
+world_pos = Vector2i(24, 61)
+dungeon_base = "Warden-Dungeons"
+description = "A ranger training ground hidden in the wastes. The Wardens patrol the roads and hunt the corrupted."
+baked_offset = Vector2i(-112, -12)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "wastes",
+"tx": 8,
+"ty": 48,
+"x": 9,
+"y": 0
+}])
+npcs = Array[Dictionary]([{
+"name": "Ryu",
+"portrait": 207,
+"shop": "none",
+"tile": 142,
+"type": "trainer",
+"x": 13,
+"y": 7
+}])

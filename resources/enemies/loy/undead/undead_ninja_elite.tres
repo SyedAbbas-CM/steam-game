@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Undead Ninja Elite"
 description = "An undead elite ninja"
-max_hp = 118
+max_hp = 94
 move_speed = 25.6
 contact_damage = 5
 level = 12

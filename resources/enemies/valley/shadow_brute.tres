@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Shadow Brute"
+description = "Massive armored dark warrior. Slow but hits hard with shockwave slams."
+max_hp = 60
+move_speed = 14.0
+contact_damage = 5
+level = 6
+kingdom = "human"
+size_class = 1
+hostile = true
+attack_type = 7
+attack_damage = 3
+attack_speed = 2.5
+bullet_speed = 50.0
+bullet_count = 1
+preferred_distance = 15.0
+aggro_range = 70.0
+slam_radius = 28.0
+shield_hp = 6
+use_loy_sprite = true
+loy_tile_index = 70
+sprite_color = Color(0.2, 0.1, 0.3, 1)
+xp_value = 50
+score_value = 100

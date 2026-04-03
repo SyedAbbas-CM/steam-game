@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="MutationDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/mutation_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+mutation_id = "dash_shockwave"
+mutation_name = "Shockwave Dash"
+description = "Dash creates a damaging shockwave"
+type = 7
+tier = 1
+strength = 3.0
+max_stacks = 3
+tags = ["movement"]

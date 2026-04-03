@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "gallows"
+zone_name = "Gallows Crossing"
+tileset = 112
+width = 15
+height = 15
+description = "An execution crossroads haunted by the spirits of the hanged. The gibbet cages still swing in the wind."
+baked_offset = Vector2i(-99999, -99999)
+exits = Array[Dictionary]([{
+"target": "wastes",
+"tx": 25,
+"ty": 1,
+"x": 7,
+"y": 14
+}])
+signs = Array[Dictionary]([{
+"message": "North: The Ironspine
+South: Aria
+East: Forest
+West: Ashvale",
+"x": 7,
+"y": 7
+}])

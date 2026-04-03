@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 2.0
+flat_bonus = 4.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 14
+flat_bonus = 1.0
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Ridged Dagger"
 loy_tile_index = 226
 description = "A spiky dagger"
 slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 0
-buy_price = 31
-sell_value = 7
-bullet_sprite_index = 120
-weapon_range = 1.5
+buy_price = 120
+sell_value = 30
+bullet_sprite_index = 240
+weapon_range = 1.0
+weapon_type = "dagger"

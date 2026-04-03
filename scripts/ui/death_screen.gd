@@ -1,101 +1,156 @@
 class_name DeathScreen
 extends CanvasLayer
 
-signal continue_pressed
 
-var title_label: Label
-var stats_label: Label
-var return_btn: Button
-var retry_btn: Button
+var _overlay: ColorRect
+var _center: VBoxContainer
+var _stats_label: Label
+var _retry_btn: Button
 
 func _ready() -> void:
+	layer = 200
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = false
-	_build_ui()
-
-func _build_ui() -> void:
-	# Full screen dark overlay
-	var overlay = ColorRect.new()
-	overlay.anchors_preset = Control.PRESET_FULL_RECT
-	overlay.color = Color(0.02, 0.02, 0.05, 0.92)
-	add_child(overlay)
-
-	var center = VBoxContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	center.add_theme_constant_override("separation", 6)
-	overlay.add_child(center)
-
-	# Death title
-	title_label = Label.new()
-	title_label.text = "YOU DIED"
-	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var title_settings = LabelSettings.new()
-	title_settings.font_size = 16
-	title_settings.font_color = Color(0.9, 0.15, 0.15)
-	title_label.label_settings = title_settings
-	center.add_child(title_label)
-
-	# Separator
-	var sep = HSeparator.new()
-	sep.custom_minimum_size = Vector2(180, 4)
-	center.add_child(sep)
-
-	# Stats
-	stats_label = Label.new()
-	stats_label.text = ""
-	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var stat_settings = LabelSettings.new()
-	stat_settings.font_size = 8
-	stat_settings.font_color = Color(0.8, 0.8, 0.8)
-	stats_label.label_settings = stat_settings
-	center.add_child(stats_label)
-
-	# Spacer
-	var spacer = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 8)
-	center.add_child(spacer)
-
-	# Buttons
-	var btn_hbox = HBoxContainer.new()
-	btn_hbox.add_theme_constant_override("separation", 10)
-	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	center.add_child(btn_hbox)
-
-	return_btn = Button.new()
-	return_btn.focus_mode = Control.FOCUS_NONE
-	return_btn.text = "Return to Town"
-	return_btn.custom_minimum_size = Vector2(90, 22)
-	return_btn.add_theme_font_size_override("font_size", 8)
-	return_btn.pressed.connect(_on_return)
-	btn_hbox.add_child(return_btn)
-
-	retry_btn = Button.new()
-	retry_btn.focus_mode = Control.FOCUS_NONE
-	retry_btn.text = "Try Again"
-	retry_btn.custom_minimum_size = Vector2(90, 22)
-	retry_btn.add_theme_font_size_override("font_size", 8)
-	retry_btn.pressed.connect(_on_retry)
-	btn_hbox.add_child(retry_btn)
 
 func show_death(run_state: RunState) -> void:
 	get_tree().paused = true
 	visible = true
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("lose_a", 0.0, 0.0)
+	_build_ui(run_state)
+
+func _build_ui(run_state: RunState) -> void:
+	# Clear any previous UI
+	for c in get_children():
+		c.queue_free()
+
+	var vp_size = Vector2(1920, 1080)
+
+	# Dark overlay
+	_overlay = ColorRect.new()
+	_overlay.position = Vector2.ZERO
+	_overlay.size = vp_size
+	_overlay.color = Color(0.02, 0.02, 0.05, 0.0)
+	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_overlay)
+
+	var fade = _overlay.create_tween()
+	fade.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	fade.tween_property(_overlay, "color:a", 0.92, 0.8)
+
+	# Centered VBox
+	_center = VBoxContainer.new()
+	_center.position = Vector2.ZERO
+	_center.size = vp_size
+	_center.add_theme_constant_override("separation", 20)
+	_center.alignment = BoxContainer.ALIGNMENT_CENTER
+	add_child(_center)
+
+	# "YOU DIED" title
+	var title = Label.new()
+	title.text = "YOU DIED"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var title_s = LabelSettings.new()
+	title_s.font_size = 64
+	title_s.font_color = Color(0.9, 0.12, 0.12)
+	title_s.outline_size = 4
+	title_s.outline_color = Color(0.3, 0.0, 0.0)
+	title.label_settings = title_s
+	title.modulate.a = 0.0
+	_center.add_child(title)
+
+	var t_tw = title.create_tween()
+	t_tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	t_tw.tween_interval(0.5)
+	t_tw.tween_property(title, "modulate:a", 1.0, 0.6)
+
+	# Subtitle
+	var sub = Label.new()
+	sub.text = "Your hero has fallen..."
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var sub_s = LabelSettings.new()
+	sub_s.font_size = 20
+	sub_s.font_color = Color(0.7, 0.6, 0.6)
+	sub.label_settings = sub_s
+	sub.modulate.a = 0.0
+	_center.add_child(sub)
+
+	var s_tw = sub.create_tween()
+	s_tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	s_tw.tween_interval(1.2)
+	s_tw.tween_property(sub, "modulate:a", 1.0, 0.5)
+
+	# Run stats
+	_stats_label = Label.new()
+	_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var stat_s = LabelSettings.new()
+	stat_s.font_size = 18
+	stat_s.font_color = Color(0.75, 0.75, 0.75)
+	_stats_label.label_settings = stat_s
 
 	var text = ""
 	text += "Floor Reached: " + str(run_state.current_floor) + "\n"
 	text += "Rooms Cleared: " + str(run_state.rooms_cleared) + "\n"
 	text += "Enemies Killed: " + str(run_state.enemies_killed) + "\n"
 	text += "Gold Earned: " + str(run_state.run_gold) + "\n"
-	text += "Relics: " + str(run_state.run_relics) + "\n"
 	text += "Time: " + str(int(run_state.get_duration_seconds())) + "s"
-	stats_label.text = text
+	_stats_label.text = text
+	_stats_label.modulate.a = 0.0
+	_center.add_child(_stats_label)
 
-func _on_return() -> void:
-	visible = false
-	get_tree().paused = false
-	continue_pressed.emit()
+	var st_tw = _stats_label.create_tween()
+	st_tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	st_tw.tween_interval(1.5)
+	st_tw.tween_property(_stats_label, "modulate:a", 1.0, 0.5)
+
+	# Button container
+	var btn_box = HBoxContainer.new()
+	btn_box.add_theme_constant_override("separation", 20)
+	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_box.modulate.a = 0.0
+	_center.add_child(btn_box)
+
+	# Choose new class button (death wipes character, world persists)
+	_retry_btn = _make_button("Choose New Class")
+	_retry_btn.pressed.connect(_on_retry)
+	btn_box.add_child(_retry_btn)
+
+	var b_tw = btn_box.create_tween()
+	b_tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	b_tw.tween_interval(2.0)
+	b_tw.tween_property(btn_box, "modulate:a", 1.0, 0.4)
+
+func _make_button(text: String) -> Button:
+	var btn = Button.new()
+	btn.text = text
+	btn.custom_minimum_size = Vector2(200, 50)
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	btn.add_theme_font_size_override("font_size", 22)
+	btn.focus_mode = Control.FOCUS_NONE
+
+	var sty = StyleBoxFlat.new()
+	sty.bg_color = Color(0.15, 0.08, 0.08, 0.9)
+	sty.border_color = Color(0.7, 0.2, 0.2)
+	sty.set_border_width_all(2)
+	sty.set_corner_radius_all(8)
+	btn.add_theme_stylebox_override("normal", sty)
+
+	var hover = sty.duplicate()
+	hover.bg_color = Color(0.3, 0.1, 0.1, 0.95)
+	hover.border_color = Color(1.0, 0.3, 0.3)
+	btn.add_theme_stylebox_override("hover", hover)
+
+	return btn
 
 func _on_retry() -> void:
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("click", -3.0)
 	visible = false
 	get_tree().paused = false
-	get_tree().reload_current_scene()
+	var gm = get_node_or_null("/root/GameManager")
+	if gm:
+		gm.go_to_start_screen()
+	else:
+		get_tree().call_deferred("change_scene_to_file", "res://scenes/ui/title_screen.tscn")

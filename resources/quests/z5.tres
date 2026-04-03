@@ -7,8 +7,8 @@ script = ExtResource("1_5p1q2")
 id = "z5"
 title = "Parot Passion"
 level = 120
-location = "naleg"
-target_location = "talmita"
+location = "brackwater"
+target_location = "boghollow"
 properties = [{
 "index": 0,
 "name": "Delivered",
@@ -80,7 +80,7 @@ events = [{
 }],
 "type": "activate"
 }, {
-"param": "naleg",
+"param": "brackwater",
 "script": [{
 "attribute": "session-z5-0",
 "cmd": "if",

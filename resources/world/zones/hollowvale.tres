@@ -1,0 +1,67 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "hollowvale"
+zone_name = "Hollowvale"
+tileset = 112
+height = 35
+world_pos = Vector2i(74, 52)
+dungeon_base = "Hollowvale-Dungeons"
+dungeon_count = 6
+description = "A misty cursed valley where time moves strangely. Travelers emerge days later thinking only hours have passed."
+baked_offset = Vector2i(1648, -188)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "permafrost",
+"tx": 24,
+"ty": 29,
+"x": 11,
+"y": 0
+}, {
+"target": "frostgrave",
+"tx": 29,
+"ty": 4,
+"x": 0,
+"y": 22
+}, {
+"target": "cenneth",
+"tx": 1,
+"ty": 28,
+"x": 24,
+"y": 27
+}])
+npcs = Array[Dictionary]([{
+"message": "Welcome Hero!",
+"name": "Guard",
+"portrait": 149,
+"tile": 133,
+"type": "message",
+"x": 23,
+"y": 26
+}, {
+"message": "Watch yourself in Cenneth Citadel, the law here is strict!",
+"name": "Guard",
+"portrait": 149,
+"tile": 133,
+"type": "message",
+"x": 23,
+"y": 28
+}])
+signs = Array[Dictionary]([{
+"message": "To the Permafrost",
+"x": 12,
+"y": 2
+}, {
+"message": "To Frostgrave",
+"x": 1,
+"y": 24
+}])
+spawns = Array[Dictionary]([{
+"chance": 100,
+"type": "Wolf Rider",
+"x": 1,
+"y": 1
+}])

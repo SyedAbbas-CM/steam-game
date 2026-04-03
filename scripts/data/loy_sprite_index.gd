@@ -1,7 +1,7 @@
 class_name LoySpriteIndex
 extends RefCounted
 
-## Legends of Yore sprite index mapping.
+## Legends of Ashenmoor sprite index mapping.
 ## LoY uses linear tile indices into 512x512 sprite sheets with 32x32 tiles (16 per row).
 
 const TILES_PER_ROW := 16

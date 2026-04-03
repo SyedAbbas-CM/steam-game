@@ -17,8 +17,10 @@ var _player_nearby: bool = false
 var _chars_texture: Texture2D
 var _chars2_texture: Texture2D
 var _animator: SpriteAnimator
+var _interact_cooldown: float = 0.0
 
 func _ready() -> void:
+	add_to_group("npc")
 	collision_layer = 0
 	collision_mask = 1
 	monitoring = true
@@ -46,13 +48,18 @@ func _ready() -> void:
 	add_child(_label)
 
 	_interact_label = Label.new()
-	_interact_label.text = "[E] Talk"
+	_interact_label.text = "Tap to Talk" if TouchControls.is_mobile() else "[E] Talk"
 	_interact_label.position = Vector2(-20, 22)
 	_interact_label.add_theme_font_size_override("font_size", 9)
 	_interact_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
 	_interact_label.visible = false
 	_interact_label.z_index = 5
 	add_child(_interact_label)
+
+	# On mobile, allow tapping the NPC directly to interact
+	if TouchControls.is_mobile():
+		input_pickable = true
+		input_event.connect(_on_touch_interact)
 
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
@@ -75,17 +82,38 @@ func _on_body_entered(body: Node2D) -> void:
 	if body.is_in_group("player"):
 		_player_nearby = true
 		_interact_label.visible = true
+		if TouchControls.is_mobile():
+			var tc = get_tree().get_first_node_in_group("touch_controls") as TouchControls
+			if tc:
+				tc.show_interact_button("Talk")
 
 func _on_body_exited(body: Node2D) -> void:
 	if body.is_in_group("player"):
 		_player_nearby = false
 		_interact_label.visible = false
+		if TouchControls.is_mobile():
+			var tc = get_tree().get_first_node_in_group("touch_controls") as TouchControls
+			if tc:
+				tc.hide_interact_button()
+
+func _on_touch_interact(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+	if event is InputEventScreenTouch and event.pressed:
+		if _player_nearby and _interact_cooldown <= 0 and not _is_dialogue_open():
+			interact()
+			_interact_cooldown = 0.4
+
+func _process(delta: float) -> void:
+	if _interact_cooldown > 0:
+		_interact_cooldown -= delta
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _player_nearby:
 		return
+	if _interact_cooldown > 0:
+		return
 	if event.is_action_pressed("interact") and not _is_dialogue_open():
 		interact()
+		_interact_cooldown = 0.4
 		get_viewport().set_input_as_handled()
 
 func _is_dialogue_open() -> bool:
@@ -96,6 +124,9 @@ func interact() -> void:
 	var qm = get_node_or_null("/root/QuestManager")
 	if not qm:
 		return
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("select_b", -4.0)
 
 	# Notify quest system of NPC activation (for delivery quests)
 	if npc_name != "":
@@ -125,6 +156,12 @@ func interact() -> void:
 				_show_simple_dialogue()
 		"message":
 			_show_simple_dialogue()
+		"blacksmith":
+			_open_crafting_station("blacksmith")
+		"alchemist":
+			_open_crafting_station("alchemist")
+		"spellcraft":
+			_open_spell_craft()
 		_:
 			_show_simple_dialogue()
 
@@ -146,6 +183,12 @@ func _show_simple_dialogue() -> void:
 				text = "Train hard, adventurer. Strength comes from practice."
 			"craft":
 				_open_enchant_station()
+				return
+			"blacksmith":
+				_open_crafting_station("blacksmith")
+				return
+			"alchemist":
+				_open_crafting_station("alchemist")
 				return
 			"pets":
 				text = "Looking for a loyal companion? I might be able to help."
@@ -172,21 +215,38 @@ func _offer_zone_quests() -> void:
 			player_level = ls.level
 
 	# First: check if player has any active quests to report on in this zone
+	var had_active_quest = false
 	for quest_id in qm.active_quests:
 		if not qm.active_quests[quest_id].get("active", false):
 			continue
 		var quest = qm.definitions.get(quest_id) as QuestDefinition
 		if quest and (quest.target_location == zone_id or quest.location == zone_id):
-			qm.on_zone_entered(zone_id)
-			return
+			had_active_quest = true
+			await qm.check_zone_quests(zone_id)
+			break
+	# If a quest was just completed during check, fall through to offer the next one
+	if had_active_quest:
+		# Re-check: if the quest was completed, don't return — offer next quest below
+		var still_has_active = false
+		for quest_id in qm.active_quests:
+			if not qm.active_quests[quest_id].get("active", false):
+				continue
+			var quest = qm.definitions.get(quest_id) as QuestDefinition
+			if quest and (quest.target_location == zone_id or quest.location == zone_id):
+				still_has_active = true
+				break
+		if still_has_active:
+			return  # quest still active, don't offer a new one
 
-	# Collect all available quests for this zone
+	# Collect all available quests for this zone (prerequisite-filtered)
 	var available: Array = []
 	for quest_id in qm.definitions:
 		var quest = qm.definitions[quest_id] as QuestDefinition
 		if quest.location != zone_id:
 			continue
 		if qm.is_quest_active(quest_id) or qm.is_quest_completed(quest_id):
+			continue
+		if not qm._prerequisites_met(quest):
 			continue
 		available.append(quest)
 
@@ -207,10 +267,17 @@ func _offer_zone_quests() -> void:
 		qm.offer_quest(available[0].id)
 		return
 
-	# No quests at all — show default elder dialogue
-	var greeting = "All is well in %s. You've done great work, adventurer!" % zone_id if zone_id != "" else "Welcome, adventurer. The land needs heroes."
+	# No quests at all — show default elder dialogue with hire option
+	var greeting = "The Hollow Tide has not reached %s... yet. Stay sharp." % zone_id if zone_id != "" else "Dark times are upon us. The land needs those who won't look away."
 	qm._waiting_for_dialogue = true
-	qm.show_dialogue_requested.emit(npc_name, portrait_tile, greeting, ["Ok"])
+	qm.show_dialogue_requested.emit(npc_name, portrait_tile, greeting, ["Hire Fighters", "Ok"])
+	var choice = await qm.dialogue_option_chosen
+	if choice == 0:
+		_open_hire_ui()
+
+func _open_hire_ui() -> void:
+	var hire_ui := HireUI.new()
+	get_tree().current_scene.add_child(hire_ui)
 
 func _open_shop() -> void:
 	var shop_ui: ShopUI = null
@@ -238,3 +305,31 @@ func _open_enchant_station() -> void:
 		enchant_ui = EnchantUI.new()
 		get_tree().current_scene.add_child(enchant_ui)
 		enchant_ui.open()
+
+func _open_crafting_station(craft_type: String) -> void:
+	var crafting_ui: CraftingUI = null
+	for child in get_tree().root.get_children():
+		for sub in child.get_children():
+			if sub is CraftingUI:
+				crafting_ui = sub
+				break
+	if crafting_ui:
+		crafting_ui.open(craft_type)
+	else:
+		crafting_ui = CraftingUI.new()
+		get_tree().current_scene.add_child(crafting_ui)
+		crafting_ui.open(craft_type)
+
+func _open_spell_craft() -> void:
+	var spell_ui: SpellCraftUI = null
+	for child in get_tree().root.get_children():
+		for sub in child.get_children():
+			if sub is SpellCraftUI:
+				spell_ui = sub
+				break
+	if spell_ui:
+		spell_ui.open()
+	else:
+		spell_ui = SpellCraftUI.new()
+		get_tree().current_scene.add_child(spell_ui)
+		spell_ui.open()

@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
-flat_bonus = 6.0
+flat_bonus = 7.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 14
+flat_bonus = 1.0
 
 [resource]
 script = ExtResource("1")
@@ -14,7 +19,7 @@ item_name = "Merc Armor"
 loy_tile_index = 197
 description = "A light plate armor"
 slot_type = 4
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 0
-buy_price = 63
-sell_value = 15
+buy_price = 174
+sell_value = 43

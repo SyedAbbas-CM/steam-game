@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/forest/spore_cloud.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Poison Ivy"
+description = "Toxic plant that fires poison and splits into spore clouds on death."
+max_hp = 24
+move_speed = 8.0
+contact_damage = 2
+level = 8
+kingdom = "crawler"
+size_class = 0
+hostile = true
+attack_type = 15
+attack_damage = 2
+attack_speed = 1.8
+bullet_speed = 55.0
+bullet_count = 2
+preferred_distance = 40.0
+aggro_range = 65.0
+poison_chance = 0.4
+leaves_trail = true
+trail_type = "poison"
+split_count = 2
+split_definition = ExtResource("2")
+use_loy_sprite = true
+loy_tile_index = 365
+sprite_color = Color(0.15, 0.5, 0.1, 1)
+xp_value = 50
+score_value = 100

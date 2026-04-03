@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Ash Phantom"
+description = "A spectral figure formed from volcanic ash, vanishes into smoke then reappears with a devastating burst"
+max_hp = 48
+move_speed = 26.0
+contact_damage = 3
+level = 8
+kingdom = "demon"
+size_class = 0
+hostile = true
+attack_type = 11
+attack_damage = 5
+attack_speed = 2.2
+bullet_speed = 70
+bullet_count = 4
+preferred_distance = 35.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 85.0
+ignores_terrain = false
+stealth_duration = 1.8
+use_loy_sprite = true
+loy_tile_index = 24
+sprite_color = Color(0.6, 0.4, 0.3, 0.9)
+xp_value = 35
+score_value = 70

@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Dark Wikka"
 description = "A evil undead witch"
-max_hp = 125
+max_hp = 100
 move_speed = 26.8
 contact_damage = 5
 level = 16

@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Robber"
 description = "Stand and deliver, your money or your life"
-max_hp = 18
+max_hp = 14
 move_speed = 25.1
 contact_damage = 4
 level = 3

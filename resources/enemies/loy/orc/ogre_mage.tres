@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Ogre Mage"
 description = "A mighty wizard of the Ogre kingdom"
-max_hp = 112
+max_hp = 90
 move_speed = 19.1
 contact_damage = 5
 level = 5

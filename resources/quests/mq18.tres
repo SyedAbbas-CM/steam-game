@@ -1,0 +1,168 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq18"
+title = "The Price of Sealing"
+summary = "The seal must be remade. Someone must bind permanently. Choose who — or redirect the Tide elsewhere."
+level = 22
+location = "hellgate"
+target_location = "hellgate"
+prerequisite = "mq17"
+start_script = [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "What are the options?",
+"script": [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "I'll bind myself.",
+"script": [{
+"cmd": "set",
+"id": "mq18",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "Do it.",
+"script": [{
+"cmd": "startQuest"
+}, {
+"cmd": "getExp",
+"value": "3000"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 163,
+"text": "Your sacrifice will be remembered. The Tide ends here."
+}]
+}, {
+"name": "Is there another way?",
+"script": [{
+"attribute": "session-mq08-0",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Priestess Yara",
+"options": [{
+"name": "Let her bind.",
+"script": [{
+"cmd": "set",
+"id": "mq18",
+"index": "0",
+"value": "2"
+}, {
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "Thank you, Yara.",
+"script": [{
+"cmd": "startQuest"
+}, {
+"cmd": "getExp",
+"value": "3000"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 163,
+"text": "So be it. The priestess will hold the seal."
+}]
+}, {
+"name": "No. I'll find another way.",
+"script": [{
+"cmd": "set",
+"id": "mq18",
+"index": "0",
+"value": "3"
+}, {
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "Buy time.",
+"script": [{
+"cmd": "startQuest"
+}, {
+"cmd": "getExp",
+"value": "2000"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 163,
+"text": "There is one more option — redirect the Tide into the deep earth. It won't be sealed, just... moved. It will return someday."
+}]
+}],
+"portrait": 288,
+"text": "I was part of this corruption. Let me be its prison. It's the least I can do."
+}]
+}, {
+"attribute": "session-mq08-0",
+"cmd": "ifNot",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "Redirect it.",
+"script": [{
+"cmd": "set",
+"id": "mq18",
+"index": "0",
+"value": "3"
+}, {
+"cmd": "startQuest"
+}, {
+"cmd": "getExp",
+"value": "2000"
+}, {
+"cmd": "completeQuest"
+}]
+}, {
+"name": "No. I'll bind myself.",
+"script": [{
+"cmd": "set",
+"id": "mq18",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "Do it.",
+"script": [{
+"cmd": "startQuest"
+}, {
+"cmd": "getExp",
+"value": "3000"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 163,
+"text": "Your courage defines you. The seal holds."
+}]
+}],
+"portrait": 163,
+"text": "The priestess might have helped... but she's gone. You can redirect the Tide into the deep earth. It won't seal, just delay."
+}]
+}]
+}],
+"portrait": 163,
+"text": "You could bind yourself. Or... there may be another way."
+}]
+}],
+"portrait": 163,
+"text": "The seal requires a living anchor. Someone must bind themselves to it — forever. There is no other way."
+}]
+events = []

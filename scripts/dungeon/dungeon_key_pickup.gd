@@ -32,5 +32,8 @@ func _ready() -> void:
 
 func _on_body_entered(body: Node2D) -> void:
 	if body.is_in_group("player"):
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("collect_b", -2.0, 0.0)
 		key_collected.emit(key_id)
 		queue_free()

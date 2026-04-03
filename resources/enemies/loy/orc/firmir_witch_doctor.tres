@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Firmir Witch Doctor"
 description = "A firmir master of the dark arts"
-max_hp = 280
+max_hp = 224
 move_speed = 22.7
 contact_damage = 5
 level = 17

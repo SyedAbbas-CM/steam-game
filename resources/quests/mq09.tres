@@ -1,0 +1,66 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq09"
+title = "A Ship That Shouldn't Sail"
+summary = "A ghost ship at Gomb harbor. The harbor master denies it. A fisherman points to a hidden cove."
+level = 12
+location = "ashheim"
+target_location = "cliffs"
+prerequisite = "mq06"
+start_script = [{
+"cmd": "showDialog",
+"name": "Warden Aldric",
+"options": [{
+"name": "I'll check Gomb.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 148,
+"text": "The third fragment was sent south by sea. But sailors report a ghost ship at Gomb — flying no colors. The harbor master claims nothing's wrong. Investigate."
+}]
+events = [{
+"param": "briarvale",
+"script": [{
+"cmd": "showDialog",
+"name": "Harbor Master",
+"options": [{
+"name": "Ask around",
+"script": [{
+"cmd": "showDialog",
+"name": "Old Fisherman",
+"options": [{
+"name": "The bluffs.",
+"script": []
+}],
+"portrait": 0,
+"text": "He's lying. I saw crates unloaded at night — marked with a strange brand. They took them to the bluffs south of here. Hidden cove."
+}]
+}],
+"portrait": 155,
+"text": "Ghost ship? Nonsense. Just fog playing tricks. Nothing to see here."
+}],
+"type": "zone_enter"
+}, {
+"param": "cliffs",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Follow the trail.",
+"script": [{
+"cmd": "getExp",
+"value": "500"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "Hidden among the rocks: stacks of crates, each branded with your symbol. Shipping manifests list a destination — Tor'Kaan, the pirate city to the east."
+}],
+"type": "zone_enter"
+}]

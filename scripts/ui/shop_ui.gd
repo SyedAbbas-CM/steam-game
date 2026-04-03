@@ -15,28 +15,19 @@ var _shop_data: ShopDefinition
 var _all_shops: Dictionary = {}
 var _equipment_manager: EquipmentManager
 var _mode: String = "buy"  # "buy" or "sell"
-var _item_pool: ItemPool
-var _generated_stock: Array[EquipmentItem] = []  # dynamic stock for current shop session
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 100
+	add_to_group("shop_ui")
 	_load_shops()
 	_build_ui()
-	_item_pool = ItemPool.new()
 
 func _load_shops() -> void:
-	var dir = DirAccess.open("res://resources/shops/")
-	if not dir:
-		return
-	dir.list_dir_begin()
-	var fname = dir.get_next()
-	while fname != "":
-		if fname.ends_with(".tres"):
-			var shop = load("res://resources/shops/" + fname) as ShopDefinition
-			if shop and shop.id != "":
-				_all_shops[shop.id] = shop
-		fname = dir.get_next()
+	for path in ResourceRegistry.shops():
+		var shop = load(path) as ShopDefinition
+		if shop and shop.id != "":
+			_all_shops[shop.id] = shop
 
 func _build_ui() -> void:
 	_panel = PanelContainer.new()
@@ -133,25 +124,13 @@ func open_shop(shop_id: String) -> void:
 		if player:
 			_equipment_manager = player.get_node_or_null("EquipmentManager") as EquipmentManager
 
-	# Generate dynamic stock items based on area
-	_generated_stock.clear()
-	if _item_pool and _shop_data.shop_type != "inn":
-		var bd = _get_area_difficulty()
-		var extra_items = _item_pool.get_shop_items(6, bd, _shop_data.shop_type)
-		_generated_stock = extra_items
-
 	_mode = "buy"
 	_update_gold()
 	_populate_buy()
 	_panel.visible = true
-
-func _get_area_difficulty() -> int:
-	var gm = get_node_or_null("/root/GameManager")
-	if gm and gm.save_data:
-		# Use player level as a proxy: every 3 levels = +5 difficulty
-		var plvl = gm.save_data.player_level
-		return clampi(plvl / 3 * 5, 0, 25)
-	return 0
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("open", -3.0, 0.0)
 
 func _update_gold() -> void:
 	var gm = get_node_or_null("/root/GameManager")
@@ -162,11 +141,17 @@ func _switch_to_buy() -> void:
 	_mode = "buy"
 	_status_label.text = ""
 	_populate_buy()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("click", -5.0)
 
 func _switch_to_sell() -> void:
 	_mode = "sell"
 	_status_label.text = ""
 	_populate_sell()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("click", -5.0)
 
 func _populate_buy() -> void:
 	_clear_items()
@@ -184,26 +169,20 @@ func _populate_buy() -> void:
 		var price = _get_item_price(item, item_name)
 		_add_buy_row(item, item_name, price)
 
-	# Dynamic stock based on area/level
-	if _generated_stock.size() > 0:
-		# Separator
-		var sep = HSeparator.new()
-		sep.add_theme_color_override("separator", Color(0.4, 0.35, 0.25))
-		_items_container.add_child(sep)
-		var label = Label.new()
-		label.text = "-- Traveling Merchant --"
-		label.add_theme_font_size_override("font_size", 10)
-		label.add_theme_color_override("font_color", Color(0.7, 0.6, 0.4))
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_items_container.add_child(label)
 
-		for item in _generated_stock:
-			var price = item.buy_price if item.buy_price > 0 else 50
-			_add_buy_row(item, item.item_name, price)
 
 func _add_buy_row(item: EquipmentItem, item_name: String, price: int) -> void:
+	var row_panel = PanelContainer.new()
+	var row_style = StyleBoxFlat.new()
+	row_style.bg_color = Color(0, 0, 0, 0)
+	row_style.set_content_margin_all(4)
+	row_panel.add_theme_stylebox_override("panel", row_style)
+	row_panel.mouse_entered.connect(func(): row_style.bg_color = Color(0.2, 0.18, 0.1, 0.6))
+	row_panel.mouse_exited.connect(func(): row_style.bg_color = Color(0, 0, 0, 0))
+
 	var hbox = HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 8)
+	row_panel.add_child(hbox)
 
 	# Item icon
 	if item and item.loy_tile_index >= 0:
@@ -243,7 +222,7 @@ func _add_buy_row(item: EquipmentItem, item_name: String, price: int) -> void:
 	buy_btn.pressed.connect(_on_buy.bind(item, item_name, price))
 	hbox.add_child(buy_btn)
 
-	_items_container.add_child(hbox)
+	_items_container.add_child(row_panel)
 
 func _populate_sell() -> void:
 	_clear_items()
@@ -255,8 +234,17 @@ func _populate_sell() -> void:
 		var sell_price = item.sell_value if item.sell_value > 0 else maxi(1, item.buy_price / 4)
 		var is_equipped = _equipment_manager.is_equipped(item)
 
+		var row_panel = PanelContainer.new()
+		var row_style = StyleBoxFlat.new()
+		row_style.bg_color = Color(0, 0, 0, 0)
+		row_style.set_content_margin_all(4)
+		row_panel.add_theme_stylebox_override("panel", row_style)
+		row_panel.mouse_entered.connect(func(): row_style.bg_color = Color(0.2, 0.18, 0.1, 0.6))
+		row_panel.mouse_exited.connect(func(): row_style.bg_color = Color(0, 0, 0, 0))
+
 		var hbox = HBoxContainer.new()
 		hbox.add_theme_constant_override("separation", 8)
+		row_panel.add_child(hbox)
 
 		# Item icon
 		if item.loy_tile_index >= 0:
@@ -294,7 +282,7 @@ func _populate_sell() -> void:
 			sell_btn.pressed.connect(_on_sell.bind(i, sell_price))
 		hbox.add_child(sell_btn)
 
-		_items_container.add_child(hbox)
+		_items_container.add_child(row_panel)
 
 func _clear_items() -> void:
 	for child in _items_container.get_children():
@@ -302,20 +290,21 @@ func _clear_items() -> void:
 
 func _find_item(item_name: String) -> Resource:
 	var safe = item_name.to_lower().replace(" ", "_")
-	var path = "res://resources/items/loy/" + safe + ".tres"
-	if ResourceLoader.exists(path):
-		return load(path)
+	for dir in ["res://resources/items/loy/", "res://resources/items/crafting/", "res://resources/items/crafted/"]:
+		var path = dir + safe + ".tres"
+		if ResourceLoader.exists(path):
+			return load(path)
 	return null
 
 func _get_item_price(item: Resource, item_name: String) -> int:
 	if item and item.get("buy_price") and int(item.buy_price) > 0:
-		return int(item.buy_price)
+		return int(item.buy_price * 2.5)  # Mark-up: items cost 2.5x base price
 	var prices = {
-		"Apple": 10, "Meat": 25, "Red Potion": 50, "Blue Potion": 100,
-		"Green Potion": 75, "Town Portal": 150, "Trap": 30, "Powder Keg": 80,
-		"Fishing Pole": 200, "Spade": 100, "Pet Food": 50,
+		"Apple": 25, "Meat": 60, "Red Potion": 120, "Blue Potion": 250,
+		"Green Potion": 180, "Town Portal": 350, "Trap": 75, "Powder Keg": 200,
+		"Fishing Pole": 500, "Spade": 250, "Pet Food": 120,
 	}
-	return prices.get(item_name, 100)
+	return prices.get(item_name, 250)
 
 func _on_buy(item: EquipmentItem, item_name: String, price: int) -> void:
 	var gm = get_node_or_null("/root/GameManager")
@@ -327,18 +316,22 @@ func _on_buy(item: EquipmentItem, item_name: String, price: int) -> void:
 		_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 		return
 
+	var sfx = get_node_or_null("/root/SFXManager")
 	if gm.spend_gold(price):
 		if item:
-			var new_item = item.duplicate() as EquipmentItem
-			_equipment_manager.add_to_inventory(new_item)
+			_equipment_manager.add_to_inventory(item.make_copy())
 			_status_label.text = "Bought " + item.get_display_name()
 		else:
 			_status_label.text = "Bought " + item_name
 		_status_label.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6))
 		_update_gold()
+		if sfx:
+			sfx.play("gold", -3.0)
 	else:
 		_status_label.text = _shop_data.nomoney if _shop_data.nomoney != "" else "Not enough gold!"
 		_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+		if sfx:
+			sfx.play("error", -3.0)
 
 func _on_sell(inv_index: int, sell_price: int) -> void:
 	var gm = get_node_or_null("/root/GameManager")
@@ -362,6 +355,9 @@ func _on_sell(inv_index: int, sell_price: int) -> void:
 	_status_label.text = "Sold " + item_name + " for " + str(sell_price) + "g"
 	_status_label.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6))
 	_update_gold()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("coin", -3.0)
 	# Refresh sell list (indices shifted)
 	_populate_sell()
 
@@ -388,6 +384,9 @@ func _rarity_color(rarity: int) -> Color:
 
 func _close() -> void:
 	_panel.visible = false
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("close", -4.0, 0.0)
 	shop_closed.emit()
 
 func is_open() -> bool:

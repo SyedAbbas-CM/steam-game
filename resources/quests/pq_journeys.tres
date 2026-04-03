@@ -1,0 +1,435 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "pq_journeys"
+title = "The Pilgrim's Path"
+summary = "Muraad asks you to walk the four journeys: visit the The Barrows, then the Farmlands, return to Aria, and finally speak to someone in town."
+level = 7
+location = "haven"
+prerequisite = "pq_cave"
+properties = [{
+"index": 0,
+"name": "The Barrows Visited",
+"type": "yesno"
+}, {
+"index": 1,
+"name": "Farmlands Visited",
+"type": "yesno"
+}, {
+"index": 2,
+"name": "Returned to Aria",
+"type": "yesno"
+}, {
+"index": 3,
+"name": "Spoke to Townsperson",
+"type": "yesno"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Muraad",
+"portrait": 165,
+"text": "You've started asking the right questions. Now it's time to walk. I want you to take four journeys for me.",
+"options": [{
+"name": "What journeys?",
+"script": [{
+"cmd": "showDialog",
+"name": "Muraad",
+"portrait": 165,
+"text": "First, visit the The Barrows north of town — face what ends. Then go to the Farmlands east of town — see what grows. Return here, and I'll tell you the rest.",
+"options": [{
+"name": "I'll walk",
+"script": [{
+"cmd": "startQuest",
+"id": "pq_journeys"
+}]
+}, {
+"name": "Not now",
+"script": []
+}]
+}]
+}]
+}]
+events = [{
+"param": "barrows",
+"script": [{
+"attribute": "session-pq_journeys-0",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "",
+"portrait": 0,
+"text": "Death surrounds you here, but you are alive. The first journey: from yourself, toward truth.",
+"options": [{
+"name": "...",
+"script": []
+}]
+}]
+}],
+"type": "zone_enter"
+}, {
+"param": "duskfarm",
+"script": [{
+"attribute": "session-pq_journeys-0",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-1",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "1",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "",
+"portrait": 0,
+"text": "Life grows from death's soil. The second journey: from truth, toward the source of truth.",
+"options": [{
+"name": "...",
+"script": []
+}]
+}]
+}]
+}],
+"type": "zone_enter"
+}, {
+"param": "haven",
+"script": [{
+"attribute": "session-pq_journeys-1",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "2",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Muraad",
+"portrait": 165,
+"text": "You left as one person. You returned as another. That is the third journey — from the source, back to yourself. But you are not the same self. Now, the fourth journey.",
+"options": [{
+"name": "What is it?",
+"script": [{
+"cmd": "showDialog",
+"name": "Muraad",
+"portrait": 165,
+"text": "Talk to anyone in town. Anyone at all. The fourth journey is returning to the world to serve others. Go — speak to a townsperson.",
+"options": [{
+"name": "I understand",
+"script": []
+}]
+}]
+}]
+}]
+}]
+}, {
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Muraad",
+"portrait": 165,
+"text": "Four journeys. From yourself to truth, from truth to its source, from the source back to yourself, and from yourself back to the world. You have walked them all.",
+"options": [{
+"name": "Thank you",
+"script": [{
+"cmd": "getExp",
+"value": "600"
+}, {
+"cmd": "getItem",
+"count": "300",
+"name": "Gold"
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}]
+}]
+}],
+"type": "quest"
+}, {
+"param": "Guard",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Arnie",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Elder",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Corvus",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Jimbob",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Morin",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Hawkeye",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Solmund",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Heshem",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Telos",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Aldric",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Navid",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}, {
+"param": "Wahid",
+"script": [{
+"attribute": "session-pq_journeys-2",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "session-pq_journeys-3",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "set",
+"index": "3",
+"value": "1"
+}]
+}]
+}],
+"type": "activate"
+}]

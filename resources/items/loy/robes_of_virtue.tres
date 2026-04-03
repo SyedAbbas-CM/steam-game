@@ -8,13 +8,18 @@ script = ExtResource("2")
 stat = 0
 flat_bonus = 15.0
 
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 14
+flat_bonus = 5.0
+
 [resource]
 script = ExtResource("1")
 item_name = "Robes of Virtue"
 loy_tile_index = 461
 description = "Golden long robes of the epic wizard"
 slot_type = 4
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 420
-sell_value = 105
+buy_price = 960
+sell_value = 240

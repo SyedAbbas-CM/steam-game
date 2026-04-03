@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "shield_bash"
+spell_name = "Shield Bash"
+description = "AoE knockback + damage around player"
+effect_type = 0
+delivery = 3
+magnitude = 25
+duration = 0.0
+mp_cost = 15.0
+cooldown = 5.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

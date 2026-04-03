@@ -1,0 +1,64 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq01"
+title = "Waking in Ash"
+summary = "The healer says the brand on your arm matches symbols found on dead livestock at the farm. Travel there to investigate."
+level = 1
+location = "haven"
+target_location = "duskfarm"
+start_script = [{
+"cmd": "showDialog",
+"name": "Healer Maren",
+"options": [{
+"name": "What happened to me?",
+"script": [{
+"cmd": "showDialog",
+"name": "Healer Maren",
+"options": [{
+"name": "I'll go look.",
+"script": [{
+"cmd": "startQuest"
+}]
+}, {
+"name": "Not my problem.",
+"script": []
+}],
+"portrait": 160,
+"text": "Found you face-down in the ash outside town. That brand on your arm... I've seen those symbols before. On the dead livestock at the farm south of here."
+}]
+}],
+"portrait": 160,
+"text": "You're awake. Don't move too fast — whatever marked you nearly killed you."
+}]
+events = [{
+"param": "duskfarm",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Examine the ichor",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Continue",
+"script": [{
+"cmd": "getExp",
+"value": "100"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "The ichor leads toward the dungeon entrance at the edge of the farm. Something down there is the source."
+}]
+}],
+"portrait": 0,
+"text": "The stench hits you before you see it. Cattle lie twisted in the dirt, their hides branded with the same symbol that burns on your arm. Black ichor seeps from the marks into the soil."
+}],
+"type": "zone_enter"
+}]

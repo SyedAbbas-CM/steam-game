@@ -5,18 +5,18 @@
 [resource]
 script = ExtResource("1")
 id = "shrine"
-zone_name = "Shrine"
+zone_name = "The Shattered Shrine"
 tileset = 224
 width = 17
 height = 17
 world_pos = Vector2i(4, 52)
-dungeon_base = "Shrine-base"
+dungeon_base = "Shrine-Dungeons"
 dungeon_count = 8
-description = "The ancient shrine to the mighty gods"
+description = "A broken holy site where divine power once flowed. The altar is cracked and weeping black ichor."
 baked_offset = Vector2i(-536, -208)
 baked_scale = 4
 exits = Array[Dictionary]([{
-"target": "sthel",
+"target": "mirage",
 "tx": 0,
 "ty": 9,
 "x": 16,

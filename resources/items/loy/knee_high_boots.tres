@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
-flat_bonus = 2.0
+flat_bonus = 4.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 1
+flat_bonus = 0.05
 
 [resource]
 script = ExtResource("1")
@@ -14,7 +19,7 @@ item_name = "Knee High Boots"
 loy_tile_index = 51
 description = "A long pair of boots"
 slot_type = 6
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 0
-buy_price = 31
-sell_value = 7
+buy_price = 102
+sell_value = 25

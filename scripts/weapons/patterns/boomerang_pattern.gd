@@ -31,6 +31,7 @@ func get_fire_data(aim_direction: Vector2, _stats: EquipmentManager) -> Array[Di
 			"direction": dir,
 			"delay": 0.0,
 			"offset": Vector2.ZERO,
-			"speed_mult": 0.7 + t * 0.6
+			"speed_mult": 0.7 + t * 0.6,
+			"damage_mult": 1.0 / arc_count
 		})
 	return result

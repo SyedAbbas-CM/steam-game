@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/kobold.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Goblin Shaman"
+description = "Heals nearby goblins and summons kobold reinforcements."
+max_hp = 24
+move_speed = 18.0
+contact_damage = 2
+level = 4
+kingdom = "orc"
+size_class = 0
+hostile = true
+attack_type = 9
+attack_damage = 1
+attack_speed = 2.0
+bullet_speed = 60.0
+bullet_count = 1
+preferred_distance = 55.0
+aggro_range = 80.0
+heal_amount = 3
+heal_range = 45.0
+summon_count = 2
+summon_definition = ExtResource("2")
+use_loy_sprite = true
+loy_tile_index = 271
+sprite_color = Color(0.4, 0.7, 0.3, 1)
+xp_value = 30
+score_value = 60

@@ -1,0 +1,69 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "grimhold"
+zone_name = "Grimhold"
+tileset = 144
+width = 45
+world_pos = Vector2i(14, 27)
+dungeon_base = "Grim-Dungeons"
+dungeon_count = 6
+description = "A northern fortress settlement carved into the mountainside. Its forges burn day and night."
+baked_offset = Vector2i(-420, -620)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "frostpass",
+"tx": 11,
+"ty": 0,
+"x": 22,
+"y": 24
+}])
+npcs = Array[Dictionary]([{
+"message": "What brings you to the frozen north young adventurer?",
+"name": "Eski",
+"portrait": 169,
+"tile": 168,
+"type": "elder",
+"x": 8,
+"y": 18
+}, {
+"name": "Moe",
+"portrait": 169,
+"tile": 168,
+"shop": "grimhold-weapon",
+"type": "shop",
+"x": 10,
+"y": 9
+}, {
+"name": "Abon",
+"portrait": 169,
+"tile": 168,
+"shop": "grimhold-inn",
+"type": "shop",
+"x": 32,
+"y": 11
+}, {
+"name": "Able",
+"portrait": 169,
+"tile": 168,
+"shop": "grimhold-magic",
+"type": "shop",
+"x": 33,
+"y": 18
+}])
+signs = Array[Dictionary]([{
+"message": "The Frosty Barnacle",
+"x": 9,
+"y": 14
+}, {
+"message": "The Frozen Tome",
+"x": 38,
+"y": 12
+}, {
+"message": "Icy Anvil",
+"x": 26,
+"y": 19
+}])

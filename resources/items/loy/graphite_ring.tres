@@ -1,6 +1,17 @@
-[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="mod_0"]
+script = ExtResource("2")
+stat = 0
+flat_bonus = 9.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 13
+flat_bonus = 0.15
 
 [resource]
 script = ExtResource("1")
@@ -8,6 +19,7 @@ item_name = "Graphite Ring"
 loy_tile_index = 172
 description = "A heavy stone ring"
 slot_type = 8
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 300
-sell_value = 75
+buy_price = 764
+sell_value = 191

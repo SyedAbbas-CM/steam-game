@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 6.0
+flat_bonus = 14.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 7
+flat_bonus = 2.0
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Hunters Bow"
 loy_tile_index = 92
 description = "A master archers bow"
 slot_type = 1
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 348
-sell_value = 87
-bullet_sprite_index = 96
+buy_price = 888
+sell_value = 222
+bullet_sprite_index = 248
 weapon_range = 5.0
+weapon_type = "bow"

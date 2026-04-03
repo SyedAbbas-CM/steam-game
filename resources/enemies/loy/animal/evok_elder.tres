@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Evok Elder"
 description = "A ferocious evil bear"
-max_hp = 125
+max_hp = 100
 move_speed = 30.6
 contact_damage = 5
 level = 14

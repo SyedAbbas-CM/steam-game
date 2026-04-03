@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Giant Scorpion"
 description = "A huge grey scorpion"
-max_hp = 199
+max_hp = 159
 move_speed = 33.4
 contact_damage = 5
 level = 16

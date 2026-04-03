@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
-flat_bonus = 4.0
+flat_bonus = 10.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 3
+flat_bonus = 0.15
 
 [resource]
 script = ExtResource("1")
@@ -14,7 +19,7 @@ item_name = "Bone Gloves"
 loy_tile_index = 302
 description = "Gloves made of slices of bone"
 slot_type = 7
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 332
-sell_value = 83
+buy_price = 782
+sell_value = 195

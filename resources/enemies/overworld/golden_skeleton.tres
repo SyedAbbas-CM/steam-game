@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Golden Skeleton"
+description = "A legendary golden skeleton — extremely rare and dangerous"
+max_hp = 40
+move_speed = 24.0
+contact_damage = 3
+level = 8
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 2
+attack_damage = 3
+attack_speed = 1.2
+bullet_speed = 80
+bullet_count = 3
+preferred_distance = 0.0
+charge_speed = 70.0
+charge_duration = 0.3
+aggro_range = 700.0
+bullet_sprite_index = 240
+ignores_terrain = false
+use_loy_sprite = true
+loy_tile_index = 19
+sprite_color = Color(1, 0.85, 0.2, 1)
+xp_value = 50
+score_value = 100

@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Faca"
 description = "A blobby brown goop with one evil eye"
-max_hp = 32
+max_hp = 26
 move_speed = 28.9
 contact_damage = 4
 level = 1

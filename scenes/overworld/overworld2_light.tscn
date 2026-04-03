@@ -1676,6 +1676,7 @@ sources/6 = SubResource("TileSetAtlasSource_tiles2")
 [node name="Overworld2" type="Node2D" unique_id=571089789]
 script = ExtResource("2_script")
 chunks_base_path = "res://resources/world/chunks2"
+player_spawn_tile = Vector2i(74, 23)
 
 [node name="Ground" type="TileMapLayer" parent="." unique_id=1327906623]
 tile_map_data = PackedByteArray()

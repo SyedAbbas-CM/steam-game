@@ -1,0 +1,40 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "fenport"
+zone_name = "Fenport"
+tileset = 112
+width = 20
+height = 15
+description = "A marshy harbor at the forest edge where smugglers dock under cover of fog."
+baked_offset = Vector2i(-99999, -99999)
+exits = Array[Dictionary]([{
+"target": "briarvale",
+"tx": 1,
+"ty": 10,
+"x": 19,
+"y": 7
+}, {
+"target": "rotgrove",
+"tx": 49,
+"ty": 25,
+"x": 0,
+"y": 7
+}])
+signs = Array[Dictionary]([{
+"message": "Fenport
+River Delta",
+"x": 9,
+"y": 1
+}])
+spawns = Array[Dictionary]([{
+"chance": 40,
+"height": 11,
+"type": "Snake",
+"width": 16,
+"x": 2,
+"y": 2
+}])

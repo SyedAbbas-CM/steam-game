@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 19.0
+flat_bonus = 16.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 13
+flat_bonus = 0.15
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Throwing Stars"
 loy_tile_index = 419
 description = "Thin silver throwing stars"
 slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 452
-sell_value = 113
-bullet_sprite_index = 61
+buy_price = 890
+sell_value = 222
+bullet_sprite_index = 128
 weapon_range = 3.0
+weapon_type = "throwing"

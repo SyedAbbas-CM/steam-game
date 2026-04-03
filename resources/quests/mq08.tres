@@ -1,0 +1,90 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq08"
+title = "The Witch of Nord"
+summary = "Confront the corrupted priestess in the frozen dungeon. Choose: spare her or strike her down."
+level = 12
+location = "frostpass"
+target_location = "frostpass"
+prerequisite = "mq07"
+boss_dungeon = "nord"
+boss_enemy_path = "res://resources/enemies/quest/corrupted_priestess.tres"
+start_script = [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Enter the temple.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 0,
+"text": "The frozen temple entrance looms ahead. Whatever the priestess has become, she holds the second fragment. Steel yourself."
+}]
+events = [{
+"param": "Corrupted Priestess",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Spare her",
+"script": [{
+"cmd": "set",
+"id": "mq08",
+"index": "0",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Priestess Yara",
+"options": [{
+"name": "I'll stop him.",
+"script": [{
+"cmd": "getExp",
+"value": "1200"
+}, {
+"cmd": "getItem",
+"count": "1",
+"name": "Key Fragment"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 288,
+"text": "Thank you... Take the fragment. And know this: the one who broke the seals — he's not just imprisoned. He's awake. He's been calling to his servants for years."
+}]
+}, {
+"name": "Strike her down",
+"script": [{
+"cmd": "set",
+"id": "mq08",
+"index": "0",
+"value": "2"
+}, {
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Take the fragment.",
+"script": [{
+"cmd": "getExp",
+"value": "1200"
+}, {
+"cmd": "getItem",
+"count": "1",
+"name": "Key Fragment"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "You end it cleanly. The fragment falls from her hand, cold as the ice around you. Whatever warning she had dies with her."
+}]
+}],
+"portrait": 0,
+"text": "The priestess collapses. The corruption recedes from her eyes — for a moment, she's herself again. 'Please...' she whispers. 'It wasn't me. The Tide... it speaks through the seals.'"
+}],
+"type": "boss_killed"
+}]

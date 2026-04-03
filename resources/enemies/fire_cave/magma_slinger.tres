@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Magma Slinger"
+description = "A ranged demon that hurls shotgun-like blasts of superheated magma pellets"
+max_hp = 60
+move_speed = 21.0
+contact_damage = 3
+level = 8
+kingdom = "demon"
+size_class = 0
+hostile = true
+attack_type = 23
+attack_damage = 4
+attack_speed = 2.4
+bullet_speed = 80
+bullet_count = 6
+preferred_distance = 50.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 85.0
+ignores_terrain = false
+use_loy_sprite = true
+loy_tile_index = 442
+sprite_color = Color(0.9, 0.4, 0.2, 1)
+xp_value = 35
+score_value = 70

@@ -1,0 +1,69 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "The Hollow King"
+description = "The ancient ruler who broke the seal seeking immortality. Now an amalgamation of corruption and rage."
+max_hp = 1200
+move_speed = 22.0
+contact_damage = 15
+level = 22
+
+kingdom = "demon"
+size_class = 2
+hostile = true
+
+attack_type = 1
+attack_damage = 14
+attack_speed = 1.5
+bullet_speed = 90
+bullet_count = 1
+bullet_sprite_index = -1
+
+preferred_distance = 40.0
+charge_speed = 100.0
+charge_duration = 0.4
+aggro_range = 150.0
+ignores_terrain = false
+
+summon_count = 4
+slam_radius = 32.0
+teleport_cooldown = 5.0
+heal_amount = 0
+heal_range = 48.0
+leaves_trail = true
+trail_type = "poison"
+explodes_on_death = true
+explode_radius = 40.0
+drains_resource = true
+poison_chance = 0.3
+split_count = 2
+stealth_duration = 2.0
+shield_hp = 30
+beam_duration = 2.0
+beam_sweep_speed = 1.0
+death_bullet_pattern = 21
+bounce_count = 0
+bomb_aoe_radius = 24.0
+bomb_flight_time = 0.6
+
+boss_phases = 3
+phase_2_attack = 6
+phase_2_bullet_count = 5
+phase_3_attack = 21
+phase_3_bullet_count = 8
+summon_on_phase_change = true
+summon_phase_count = 5
+
+sprite_frame = 48
+sprite_color = Color(0.15, 0.0, 0.2, 1)
+use_loy_sprite = true
+loy_tile_index = 480
+
+quest_kill_name = "The Hollow King"
+
+xp_value = 5000
+score_value = 10000

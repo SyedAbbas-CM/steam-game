@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Haven-Crypt-2"
+tileset = 40
+chests = 10
+width = 50
+height = 50
+rooms = 30
+min_monsters = 5
+max_monsters = 8
+aggro_chance = 0
+requires_key = true
+legend = ""
+recommended_level = 10
+monster_pool = [{ "type": "Bone Guard", "chance": 3 }, { "type": "Bone Giant", "chance": 3 }, { "type": "Crypt Guardian", "chance": 3 }, { "type": "Ghoul Brute", "chance": 3 }, { "type": "Death Rattle", "chance": 3 }, { "type": "Corpse Spitter", "chance": 3 }, { "type": "Phantom", "chance": 3 }, { "type": "Bone Charger", "chance": 3 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 0, "items": [{ "name": "Apple", "chance": 10, "min": 1, "max": 1 }, { "name": "Ruby", "chance": 1, "min": 1, "max": 1 }, { "name": "Gold", "chance": 5, "min": 20, "max": 30 }] }]

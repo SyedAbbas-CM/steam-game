@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "boghollow-weapon"
+shop_type = "weapon"
+shop_name = "Fighter Mak"
+portrait = 207
+title = "The Armory Tent"
+welcome = "Have you come to help us defeat our enemies?"
+nomoney = "This isn't a free service!"
+buy_text = "Take this and slay evil for the good of the nomads!"
+sell_text = "With a little work it could be a good weapon, I'll take it"
+stock = [{ "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Hunter Knife", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Explosion Arrow", "required_quest": "" }, { "item_name": "Lion Blade", "required_quest": "" }]

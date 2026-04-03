@@ -6,9 +6,9 @@
 script = ExtResource("1")
 
 enemy_name = "Fire Ninja"
-description = "A flame magic ninja"
-max_hp = 95
-move_speed = 27.8
+description = "A flame magic ninja that vanishes into smoke and strikes with chain lightning"
+max_hp = 76
+move_speed = 30.0
 contact_damage = 5
 level = 12
 kingdom = "human"
@@ -16,9 +16,10 @@ size_class = 0
 hostile = true
 attack_type = 11
 attack_damage = 10
-attack_speed = 2.26
-bullet_speed = 67
-bullet_count = 1
+attack_speed = 2.0
+bullet_speed = 75
+bullet_count = 3
+stealth_duration = 1.5
 preferred_distance = 30.0
 charge_speed = 80.0
 charge_duration = 0.3

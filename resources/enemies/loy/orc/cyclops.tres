@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Cyclops"
 description = "Towering one-eyed giant with devastating ground-pound attacks"
-max_hp = 123
+max_hp = 98
 move_speed = 19.4
 contact_damage = 4
 level = 6

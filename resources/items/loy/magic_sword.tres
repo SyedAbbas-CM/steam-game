@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 10.0
+flat_bonus = 17.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 3
+flat_bonus = 0.15
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Magic Sword"
 loy_tile_index = 89
 description = "A elven sword infused with lightning"
 slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 380
-sell_value = 95
-bullet_sprite_index = 120
-weapon_range = 2.5
+buy_price = 908
+sell_value = 227
+bullet_sprite_index = 240
+weapon_range = 1.65
+weapon_type = "sword"

@@ -19,7 +19,7 @@ const LEVEL_BONUSES: Dictionary = {
 	StatModifier.StatType.ATTACK_SPEED: -0.003,  # negative = faster
 	StatModifier.StatType.BULLET_SPEED: 1.0,
 	StatModifier.StatType.MAX_MP: 2.0,
-	StatModifier.StatType.HP_REGEN: 0.05,
+	# HP_REGEN removed — only increases via vitality allocation or potions
 	StatModifier.StatType.MP_REGEN: 0.03,
 	StatModifier.StatType.LUCK: 0.5,
 	StatModifier.StatType.CRIT_DAMAGE: 0.02,
@@ -45,6 +45,8 @@ const ALLOCATION_CATEGORIES: Dictionary = {
 		StatModifier.StatType.MOVE_SPEED: 3.0,
 		StatModifier.StatType.ACCELERATION: 0.3,
 		StatModifier.StatType.DODGE_CHANCE: 1.0,
+		StatModifier.StatType.MAX_STAMINA: 15.0,
+		StatModifier.StatType.STAMINA_REGEN: 2.0,
 	},
 	"spirit": {
 		StatModifier.StatType.MAX_MP: 10.0,
@@ -60,6 +62,8 @@ const ALLOCATION_CATEGORIES: Dictionary = {
 		StatModifier.StatType.WEIGHT: 0.5,
 		StatModifier.StatType.MAX_HP: 5.0,
 		StatModifier.StatType.PICKUP_RADIUS: 2.0,
+		StatModifier.StatType.TENACITY: 3.0,
+		StatModifier.StatType.THORNS: 1.0,
 	},
 }
 
@@ -97,6 +101,22 @@ func get_allocation_bonus(stat_type: StatModifier.StatType) -> float:
 		if bonuses.has(stat_type):
 			total += bonuses[stat_type] * count
 	return total
+
+func get_total_allocated_points() -> int:
+	var total: int = 0
+	for cat in allocated:
+		total += allocated[cat] as int
+	return total
+
+# Power level: represents overall player strength for dungeon scaling comparison
+# Formula: level * 10 + allocated_stat_points * 5
+# Level 1 naked = 10, Level 5 with 1 point = 55, Level 10 with 2 points = 110
+func get_power_level() -> int:
+	return level * 10 + get_total_allocated_points() * 5
+
+# Returns the recommended player level for a given dungeon power level
+static func power_to_level(power: int) -> int:
+	return maxi(1, power / 10)
 
 func allocate_stat_point(category: String) -> bool:
 	if unspent_stat_points <= 0:

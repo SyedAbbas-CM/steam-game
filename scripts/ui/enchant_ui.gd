@@ -17,6 +17,7 @@ var _selected_item_index: int = -1
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 100
+	add_to_group("enchant_ui")
 	_build_ui()
 
 func setup(equip_mgr: EquipmentManager) -> void:
@@ -104,6 +105,9 @@ func open() -> void:
 	_update_gold()
 	_show_item_list()
 	_panel.visible = true
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("open", -3.0, 0.0)
 
 func _update_gold() -> void:
 	var gm = get_node_or_null("/root/GameManager")
@@ -272,6 +276,9 @@ func _apply_enchant(inv_index: int, etype: ItemEnchantment.EnchantType, tier: in
 	_status_label.text = "Enchanted! → " + item.get_display_name()
 	_status_label.add_theme_color_override("font_color", item.enchantment.get_color())
 	_update_gold()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("sorcery", -2.0)
 	_select_item(inv_index)  # refresh
 
 func _upgrade_rarity(inv_index: int, cost: int) -> void:
@@ -301,6 +308,9 @@ func _upgrade_rarity(inv_index: int, cost: int) -> void:
 	_status_label.text = "Upgraded to " + rarity_names[item.rarity] + "!"
 	_status_label.add_theme_color_override("font_color", _rarity_color(item.rarity))
 	_update_gold()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("1up_a", -2.0, 0.0)
 	_select_item(inv_index)
 
 func _rarity_color(rarity: int) -> Color:
@@ -312,6 +322,9 @@ func _rarity_color(rarity: int) -> Color:
 
 func _close() -> void:
 	_panel.visible = false
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("close", -4.0, 0.0)
 	enchant_closed.emit()
 
 func is_open() -> bool:

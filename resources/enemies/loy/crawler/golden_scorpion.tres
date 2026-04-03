@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Golden Scorpion"
 description = "A large stinging crawler"
-max_hp = 22
+max_hp = 18
 move_speed = 30.7
 contact_damage = 4
 level = 7

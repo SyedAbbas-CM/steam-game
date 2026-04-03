@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Goblin Ninja"
 description = "A goblin trained in the ancient arts"
-max_hp = 210
+max_hp = 168
 move_speed = 28.9
 contact_damage = 5
 level = 23

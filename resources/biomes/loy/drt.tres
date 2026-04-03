@@ -8,6 +8,7 @@
 [resource]
 script = ExtResource("1")
 biome_name = "Drt Dungeons"
+base_difficulty = 8
 theme = "brown"
 enemy_pool = [ExtResource("2"), ExtResource("3")]
 min_floor = 1

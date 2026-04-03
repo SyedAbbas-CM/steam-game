@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Water Elemental"
 description = "A spirit of pure water"
-max_hp = 24
+max_hp = 19
 move_speed = 22.2
 contact_damage = 5
 level = 8

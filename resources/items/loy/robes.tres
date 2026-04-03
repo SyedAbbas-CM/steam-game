@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
-flat_bonus = 2.0
+flat_bonus = 4.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 14
+flat_bonus = 1.0
 
 [resource]
 script = ExtResource("1")
@@ -14,7 +19,7 @@ item_name = "Robes"
 loy_tile_index = 115
 description = "Clean plain robes"
 slot_type = 4
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 0
-buy_price = 31
-sell_value = 7
+buy_price = 120
+sell_value = 30

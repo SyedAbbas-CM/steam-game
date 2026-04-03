@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Green Dragon"
 description = "The holy green dragon"
-max_hp = 307
+max_hp = 246
 move_speed = 30.0
 contact_damage = 5
 level = 12

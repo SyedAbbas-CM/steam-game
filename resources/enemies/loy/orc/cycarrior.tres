@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Cycarrior"
 description = "A cyclopian warrior"
-max_hp = 135
+max_hp = 108
 move_speed = 20.0
 contact_damage = 5
 level = 8

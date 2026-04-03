@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq16"
+title = "The Catacombs"
+summary = "Descend into Ultima Thule's catacombs. Ancient lore reveals the old kingdom. Kill the Tide Guardian construct."
+level = 20
+location = "thule"
+target_location = "thule"
+prerequisite = "mq15"
+start_script = [{
+"cmd": "showDialog",
+"name": "Commander Rhis",
+"options": [{
+"name": "Then I'll make it.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 149,
+"text": "The gate is open. The catacombs go deep — older than Ultima Thule itself. Our scouts never came back. Whatever guards the path to the seal chamber, it won't let you pass easily."
+}]
+events = [{
+"param": "thule",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Descend",
+"script": [{
+"cmd": "getExp",
+"value": "1500"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "The Tide Guardian — a construct of bone and corrupted stone — shatters. Beyond it, stairs descend to the seal chamber. The walls are covered in murals: a king, a crown, a kingdom consumed."
+}],
+"type": "boss_killed"
+}]

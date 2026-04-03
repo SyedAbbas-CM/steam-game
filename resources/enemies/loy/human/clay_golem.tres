@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Clay Golem"
 description = "An enormous clay like creature"
-max_hp = 181
+max_hp = 145
 move_speed = 46.7
 contact_damage = 5
 level = 75

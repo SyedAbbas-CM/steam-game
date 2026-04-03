@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Holy Knight"
 description = "A huge blessed knight"
-max_hp = 109
+max_hp = 87
 move_speed = 41.3
 contact_damage = 5
 level = 57

@@ -16,5 +16,5 @@ description = "A freezing arrow"
 slot_type = 11
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
-buy_price = 55
-sell_value = 13
+buy_price = 120
+sell_value = 30

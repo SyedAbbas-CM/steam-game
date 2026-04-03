@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Molten Crawler"
+description = "An armored insectoid creature dripping with magma, charges at prey and spits bouncing fireballs"
+max_hp = 40
+move_speed = 26.0
+contact_damage = 3
+level = 6
+kingdom = "demon"
+size_class = 0
+hostile = true
+attack_type = 4
+attack_damage = 3
+attack_speed = 2.2
+bullet_speed = 60
+bullet_count = 2
+preferred_distance = 30.0
+charge_speed = 100.0
+charge_duration = 0.4
+aggro_range = 80.0
+ignores_terrain = false
+leaves_trail = true
+trail_type = "fire"
+use_loy_sprite = true
+loy_tile_index = 409
+sprite_color = Color(0.9, 0.4, 0.15, 1)
+xp_value = 22
+score_value = 45

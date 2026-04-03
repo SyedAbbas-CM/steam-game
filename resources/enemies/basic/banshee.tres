@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Banshee"
+description = "A screaming wraith that unleashes a devastating beam of ghostly energy. Her wail sweeps across the room."
+max_hp = 24
+move_speed = 15.0
+contact_damage = 2
+level = 4
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 13
+attack_damage = 3
+attack_speed = 3.0
+bullet_speed = 60.0
+bullet_count = 2
+preferred_distance = 45.0
+aggro_range = 70.0
+beam_duration = 1.2
+beam_sweep_speed = 2.0
+ignores_terrain = true
+use_loy_sprite = true
+loy_tile_index = 24
+sprite_color = Color(0.8, 0.9, 0.8, 0.6)
+xp_value = 16
+score_value = 32

@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Skaven Warrior"
 description = "A rat man warrior"
-max_hp = 118
+max_hp = 94
 move_speed = 25.0
 contact_damage = 5
 level = 10

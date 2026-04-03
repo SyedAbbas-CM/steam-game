@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CraftingRecipe" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/crafting_recipe.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "natures_elixir"
+recipe_name = "Nature's Elixir"
+recipe_type = "alchemist"
+ingredients = Array[Dictionary]([{{
+"item_name": "Swamp Root",
+"count": 1
+}}, {{
+"item_name": "Healing Herb",
+"count": 1
+}}, {{
+"item_name": "Ancient Bark",
+"count": 1
+}}])
+gold_cost = 60
+result_item_path = "res://resources/items/crafted/natures_elixir.tres"
+result_count = 1
+required_level = 10

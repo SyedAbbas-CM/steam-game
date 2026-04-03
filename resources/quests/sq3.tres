@@ -6,9 +6,9 @@
 script = ExtResource("1")
 id = "sq3"
 title = "Ghost Stories"
-summary = "Yoregot's inn patrons are spooked by ghost sightings near the graveyard. Kill 15 Ghosts to put their fears to rest."
+summary = "Corvus's inn patrons are spooked by ghost sightings near the graveyard. Kill 15 Ghosts to put their fears to rest."
 level = 7
-location = "aria"
+location = "haven"
 properties = [{
 "index": 0,
 "name": "Ghosts Banished",

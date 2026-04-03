@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Imp"
 description = "Quick little fiend that pelts you with rapid-fire dark bolts"
-max_hp = 29
+max_hp = 23
 move_speed = 22.9
 contact_damage = 1
 level = 3

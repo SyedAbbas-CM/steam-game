@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Enoch"
 description = "A chaos magician"
-max_hp = 65
+max_hp = 52
 move_speed = 29.3
 contact_damage = 5
 level = 17

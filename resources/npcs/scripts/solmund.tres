@@ -1,0 +1,70 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+commands = [{
+"cmd": "showDialog",
+"name": "Solmund",
+"portrait": 163,
+"text": "You again. Come to stare at the cave mouth too? Most people walk past without a second glance.",
+"options": [{
+"name": "What cave?",
+"script": [{
+"cmd": "showDialog",
+"name": "Solmund",
+"portrait": 163,
+"text": "Exactly. You see the entrance, but not the cave. Down in those dungeons... you think you're fighting monsters. But what are they, really? Have you ever stopped to look?",
+"options": [{
+"name": "They're monsters",
+"script": [{
+"cmd": "showDialog",
+"name": "Solmund",
+"portrait": 163,
+"text": "That's what the firelight shows you. Shapes on a wall. Maybe one day you'll turn around and see what's casting them.",
+"options": [{
+"name": "Hmm...",
+"script": []
+}]
+}]
+}, {
+"name": "What do you mean?",
+"script": [{
+"cmd": "showDialog",
+"name": "Solmund",
+"portrait": 163,
+"text": "I mean that what you see isn't always what's there. Most people spend their whole lives fighting shadows and never once wonder what's making them.",
+"options": [{
+"name": "Interesting",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "haven"
+}]
+}]
+}]
+}]
+}]
+}, {
+"name": "You seem troubled",
+"script": [{
+"cmd": "showDialog",
+"name": "Solmund",
+"portrait": 163,
+"text": "Troubled? No. I spent years in the dark. When I came out, the sunlight nearly blinded me. Now everyone else looks... dim. Not their fault. They just haven't left the cave yet.",
+"options": [{
+"name": "Any quests?",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "haven"
+}]
+}, {
+"name": "Farewell",
+"script": []
+}]
+}]
+}, {
+"name": "Farewell",
+"script": []
+}]
+}]

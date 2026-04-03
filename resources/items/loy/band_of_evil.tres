@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
-flat_bonus = 2.0
+flat_bonus = 10.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 12
+flat_bonus = 4.0
 
 [resource]
 script = ExtResource("1")
@@ -14,7 +19,7 @@ item_name = "Band of Evil"
 loy_tile_index = 8
 description = "A ring with a dark stone"
 slot_type = 8
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 316
-sell_value = 79
+buy_price = 852
+sell_value = 213

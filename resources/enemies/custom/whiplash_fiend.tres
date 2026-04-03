@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Whiplash Fiend"
+description = "Fast demon that lashes out with sweeping arcs of bullets. Dashes between attacks."
+max_hp = 6
+move_speed = 22.0
+contact_damage = 2
+kingdom = "demon"
+attack_type = 53
+attack_damage = 2
+attack_speed = 2.0
+bullet_speed = 85.0
+bullet_count = 10
+preferred_distance = 35.0
+charge_speed = 100.0
+charge_duration = 0.25
+use_loy_sprite = true
+loy_tile_index = 102
+sprite_color = Color(0.9, 0.3, 0.3, 1)
+xp_value = 6
+score_value = 40

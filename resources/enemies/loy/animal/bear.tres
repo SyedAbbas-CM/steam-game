@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Bear"
 description = "Lumbering beast that charges and mauls anything in its way"
-max_hp = 30
+max_hp = 24
 move_speed = 27.6
 contact_damage = 3
 level = 4

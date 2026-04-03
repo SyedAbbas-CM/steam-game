@@ -20,10 +20,20 @@ func take_damage(amount: int) -> void:
 	modulate = Color(1.5, 0.5, 0.5)
 	var tween = create_tween()
 	tween.tween_property(self, "modulate", Color.WHITE, 0.15)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("impact_b", -4.0)
 	if hp <= 0:
 		_destroy()
 
 func _destroy() -> void:
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("magic_crumble", -2.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.death_burst(global_position, Color(0.5, 0.4, 0.3), 0)
+		vfx.shake(1.5, 0.15)
 	for pos in tile_positions:
 		if wall_layer_ref:
 			wall_layer_ref.erase_cell(pos)

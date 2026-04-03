@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "eldori-inn"
+shop_type = "inn"
+shop_name = "Hado"
+portrait = 326
+title = "Hado's Supplies"
+welcome = "Welcome weary traveler! Rest your bones and browse my wares."
+nomoney = "You don't have the gold!"
+buy_text = "Good choice!"
+sell_text = "Thanks for your business."
+stock = [{ "item_name": "Apple", "required_quest": "" }, { "item_name": "Meat", "required_quest": "" }, { "item_name": "Trap", "required_quest": "" }, { "item_name": "Fishing Pole", "required_quest": "" }, { "item_name": "Spade", "required_quest": "" }, { "item_name": "Pet Food", "required_quest": "" }, { "item_name": "Healing Herb", "required_quest": "" }, { "item_name": "Iron Ore", "required_quest": "" }]

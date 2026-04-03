@@ -6,19 +6,20 @@
 script = ExtResource("1")
 
 enemy_name = "Drake"
-description = "A mini-dragon"
-max_hp = 64
+description = "A mini-dragon that charges with fiery breath and bouncing fireballs"
+max_hp = 51
 move_speed = 28.8
 contact_damage = 5
 level = 8
 kingdom = "animal"
 size_class = 0
 hostile = true
-attack_type = 4
+attack_type = 37
 attack_damage = 4
 attack_speed = 2.34
-bullet_speed = 48
-bullet_count = 1
+bullet_speed = 60
+bullet_count = 3
+bounce_count = 2
 preferred_distance = 40.0
 charge_speed = 80.0
 charge_duration = 0.3

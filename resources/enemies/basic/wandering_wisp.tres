@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Wandering Wisp"
+description = "Slow glowing orb that zigzags through walls. Harmless but annoying."
+max_hp = 4
+move_speed = 14.0
+contact_damage = 1
+level = 1
+kingdom = "magical"
+size_class = 0
+hostile = true
+attack_type = 22
+attack_damage = 1
+attack_speed = 2.5
+bullet_speed = 40.0
+bullet_count = 1
+preferred_distance = 30.0
+aggro_range = 60.0
+ignores_terrain = true
+use_loy_sprite = true
+loy_tile_index = 24
+sprite_color = Color(0.6, 0.9, 1, 0.8)
+xp_value = 3
+score_value = 6

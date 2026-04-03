@@ -1,0 +1,67 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+commands = [{
+"cmd": "showDialog",
+"name": "Telos",
+"portrait": 161,
+"text": "Careful where you step — I'm cataloging the soil composition here. Fascinating how dungeon creatures adapt to their environment. Everything has a purpose, you know.",
+"options": [{
+"name": "A purpose?",
+"script": [{
+"cmd": "showDialog",
+"name": "Telos",
+"portrait": 161,
+"text": "Every creature, every plant, every rock. The skeleton guards its tomb because guarding IS its nature. Understanding what something is FOR tells you everything about it.",
+"options": [{
+"name": "What's my purpose?",
+"script": [{
+"cmd": "showDialog",
+"name": "Telos",
+"portrait": 161,
+"text": "That's for you to discover through action. A sword unused is just metal. A warrior who never fights is just a person with armor. You become what you repeatedly do.",
+"options": [{
+"name": "Any quests?",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "haven"
+}]
+}, {
+"name": "I see",
+"script": []
+}]
+}]
+}, {
+"name": "What about balance?",
+"script": [{
+"cmd": "showDialog",
+"name": "Telos",
+"portrait": 161,
+"text": "Ah, now you're thinking! Too much courage becomes recklessness. Too little becomes cowardice. The sweet spot — that narrow middle ground — is where virtue lives. Discipline is finding that mark.",
+"options": [{
+"name": "Any quests?",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "haven"
+}]
+}, {
+"name": "Farewell",
+"script": []
+}]
+}]
+}]
+}]
+}, {
+"name": "Any quests?",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "haven"
+}]
+}, {
+"name": "Farewell",
+"script": []
+}]
+}]

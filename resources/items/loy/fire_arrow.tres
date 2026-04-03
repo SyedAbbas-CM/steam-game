@@ -16,5 +16,5 @@ description = "A flaming arrow"
 slot_type = 11
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
-buy_price = 39
-sell_value = 9
+buy_price = 84
+sell_value = 21

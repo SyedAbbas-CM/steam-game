@@ -43,6 +43,9 @@ func _create_card(reward: Dictionary, index: int) -> Button:
 	return btn
 
 func _on_card_pressed(index: int) -> void:
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("bonus", -2.0, 0.0)
 	var chosen = rewards[index]
 	visible = false
 	get_tree().paused = false

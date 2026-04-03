@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Hive Queen"
+description = "A giant insect matriarch that summons swarms of crawlers. In later phases she fires seeking mines and carpet-bombs the room."
+max_hp = 56
+move_speed = 14.0
+contact_damage = 3
+level = 5
+kingdom = "crawler"
+size_class = 1
+hostile = true
+attack_type = 6
+attack_damage = 4
+attack_speed = 2.5
+bullet_speed = 45.0
+bullet_count = 4
+preferred_distance = 40.0
+aggro_range = 70.0
+summon_count = 3
+boss_phases = 3
+phase_2_attack = 30
+phase_2_bullet_count = 3
+phase_3_attack = 43
+phase_3_bullet_count = 5
+summon_on_phase_change = true
+use_loy_sprite = true
+loy_tile_index = 36
+sprite_color = Color(0.6, 0.5, 0.2, 1)
+xp_value = 40
+score_value = 80

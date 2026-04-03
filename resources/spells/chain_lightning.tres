@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "chain_lightning"
+spell_name = "Chain Lightning"
+description = "Instant hit on nearest enemy, chains to 2 more"
+effect_type = 2
+delivery = 3
+magnitude = 25
+duration = 0.0
+mp_cost = 20.0
+cooldown = 6.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

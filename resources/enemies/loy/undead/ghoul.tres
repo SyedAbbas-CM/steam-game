@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Ghoul"
 description = "The walking dead"
-max_hp = 6
+max_hp = 19
 move_speed = 23.2
 contact_damage = 2
 level = 4
@@ -15,7 +15,7 @@ kingdom = "undead"
 size_class = 0
 hostile = true
 attack_type = 2
-attack_damage = 1
+attack_damage = 2
 attack_speed = 2.42
 bullet_speed = 69
 bullet_count = 1

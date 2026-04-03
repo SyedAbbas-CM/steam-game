@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CraftingRecipe" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/crafting_recipe.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "xp_elixir"
+recipe_name = "XP Elixir"
+recipe_type = "alchemist"
+ingredients = Array[Dictionary]([{{
+"item_name": "Magic Essence",
+"count": 1
+}}, {{
+"item_name": "Healing Herb",
+"count": 1
+}}])
+gold_cost = 100
+result_item_path = "res://resources/items/crafted/xp_elixir.tres"
+result_count = 1
+required_level = 7

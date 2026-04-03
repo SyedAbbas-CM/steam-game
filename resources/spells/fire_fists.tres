@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "fire_fists"
+spell_name = "Fire Fists"
+description = "+25% damage, bullets apply BURNING for 8s"
+effect_type = 0
+delivery = 2
+magnitude = 25
+duration = 8.0
+mp_cost = 15.0
+cooldown = 12.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

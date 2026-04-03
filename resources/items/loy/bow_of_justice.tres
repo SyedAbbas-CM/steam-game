@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 33.0
+flat_bonus = 30.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 4
+flat_bonus = 0.2
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Bow of Justice"
 loy_tile_index = 438
 description = "A glowing golden bow"
 slot_type = 1
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 564
-sell_value = 141
-bullet_sprite_index = 105
+buy_price = 1143
+sell_value = 285
+bullet_sprite_index = 185
 weapon_range = 5.0
+weapon_type = "bow"

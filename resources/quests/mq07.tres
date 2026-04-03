@@ -1,0 +1,53 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq07"
+title = "Frozen Witnesses"
+summary = "A patrol frozen in black ice in the cold wastes. Their journal describes a 'woman in white.'"
+level = 10
+location = "ashheim"
+target_location = "frostpass"
+prerequisite = "mq06"
+start_script = [{
+"cmd": "showDialog",
+"name": "Warden Aldric",
+"options": [{
+"name": "I'll find them.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 148,
+"text": "The northern fragment was guarded by a priestess in the frozen temple. But we've lost contact. Scouts sent north haven't returned."
+}]
+events = [{
+"param": "frostpass",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Read the journal",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "The priestess is corrupted.",
+"script": [{
+"cmd": "getExp",
+"value": "400"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "'Day 4 — The priestess has changed. Her eyes are white now. She speaks in a voice that isn't hers. We tried to leave. She wouldn't let us.' The entries end there."
+}]
+}],
+"portrait": 0,
+"text": "Soldiers frozen mid-stride in columns of black ice. Their faces are locked in terror. A journal lies at one's feet."
+}],
+"type": "zone_enter"
+}]

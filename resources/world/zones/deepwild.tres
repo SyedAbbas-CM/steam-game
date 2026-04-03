@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "deepwild"
+zone_name = "The Deepwild"
+tileset = 192
+width = 30
+height = 30
+world_pos = Vector2i(82, 17)
+dungeon_base = "Deep-Dungeons"
+dungeon_count = 8
+description = "Dense unexplored jungle so thick that sunlight never reaches the ground. Ancient things move in the darkness."
+baked_offset = Vector2i(1716, -608)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "feverjungle",
+"tx": 24,
+"ty": 0,
+"x": 6,
+"y": 29
+}])
+spawns = Array[Dictionary]([{
+"chance": 100,
+"type": "Cannibal",
+"x": 1,
+"y": 1
+}])

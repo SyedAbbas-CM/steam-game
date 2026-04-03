@@ -6,7 +6,11 @@ var player: Node2D
 var equipment_manager: EquipmentManager
 
 func _ready() -> void:
+	if not is_inside_tree():
+		return
 	await get_tree().process_frame
+	if not is_inside_tree():
+		return
 	player = get_tree().get_first_node_in_group("player")
 	if player:
 		player.hp_changed.connect(_on_hp_changed)

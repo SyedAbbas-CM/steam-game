@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Poison Flask"
+loy_tile_index = 85
+description = "Throw to release a cloud of poison."
+slot_type = 10
+rarity = 1
+buy_price = 120
+sell_value = 30
+use_effect = "poison_aoe"

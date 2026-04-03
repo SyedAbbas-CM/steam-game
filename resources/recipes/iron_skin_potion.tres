@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CraftingRecipe" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/crafting_recipe.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "iron_skin_potion"
+recipe_name = "Iron Skin Potion"
+recipe_type = "alchemist"
+ingredients = Array[Dictionary]([{{
+"item_name": "Iron Ore",
+"count": 2
+}}, {{
+"item_name": "Healing Herb",
+"count": 1
+}}])
+gold_cost = 60
+result_item_path = "res://resources/items/crafted/iron_skin_potion.tres"
+result_count = 1
+required_level = 7

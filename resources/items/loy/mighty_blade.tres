@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 6.0
+flat_bonus = 15.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 13
+flat_bonus = 0.15
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Mighty Blade"
 loy_tile_index = 88
 description = "A golden glowing sword"
 slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 348
-sell_value = 87
-bullet_sprite_index = 120
-weapon_range = 2.5
+buy_price = 872
+sell_value = 218
+bullet_sprite_index = 240
+weapon_range = 1.65
+weapon_type = "sword"

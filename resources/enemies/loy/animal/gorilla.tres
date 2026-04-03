@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Gorilla"
 description = "A dirty stinking ape"
-max_hp = 21
+max_hp = 17
 move_speed = 26.7
 contact_damage = 1
 level = 1

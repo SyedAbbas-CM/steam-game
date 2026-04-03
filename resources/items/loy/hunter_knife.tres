@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 4.0
+flat_bonus = 8.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 7
+flat_bonus = 1.0
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Hunter Knife"
 loy_tile_index = 227
 description = "A long bladed carving knife"
 slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 1
-buy_price = 112
-sell_value = 28
-bullet_sprite_index = 120
-weapon_range = 1.5
+buy_price = 312
+sell_value = 78
+bullet_sprite_index = 240
+weapon_range = 1.0
+weapon_type = "dagger"

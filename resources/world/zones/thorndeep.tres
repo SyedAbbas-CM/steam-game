@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "thorndeep"
+zone_name = "Thorndeep"
+tileset = 112
+width = 50
+height = 15
+world_pos = Vector2i(42, 52)
+dungeon_base = "Thorn-Dungeons"
+baked_offset = Vector2i(232, -60)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "rotgrove",
+"tx": 10,
+"ty": 28,
+"x": 10,
+"y": 0
+}, {
+"target": "dreadbridge",
+"tx": 1,
+"ty": 3,
+"x": 49,
+"y": 2
+}])
+signs = Array[Dictionary]([{
+"message": "To The Wailing Cliffs",
+"x": 48,
+"y": 3
+}])
+spawns = Array[Dictionary]([{
+"chance": 200,
+"type": "Robber",
+"x": 3,
+"y": 3
+}])

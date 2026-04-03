@@ -1,0 +1,59 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "boghollow"
+zone_name = "Boghollow"
+tileset = 100
+world_pos = Vector2i(90, 16)
+dungeon_base = "Bog-Dungeons"
+dungeon_count = 10
+description = "A reclusive swamp settlement whose inhabitants have adapted to the corruption in disturbing ways."
+baked_offset = Vector2i(2048, -372)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "miredeep",
+"tx": 6,
+"ty": 0,
+"x": 14,
+"y": 24
+}])
+npcs = Array[Dictionary]([{
+"name": "Fighter Mak",
+"portrait": 207,
+"tile": 436,
+"shop": "boghollow-weapon",
+"type": "shop",
+"x": 7,
+"y": 16
+}, {
+"name": "Goodman Durnik",
+"portrait": 202,
+"tile": 186,
+"shop": "boghollow-inn",
+"type": "shop",
+"x": 18,
+"y": 16
+}, {
+"name": "Shaman Kal",
+"portrait": 207,
+"tile": 455,
+"shop": "boghollow-magic",
+"type": "shop",
+"x": 7,
+"y": 7
+}, {
+"name": "Chief Komba",
+"portrait": 158,
+"tile": 456,
+"type": "elder",
+"x": 18,
+"y": 7
+}])
+signs = Array[Dictionary]([{
+"message": "To the Miredeep",
+"x": 15,
+"y": 22
+}])

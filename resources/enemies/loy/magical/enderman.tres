@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Enderman"
 description = "A dark thin spirit"
-max_hp = 57
+max_hp = 46
 move_speed = 23.1
 contact_damage = 5
 level = 11

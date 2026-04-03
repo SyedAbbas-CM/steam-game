@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Goblin"
 description = "Crafty ranged fighter that peppers you with a spread of crude arrows"
-max_hp = 55
+max_hp = 44
 move_speed = 18.5
 contact_damage = 2
 level = 3

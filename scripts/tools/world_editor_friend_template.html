@@ -22,6 +22,9 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1a2e; colo
 #canvas-wrap.dragging { cursor: grabbing; }
 #canvas-wrap.painting { cursor: crosshair; }
 #canvas-wrap.annotating { cursor: text; }
+#canvas-wrap.eyedropping { cursor: copy; }
+#canvas-wrap.area-draw { cursor: crosshair; }
+#canvas-wrap.selecting { cursor: crosshair; }
 canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; }
 
 #panel { width: 380px; background: #16213e; border-left: 1px solid #0f3460; display: flex; flex-direction: column; overflow: hidden; }
@@ -48,7 +51,7 @@ canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; }
 .btn-remove { background: none; border: none; color: #e94560; cursor: pointer; font-size: 13px; padding: 1px 4px; }
 
 /* Palette grid */
-#palette-grid { display: grid; grid-template-columns: repeat(16, 21px); gap: 1px; margin-bottom: 6px; }
+#palette-grid { display: grid; gap: 1px; margin-bottom: 6px; }
 #palette-grid .ptile { width: 21px; height: 21px; cursor: pointer; border: 1px solid #1a4a8a; image-rendering: pixelated; background-size: cover; background-repeat: no-repeat; }
 #palette-grid .ptile:hover { border-color: #e94560; }
 #palette-grid .ptile.selected { border: 2px solid #e94560; }
@@ -73,22 +76,33 @@ canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; }
     <input id="author-name" placeholder="Your name" style="width:100px">
     <div class="sep"></div>
     <button onclick="setMode('pan')" id="btn-pan" class="active">Pan</button>
-    <button onclick="setMode('paint')" id="btn-paint">Paint</button>
+    <button onclick="setMode('paint')" id="btn-paint">Draw</button>
     <button onclick="setMode('annotate')" id="btn-annotate">Note</button>
-    <button onclick="toggleEraser()" id="btn-eraser">Eraser</button>
     <div class="sep"></div>
+    <span id="draw-options" style="display:none">
+      <button onclick="toggleEraser()" id="btn-eraser" style="font-size:10px">Eraser</button>
+      <button onclick="toggleBoxSelect()" id="btn-box" style="font-size:10px">Select</button>
+      <button onclick="eyedropMode()" id="btn-eyedropper" style="font-size:10px">Pick</button>
+      <button onclick="openTileRemover()" style="font-size:10px">Find/Replace</button>
+      <div class="sep"></div>
+    </span>
     <button onclick="undo()">Undo</button>
     <button onclick="redo()">Redo</button>
     <div class="sep"></div>
-    <button onclick="fitView()">Fit</button>
     <button onclick="toggleLabels()" id="btn-labels" class="active">Labels</button>
     <button onclick="toggleNpcs()" id="btn-npcs" class="active">NPCs</button>
     <button onclick="toggleQuests()" id="btn-quests" class="active">Quests</button>
+    <button onclick="toggleLayerTint()" id="btn-layertint">Layers</button>
+    <button onclick="placeSpawnMode()" id="btn-spawn" style="font-size:10px;background:#0e4a5c;border-color:#22d3ee;color:#22d3ee">Spawn</button>
+    <button onclick="toggleAreaMode()" id="btn-area" style="font-size:10px;background:#4a1d0e;border-color:#ef4444;color:#ef4444">Region</button>
     <div class="sep"></div>
-    <button onclick="exportChangeset()" style="background:#166534;border-color:#4ade80;color:#4ade80">Export</button>
+    <button onclick="exportChangeset()" style="background:#166534;border-color:#4ade80;color:#4ade80">Export Diff</button>
+    <button onclick="exportFullMap()" style="background:#7c2d12;border-color:#fb923c;color:#fb923c">Export Full Map</button>
     <button onclick="importChangeset()">Import</button>
+    <button onclick="resetBaseline()" id="btn-reset-baseline" title="Reset baseline to current state (next diff will be empty)" style="font-size:9px;color:#888">Reset Baseline</button>
     <div class="sep"></div>
     <input type="text" id="search" placeholder="Search..." style="width:120px" oninput="filterZones(this.value)">
+    <span id="baseline-info" style="color:#666;font-size:9px"></span>
     <div class="info" id="info-bar">Loading...</div>
 </div>
 
@@ -108,6 +122,7 @@ canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; }
             <button data-tab="exits" onclick="switchTab('exits')">Exits</button>
             <button data-tab="notes" onclick="switchTab('notes')">Notes</button>
             <button data-tab="quests" onclick="switchTab('quests')">Quests</button>
+            <button data-tab="selection" onclick="switchTab('selection')">Selection</button>
             <button data-tab="ideas" onclick="switchTab('ideas')">Ideas</button>
         </div>
         <div id="panel-content"></div>
@@ -124,7 +139,47 @@ canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; }
 
 <div class="toast" id="toast"></div>
 <div id="loading">Loading world data...</div>
+
+<div id="tile-remover-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;display:none;align-items:center;justify-content:center">
+  <div style="background:#16213e;border:1px solid #0f3460;border-radius:8px;padding:16px;width:360px;max-height:80vh;overflow-y:auto">
+    <h3 style="font-size:14px;margin-bottom:10px;color:#e94560">Remove / Replace Tiles in Area</h3>
+    <div class="field"><label>Area</label>
+      <select id="tr-area" style="width:100%;background:#0d1b2a;border:1px solid #1a4a8a;color:#e0e0e0;padding:4px;border-radius:3px;font-size:11px"></select>
+    </div>
+    <div class="field"><label>Find tile (use Pick tool to select, showing current brush)</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="tr-tile-preview" style="width:32px;height:32px;border:2px solid #e94560;border-radius:3px;image-rendering:pixelated"></div>
+        <span id="tr-tile-label" style="font-size:11px;color:#888">Tile #1</span>
+      </div>
+    </div>
+    <div class="field"><label>Action</label>
+      <select id="tr-action" style="width:100%;background:#0d1b2a;border:1px solid #1a4a8a;color:#e0e0e0;padding:4px;border-radius:3px;font-size:11px" onchange="toggleReplaceWith()">
+        <option value="remove">Remove (erase to void)</option>
+        <option value="replace">Replace with another tile</option>
+      </select>
+    </div>
+    <div class="field" id="tr-replace-row" style="display:none"><label>Replace with tile # (type number)</label>
+      <input type="number" id="tr-replace-idx" value="1" min="0" max="255" style="width:80px;background:#0d1b2a;border:1px solid #1a4a8a;color:#e0e0e0;padding:4px;border-radius:3px;font-size:11px">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="executeTileRemoval()" style="flex:1;background:#e94560;border:none;color:#fff;padding:6px;border-radius:4px;cursor:pointer;font-size:12px">Execute</button>
+      <button onclick="closeTileRemover()" style="flex:1;background:#0f3460;border:1px solid #1a4a8a;color:#e0e0e0;padding:6px;border-radius:4px;cursor:pointer;font-size:12px">Cancel</button>
+    </div>
+  </div>
+</div>
 <div id="ann-popup"><input id="ann-input" placeholder="Type note, press Enter"></div>
+<div id="area-name-popup" style="position:fixed;z-index:50;display:none;background:#0d1b2a;border:2px solid #f59e0b;border-radius:6px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,0.5)">
+    <input id="area-name-input" placeholder="Region name..." style="background:#0a1628;border:1px solid #1a4a8a;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:12px;width:200px;outline:none;display:block;margin-bottom:6px">
+    <select id="area-type-select" style="background:#0a1628;border:1px solid #1a4a8a;color:#e0e0e0;padding:3px 6px;border-radius:4px;font-size:11px;width:100%;margin-bottom:4px">
+        <option value="area">Area (general)</option>
+        <option value="enemy_spawn">Enemy Spawn</option>
+        <option value="safe_zone">Safe Zone</option>
+        <option value="boss_arena">Boss Arena</option>
+        <option value="trigger">Trigger Zone</option>
+        <option value="npc_patrol">NPC Patrol</option>
+    </select>
+    <div style="font-size:9px;color:#888">Press Enter to confirm, Esc to cancel</div>
+</div>
 <input type="file" id="import-file" accept=".json" style="display:none">
 
 <script>
@@ -161,17 +216,121 @@ const TERRAIN_CHUNK = 64; // tiles per chunk side
 let terrainData = null; // decoded terrain grid
 let terrainReady = false;
 
+// Spritesheet system: multiple atlases
+// Tile index encoding: sheetOffset + localIdx
+// maptiles: 0-255, tiles: 256-511, tiles2: 512-767, lofiEnv: 768-1183 (16x26=416), dungeonFeat: 1184-1291 (12x9=108)
+const SHEETS = [
+    { id: 'maptiles', name: 'Overworld (maptiles)', file: 'maptiles.png', cols: 16, rows: 16, tilePx: 32, offset: 0, img: null },
+    { id: 'tiles', name: 'LoY Tiles', file: 'tiles.png', cols: 16, rows: 16, tilePx: 32, offset: 256, img: null },
+    { id: 'tiles2', name: 'LoY Tiles 2', file: 'tiles2.png', cols: 16, rows: 16, tilePx: 32, offset: 512, img: null },
+    { id: 'lofiEnv', name: 'Dungeon Env (8px)', file: 'lofiEnvironment.png', cols: 16, rows: 26, tilePx: 8, offset: 768, img: null },
+    { id: 'dungeonFeat', name: 'Dungeon Features (8px)', file: 'lofi_dungeon_features.png', cols: 12, rows: 9, tilePx: 8, offset: 1184, img: null },
+    { id: 'lofiObj', name: 'LoFi Objects (8px)', file: 'lofi_obj.png', cols: 16, rows: 16, tilePx: 8, offset: 1292, img: null },
+    { id: 'lofiObjB', name: 'LoFi Objects B (8px)', file: 'lofi_obj_packB.png', cols: 9, rows: 8, tilePx: 8, offset: 1548, img: null },
+];
+let selectedSheet = SHEETS[0]; // currently active spritesheet
+let allSheetsLoaded = false;
+
+function getSheetForIdx(idx) {
+    for (let i = SHEETS.length - 1; i >= 0; i--) {
+        if (idx >= SHEETS[i].offset) return SHEETS[i];
+    }
+    return SHEETS[0];
+}
+
+function getSheetLocalIdx(globalIdx) {
+    const sheet = getSheetForIdx(globalIdx);
+    return { sheet, localIdx: globalIdx - sheet.offset };
+}
+
+// Get effective tile at key for the active layer
+function getLayerTile(key) {
+    const paintLayer = layerPaints[activeLayer];
+    let v = paintLayer[key];
+    if (v !== undefined) return v;
+    // For ground layer, fall through to base terrain
+    if (activeLayer === 'ground') {
+        if (terrainOverlay && terrainOverlay[key] !== undefined) return terrainOverlay[key];
+        if (terrainGround && terrainGround[key] !== undefined) return terrainGround[key];
+    }
+    return -1;
+}
+
+function drawTileFromIdx(targetCtx, globalIdx, dx, dy, size) {
+    if (globalIdx < 0) { targetCtx.fillStyle = '#0a0a12'; targetCtx.fillRect(dx, dy, size, size); return; }
+    const { sheet, localIdx } = getSheetLocalIdx(globalIdx);
+    if (!sheet.img) return;
+    const sx = (localIdx % sheet.cols) * sheet.tilePx;
+    const sy = Math.floor(localIdx / sheet.cols) * sheet.tilePx;
+    targetCtx.drawImage(sheet.img, sx, sy, sheet.tilePx, sheet.tilePx, dx, dy, size, size);
+}
+
+// Layer system - bottom to top render order
+const PAINT_LAYERS = [
+    { id: 'ground', name: 'Ground', desc: 'Base terrain (grass, dirt, water, sand)' },
+    { id: 'paths', name: 'Paths', desc: 'Roads, bridges, walkways' },
+    { id: 'buildings', name: 'Buildings', desc: 'Walls, roofs, structures' },
+    { id: 'objects', name: 'Objects', desc: 'Furniture, barrels, wells, signs' },
+    { id: 'decor', name: 'Decoration', desc: 'Trees, flowers, bushes, details' },
+];
+let activeLayer = 'ground'; // which layer to paint on
+
 // Modes
-let mode = 'pan'; // 'pan', 'paint', 'annotate'
+let mode = 'pan'; // 'pan', 'paint', 'annotate', 'eyedropper'
 let eraserOn = false;
-let selectedTileIdx = 1; // default floor
+let boxMode = false; // box fill mode for paint/erase
+let boxStart = null; // {wx, wy} world-tile coords of box start
+let boxCurrent = null; // current mouse pos during box drag
+let selectedTileIdx = 1; // default floor (global idx: sheet offset + local)
 let brushSize = 1;
 let isPainting = false;
 
 // Changes tracking
 let tileChanges = {};  // {zone_id: Map("x,y" -> [x, y, oldIdx, newIdx])}
-let undoStack = [];    // [{zone_id, x, y, oldIdx, newIdx}, ...]
+// Per-layer terrain paints: { layerId: { "wx,wy": spriteIdx } }
+let layerPaints = { ground: {}, paths: {}, buildings: {}, objects: {}, decor: {} };
+// Legacy single-dict reference (for backwards compat with saved data)
+let terrainPaints = layerPaints.ground;
+let undoStack = [];    // [{zone_id, x, y, oldIdx, newIdx}, ...] or {terrain: true, wx, wy, oldIdx, newIdx}
 let redoStack = [];
+
+// Baseline snapshot — set after successful export, used to diff against
+// Contains: { layerPaints, customAreas, npcMoves, zoneOverrides, npcDialogueOverrides, playerSpawn, timestamp }
+let baseline = null;
+
+// Custom named areas/regions (user-drawn boxes)
+// Each: {name, x1, y1, x2, y2, type?, data?}
+// Types: 'area' (default), 'enemy_spawn', 'safe_zone', 'trigger', 'boss_arena', 'npc_patrol'
+let customAreas = [];
+const REGION_TYPES = [
+    { id: 'area', name: 'Area', color: '#f59e0b' },
+    { id: 'enemy_spawn', name: 'Enemy Spawn', color: '#ef4444' },
+    { id: 'safe_zone', name: 'Safe Zone', color: '#22c55e' },
+    { id: 'boss_arena', name: 'Boss Arena', color: '#a855f7' },
+    { id: 'trigger', name: 'Trigger Zone', color: '#3b82f6' },
+    { id: 'npc_patrol', name: 'NPC Patrol', color: '#ec4899' },
+];
+let areaDrawStart = null; // temp during area drawing
+let pendingArea = null; // temp area awaiting naming
+
+// NPC position overrides {zoneId_npcIdx: {x, y}} in zone-local tile coords
+let npcMoves = {};
+let draggingNpc = null; // {zoneId, idx, startX, startY}
+let _npcClickStart = null; // track click vs drag
+
+// Zone data overrides (user edits to zone name, description, etc.)
+let zoneOverrides = {}; // {zoneId: {zone_name, description}}
+
+let undoGroupId = 0; // incrementing group ID for batch undo
+
+// Selection tool state
+let selection = null; // {x1, y1, x2, y2} world-tile coords
+let selectionStart = null; // temp during selection draw
+let selectionTiles = null; // Map: "rx,ry" -> spriteIdx (relative to selection origin)
+let selectionDragging = false;
+let selectionDragOff = null; // {dx, dy} offset from mouse to selection origin
+let selectionDragOrigin = null; // {x1, y1, x2, y2} original position before drag
+let selectionAnalysis = null; // {tileCounts, emptyCount, total}
 
 // Annotations
 let annotations = {};  // {zone_id: [{x, y, text}]}
@@ -189,30 +348,39 @@ async function init() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    maptilesImg = new Image();
-    maptilesImg.onload = () => {
-        maptilesLoaded = true;
-        // Show loading state immediately, decode terrain async
-        document.getElementById('loading').textContent = 'Decoding terrain...';
-        document.getElementById('loading').style.display = '';
-        setTimeout(() => {
-            const t0 = performance.now();
-            try {
-                decodeTerrain();
-                const dt = ((performance.now() - t0) / 1000).toFixed(1);
-                console.log(`decodeTerrain: ${dt}s, terrainReady: ${terrainReady}, chunks: ${Object.keys(terrainChunks).length}`);
-                document.title = `LoY Editor — terrain: ${Object.keys(terrainChunks).length} chunks in ${dt}s`;
-            } catch(e) {
-                console.error('decodeTerrain FAILED:', e);
-                document.title = 'LoY Editor — TERRAIN ERROR: ' + e.message;
-            }
-            prebakeAllZones();
-            buildPaletteAtlas();
-            document.getElementById('loading').style.display = 'none';
-            render();
-        }, 50);
-    };
-    maptilesImg.src = 'maptiles.png';
+    // Load all spritesheets
+    let sheetsLoaded = 0;
+    function onSheetLoaded() {
+        sheetsLoaded++;
+        if (sheetsLoaded === SHEETS.length) {
+            allSheetsLoaded = true;
+            maptilesImg = SHEETS[0].img;
+            maptilesLoaded = true;
+            document.getElementById('loading').textContent = 'Decoding terrain...';
+            setTimeout(() => {
+                const t0 = performance.now();
+                try {
+                    decodeTerrain();
+                    const dt = ((performance.now() - t0) / 1000).toFixed(1);
+                    console.log(`decodeTerrain: ${dt}s, terrainReady: ${terrainReady}`);
+                    document.title = `LoY Editor — terrain decoded in ${dt}s`;
+                } catch(e) {
+                    console.error('decodeTerrain FAILED:', e);
+                    document.title = 'LoY Editor — TERRAIN ERROR: ' + e.message;
+                }
+                prebakeAllZones();
+                buildPaletteAtlas();
+                document.getElementById('loading').style.display = 'none';
+                render();
+            }, 50);
+        }
+    }
+    for (const sheet of SHEETS) {
+        sheet.img = new Image();
+        sheet.img.onload = onSheetLoaded;
+        sheet.img.onerror = () => { console.warn('Failed to load ' + sheet.file); onSheetLoaded(); };
+        sheet.img.src = sheet.file;
+    }
     charsImg = new Image(); charsImg.src = 'chars.png';
     chars2Img = new Image(); chars2Img.src = 'chars2.png';
 
@@ -253,6 +421,12 @@ async function init() {
 
     // Load saved state from localStorage (annotations, ideas, tile changes)
     loadSavedState();
+    // Auto-set baseline on first load so current map = baseline
+    if (!baseline) {
+        _snapshotBaseline();
+        console.log('Auto-set baseline to current state (first load)');
+    }
+    updateBaselineInfo();
 
     document.getElementById('status-zones').textContent = `Zones: ${zones.length}`;
     document.getElementById('info-bar').textContent = `${zones.length} zones | ${quests.length} quests`;
@@ -263,11 +437,12 @@ async function init() {
     if (ariaZone) {
         const off = ariaZone.baked_offset || {x:0,y:0};
         const s = ariaZone.baked_scale || 1;
-        zoom = 0.12;
+        zoom = 0.25;
         camX = -(off.x + (ariaZone.width||25)*s/2) * TILE_PX * zoom + canvas.width/2;
         camY = -(off.y + (ariaZone.height||25)*s/2) * TILE_PX * zoom + canvas.height/2;
     } else {
-        fitView();
+        zoom = 0.25;
+        camX = canvas.width/2; camY = canvas.height/2;
     }
     switchTab('palette');
 
@@ -275,6 +450,28 @@ async function init() {
     document.getElementById('ann-input').addEventListener('keydown', e => {
         if (e.key === 'Enter') { commitAnnotation(e.target.value); e.target.value = ''; }
         if (e.key === 'Escape') { document.getElementById('ann-popup').style.display = 'none'; }
+    });
+
+    // Area naming popup handler
+    document.getElementById('area-name-input').addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Enter' && pendingArea) {
+            const name = e.target.value.trim();
+            if (name) {
+                const regionType = document.getElementById('area-type-select').value;
+                customAreas.push({ name, type: regionType, ...pendingArea });
+                saveAnnotations();
+                showToast(`${regionType} region "${name}" created`);
+                render();
+            }
+            pendingArea = null;
+            document.getElementById('area-name-popup').style.display = 'none';
+            e.target.value = '';
+        }
+        if (e.key === 'Escape') {
+            pendingArea = null;
+            document.getElementById('area-name-popup').style.display = 'none';
+        }
     });
 
     document.getElementById('import-file').addEventListener('change', handleImportFile);
@@ -367,7 +564,7 @@ function decodeTerrain() {
 }
 
 function renderChunk(cx, cy) {
-    // Render a single chunk canvas on-demand
+    // Render a single chunk canvas with baked terrain + all paint layer overrides
     const oc = document.createElement('canvas');
     const TC = TERRAIN_CHUNK, TP = TILE_PX;
     oc.width = TC * TP; oc.height = TC * TP;
@@ -378,24 +575,47 @@ function renderChunk(cx, cy) {
     for (let ly = 0; ly < TC; ly++) {
         for (let lx = 0; lx < TC; lx++) {
             const key = (baseX + lx) + ',' + (baseY + ly);
-            // Ground
-            const gs = terrainGround[key];
-            if (gs !== undefined) {
-                if (gs === -2) {
-                    octx.fillStyle = '#0a0a12';
-                    octx.fillRect(lx * TP, ly * TP, TP, TP);
-                } else {
-                    const sx = (gs % ATLAS_COLS) * TP;
-                    const sy = ((gs / ATLAS_COLS) | 0) * TP;
-                    octx.drawImage(maptilesImg, sx, sy, TP, TP, lx * TP, ly * TP, TP, TP);
+            const dx = lx * TP, dy = ly * TP;
+
+            // --- Ground layer ---
+            const groundPaint = layerPaints.ground[key];
+            if (groundPaint !== undefined) {
+                drawTileFromIdx(octx, groundPaint, dx, dy, TP);
+                if (showLayerTint && groundPaint >= 0) {
+                    octx.fillStyle = LAYER_COLORS.ground;
+                    octx.fillRect(dx, dy, TP, TP);
+                }
+            } else {
+                const gs = terrainGround[key];
+                if (gs !== undefined) {
+                    if (gs === -2) {
+                        octx.fillStyle = '#0a0a12';
+                        octx.fillRect(dx, dy, TP, TP);
+                    } else {
+                        const sx = (gs % ATLAS_COLS) * TP;
+                        const sy = ((gs / ATLAS_COLS) | 0) * TP;
+                        octx.drawImage(maptilesImg, sx, sy, TP, TP, dx, dy, TP, TP);
+                    }
+                }
+                const os = terrainOverlay[key];
+                if (os !== undefined && os >= 0) {
+                    const sx = (os % ATLAS_COLS) * TP;
+                    const sy = ((os / ATLAS_COLS) | 0) * TP;
+                    octx.drawImage(maptilesImg, sx, sy, TP, TP, dx, dy, TP, TP);
                 }
             }
-            // Overlay on top
-            const os = terrainOverlay[key];
-            if (os !== undefined && os >= 0) {
-                const sx = (os % ATLAS_COLS) * TP;
-                const sy = ((os / ATLAS_COLS) | 0) * TP;
-                octx.drawImage(maptilesImg, sx, sy, TP, TP, lx * TP, ly * TP, TP, TP);
+
+            // --- Upper paint layers (paths, buildings, objects, decor) ---
+            for (let li = 1; li < PAINT_LAYERS.length; li++) {
+                const lid = PAINT_LAYERS[li].id;
+                const v = layerPaints[lid][key];
+                if (v !== undefined && v >= 0) {
+                    drawTileFromIdx(octx, v, dx, dy, TP);
+                    if (showLayerTint) {
+                        octx.fillStyle = LAYER_COLORS[lid];
+                        octx.fillRect(dx, dy, TP, TP);
+                    }
+                }
             }
         }
     }
@@ -443,27 +663,39 @@ function drawTerrain() {
     }
 }
 
-// ── Camera ───────────────────────────────────────────────────────────────
-function fitView() {
-    if (!zones.length) return;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const z of zones) {
-        const off = z.baked_offset || {x:0,y:0};
-        const s = z.baked_scale || 1;
-        minX = Math.min(minX, off.x);
-        minY = Math.min(minY, off.y);
-        maxX = Math.max(maxX, off.x + (z.width||25)*s);
-        maxY = Math.max(maxY, off.y + (z.height||25)*s);
+function drawPaintedTiles() {
+    // Draw all paint layers in order (bottom to top) at 1:1 world-tile resolution
+    if (!allSheetsLoaded) return;
+    // Viewport culling
+    const vl = -camX / zoom / TILE_PX - 1, vt = -camY / zoom / TILE_PX - 1;
+    const vr = vl + canvas.width / zoom / TILE_PX + 2, vb = vt + canvas.height / zoom / TILE_PX + 2;
+    for (const layerDef of PAINT_LAYERS) {
+        const paints = layerPaints[layerDef.id];
+        if (!paints) continue;
+        for (const [key, spriteIdx] of Object.entries(paints)) {
+            const [tx, ty] = key.split(',').map(Number);
+            if (tx < vl || tx > vr || ty < vt || ty > vb) continue; // off-screen
+            const px = tx * TILE_PX, py = ty * TILE_PX;
+            if (layerDef.id === 'ground') {
+                // Ground layer: -1 draws void to cover baked terrain
+                drawTileFromIdx(ctx, spriteIdx, px, py, TILE_PX);
+            } else {
+                // Upper layers: only draw non-erased tiles (transparent over ground)
+                if (spriteIdx >= 0) {
+                    drawTileFromIdx(ctx, spriteIdx, px, py, TILE_PX);
+                }
+            }
+        }
     }
-    const ww = (maxX - minX) * TILE_PX, wh = (maxY - minY) * TILE_PX;
-    zoom = Math.min(canvas.width / (ww + 80), canvas.height / (wh + 80));
-    zoom = Math.max(0.01, Math.min(zoom, 4));
-    camX = -(minX * TILE_PX + ww/2) * zoom + canvas.width/2;
-    camY = -(minY * TILE_PX + wh/2) * zoom + canvas.height/2;
-    updateStatus(); render();
 }
 
+// ── Camera ───────────────────────────────────────────────────────────────
+
 // ── Mode switching ──────────────────────────────────────────────────────
+let areaCreationMode = false; // sub-toggle within select mode
+
+let boxSelectMode = false; // box-select sub-mode within paint
+
 function setMode(m) {
     mode = m;
     const wrap = document.getElementById('canvas-wrap');
@@ -471,7 +703,39 @@ function setMode(m) {
     document.getElementById('btn-pan').classList.toggle('active', m === 'pan');
     document.getElementById('btn-paint').classList.toggle('active', m === 'paint');
     document.getElementById('btn-annotate').classList.toggle('active', m === 'annotate');
+    // Show/hide sub-options
+    document.getElementById('draw-options').style.display = m === 'paint' ? '' : 'none';
     if (m === 'paint') switchTab('palette');
+    if (m !== 'paint') {
+        boxSelectMode = false; eraserOn = false;
+        document.getElementById('btn-box').classList.remove('active');
+        document.getElementById('btn-eraser').classList.remove('active');
+        // Don't clear areaCreationMode — it works in any mode now
+    }
+}
+
+function toggleBoxSelect() {
+    boxSelectMode = !boxSelectMode;
+    if (boxSelectMode) { eraserOn = false; areaCreationMode = false; document.getElementById('btn-eraser').classList.remove('active'); document.getElementById('btn-area').classList.remove('active'); }
+    document.getElementById('btn-box').classList.toggle('active', boxSelectMode);
+    if (boxSelectMode) switchTab('selection');
+}
+
+function toggleAreaMode() {
+    areaCreationMode = !areaCreationMode;
+    document.getElementById('btn-area').classList.toggle('active', areaCreationMode);
+    if (areaCreationMode) showToast('Drag a box on the map to create a region');
+}
+
+function eyedropMode() {
+    // Temporary eyedropper — reverts to paint after one pick
+    mode = 'eyedropper';
+    document.getElementById('btn-eyedropper').classList.add('active');
+}
+
+function toggleBoxMode() {
+    // Legacy — redirects to box select
+    toggleBoxSelect();
 }
 
 function toggleEraser() {
@@ -493,6 +757,30 @@ function toggleNpcs() {
 function toggleQuests() {
     showQuests = !showQuests;
     document.getElementById('btn-quests').classList.toggle('active', showQuests);
+    render();
+}
+
+let placingSpawn = false;
+function placeSpawnMode() {
+    placingSpawn = !placingSpawn;
+    document.getElementById('btn-spawn').classList.toggle('active', placingSpawn);
+    if (placingSpawn) showToast('Click on the map to place player spawn point');
+}
+
+let showLayerTint = false;
+const LAYER_COLORS = {
+    ground: 'rgba(74,222,128,0.25)',   // green
+    paths: 'rgba(251,191,36,0.3)',     // yellow
+    buildings: 'rgba(239,68,68,0.3)',  // red
+    objects: 'rgba(96,165,250,0.3)',   // blue
+    decor: 'rgba(192,132,252,0.3)',    // purple
+};
+function toggleLayerTint() {
+    showLayerTint = !showLayerTint;
+    document.getElementById('btn-layertint').classList.toggle('active', showLayerTint);
+    // Invalidate all chunks so they re-render with/without tints
+    for (const key of Object.keys(terrainChunks)) delete terrainChunks[key];
+    chunkLRU.length = 0;
     render();
 }
 
@@ -523,7 +811,62 @@ function worldToZoneTile(wx, wy) {
 }
 
 canvas.addEventListener('pointerdown', e => {
+    // Right-click or middle-click: always pan (any mode)
+    if (e.button === 1 || e.button === 2) {
+        isDragging = true; didDrag = false;
+        dragStartX = e.clientX; dragStartY = e.clientY;
+        dragStartCamX = camX; dragStartCamY = camY;
+        wrap.classList.add('dragging');
+        canvas.setPointerCapture(e.pointerId);
+        return;
+    }
     if (e.button !== 0) return;
+
+    // NPC click/drag — in pan mode always, in other modes only with Shift
+    if (showNpcs && (mode === 'pan' || e.shiftKey)) {
+        const {wx, wy} = screenToWorld(e);
+        const hitNpc = findNpcAt(wx, wy);
+        if (hitNpc) {
+            draggingNpc = hitNpc;
+            _npcClickStart = { x: e.clientX, y: e.clientY };
+            canvas.setPointerCapture(e.pointerId);
+            return;
+        }
+    }
+
+    // Spawn drag — click near existing spawn in pan mode to drag it
+    if (playerSpawn && mode === 'pan') {
+        const {wx, wy} = screenToWorld(e);
+        const dx = Math.abs(wx - playerSpawn.x - 0.5), dy = Math.abs(wy - playerSpawn.y - 0.5);
+        if (dx < Math.max(1.5, 3/zoom) && dy < Math.max(1.5, 3/zoom)) {
+            draggingSpawn = true;
+            canvas.setPointerCapture(e.pointerId);
+            return;
+        }
+    }
+
+    // Spawn placement mode
+    if (placingSpawn) {
+        const {wx, wy} = screenToWorld(e);
+        playerSpawn = { x: Math.floor(wx), y: Math.floor(wy) };
+        placingSpawn = false;
+        document.getElementById('btn-spawn').classList.remove('active');
+        saveAnnotations();
+        showToast(`Player spawn set to (${playerSpawn.x}, ${playerSpawn.y})`);
+        render();
+        return;
+    }
+
+    // Area creation works in ANY mode when toggled on
+    if (areaCreationMode) {
+        const {wx, wy} = screenToWorld(e);
+        const tx = Math.floor(wx), ty = Math.floor(wy);
+        areaDrawStart = { wx: tx, wy: ty };
+        boxCurrent = { wx: tx, wy: ty };
+        isPainting = true;
+        canvas.setPointerCapture(e.pointerId);
+        return;
+    }
 
     if (mode === 'pan') {
         isDragging = true; didDrag = false;
@@ -531,11 +874,39 @@ canvas.addEventListener('pointerdown', e => {
         dragStartCamX = camX; dragStartCamY = camY;
         wrap.classList.add('dragging');
         canvas.setPointerCapture(e.pointerId);
-    } else if (mode === 'paint') {
+    } else if (mode === 'eyedropper' || (mode === 'paint' && e.altKey)) {
+        const {wx, wy} = screenToWorld(e);
+        eyedropAt(wx, wy);
+        return;
+    } else if (mode === 'paint' && areaCreationMode) {
+        const {wx, wy} = screenToWorld(e);
+        const tx = Math.floor(wx), ty = Math.floor(wy);
+        areaDrawStart = { wx: tx, wy: ty };
+        boxCurrent = { wx: tx, wy: ty };
         isPainting = true;
         canvas.setPointerCapture(e.pointerId);
+    } else if (mode === 'paint' && boxSelectMode) {
         const {wx, wy} = screenToWorld(e);
-        paintAt(wx, wy);
+        const tx = Math.floor(wx), ty = Math.floor(wy);
+        // If clicking inside existing selection, start dragging it
+        if (selection && selectionTiles && tx >= selection.x1 && tx <= selection.x2 && ty >= selection.y1 && ty <= selection.y2) {
+            selectionDragging = true;
+            selectionDragOff = { dx: tx - selection.x1, dy: ty - selection.y1 };
+            selectionDragOrigin = { x1: selection.x1, y1: selection.y1, x2: selection.x2, y2: selection.y2 };
+            canvas.setPointerCapture(e.pointerId);
+        } else {
+            selectionStart = { wx: tx, wy: ty };
+            boxCurrent = { wx: tx, wy: ty };
+            selection = null; selectionTiles = null;
+            isPainting = true;
+            canvas.setPointerCapture(e.pointerId);
+        }
+    } else if (mode === 'paint') {
+        const {wx, wy} = screenToWorld(e);
+        boxStart = { wx: Math.floor(wx), wy: Math.floor(wy) };
+        boxCurrent = { ...boxStart };
+        isPainting = true;
+        canvas.setPointerCapture(e.pointerId);
     } else if (mode === 'annotate') {
         const {wx, wy} = screenToWorld(e);
         startAnnotation(wx, wy, e.clientX, e.clientY);
@@ -546,39 +917,177 @@ canvas.addEventListener('pointermove', e => {
     const {wx, wy} = screenToWorld(e);
     document.getElementById('status-mouse').textContent = `Tile: ${Math.floor(wx)},${Math.floor(wy)}`;
 
-    if (mode === 'pan' && isDragging) {
+    if (draggingSpawn) {
+        playerSpawn = { x: Math.floor(wx), y: Math.floor(wy) };
+        render();
+        return;
+    }
+    if (draggingNpc) {
+        // Move NPC to current world-tile pos (1:1, no scale snapping)
+        const z = zonesMap[draggingNpc.zoneId];
+        if (z) {
+            const off = z.baked_offset || {x:0,y:0};
+            const s = z.baked_scale || 1;
+            // Store as fractional local coords — snaps to world tiles (not zone-local tiles)
+            const worldTileX = Math.floor(wx);
+            const worldTileY = Math.floor(wy);
+            const localX = (worldTileX - off.x) / s;
+            const localY = (worldTileY - off.y) / s;
+            const key = draggingNpc.zoneId + '_' + draggingNpc.idx;
+            npcMoves[key] = { x: localX, y: localY };
+        }
+        render();
+        return;
+    } else if (areaCreationMode && isPainting && areaDrawStart) {
+        boxCurrent = { wx: Math.floor(wx), wy: Math.floor(wy) };
+        render();
+    } else if (isDragging) {
         const dx = e.clientX - dragStartX, dy = e.clientY - dragStartY;
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDrag = true;
         camX = dragStartCamX + dx; camY = dragStartCamY + dy;
         render();
-    } else if (mode === 'paint' && isPainting) {
-        paintAt(wx, wy);
+    } else if (selectionDragging && selection && selectionTiles) {
+        const tx = Math.floor(wx), ty = Math.floor(wy);
+        const newX1 = tx - selectionDragOff.dx;
+        const newY1 = ty - selectionDragOff.dy;
+        const w = selection.x2 - selection.x1;
+        const h = selection.y2 - selection.y1;
+        selection = { x1: newX1, y1: newY1, x2: newX1 + w, y2: newY1 + h };
+        render();
+    } else if (mode === 'paint' && boxSelectMode && isPainting && selectionStart) {
+        boxCurrent = { wx: Math.floor(wx), wy: Math.floor(wy) };
+        render();
+    } else if (mode === 'paint' && areaCreationMode && isPainting && areaDrawStart) {
+        boxCurrent = { wx: Math.floor(wx), wy: Math.floor(wy) };
+        render();
+    } else if (mode === 'paint' && isPainting && boxStart) {
+        boxCurrent = { wx: Math.floor(wx), wy: Math.floor(wy) };
+        render();
     }
 });
 
 canvas.addEventListener('pointerup', e => {
-    if (mode === 'pan' && isDragging) {
+    if (draggingSpawn) {
+        draggingSpawn = false;
+        canvas.releasePointerCapture(e.pointerId);
+        saveAnnotations();
+        showToast(`Spawn moved to (${playerSpawn.x}, ${playerSpawn.y})`);
+        render();
+        return;
+    }
+    if (draggingNpc) {
+        canvas.releasePointerCapture(e.pointerId);
+        const didMove = _npcClickStart && (Math.abs(e.clientX - _npcClickStart.x) > 4 || Math.abs(e.clientY - _npcClickStart.y) > 4);
+        if (didMove) {
+            saveAnnotations();
+            showToast(`Moved NPC`);
+        } else {
+            // It was a click, not a drag — select the NPC
+            selectedNpc = { zoneId: draggingNpc.zoneId, idx: draggingNpc.idx };
+            renderNpcPanel(selectedNpc);
+            switchTab('npcs');
+        }
+        draggingNpc = null;
+        _npcClickStart = null;
+        render();
+        return;
+    }
+    // Area creation finalize — works in any mode
+    if (areaCreationMode && areaDrawStart && boxCurrent) {
+        isPainting = false;
+        canvas.releasePointerCapture(e.pointerId);
+        const x1 = Math.min(areaDrawStart.wx, boxCurrent.wx);
+        const y1 = Math.min(areaDrawStart.wy, boxCurrent.wy);
+        const x2 = Math.max(areaDrawStart.wx, boxCurrent.wx);
+        const y2 = Math.max(areaDrawStart.wy, boxCurrent.wy);
+        if (x2 - x1 > 2 && y2 - y1 > 2) {
+            pendingArea = { x1, y1, x2, y2 };
+            const popup = document.getElementById('area-name-popup');
+            popup.style.display = 'block';
+            popup.style.left = e.clientX + 'px';
+            popup.style.top = e.clientY + 'px';
+            document.getElementById('area-name-input').focus();
+        }
+        areaDrawStart = null; boxCurrent = null;
+        render();
+        return;
+    }
+    if (isDragging) {
         isDragging = false;
         wrap.classList.remove('dragging');
         canvas.releasePointerCapture(e.pointerId);
-        if (!didDrag) {
+        if (!didDrag && e.button === 0 && mode === 'pan') {
             const {wx, wy} = screenToWorld(e);
             handleClick(wx, wy);
         }
+    } else if (selectionDragging) {
+        selectionDragging = false;
+        canvas.releasePointerCapture(e.pointerId);
+        stampSelection();
+        render();
+    } else if (mode === 'paint' && boxSelectMode && selectionStart && boxCurrent) {
+        isPainting = false;
+        canvas.releasePointerCapture(e.pointerId);
+        const x1 = Math.min(selectionStart.wx, boxCurrent.wx);
+        const y1 = Math.min(selectionStart.wy, boxCurrent.wy);
+        const x2 = Math.max(selectionStart.wx, boxCurrent.wx);
+        const y2 = Math.max(selectionStart.wy, boxCurrent.wy);
+        if (x2 > x1 && y2 > y1) {
+            selection = { x1, y1, x2, y2 };
+            captureSelection();
+        }
+        selectionStart = null; boxCurrent = null;
+        render();
+    } else if (mode === 'paint' && areaCreationMode && areaDrawStart && boxCurrent) {
+        isPainting = false;
+        canvas.releasePointerCapture(e.pointerId);
+        const x1 = Math.min(areaDrawStart.wx, boxCurrent.wx);
+        const y1 = Math.min(areaDrawStart.wy, boxCurrent.wy);
+        const x2 = Math.max(areaDrawStart.wx, boxCurrent.wx);
+        const y2 = Math.max(areaDrawStart.wy, boxCurrent.wy);
+        if (x2 - x1 > 2 && y2 - y1 > 2) {
+            pendingArea = { x1, y1, x2, y2 };
+            const popup = document.getElementById('area-name-popup');
+            popup.style.display = 'block';
+            popup.style.left = e.clientX + 'px';
+            popup.style.top = (e.clientY - 30) + 'px';
+            const inp = document.getElementById('area-name-input');
+            inp.value = '';
+            inp.focus();
+        }
+        areaDrawStart = null; boxCurrent = null;
+        render();
+    } else if (mode === 'paint' && boxStart && boxCurrent) {
+        isPainting = false;
+        canvas.releasePointerCapture(e.pointerId);
+        boxFill(boxStart, boxCurrent);
+        boxStart = null; boxCurrent = null;
+        render();
     } else if (mode === 'paint') {
         isPainting = false;
         canvas.releasePointerCapture(e.pointerId);
     }
 });
 
+// Prevent context menu on right-click (used for panning)
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
 canvas.addEventListener('wheel', e => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    const worldX = (mx - camX) / zoom, worldY = (my - camY) / zoom;
-    zoom *= e.deltaY < 0 ? 1.2 : 0.833;
-    zoom = Math.max(0.03, Math.min(zoom, 8));
-    camX = mx - worldX * zoom; camY = my - worldY * zoom;
+
+    if (e.ctrlKey) {
+        // Pinch-to-zoom on Mac trackpad (or Ctrl+scroll)
+        const worldX = (mx - camX) / zoom, worldY = (my - camY) / zoom;
+        zoom *= e.deltaY < 0 ? 1.15 : 0.87;
+        zoom = Math.max(0.15, Math.min(zoom, 8));
+        camX = mx - worldX * zoom; camY = my - worldY * zoom;
+    } else {
+        // Two-finger scroll on Mac trackpad = pan
+        camX -= e.deltaX;
+        camY -= e.deltaY;
+    }
     updateStatus(); render();
 }, { passive: false });
 
@@ -607,6 +1116,26 @@ function handleClick(wx, wy) {
     // Clicked empty space — collapse any expanded annotation
     if (selectedAnnotation) { selectedAnnotation = null; render(); return; }
 
+    // Check NPC clicks
+    if (showNpcs) {
+        const hitNpc = findNpcAt(wx, wy);
+        if (hitNpc) {
+            selectedNpc = hitNpc;
+            renderNpcPanel(hitNpc);
+            switchTab('npcs');
+            render();
+            return;
+        }
+    }
+
+    // Check custom areas (smaller areas checked first for precision)
+    for (const area of customAreas) {
+        if (wx >= area.x1 && wx <= area.x2 && wy >= area.y1 && wy <= area.y2) {
+            selectCustomArea(area);
+            return;
+        }
+    }
+
     for (const z of zones) {
         const off = z.baked_offset || {x:0,y:0};
         const s = z.baked_scale || 1;
@@ -617,37 +1146,139 @@ function handleClick(wx, wy) {
     }
 }
 
+let selectedCustomArea = null;
+
+function selectCustomArea(area) {
+    selectedCustomArea = area;
+    selectedZone = null;
+    document.getElementById('panel-title').textContent = area.name;
+    document.getElementById('panel-subtitle').textContent = 'Custom area';
+    renderCustomAreaInfo(area);
+    render();
+}
+
+function renderCustomAreaInfo(area) {
+    const w = area.x2 - area.x1 + 1, h = area.y2 - area.y1 + 1;
+    const rt = REGION_TYPES.find(r => r.id === (area.type || 'area')) || REGION_TYPES[0];
+    const content = document.getElementById('panel-content');
+    let typeOptions = REGION_TYPES.map(r =>
+        `<option value="${r.id}" ${r.id === rt.id ? 'selected' : ''}>${r.name}</option>`
+    ).join('');
+    content.innerHTML = `
+        <div class="field"><label>Region Name</label><input value="${esc(area.name)}" oninput="renameCustomArea('${esc(area.name)}',this.value)"></div>
+        <div class="field"><label>Type</label><select onchange="changeAreaType('${esc(area.name)}',this.value)" style="width:100%;background:#0a1628;border:1px solid #1a4a8a;color:#e0e0e0;padding:4px;border-radius:4px">${typeOptions}</select></div>
+        <div class="field-row">
+            <div class="field"><label>Origin</label><input value="${area.x1}, ${area.y1}" readonly></div>
+            <div class="field"><label>Size</label><input value="${w} x ${h}" readonly></div>
+        </div>
+        <div class="field"><label>Data (JSON)</label><textarea style="width:100%;min-height:40px;background:#0a1628;border:1px solid #1a4a8a;color:#e0e0e0;border-radius:3px;padding:4px;font-size:10px;font-family:monospace;resize:vertical" oninput="saveAreaData('${esc(area.name)}',this.value)">${esc(JSON.stringify(area.data || {}, null, 2))}</textarea></div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+            <button onclick="selectAreaRegion('${esc(area.name)}')" style="width:100%;background:#0f3460;border:1px solid #1a4a8a;color:#e0e0e0;padding:5px;border-radius:4px;cursor:pointer;font-size:11px">Select region for analysis</button>
+            <button onclick="deleteCustomArea('${esc(area.name)}')" style="width:100%;background:#7f1d1d;border:1px solid #e94560;color:#e94560;padding:5px;border-radius:4px;cursor:pointer;font-size:11px">Delete region</button>
+        </div>
+    `;
+}
+
+function changeAreaType(areaName, newType) {
+    const area = customAreas.find(a => a.name === areaName);
+    if (area) { area.type = newType; saveAnnotations(); render(); }
+}
+
+function saveAreaData(areaName, jsonStr) {
+    const area = customAreas.find(a => a.name === areaName);
+    if (!area) return;
+    try { area.data = JSON.parse(jsonStr); saveAnnotations(); }
+    catch(e) { /* ignore parse errors while typing */ }
+}
+
+function renameCustomArea(oldName, newName) {
+    const area = customAreas.find(a => a.name === oldName);
+    if (area) {
+        area.name = newName;
+        document.getElementById('panel-title').textContent = newName;
+        saveAnnotations();
+        render();
+    }
+}
+
+function selectAreaRegion(areaName) {
+    const area = customAreas.find(a => a.name === areaName);
+    if (!area) return;
+    selection = { x1: area.x1, y1: area.y1, x2: area.x2, y2: area.y2 };
+    setMode('paint');
+    boxSelectMode = true;
+    document.getElementById('btn-box').classList.add('active');
+    captureSelection();
+    render();
+}
+
+function deleteCustomArea(name) {
+    customAreas = customAreas.filter(a => a.name !== name);
+    selectedCustomArea = null;
+    document.getElementById('panel-title').textContent = 'Select a zone';
+    document.getElementById('panel-subtitle').textContent = '';
+    document.getElementById('panel-content').innerHTML = '';
+    saveAnnotations();
+    render();
+}
+
 // ── Tile Painting ───────────────────────────────────────────────────────
 function paintAt(wx, wy) {
-    const hit = worldToZoneTile(wx, wy);
-    if (!hit) return;
-    const z = zonesMap[hit.zoneId];
-    if (!z || !z.grid) return;
+    if (terrainReady) {
+        // Terrain mode: paint at 1:1 world-tile resolution on active layer
+        const tileIdx = eraserOn ? -1 : selectedTileIdx;
+        const half = Math.floor(brushSize / 2);
+        const baseX = Math.floor(wx), baseY = Math.floor(wy);
+        const paintLayer = layerPaints[activeLayer];
+        for (let dy = -half; dy < brushSize - half; dy++) {
+            for (let dx = -half; dx < brushSize - half; dx++) {
+                const tx = baseX + dx, ty = baseY + dy;
+                const key = tx + ',' + ty;
+                const oldIdx = paintLayer[key] !== undefined ? paintLayer[key] : -1;
+                if (oldIdx === tileIdx) continue;
+                paintLayer[key] = tileIdx;
+                // Invalidate the chunk cache for this tile
+                const cx = Math.floor(tx / TERRAIN_CHUNK);
+                const cy = Math.floor(ty / TERRAIN_CHUNK);
+                const ckey = cx + ',' + cy;
+                delete terrainChunks[ckey];
+                const lruIdx = chunkLRU.indexOf(ckey);
+                if (lruIdx >= 0) chunkLRU.splice(lruIdx, 1);
 
-    const tileIdx = eraserOn ? (1 + (z.tileset < 30 ? z.tileset : 0)) : selectedTileIdx;
-    const half = Math.floor(brushSize / 2);
+                undoStack.push({ terrain: true, layer: activeLayer, wx: tx, wy: ty, oldIdx, newIdx: tileIdx });
+                redoStack = [];
+            }
+        }
+    } else {
+        // Zone mode: paint at zone-tile resolution
+        const hit = worldToZoneTile(wx, wy);
+        if (!hit) return;
+        const z = zonesMap[hit.zoneId];
+        if (!z || !z.grid) return;
 
-    for (let dy = -half; dy < brushSize - half; dy++) {
-        for (let dx = -half; dx < brushSize - half; dx++) {
-            const tx = hit.x + dx, ty = hit.y + dy;
-            if (tx < 0 || tx >= z.width || ty < 0 || ty >= z.height) continue;
+        const tileIdx = eraserOn ? (1 + (z.tileset < 30 ? z.tileset : 0)) : selectedTileIdx;
+        const half = Math.floor(brushSize / 2);
 
-            const oldIdx = z.grid[ty][tx];
-            if (oldIdx === tileIdx) continue;
+        for (let dy = -half; dy < brushSize - half; dy++) {
+            for (let dx = -half; dx < brushSize - half; dx++) {
+                const tx = hit.x + dx, ty = hit.y + dy;
+                if (tx < 0 || tx >= z.width || ty < 0 || ty >= z.height) continue;
 
-            // Record change
-            if (!tileChanges[hit.zoneId]) tileChanges[hit.zoneId] = new Map();
-            const key = `${tx},${ty}`;
-            const existing = tileChanges[hit.zoneId].get(key);
-            const origOld = existing ? existing[2] : oldIdx;
-            tileChanges[hit.zoneId].set(key, [tx, ty, origOld, tileIdx]);
+                const oldIdx = z.grid[ty][tx];
+                if (oldIdx === tileIdx) continue;
 
-            undoStack.push({ zoneId: hit.zoneId, x: tx, y: ty, oldIdx, newIdx: tileIdx });
-            redoStack = [];
+                if (!tileChanges[hit.zoneId]) tileChanges[hit.zoneId] = new Map();
+                const key = `${tx},${ty}`;
+                const existing = tileChanges[hit.zoneId].get(key);
+                const origOld = existing ? existing[2] : oldIdx;
+                tileChanges[hit.zoneId].set(key, [tx, ty, origOld, tileIdx]);
 
-            // Apply
-            z.grid[ty][tx] = tileIdx;
-            repaintTile(hit.zoneId, tx, ty, tileIdx);
+                undoStack.push({ zoneId: hit.zoneId, x: tx, y: ty, oldIdx, newIdx: tileIdx });
+                redoStack = [];
+
+                z.grid[ty][tx] = tileIdx;
+                repaintTile(hit.zoneId, tx, ty, tileIdx);
+            }
         }
     }
     saveAnnotations();
@@ -655,45 +1286,447 @@ function paintAt(wx, wy) {
     render();
 }
 
-function undo() {
-    if (!undoStack.length) return;
-    const act = undoStack.pop();
-    const z = zonesMap[act.zoneId];
-    if (!z) return;
-    z.grid[act.y][act.x] = act.oldIdx;
-    repaintTile(act.zoneId, act.x, act.y, act.oldIdx);
+function boxFill(start, end) {
+    const x1 = Math.min(start.wx, end.wx), x2 = Math.max(start.wx, end.wx);
+    const y1 = Math.min(start.wy, end.wy), y2 = Math.max(start.wy, end.wy);
+    const tileIdx = eraserOn ? -1 : selectedTileIdx;
+    const gid = ++undoGroupId;
+    const paintLayer = layerPaints[activeLayer];
+    const chunksToInvalidate = new Set();
+    for (let ty = y1; ty <= y2; ty++) {
+        for (let tx = x1; tx <= x2; tx++) {
+            const key = tx + ',' + ty;
+            const oldIdx = paintLayer[key] !== undefined ? paintLayer[key] : -1;
+            if (oldIdx === tileIdx) continue;
+            paintLayer[key] = tileIdx;
+            undoStack.push({ terrain: true, layer: activeLayer, wx: tx, wy: ty, oldIdx, newIdx: tileIdx, group: gid });
+            chunksToInvalidate.add(Math.floor(tx / TERRAIN_CHUNK) + ',' + Math.floor(ty / TERRAIN_CHUNK));
+        }
+    }
+    redoStack = [];
+    invalidateChunks(chunksToInvalidate);
+    saveAnnotations();
+    updateStatus();
+    const count = (x2-x1+1)*(y2-y1+1);
+    showToast(`Box filled ${count} tiles on ${activeLayer}`);
+}
 
-    // Update tileChanges map
-    if (tileChanges[act.zoneId]) {
-        const key = `${act.x},${act.y}`;
-        const entry = tileChanges[act.zoneId].get(key);
-        if (entry) {
-            if (entry[2] === act.oldIdx) {
-                tileChanges[act.zoneId].delete(key);
+function invalidateChunks(chunks) {
+    for (const ckey of chunks) {
+        delete terrainChunks[ckey];
+        const lruIdx = chunkLRU.indexOf(ckey);
+        if (lruIdx >= 0) chunkLRU.splice(lruIdx, 1);
+    }
+}
+
+function captureSelection() {
+    if (!selection) return;
+    selectionTiles = {};
+    const tileCounts = {}; // spriteIdx -> count
+    let emptyCount = 0;
+    const paintLayer = layerPaints[activeLayer];
+    for (let ty = selection.y1; ty <= selection.y2; ty++) {
+        for (let tx = selection.x1; tx <= selection.x2; tx++) {
+            const key = tx + ',' + ty;
+            // For analysis, check active paint layer first, then base terrain
+            let sprite = paintLayer[key];
+            if (sprite === undefined && activeLayer === 'ground') {
+                if (terrainOverlay) sprite = terrainOverlay[key];
+                if (sprite === undefined && terrainGround) sprite = terrainGround[key];
+            }
+            const rx = tx - selection.x1, ry = ty - selection.y1;
+            if (sprite !== undefined) {
+                selectionTiles[rx + ',' + ry] = sprite;
+                tileCounts[sprite] = (tileCounts[sprite] || 0) + 1;
             } else {
-                entry[3] = act.oldIdx;
+                selectionTiles[rx + ',' + ry] = -1;
+                emptyCount++;
             }
         }
     }
+    // Store analysis for panel display
+    selectionAnalysis = { tileCounts, emptyCount, total: Object.keys(selectionTiles).length };
+    const count = Object.keys(selectionTiles).length;
+    showToast(`Selected ${count} tiles`);
+    renderSelectionTab();
+    switchTab('selection');
+}
+
+function renderSelectionTab() {
+    const content = document.getElementById('panel-content');
+    if (!selectionAnalysis || !selection) {
+        content.innerHTML = '<p style="color:#666;text-align:center;margin-top:30px">Use Select mode to box-select a region</p>';
+        return;
+    }
+    const { tileCounts, emptyCount, total } = selectionAnalysis;
+    const w = selection.x2 - selection.x1 + 1, h = selection.y2 - selection.y1 + 1;
+    let html = `<div style="margin-bottom:8px"><strong style="font-size:12px">Selection: ${w}x${h} (${total} tiles)</strong></div>`;
+    html += `<div style="font-size:10px;color:#888;margin-bottom:6px">Origin: ${selection.x1},${selection.y1} | Active layer: <strong style="color:#e94560">${activeLayer}</strong></div>`;
+
+    // Sort tile types by count descending
+    const entries = Object.entries(tileCounts).map(([idx, count]) => [parseInt(idx), count]).sort((a,b) => b[1] - a[1]);
+    if (emptyCount > 0) entries.push([-1, emptyCount]);
+
+    html += '<div style="margin-bottom:8px">';
+    for (const [idx, count] of entries) {
+        const pct = ((count / total) * 100).toFixed(1);
+        let label, thumbStyle;
+        if (idx === -1) {
+            label = 'Empty/void';
+            thumbStyle = 'background:#333';
+        } else {
+            const { sheet, localIdx } = getSheetLocalIdx(idx);
+            label = `#${idx} (${sheet.id}:${localIdx})`;
+            if (sheet.img) {
+                const sz = 24;
+                const bgW = sheet.cols * sz, bgH = sheet.rows * sz;
+                thumbStyle = `background-image:url('${sheet.file}');background-size:${bgW}px ${bgH}px;background-position:-${(localIdx%sheet.cols)*sz}px -${Math.floor(localIdx/sheet.cols)*sz}px;image-rendering:pixelated`;
+            } else {
+                thumbStyle = 'background:#555';
+            }
+        }
+        html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:#0d1b2a;border:1px solid #1a4a8a;border-radius:3px;margin-bottom:2px;font-size:11px">
+            <div style="width:24px;height:24px;border:1px solid #1a4a8a;border-radius:2px;flex-shrink:0;${thumbStyle}"></div>
+            <span style="flex:1">${label} <span style="color:#888">(${count} / ${pct}%)</span></span>
+            <button onclick="selectionReplace(${idx})" style="background:#0f3460;border:1px solid #1a4a8a;color:#e0e0e0;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:9px" title="Replace these with current brush">Repl</button>
+            <button onclick="selectionRemove(${idx})" style="background:#7f1d1d;border:1px solid #e94560;color:#e94560;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:9px" title="Erase to void">Del</button>
+        </div>`;
+    }
+    html += '</div>';
+    html += `<div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
+        <div style="display:flex;gap:4px">
+            <button onclick="selectionReplaceAll()" style="flex:1;background:#166534;border:1px solid #4ade80;color:#4ade80;padding:5px;border-radius:4px;cursor:pointer;font-size:10px">Fill ALL with brush</button>
+            <button onclick="selectionFillEmpty()" style="flex:1;background:#1e3a5f;border:1px solid #60a5fa;color:#60a5fa;padding:5px;border-radius:4px;cursor:pointer;font-size:10px">Fill empty only</button>
+        </div>
+        <div style="display:flex;gap:4px">
+            <button onclick="selectionRemoveAll()" style="flex:1;background:#7f1d1d;border:1px solid #e94560;color:#e94560;padding:5px;border-radius:4px;cursor:pointer;font-size:10px">Remove ALL tiles</button>
+            <button onclick="clearSelection()" style="flex:1;background:#0f3460;border:1px solid #1a4a8a;color:#e0e0e0;padding:5px;border-radius:4px;cursor:pointer;font-size:10px">Clear selection</button>
+        </div>
+        <div style="margin-top:6px;padding:6px;background:#0d1b2a;border:1px solid #1a4a8a;border-radius:4px">
+            <div style="font-size:10px;color:#888;margin-bottom:4px">Move selected tiles to layer:</div>
+            <div style="display:flex;gap:3px;flex-wrap:wrap">
+                ${PAINT_LAYERS.filter(l => l.id !== activeLayer).map(l =>
+                    '<button onclick="moveSelectionToLayer(\'' + l.id + '\')" style="flex:1;background:#1e3a5f;border:1px solid #60a5fa;color:#60a5fa;padding:4px 6px;border-radius:3px;cursor:pointer;font-size:9px;min-width:50px">' + l.name + '</button>'
+                ).join('')}
+            </div>
+        </div>
+    </div>`;
+    content.innerHTML = html;
+}
+
+function selectionRemove(targetIdx) {
+    if (!selection) return;
+    const gid = ++undoGroupId;
+    const paintLayer = layerPaints[activeLayer];
+    let count = 0;
+    const chunksToInvalidate = new Set();
+    for (let ty = selection.y1; ty <= selection.y2; ty++) {
+        for (let tx = selection.x1; tx <= selection.x2; tx++) {
+            const key = tx + ',' + ty;
+            let current = getLayerTile(key);
+            if (current === targetIdx) {
+                paintLayer[key] = -1;
+                undoStack.push({ terrain: true, layer: activeLayer, wx: tx, wy: ty, oldIdx: current, newIdx: -1, group: gid });
+                chunksToInvalidate.add(Math.floor(tx / TERRAIN_CHUNK) + ',' + Math.floor(ty / TERRAIN_CHUNK));
+                count++;
+            }
+        }
+    }
+    redoStack = [];
+    invalidateChunks(chunksToInvalidate);
+    saveAnnotations(); updateStatus();
+    captureSelection(); // refresh analysis
+    showToast(`Removed ${count} tiles`);
+    render();
+}
+
+function selectionReplace(targetIdx) {
+    if (!selection) return;
+    const replaceWith = selectedTileIdx;
+    const gid = ++undoGroupId;
+    const paintLayer = layerPaints[activeLayer];
+    let count = 0;
+    const chunksToInvalidate = new Set();
+    for (let ty = selection.y1; ty <= selection.y2; ty++) {
+        for (let tx = selection.x1; tx <= selection.x2; tx++) {
+            const key = tx + ',' + ty;
+            let current = getLayerTile(key);
+            if (current === targetIdx && current !== replaceWith) {
+                paintLayer[key] = replaceWith;
+                undoStack.push({ terrain: true, layer: activeLayer, wx: tx, wy: ty, oldIdx: current, newIdx: replaceWith, group: gid });
+                chunksToInvalidate.add(Math.floor(tx / TERRAIN_CHUNK) + ',' + Math.floor(ty / TERRAIN_CHUNK));
+                count++;
+            }
+        }
+    }
+    redoStack = [];
+    invalidateChunks(chunksToInvalidate);
+    saveAnnotations(); updateStatus();
+    captureSelection(); // refresh analysis
+    showToast(`Replaced ${count} tiles with #${replaceWith}`);
+    render();
+}
+
+function selectionReplaceAll() {
+    if (!selection) return;
+    const replaceWith = selectedTileIdx;
+    const gid = ++undoGroupId;
+    const paintLayer = layerPaints[activeLayer];
+    let count = 0;
+    const chunksToInvalidate = new Set();
+    for (let ty = selection.y1; ty <= selection.y2; ty++) {
+        for (let tx = selection.x1; tx <= selection.x2; tx++) {
+            const key = tx + ',' + ty;
+            let current = getLayerTile(key);
+            if (current !== replaceWith) {
+                paintLayer[key] = replaceWith;
+                undoStack.push({ terrain: true, layer: activeLayer, wx: tx, wy: ty, oldIdx: current, newIdx: replaceWith, group: gid });
+                chunksToInvalidate.add(Math.floor(tx / TERRAIN_CHUNK) + ',' + Math.floor(ty / TERRAIN_CHUNK));
+                count++;
+            }
+        }
+    }
+    redoStack = [];
+    invalidateChunks(chunksToInvalidate);
+    saveAnnotations(); updateStatus();
+    captureSelection();
+    showToast(`Filled ${count} tiles with #${replaceWith}`);
+    render();
+}
+
+function selectionFillEmpty() {
+    if (!selection) return;
+    const replaceWith = selectedTileIdx;
+    const gid = ++undoGroupId;
+    const paintLayer = layerPaints[activeLayer];
+    let count = 0;
+    const chunksToInvalidate = new Set();
+    for (let ty = selection.y1; ty <= selection.y2; ty++) {
+        for (let tx = selection.x1; tx <= selection.x2; tx++) {
+            const key = tx + ',' + ty;
+            let current = getLayerTile(key);
+            if (current === -1) {
+                paintLayer[key] = replaceWith;
+                undoStack.push({ terrain: true, layer: activeLayer, wx: tx, wy: ty, oldIdx: -1, newIdx: replaceWith, group: gid });
+                chunksToInvalidate.add(Math.floor(tx / TERRAIN_CHUNK) + ',' + Math.floor(ty / TERRAIN_CHUNK));
+                count++;
+            }
+        }
+    }
+    redoStack = [];
+    invalidateChunks(chunksToInvalidate);
+    saveAnnotations(); updateStatus();
+    captureSelection();
+    showToast(`Filled ${count} empty tiles on ${activeLayer}`);
+    render();
+}
+
+function selectionRemoveAll() {
+    if (!selection) return;
+    const gid = ++undoGroupId;
+    const paintLayer = layerPaints[activeLayer];
+    let count = 0;
+    const chunksToInvalidate = new Set();
+    for (let ty = selection.y1; ty <= selection.y2; ty++) {
+        for (let tx = selection.x1; tx <= selection.x2; tx++) {
+            const key = tx + ',' + ty;
+            let current = getLayerTile(key);
+            if (current !== -1) {
+                paintLayer[key] = -1;
+                undoStack.push({ terrain: true, layer: activeLayer, wx: tx, wy: ty, oldIdx: current, newIdx: -1, group: gid });
+                chunksToInvalidate.add(Math.floor(tx / TERRAIN_CHUNK) + ',' + Math.floor(ty / TERRAIN_CHUNK));
+                count++;
+            }
+        }
+    }
+    redoStack = [];
+    invalidateChunks(chunksToInvalidate);
+    saveAnnotations(); updateStatus();
+    captureSelection();
+    showToast(`Removed ${count} tiles from ${activeLayer}`);
+    render();
+}
+
+function moveSelectionToLayer(targetLayer) {
+    if (!selection) return;
+    if (targetLayer === activeLayer) return;
+    const gid = ++undoGroupId;
+    const srcPaints = layerPaints[activeLayer];
+    const dstPaints = layerPaints[targetLayer];
+    const chunksToInvalidate = new Set();
+    let count = 0;
+    for (let ty = selection.y1; ty <= selection.y2; ty++) {
+        for (let tx = selection.x1; tx <= selection.x2; tx++) {
+            const key = tx + ',' + ty;
+            let current = getLayerTile(key);
+            if (current < 0) continue; // skip void/empty
+            // Remove from source layer
+            srcPaints[key] = -1;
+            undoStack.push({ terrain: true, layer: activeLayer, wx: tx, wy: ty, oldIdx: current, newIdx: -1, group: gid });
+            // Add to target layer
+            const oldDst = dstPaints[key] !== undefined ? dstPaints[key] : -1;
+            dstPaints[key] = current;
+            undoStack.push({ terrain: true, layer: targetLayer, wx: tx, wy: ty, oldIdx: oldDst, newIdx: current, group: gid });
+            chunksToInvalidate.add(Math.floor(tx / TERRAIN_CHUNK) + ',' + Math.floor(ty / TERRAIN_CHUNK));
+            count++;
+        }
+    }
+    redoStack = [];
+    invalidateChunks(chunksToInvalidate);
+    saveAnnotations(); updateStatus();
+    captureSelection();
+    showToast(`Moved ${count} tiles from ${activeLayer} → ${targetLayer}`);
+    render();
+}
+
+function clearSelection() {
+    selection = null; selectionTiles = null; selectionAnalysis = null;
+    renderSelectionTab();
+    render();
+}
+
+function stampSelection() {
+    if (!selection || !selectionTiles) return;
+    const gid = ++undoGroupId;
+    const paintLayer = layerPaints[activeLayer];
+    const chunksToInvalidate = new Set();
+    const origin = selectionDragOrigin;
+
+    // Step 1: Erase source tiles (if this was a move, not first placement)
+    if (origin && (origin.x1 !== selection.x1 || origin.y1 !== selection.y1)) {
+        for (const [rkey, sprite] of Object.entries(selectionTiles)) {
+            const [rx, ry] = rkey.split(',').map(Number);
+            const srcX = origin.x1 + rx, srcY = origin.y1 + ry;
+            // Don't erase if source overlaps with destination
+            const dstX = selection.x1 + rx, dstY = selection.y1 + ry;
+            if (srcX === dstX && srcY === dstY) continue;
+            const srcKey = srcX + ',' + srcY;
+            const oldSrc = getLayerTile(srcKey);
+            if (oldSrc !== -1) {
+                paintLayer[srcKey] = -1;
+                undoStack.push({ terrain: true, layer: activeLayer, wx: srcX, wy: srcY, oldIdx: oldSrc, newIdx: -1, group: gid });
+                chunksToInvalidate.add(Math.floor(srcX / TERRAIN_CHUNK) + ',' + Math.floor(srcY / TERRAIN_CHUNK));
+            }
+        }
+    }
+
+    // Step 2: Paste tiles at destination
+    for (const [rkey, sprite] of Object.entries(selectionTiles)) {
+        const [rx, ry] = rkey.split(',').map(Number);
+        const tx = selection.x1 + rx, ty = selection.y1 + ry;
+        const key = tx + ',' + ty;
+        const oldIdx = paintLayer[key] !== undefined ? paintLayer[key] : -1;
+        if (oldIdx !== sprite) {
+            paintLayer[key] = sprite;
+            undoStack.push({ terrain: true, layer: activeLayer, wx: tx, wy: ty, oldIdx, newIdx: sprite, group: gid });
+            chunksToInvalidate.add(Math.floor(tx / TERRAIN_CHUNK) + ',' + Math.floor(ty / TERRAIN_CHUNK));
+        }
+    }
+    selectionDragOrigin = null;
+    redoStack = [];
+    invalidateChunks(chunksToInvalidate);
+    saveAnnotations();
+    showToast(`Moved ${Object.keys(selectionTiles).length} tiles on ${activeLayer}`);
+    updateStatus();
+}
+
+function eyedropAt(wx, wy) {
+    const tx = Math.floor(wx), ty = Math.floor(wy);
+    const key = tx + ',' + ty;
+    let spriteIdx;
+    for (let i = PAINT_LAYERS.length - 1; i >= 0; i--) {
+        const v = layerPaints[PAINT_LAYERS[i].id][key];
+        if (v !== undefined && v >= 0) { spriteIdx = v; break; }
+    }
+    if (spriteIdx === undefined && terrainOverlay) spriteIdx = terrainOverlay[key];
+    if (spriteIdx === undefined && terrainGround) spriteIdx = terrainGround[key];
+    // Reset eyedropper state back to paint mode
+    if (mode === 'eyedropper') {
+        mode = 'paint';
+        document.getElementById('btn-eyedropper').classList.remove('active');
+    }
+    if (spriteIdx !== undefined && spriteIdx >= 0) {
+        selectBrushTile(spriteIdx);
+        showToast(`Picked tile #${spriteIdx}`);
+    } else {
+        showToast('No tile here', true);
+    }
+}
+
+function undoOne(act) {
+    if (act.terrain) {
+        const layer = act.layer || 'ground';
+        const paints = layerPaints[layer] || layerPaints.ground;
+        const key = act.wx + ',' + act.wy;
+        paints[key] = act.oldIdx;
+        const cx = Math.floor(act.wx / TERRAIN_CHUNK), cy = Math.floor(act.wy / TERRAIN_CHUNK);
+        delete terrainChunks[cx + ',' + cy];
+    } else {
+        const z = zonesMap[act.zoneId];
+        if (!z) return;
+        z.grid[act.y][act.x] = act.oldIdx;
+        repaintTile(act.zoneId, act.x, act.y, act.oldIdx);
+        if (tileChanges[act.zoneId]) {
+            const key = `${act.x},${act.y}`;
+            const entry = tileChanges[act.zoneId].get(key);
+            if (entry) {
+                if (entry[2] === act.oldIdx) tileChanges[act.zoneId].delete(key);
+                else entry[3] = act.oldIdx;
+            }
+        }
+    }
+}
+
+function redoOne(act) {
+    if (act.terrain) {
+        const layer = act.layer || 'ground';
+        const paints = layerPaints[layer] || layerPaints.ground;
+        const key = act.wx + ',' + act.wy;
+        paints[key] = act.newIdx;
+        const cx = Math.floor(act.wx / TERRAIN_CHUNK), cy = Math.floor(act.wy / TERRAIN_CHUNK);
+        delete terrainChunks[cx + ',' + cy];
+    } else {
+        const z = zonesMap[act.zoneId];
+        if (!z) return;
+        z.grid[act.y][act.x] = act.newIdx;
+        repaintTile(act.zoneId, act.x, act.y, act.newIdx);
+        if (!tileChanges[act.zoneId]) tileChanges[act.zoneId] = new Map();
+        const key = `${act.x},${act.y}`;
+        const existing = tileChanges[act.zoneId].get(key);
+        const origOld = existing ? existing[2] : act.oldIdx;
+        tileChanges[act.zoneId].set(key, [act.x, act.y, origOld, act.newIdx]);
+    }
+}
+
+function undo() {
+    if (!undoStack.length) return;
+    const act = undoStack.pop();
+    undoOne(act);
     redoStack.push(act);
+    // Undo entire group if grouped
+    if (act.group) {
+        while (undoStack.length && undoStack[undoStack.length-1].group === act.group) {
+            const a = undoStack.pop();
+            undoOne(a);
+            redoStack.push(a);
+        }
+    }
     updateStatus(); render();
 }
 
 function redo() {
     if (!redoStack.length) return;
     const act = redoStack.pop();
-    const z = zonesMap[act.zoneId];
-    if (!z) return;
-    z.grid[act.y][act.x] = act.newIdx;
-    repaintTile(act.zoneId, act.x, act.y, act.newIdx);
-
-    if (!tileChanges[act.zoneId]) tileChanges[act.zoneId] = new Map();
-    const key = `${act.x},${act.y}`;
-    const existing = tileChanges[act.zoneId].get(key);
-    const origOld = existing ? existing[2] : act.oldIdx;
-    tileChanges[act.zoneId].set(key, [act.x, act.y, origOld, act.newIdx]);
-
+    redoOne(act);
     undoStack.push(act);
+    // Redo entire group if grouped
+    if (act.group) {
+        while (redoStack.length && redoStack[redoStack.length-1].group === act.group) {
+            const a = redoStack.pop();
+            redoOne(a);
+            undoStack.push(a);
+        }
+    }
     updateStatus(); render();
 }
 
@@ -728,6 +1761,15 @@ function saveAnnotations() {
     try { localStorage.setItem('loy_tile_changes', JSON.stringify(
         Object.fromEntries(Object.entries(tileChanges).map(([k,v]) => [k, [...v.values()]]))
     )); } catch(e) {}
+    try { localStorage.setItem('loy_layer_paints', JSON.stringify(layerPaints)); } catch(e) {}
+    // Legacy compat: also save ground as terrain_paints
+    try { localStorage.setItem('loy_terrain_paints', JSON.stringify(layerPaints.ground)); } catch(e) {}
+    try { localStorage.setItem('loy_custom_areas', JSON.stringify(customAreas)); } catch(e) {}
+    try { localStorage.setItem('loy_npc_moves', JSON.stringify(npcMoves)); } catch(e) {}
+    try { localStorage.setItem('loy_zone_overrides', JSON.stringify(zoneOverrides)); } catch(e) {}
+    try { localStorage.setItem('loy_npc_dialogue', JSON.stringify(npcDialogueOverrides)); } catch(e) {}
+    try { localStorage.setItem('loy_player_spawn', JSON.stringify(playerSpawn)); } catch(e) {}
+    if (baseline) try { localStorage.setItem('loy_baseline', JSON.stringify(baseline)); } catch(e) {}
 }
 
 function loadSavedState() {
@@ -743,7 +1785,6 @@ function loadSavedState() {
                 tileChanges[zid] = new Map();
                 for (const c of changes) {
                     tileChanges[zid].set(`${c[0]},${c[1]}`, c);
-                    // Apply tile change to grid
                     const z = zonesMap[zid];
                     if (z && z.grid && c[1] < z.height && c[0] < z.width) {
                         z.grid[c[1]][c[0]] = c[3];
@@ -751,6 +1792,31 @@ function loadSavedState() {
                 }
             }
         }
+        // Load per-layer paints (new format) or legacy single-layer
+        const lp = localStorage.getItem('loy_layer_paints');
+        if (lp) {
+            const parsed = JSON.parse(lp);
+            for (const lid of Object.keys(layerPaints)) {
+                if (parsed[lid]) layerPaints[lid] = parsed[lid];
+            }
+        } else {
+            // Legacy: old single terrainPaints goes into ground layer
+            const tp = localStorage.getItem('loy_terrain_paints');
+            if (tp) layerPaints.ground = JSON.parse(tp);
+        }
+        terrainPaints = layerPaints.ground;
+        const ca = localStorage.getItem('loy_custom_areas');
+        if (ca) customAreas = JSON.parse(ca);
+        const nm = localStorage.getItem('loy_npc_moves');
+        if (nm) npcMoves = JSON.parse(nm);
+        const zo = localStorage.getItem('loy_zone_overrides');
+        if (zo) zoneOverrides = JSON.parse(zo);
+        const nd = localStorage.getItem('loy_npc_dialogue');
+        if (nd) npcDialogueOverrides = JSON.parse(nd);
+        const ps = localStorage.getItem('loy_player_spawn');
+        if (ps) playerSpawn = JSON.parse(ps);
+        const bl = localStorage.getItem('loy_baseline');
+        if (bl) baseline = JSON.parse(bl);
     } catch(e) {}
 }
 
@@ -764,18 +1830,115 @@ function render() {
     ctx.scale(zoom, zoom);
 
     if (terrainReady) {
-        drawTerrain();
+        drawTerrain(); // chunks include paint layer overrides
     } else {
         for (const z of zones) drawZone(z);
     }
     for (const z of zones) drawZoneOutline(z);
     drawConnections();
     if (showNpcs) for (const z of zones) drawNpcMarkers(z);
+    drawPlayerSpawn();
     if (showQuests) for (const z of zones) drawQuestMarkers(z);
     for (const z of zones) drawDungeonLabel(z);
     drawAnnotations();
     drawImportedOverlay();
     if (showLabels) for (const z of zones) drawZoneLabel(z);
+
+    // Draw custom areas/regions
+    for (const area of customAreas) {
+        const ax = area.x1 * TILE_PX, ay = area.y1 * TILE_PX;
+        const aw = (area.x2 - area.x1 + 1) * TILE_PX;
+        const ah = (area.y2 - area.y1 + 1) * TILE_PX;
+        const isSelected = selectedCustomArea && selectedCustomArea.name === area.name;
+        const rt = REGION_TYPES.find(r => r.id === (area.type || 'area')) || REGION_TYPES[0];
+        const color = isSelected ? '#fbbf24' : rt.color;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = (isSelected ? 3 : 2) / zoom;
+        ctx.setLineDash([8/zoom, 4/zoom]);
+        ctx.strokeRect(ax, ay, aw, ah);
+        ctx.setLineDash([]);
+        ctx.fillStyle = color.replace(')', ',0.08)').replace('rgb', 'rgba').replace('#', '');
+        // Hex to rgba fill
+        const r = parseInt(color.slice(1,3),16), g = parseInt(color.slice(3,5),16), b = parseInt(color.slice(5,7),16);
+        ctx.fillStyle = `rgba(${r},${g},${b},${isSelected ? 0.12 : 0.06})`;
+        ctx.fillRect(ax, ay, aw, ah);
+        const fs = Math.max(8/zoom, Math.min(14/zoom, aw/6));
+        ctx.font = `bold ${fs}px sans-serif`;
+        ctx.fillStyle = color; ctx.textAlign = 'center';
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 2/zoom;
+        ctx.strokeText(area.name, ax + aw/2, ay + ah/2);
+        ctx.fillText(area.name, ax + aw/2, ay + ah/2);
+        // Type label below name
+        ctx.font = `${fs*0.7}px sans-serif`;
+        ctx.fillStyle = color;
+        ctx.strokeText(rt.name, ax + aw/2, ay + ah/2 + fs);
+        ctx.fillText(rt.name, ax + aw/2, ay + ah/2 + fs);
+    }
+
+    // Selection box
+    if (selection && selectionTiles) {
+        const sx = selection.x1 * TILE_PX, sy = selection.y1 * TILE_PX;
+        const sw = (selection.x2 - selection.x1 + 1) * TILE_PX;
+        const sh = (selection.y2 - selection.y1 + 1) * TILE_PX;
+        // Draw captured tiles as semi-transparent overlay
+        ctx.globalAlpha = 0.7;
+        for (const [rkey, sprite] of Object.entries(selectionTiles)) {
+            const [rx, ry] = rkey.split(',').map(Number);
+            if (sprite >= 0) {
+                drawTileFromIdx(ctx, sprite, sx + rx*TILE_PX, sy + ry*TILE_PX, TILE_PX);
+            }
+        }
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#60a5fa';
+        ctx.lineWidth = 2 / zoom;
+        ctx.setLineDash([6/zoom, 3/zoom]);
+        ctx.strokeRect(sx, sy, sw, sh);
+        ctx.setLineDash([]);
+    }
+    // Selection draw preview
+    if (boxSelectMode && isPainting && selectionStart && boxCurrent) {
+        const x1 = Math.min(selectionStart.wx, boxCurrent.wx) * TILE_PX;
+        const y1 = Math.min(selectionStart.wy, boxCurrent.wy) * TILE_PX;
+        const x2 = (Math.max(selectionStart.wx, boxCurrent.wx) + 1) * TILE_PX;
+        const y2 = (Math.max(selectionStart.wy, boxCurrent.wy) + 1) * TILE_PX;
+        ctx.strokeStyle = '#60a5fa';
+        ctx.lineWidth = 2 / zoom;
+        ctx.setLineDash([6/zoom, 3/zoom]);
+        ctx.strokeRect(x1, y1, x2-x1, y2-y1);
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(96,165,250,0.15)';
+        ctx.fillRect(x1, y1, x2-x1, y2-y1);
+    }
+
+    // Area draw preview
+    if (areaCreationMode && areaDrawStart && boxCurrent && isPainting) {
+        const x1 = Math.min(areaDrawStart.wx, boxCurrent.wx) * TILE_PX;
+        const y1 = Math.min(areaDrawStart.wy, boxCurrent.wy) * TILE_PX;
+        const x2 = (Math.max(areaDrawStart.wx, boxCurrent.wx) + 1) * TILE_PX;
+        const y2 = (Math.max(areaDrawStart.wy, boxCurrent.wy) + 1) * TILE_PX;
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2 / zoom;
+        ctx.setLineDash([6/zoom, 4/zoom]);
+        ctx.strokeRect(x1, y1, x2-x1, y2-y1);
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(245,158,11,0.15)';
+        ctx.fillRect(x1, y1, x2-x1, y2-y1);
+    }
+
+    // Paint box preview (default drag in paint mode)
+    if (boxStart && boxCurrent && isPainting && !boxSelectMode && !areaCreationMode) {
+        const x1 = Math.min(boxStart.wx, boxCurrent.wx) * TILE_PX;
+        const y1 = Math.min(boxStart.wy, boxCurrent.wy) * TILE_PX;
+        const x2 = (Math.max(boxStart.wx, boxCurrent.wx) + 1) * TILE_PX;
+        const y2 = (Math.max(boxStart.wy, boxCurrent.wy) + 1) * TILE_PX;
+        ctx.strokeStyle = eraserOn ? '#e94560' : '#4ade80';
+        ctx.lineWidth = 2 / zoom;
+        ctx.setLineDash([6/zoom, 4/zoom]);
+        ctx.strokeRect(x1, y1, x2-x1, y2-y1);
+        ctx.setLineDash([]);
+        ctx.fillStyle = eraserOn ? 'rgba(233,69,96,0.15)' : 'rgba(74,222,128,0.15)';
+        ctx.fillRect(x1, y1, x2-x1, y2-y1);
+    }
 
     ctx.restore();
 }
@@ -830,7 +1993,8 @@ function drawZoneLabel(z) {
     if (isFiltered) ctx.globalAlpha = 0.15;
     const fs = Math.max(8/zoom, Math.min(14/zoom, pw/6));
     const pad = 4/zoom;
-    const name = z.zone_name || z.id;
+    const ov = zoneOverrides[z.id];
+    const name = (ov && ov.zone_name) || z.zone_name || z.id;
     ctx.font = `bold ${fs}px sans-serif`;
     const tm = ctx.measureText(name);
     const lw = tm.width + pad*3, lh = fs + pad*2;
@@ -848,6 +2012,44 @@ function drawZoneLabel(z) {
 }
 
 const NPC_COLORS = {shop:'#fbbf24',elder:'#60a5fa',scriptfile:'#4ade80',message:'#9ca3af',tips:'#a78bfa',craft:'#34d399',trainer:'#f472b6',pets:'#f9a8d4',maps:'#38bdf8'};
+let selectedNpc = null; // {zoneId, idx}
+let npcDialogueOverrides = {}; // "zoneId_idx" -> {dialogue: [...], notes: ""}
+let playerSpawn = null; // {x: worldTileX, y: worldTileY} or null
+let draggingSpawn = false;
+
+function drawNpcSprite(npc, px, py, size) {
+    const tile = npc.tile || npc.portrait || 0;
+    const img = tile >= 256 ? chars2Img : charsImg;
+    const local = tile >= 256 ? tile - 256 : tile;
+    if (!img || !img.complete) return;
+    const sx = (local % 16) * 32, sy = Math.floor(local / 16) * 32;
+    ctx.drawImage(img, sx, sy, 32, 32, px - size/2, py - size/2, size, size);
+}
+
+function getNpcPos(zoneId, idx, npc) {
+    const key = zoneId + '_' + idx;
+    if (npcMoves[key]) return npcMoves[key];
+    return { x: npc.x, y: npc.y };
+}
+
+function findNpcAt(wx, wy) {
+    const hitR = Math.max(1.0, 3 / zoom); // tight hit radius — must click close to NPC
+    for (const z of zones) {
+        const zd = zonesMap[z.id];
+        if (!zd || !zd.npcs) continue;
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        for (let i = 0; i < zd.npcs.length; i++) {
+            const pos = getNpcPos(z.id, i, zd.npcs[i]);
+            const nx = off.x + (pos.x + 0.5) * s;
+            const ny = off.y + (pos.y + 0.5) * s;
+            if (Math.abs(wx - nx) < hitR && Math.abs(wy - ny) < hitR) {
+                return { zoneId: z.id, idx: i };
+            }
+        }
+    }
+    return null;
+}
 
 function drawNpcMarkers(z) {
     const zd = zonesMap[z.id];
@@ -855,32 +2057,87 @@ function drawNpcMarkers(z) {
     const off = z.baked_offset || {x:0,y:0};
     const s = z.baked_scale || 1;
     const screenW = (z.width||25)*s*TILE_PX*zoom;
-    if (screenW < 60) return; // too small to show markers
+    if (screenW < 60) return;
 
     ctx.save();
-    const dotR = Math.max(3/zoom, Math.min(6/zoom, s*TILE_PX*0.3));
-    const fs = Math.max(5/zoom, Math.min(9/zoom, dotR*1.5));
+    const spriteSize = Math.max(10/zoom, Math.min(TILE_PX * s, 32/zoom));
+    const fs = Math.max(5/zoom, Math.min(9/zoom, spriteSize * 0.35));
 
-    for (const npc of zd.npcs) {
-        const px = (off.x + (npc.x + 0.5) * s) * TILE_PX;
-        const py = (off.y + (npc.y + 0.5) * s) * TILE_PX;
+    for (let ni = 0; ni < zd.npcs.length; ni++) {
+        const npc = zd.npcs[ni];
+        const pos = getNpcPos(z.id, ni, npc);
+        const px = (off.x + (pos.x + 0.5) * s) * TILE_PX;
+        const py = (off.y + (pos.y + 0.5) * s) * TILE_PX;
         const color = NPC_COLORS[npc.type] || '#888';
+        const isSelected = selectedNpc && selectedNpc.zoneId === z.id && selectedNpc.idx === ni;
 
-        // Dot
-        ctx.fillStyle = color;
-        ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = '#000'; ctx.lineWidth = 1/zoom;
-        ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI*2); ctx.stroke();
+        // Draw sprite
+        drawNpcSprite(npc, px, py, spriteSize);
 
-        // Name label (only when zoomed in enough)
-        if (screenW > 200) {
-            ctx.font = `${fs}px sans-serif`;
-            ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        // Colored border ring
+        ctx.strokeStyle = isSelected ? '#fff' : color;
+        ctx.lineWidth = (isSelected ? 2.5 : 1.5) / zoom;
+        ctx.beginPath(); ctx.arc(px, py, spriteSize/2 + 1/zoom, 0, Math.PI*2); ctx.stroke();
+
+        // Selected highlight
+        if (isSelected) {
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 1 / zoom;
+            ctx.setLineDash([4/zoom, 2/zoom]);
+            ctx.beginPath(); ctx.arc(px, py, spriteSize/2 + 3/zoom, 0, Math.PI*2); ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        // Name label
+        if (screenW > 150) {
+            ctx.font = `bold ${fs}px sans-serif`;
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
             ctx.strokeStyle = '#000'; ctx.lineWidth = 2/zoom;
-            ctx.strokeText(npc.name || '?', px + dotR + 2/zoom, py);
-            ctx.fillText(npc.name || '?', px + dotR + 2/zoom, py);
+            const nameY = py + spriteSize/2 + 1/zoom;
+            ctx.strokeText(npc.name || '?', px - spriteSize/2, nameY);
+            ctx.fillText(npc.name || '?', px - spriteSize/2, nameY);
+            // Type badge
+            ctx.font = `${fs * 0.8}px sans-serif`;
+            ctx.fillStyle = color;
+            ctx.strokeText(npc.type, px - spriteSize/2, nameY + fs + 1/zoom);
+            ctx.fillText(npc.type, px - spriteSize/2, nameY + fs + 1/zoom);
         }
     }
+    ctx.restore();
+}
+
+function drawPlayerSpawn() {
+    if (!playerSpawn) return;
+    const px = (playerSpawn.x + 0.5) * TILE_PX;
+    const py = (playerSpawn.y + 0.5) * TILE_PX;
+    const r = Math.max(6/zoom, 12/zoom);
+    // Outer glow
+    ctx.save();
+    ctx.shadowColor = '#22d3ee';
+    ctx.shadowBlur = 8/zoom;
+    // Diamond shape
+    ctx.fillStyle = '#22d3ee';
+    ctx.beginPath();
+    ctx.moveTo(px, py - r);
+    ctx.lineTo(px + r*0.7, py);
+    ctx.lineTo(px, py + r);
+    ctx.lineTo(px - r*0.7, py);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5/zoom;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // Label
+    const fs = Math.max(6/zoom, 10/zoom);
+    ctx.font = `bold ${fs}px sans-serif`;
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2.5/zoom;
+    ctx.strokeText('SPAWN', px, py - r - 2/zoom);
+    ctx.fillText('SPAWN', px, py - r - 2/zoom);
     ctx.restore();
 }
 
@@ -1094,8 +2351,11 @@ function drawImportedOverlay() {
 // ── Zone Selection ───────────────────────────────────────────────────────
 function selectZone(zoneId) {
     selectedZone = zoneId;
+    selectedCustomArea = null;
     const z = zones.find(z => z.id === zoneId);
-    document.getElementById('panel-title').textContent = z ? (z.zone_name || z.id) : zoneId;
+    const ov = zoneOverrides[zoneId];
+    const name = (ov && ov.zone_name) || (z ? z.zone_name : null) || zoneId;
+    document.getElementById('panel-title').textContent = name;
     document.getElementById('panel-subtitle').textContent = zoneId;
     switchTab(currentTab);
     render();
@@ -1110,6 +2370,7 @@ function switchTab(tab) {
     if (tab === 'palette') { renderPaletteTab(); return; }
     if (tab === 'notes') { renderNotesTab(); return; }
     if (tab === 'ideas') { renderIdeasTab(); return; }
+    if (tab === 'selection') { renderSelectionTab(); return; }
     if (!selectedZone || !zonesMap[selectedZone]) {
         content.innerHTML = '<p style="color:#666;text-align:center;margin-top:30px">Click a zone first</p>';
         return;
@@ -1126,49 +2387,93 @@ function switchTab(tab) {
 // Pre-render palette atlas as a data URL
 let paletteDataUrl = '';
 function buildPaletteAtlas() {
-    if (!maptilesLoaded) return;
-    // Already have the maptiles image, use it directly as background
-    paletteDataUrl = maptilesImg.src;
+    if (!allSheetsLoaded) return;
+    paletteDataUrl = SHEETS[0].img?.src || '';
     if (currentTab === 'palette') renderPaletteTab();
 }
 
 function renderPaletteTab() {
     const content = document.getElementById('panel-content');
-    let html = '<div class="field-row" style="margin-bottom:6px;align-items:end"><div class="field"><label>Brush Size</label>';
+    const sh = selectedSheet;
+    const totalTiles = sh.cols * sh.rows;
+    const displayPx = sh.tilePx === 8 ? 21 : 21; // display size in palette grid
+    const localIdx = selectedTileIdx - sh.offset;
+
+    // Spritesheet selector
+    let html = '<div class="field" style="margin-bottom:6px"><label>Spritesheet</label>';
+    html += '<select id="sheet-sel" onchange="switchSheet(this.value)" style="background:#0d1b2a;border:1px solid #1a4a8a;color:#e0e0e0;padding:3px;font-size:11px;width:100%">';
+    for (const s of SHEETS) {
+        html += `<option value="${s.id}" ${s.id===sh.id?'selected':''}>${s.name} (${s.cols}x${s.rows}, ${s.tilePx}px)</option>`;
+    }
+    html += '</select></div>';
+
+    // Layer selector
+    html += '<div class="field" style="margin-bottom:6px"><label>Paint Layer</label>';
+    html += '<select id="layer-sel" onchange="activeLayer=this.value" style="background:#0d1b2a;border:1px solid #1a4a8a;color:#e0e0e0;padding:3px;font-size:11px;width:100%">';
+    for (const l of PAINT_LAYERS) {
+        html += `<option value="${l.id}" ${activeLayer===l.id?'selected':''}>${l.name} — ${l.desc}</option>`;
+    }
+    html += '</select></div>';
+
+    // Brush size + selected preview
+    html += '<div class="field-row" style="margin-bottom:6px;align-items:end"><div class="field"><label>Brush Size</label>';
     html += '<select id="brush-sel" onchange="brushSize=parseInt(this.value)" style="background:#0d1b2a;border:1px solid #1a4a8a;color:#e0e0e0;padding:3px;font-size:11px;width:100%">';
     html += `<option value="1" ${brushSize===1?'selected':''}>1x1</option>`;
     html += `<option value="2" ${brushSize===2?'selected':''}>2x2</option>`;
     html += `<option value="3" ${brushSize===3?'selected':''}>3x3</option>`;
     html += `<option value="5" ${brushSize===5?'selected':''}>5x5</option>`;
     html += '</select></div>';
-    html += `<div class="field"><label>Selected: ${selectedTileIdx}</label>`;
-    html += `<div style="width:32px;height:32px;border:2px solid #e94560;border-radius:3px;image-rendering:pixelated;background-image:url('${paletteDataUrl}');background-size:${16*32}px ${16*32}px;background-position:-${(selectedTileIdx%16)*32}px -${Math.floor(selectedTileIdx/16)*32}px"></div></div></div>`;
-    html += '<div id="palette-grid">';
-    for (let i = 0; i < 256; i++) {
-        const col = i % 16, row = Math.floor(i / 16);
-        const bgPos = `-${col*21}px -${row*21}px`;
-        html += `<div class="ptile${i===selectedTileIdx?' selected':''}" data-idx="${i}" onclick="selectBrushTile(${i})" style="background-image:url('${paletteDataUrl}');background-size:${16*21}px ${16*21}px;background-position:${bgPos}"></div>`;
+
+    // Selected tile preview
+    html += `<div class="field"><label>Selected: #${selectedTileIdx} (${sh.id}:${localIdx})</label>`;
+    if (sh.img) {
+        const prevSz = 32;
+        const bgW = sh.cols * prevSz, bgH = sh.rows * prevSz;
+        const bx = -(localIdx % sh.cols) * prevSz, by = -Math.floor(localIdx / sh.cols) * prevSz;
+        html += `<div style="width:${prevSz}px;height:${prevSz}px;border:2px solid #e94560;border-radius:3px;image-rendering:pixelated;background-image:url('${sh.file}');background-size:${bgW}px ${bgH}px;background-position:${bx}px ${by}px"></div>`;
+    }
+    html += '</div></div>';
+
+    // Tile grid
+    html += `<div id="palette-grid" style="grid-template-columns:repeat(${sh.cols}, ${displayPx}px)">`;
+    for (let i = 0; i < totalTiles; i++) {
+        const col = i % sh.cols, row = Math.floor(i / sh.cols);
+        const globalIdx = sh.offset + i;
+        const bgW = sh.cols * displayPx, bgH = sh.rows * displayPx;
+        const bgPos = `-${col*displayPx}px -${row*displayPx}px`;
+        const imgSrc = sh.img ? sh.file : '';
+        html += `<div class="ptile${globalIdx===selectedTileIdx?' selected':''}" data-idx="${globalIdx}" onclick="selectBrushTile(${globalIdx})" style="background-image:url('${imgSrc}');background-size:${bgW}px ${bgH}px;background-position:${bgPos}"></div>`;
     }
     html += '</div>';
     content.innerHTML = html;
 }
 
+function switchSheet(sheetId) {
+    selectedSheet = SHEETS.find(s => s.id === sheetId) || SHEETS[0];
+    selectedTileIdx = selectedSheet.offset; // select first tile of new sheet
+    renderPaletteTab();
+}
+
 function selectBrushTile(idx) {
     selectedTileIdx = idx;
+    const sheet = getSheetForIdx(idx);
+    if (sheet.id !== selectedSheet.id) selectedSheet = sheet;
     eraserOn = false;
     document.getElementById('btn-eraser').classList.remove('active');
     setMode('paint');
     document.querySelectorAll('#palette-grid .ptile').forEach(el => {
         el.classList.toggle('selected', parseInt(el.dataset.idx) === idx);
     });
-    // Update selected preview
     renderPaletteTab();
 }
 
 function renderInfoTab(d) {
+    const ov = zoneOverrides[d.id] || {};
+    const name = ov.zone_name !== undefined ? ov.zone_name : (d.zone_name || '');
+    const desc = ov.description !== undefined ? ov.description : (d.description || '');
     document.getElementById('panel-content').innerHTML = `
-        <div class="field"><label>Zone Name</label><input value="${esc(d.zone_name||'')}" readonly></div>
-        <div class="field"><label>Description</label><textarea readonly>${esc(d.description||'')}</textarea></div>
+        <div class="field"><label>Zone Name</label><input id="edit-zone-name" value="${esc(name)}" oninput="saveZoneOverride('${d.id}','zone_name',this.value)"></div>
+        <div class="field"><label>Description</label><textarea id="edit-zone-desc" oninput="saveZoneOverride('${d.id}','description',this.value)">${esc(desc)}</textarea></div>
         <div class="field-row">
             <div class="field"><label>Width</label><input value="${d.width}" readonly></div>
             <div class="field"><label>Height</label><input value="${d.height}" readonly></div>
@@ -1181,18 +2486,153 @@ function renderInfoTab(d) {
     `;
 }
 
+function saveZoneOverride(zoneId, field, value) {
+    if (!zoneOverrides[zoneId]) zoneOverrides[zoneId] = {};
+    zoneOverrides[zoneId][field] = value;
+    // Update the panel title if zone name changed
+    if (field === 'zone_name' && selectedZone === zoneId) {
+        document.getElementById('panel-title').textContent = value || zoneId;
+    }
+    saveAnnotations();
+    render(); // re-draw labels
+}
+
 function renderNpcsTab(d) {
     const npcs = d.npcs || [];
-    const COLORS = {shop:'#fbbf24',elder:'#60a5fa',scriptfile:'#4ade80',message:'#9ca3af',tips:'#a78bfa'};
-    let html = '<ul class="item-list">';
-    npcs.forEach(npc => {
-        html += `<li><span class="npc-dot" style="background:${COLORS[npc.type]||'#666'}"></span>
-            <span class="npc-name">${esc(npc.name||'?')}</span>
-            <span class="npc-type">${npc.type} (${npc.x},${npc.y})</span></li>`;
+    if (!npcs.length) { document.getElementById('panel-content').innerHTML = '<p style="color:#666;text-align:center;margin-top:20px">No NPCs</p>'; return; }
+    let html = '';
+    npcs.forEach((npc, ni) => {
+        const color = NPC_COLORS[npc.type] || '#888';
+        const tile = npc.tile || npc.portrait || 0;
+        const isChars2 = tile >= 256;
+        const local = isChars2 ? tile - 256 : tile;
+        const file = isChars2 ? 'chars2.png' : 'chars.png';
+        const bgX = (local % 16) * 24, bgY = Math.floor(local / 16) * 24;
+        const isSel = selectedNpc && selectedNpc.zoneId === d.id && selectedNpc.idx === ni;
+        html += `<div onclick="selectNpcByIdx('${d.id}',${ni})" style="display:flex;align-items:center;gap:8px;padding:6px;background:${isSel ? '#1a3a5a' : '#0d1b2a'};border:1px solid ${isSel ? '#fbbf24' : '#1a4a8a'};border-radius:4px;margin-bottom:3px;cursor:pointer">
+            <div style="width:24px;height:24px;flex-shrink:0;border-radius:3px;border:2px solid ${color};background-image:url('${file}');background-size:${16*24}px ${16*24}px;background-position:-${bgX}px -${bgY}px;image-rendering:pixelated"></div>
+            <div style="flex:1;min-width:0">
+                <div style="font-size:11px;font-weight:bold;color:#e0e0e0">${esc(npc.name || '?')}</div>
+                <div style="font-size:9px;color:${color}">${npc.type}${npc.shop ? ' — shop: ' + npc.shop : ''}</div>
+            </div>
+            <div style="font-size:9px;color:#666">(${npc.x},${npc.y})</div>
+        </div>`;
     });
-    html += '</ul>';
-    if (!npcs.length) html = '<p style="color:#666;text-align:center;margin-top:20px">No NPCs</p>';
     document.getElementById('panel-content').innerHTML = html;
+}
+
+function selectNpcByIdx(zoneId, idx) {
+    selectedNpc = { zoneId, idx };
+    // Pan camera to NPC location
+    const zd = zonesMap[zoneId];
+    if (zd && zd.npcs && zd.npcs[idx]) {
+        const z = zones.find(z => z.id === zoneId);
+        const off = z?.baked_offset || {x:0,y:0};
+        const s = z?.baked_scale || 1;
+        const npc = zd.npcs[idx];
+        const pos = getNpcPos(zoneId, idx, npc);
+        const worldX = (off.x + (pos.x + 0.5) * s) * TILE_PX;
+        const worldY = (off.y + (pos.y + 0.5) * s) * TILE_PX;
+        zoom = Math.max(zoom, 1.5);
+        camX = canvas.width/2 - worldX * zoom;
+        camY = canvas.height/2 - worldY * zoom;
+    }
+    renderNpcPanel(selectedNpc);
+    switchTab('npcs');
+    render();
+}
+
+function renderNpcPanel(npcRef) {
+    const zd = zonesMap[npcRef.zoneId];
+    if (!zd || !zd.npcs || !zd.npcs[npcRef.idx]) return;
+    const npc = zd.npcs[npcRef.idx];
+    const color = NPC_COLORS[npc.type] || '#888';
+    const tile = npc.tile || npc.portrait || 0;
+    const isChars2 = tile >= 256;
+    const local = isChars2 ? tile - 256 : tile;
+    const file = isChars2 ? 'chars2.png' : 'chars.png';
+    const bgX = (local % 16) * 48, bgY = Math.floor(local / 16) * 48;
+    const key = npcRef.zoneId + '_' + npcRef.idx;
+    const overrides = npcDialogueOverrides[key] || {};
+    const pos = getNpcPos(npcRef.zoneId, npcRef.idx, npc);
+
+    // Find related quests
+    const relQuests = (WORLD_DATA.quests ? Object.values(WORLD_DATA.quests) : []).filter(q =>
+        q.giver === npc.name || q.location === npcRef.zoneId
+    );
+    // Find shop data
+    const shopData = npc.shop && WORLD_DATA.shops ? WORLD_DATA.shops[npc.shop] : null;
+
+    let html = `<div style="margin-bottom:8px">
+        <button onclick="renderNpcsTab(zonesMap['${npcRef.zoneId}'])" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:10px;padding:0;margin-bottom:6px">← Back to NPC list</button>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <div style="width:48px;height:48px;flex-shrink:0;border-radius:4px;border:2px solid ${color};background-image:url('${file}');background-size:${16*48}px ${16*48}px;background-position:-${bgX}px -${bgY}px;image-rendering:pixelated"></div>
+            <div>
+                <div style="font-size:14px;font-weight:bold;color:#e0e0e0">${esc(npc.name || '?')}</div>
+                <div style="font-size:10px;color:${color}">${npc.type} — tile #${tile}</div>
+                <div style="font-size:10px;color:#888">Zone: ${npcRef.zoneId} — Pos: (${pos.x}, ${pos.y})</div>
+            </div>
+        </div>
+    </div>`;
+
+    // Dialogue/message
+    if (npc.message) {
+        html += `<div style="margin-bottom:8px;padding:6px;background:#0d1b2a;border:1px solid #1a4a8a;border-radius:4px">
+            <div style="font-size:10px;color:#888;margin-bottom:3px">Message:</div>
+            <div style="font-size:11px;color:#e0e0e0;white-space:pre-wrap">${esc(npc.message)}</div>
+        </div>`;
+    }
+    if (npc.file) {
+        html += `<div style="margin-bottom:8px;padding:6px;background:#0d1b2a;border:1px solid #4ade80;border-radius:4px">
+            <div style="font-size:10px;color:#4ade80;margin-bottom:3px">Script file:</div>
+            <div style="font-size:11px;color:#e0e0e0">${esc(npc.file)}</div>
+        </div>`;
+    }
+
+    // Shop info
+    if (shopData) {
+        html += `<div style="margin-bottom:8px;padding:6px;background:#0d1b2a;border:1px solid #fbbf24;border-radius:4px">
+            <div style="font-size:10px;color:#fbbf24;margin-bottom:3px">Shop: ${esc(shopData.shop_name || npc.shop)} (${shopData.shop_type || 'general'})</div>
+        </div>`;
+    } else if (npc.shop) {
+        html += `<div style="margin-bottom:8px;padding:6px;background:#0d1b2a;border:1px solid #fbbf24;border-radius:4px">
+            <div style="font-size:10px;color:#fbbf24">Shop ID: ${esc(npc.shop)}</div>
+        </div>`;
+    }
+
+    // Related quests
+    if (relQuests.length) {
+        html += `<div style="margin-bottom:8px"><div style="font-size:10px;color:#888;margin-bottom:4px">Related Quests:</div>`;
+        for (const q of relQuests) {
+            html += `<div style="padding:5px;background:#0d1b2a;border:1px solid #a78bfa;border-radius:3px;margin-bottom:2px">
+                <div style="font-size:11px;color:#a78bfa;font-weight:bold">${esc(q.title)} (Lv${q.level})</div>
+                <div style="font-size:9px;color:#888">${esc(q.description || '').slice(0, 100)}</div>
+                ${q.objectives ? q.objectives.map(o => `<div style="font-size:9px;color:#60a5fa">• ${o.type}: ${esc(o.target || '')}</div>`).join('') : ''}
+            </div>`;
+        }
+        html += '</div>';
+    }
+
+    // Custom dialogue editor
+    html += `<div style="margin-top:8px;padding:6px;background:#0d1b2a;border:1px solid #1a4a8a;border-radius:4px">
+        <div style="font-size:10px;color:#888;margin-bottom:4px">Custom Dialogue (editable):</div>
+        <textarea id="npc-dialogue-edit" style="width:100%;min-height:60px;background:#0a1628;border:1px solid #1a4a8a;color:#e0e0e0;border-radius:3px;padding:4px;font-size:11px;resize:vertical" placeholder="Add custom dialogue lines (one per line)..." oninput="saveNpcDialogue('${key}')">${esc(overrides.dialogue || '')}</textarea>
+        <div style="font-size:9px;color:#666;margin-top:2px">Notes for this NPC:</div>
+        <textarea id="npc-notes-edit" style="width:100%;min-height:30px;background:#0a1628;border:1px solid #1a4a8a;color:#e0e0e0;border-radius:3px;padding:4px;font-size:10px;resize:vertical" placeholder="Design notes..." oninput="saveNpcNotes('${key}')">${esc(overrides.notes || '')}</textarea>
+    </div>`;
+
+    document.getElementById('panel-content').innerHTML = html;
+}
+
+function saveNpcDialogue(key) {
+    if (!npcDialogueOverrides[key]) npcDialogueOverrides[key] = {};
+    npcDialogueOverrides[key].dialogue = document.getElementById('npc-dialogue-edit').value;
+    saveAnnotations();
+}
+function saveNpcNotes(key) {
+    if (!npcDialogueOverrides[key]) npcDialogueOverrides[key] = {};
+    npcDialogueOverrides[key].notes = document.getElementById('npc-notes-edit').value;
+    saveAnnotations();
 }
 
 function renderExitsTab(d) {
@@ -1251,9 +2691,9 @@ function renderNotesTab() {
         const z = zones.find(z => z.id === zid);
         html += `<div style="margin-bottom:8px"><strong style="font-size:11px">${esc(z?.zone_name || zid)}</strong>`;
         anns.forEach((ann, i) => {
-            html += `<div style="padding:4px 6px;background:#0d1b2a;border:1px solid #1a4a8a;border-radius:3px;margin:2px 0;font-size:11px;display:flex;align-items:center">
+            html += `<div style="padding:4px 6px;background:#0d1b2a;border:1px solid #1a4a8a;border-radius:3px;margin:2px 0;font-size:11px;display:flex;align-items:center;cursor:pointer" onclick="goToAnnotation('${zid}',${i})">
                 <span style="flex:1">(${ann.x},${ann.y}) ${esc(ann.text)}</span>
-                <button class="btn-remove" onclick="removeAnnotation('${zid}',${i})">x</button>
+                <button class="btn-remove" onclick="event.stopPropagation();removeAnnotation('${zid}',${i})">x</button>
             </div>`;
             total++;
         });
@@ -1261,6 +2701,21 @@ function renderNotesTab() {
     }
     if (!total) html += '<p style="color:#666;text-align:center;margin-top:20px">No notes yet</p>';
     document.getElementById('panel-content').innerHTML = html;
+}
+
+function goToAnnotation(zid, idx) {
+    const z = zonesMap[zid];
+    const ann = annotations[zid]?.[idx];
+    if (!z || !ann) return;
+    const off = z.baked_offset || {x:0,y:0};
+    const s = z.baked_scale || 1;
+    const worldX = (off.x + ann.x * s) * TILE_PX;
+    const worldY = (off.y + ann.y * s) * TILE_PX;
+    zoom = 1.5;
+    camX = canvas.width/2 - worldX * zoom;
+    camY = canvas.height/2 - worldY * zoom;
+    selectedAnnotation = { zoneId: zid, idx };
+    render();
 }
 
 function removeAnnotation(zid, idx) {
@@ -1289,40 +2744,145 @@ let savedIdeas = {npcs:'', dungeons:'', quests:'', general:''};
 function getIdea(key) { return savedIdeas[key] || ''; }
 
 // ── Export / Import Changeset ───────────────────────────────────────────
+
+function resetBaseline() {
+    _snapshotBaseline();
+    showToast('Baseline set to current state. Next diff export will only include new changes.');
+}
+
+function updateBaselineInfo() {
+    const el = document.getElementById('baseline-info');
+    if (!el) return;
+    if (baseline && baseline.timestamp) {
+        const d = new Date(baseline.timestamp);
+        el.textContent = `Baseline: ${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+        el.style.color = '#4ade80';
+    } else {
+        el.textContent = 'No baseline (diff = all edits)';
+        el.style.color = '#e94560';
+    }
+}
+
+function _snapshotBaseline() {
+    // Deep-copy current state as the new baseline
+    baseline = {
+        timestamp: new Date().toISOString(),
+        layerPaints: JSON.parse(JSON.stringify(layerPaints)),
+        customAreas: JSON.parse(JSON.stringify(customAreas)),
+        npcMoves: JSON.parse(JSON.stringify(npcMoves)),
+        zoneOverrides: JSON.parse(JSON.stringify(zoneOverrides)),
+        npcDialogueOverrides: JSON.parse(JSON.stringify(npcDialogueOverrides)),
+        playerSpawn: playerSpawn ? JSON.parse(JSON.stringify(playerSpawn)) : null,
+    };
+    saveAnnotations();
+    updateBaselineInfo();
+}
+
+function _diffLayerPaints() {
+    // Return only tiles that changed since baseline
+    const diff = {};
+    const basePaints = baseline ? baseline.layerPaints : {};
+    for (const layerDef of PAINT_LAYERS) {
+        const lid = layerDef.id;
+        const current = layerPaints[lid];
+        const base = basePaints[lid] || {};
+        const entries = [];
+        // New or changed tiles
+        for (const [key, spriteIdx] of Object.entries(current)) {
+            if (base[key] === undefined || base[key] !== spriteIdx) {
+                const [tx, ty] = key.split(',').map(Number);
+                entries.push([tx, ty, spriteIdx]);
+            }
+        }
+        if (entries.length) diff[lid] = entries;
+    }
+    return diff;
+}
+
+function _diffArray(current, baseArr, nameKey) {
+    // Return items in current that aren't in base (by name)
+    if (!baseArr || !baseArr.length) return current;
+    const baseNames = new Set(baseArr.map(a => a[nameKey || 'name']));
+    return current.filter(a => !baseNames.has(a[nameKey || 'name']));
+}
+
+function _diffObject(current, base) {
+    // Return keys in current that differ from base
+    const diff = {};
+    for (const [k, v] of Object.entries(current)) {
+        if (!base || JSON.stringify(base[k]) !== JSON.stringify(v)) {
+            diff[k] = v;
+        }
+    }
+    return diff;
+}
+
 function exportChangeset() {
     const author = document.getElementById('author-name').value || 'Anonymous';
     const changeset = {
         version: 1,
         author,
         timestamp: new Date().toISOString(),
-        tile_changes: {},
         annotations: {},
         ideas: {},
     };
+
+    if (baseline) {
+        changeset.baseline_timestamp = baseline.timestamp;
+    }
 
     // Collect ideas
     for (const key of ['npcs','dungeons','quests','general']) {
         if (savedIdeas[key] && savedIdeas[key].trim()) changeset.ideas[key] = savedIdeas[key].trim();
     }
 
-    for (const [zid, changeMap] of Object.entries(tileChanges)) {
-        const filtered = [];
-        for (const [key, entry] of changeMap) {
-            if (entry[2] !== entry[3]) filtered.push(entry);
-        }
-        if (filtered.length) changeset.tile_changes[zid] = filtered;
+    // Layer paints — only tiles changed since baseline
+    const diffPaints = _diffLayerPaints();
+    let tileCount = 0;
+    if (Object.keys(diffPaints).length) {
+        changeset.layer_paints = diffPaints;
+        tileCount = Object.values(diffPaints).reduce((s, v) => s + v.length, 0);
     }
 
+    // Custom areas / enemy spawns — only new ones since baseline
+    const baseAreas = baseline ? baseline.customAreas : [];
+    const newAreas = _diffArray(customAreas, baseAreas, 'name');
+    const enemySpawns = newAreas.filter(a => a.type === 'enemy_spawn').map(a => ({name: a.name, x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2}));
+    const otherAreas = newAreas.filter(a => a.type !== 'enemy_spawn');
+    if (otherAreas.length) changeset.custom_areas = otherAreas;
+    if (enemySpawns.length) changeset.enemy_spawns = enemySpawns;
+
+    // NPC moves — only new/changed since baseline
+    const diffNpcMoves = _diffObject(npcMoves, baseline ? baseline.npcMoves : null);
+    if (Object.keys(diffNpcMoves).length) changeset.npc_moves = diffNpcMoves;
+
+    // Zone overrides — only new/changed
+    const diffZoneOverrides = _diffObject(zoneOverrides, baseline ? baseline.zoneOverrides : null);
+    if (Object.keys(diffZoneOverrides).length) changeset.zone_overrides = diffZoneOverrides;
+
+    // NPC dialogue — only new/changed
+    const diffDialogue = _diffObject(npcDialogueOverrides, baseline ? baseline.npcDialogueOverrides : null);
+    if (Object.keys(diffDialogue).length) changeset.npc_dialogue = diffDialogue;
+
+    // Player spawn — only if changed
+    const baseSpawn = baseline ? baseline.playerSpawn : null;
+    if (playerSpawn && JSON.stringify(playerSpawn) !== JSON.stringify(baseSpawn)) {
+        changeset.player_spawn = playerSpawn;
+    }
+
+    // Annotations
     for (const [zid, anns] of Object.entries(annotations)) {
         if (anns.length) changeset.annotations[zid] = anns;
     }
 
-    const totalChanges = Object.values(changeset.tile_changes).reduce((s, v) => s + v.length, 0);
     const totalNotes = Object.values(changeset.annotations).reduce((s, v) => s + v.length, 0);
-
     const hasIdeas = Object.keys(changeset.ideas).length > 0;
-    if (totalChanges === 0 && totalNotes === 0 && !hasIdeas) {
-        showToast('Nothing to export', true);
+    const hasAnything = tileCount > 0 || enemySpawns.length > 0 || otherAreas.length > 0 ||
+        Object.keys(diffNpcMoves).length > 0 || Object.keys(diffZoneOverrides).length > 0 ||
+        Object.keys(diffDialogue).length > 0 || changeset.player_spawn || totalNotes > 0 || hasIdeas;
+
+    if (!hasAnything) {
+        showToast('Nothing new since last export', true);
         return;
     }
 
@@ -1333,7 +2893,136 @@ function exportChangeset() {
     a.download = `changeset_${author.replace(/\s+/g,'_')}_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast(`Exported: ${totalChanges} tile changes, ${totalNotes} notes`);
+
+    // Snapshot current state as new baseline
+    _snapshotBaseline();
+    const parts = [];
+    if (tileCount > 0) parts.push(`${tileCount} tiles`);
+    if (enemySpawns.length) parts.push(`${enemySpawns.length} spawn regions`);
+    if (otherAreas.length) parts.push(`${otherAreas.length} areas`);
+    if (Object.keys(diffNpcMoves).length) parts.push(`${Object.keys(diffNpcMoves).length} NPC moves`);
+    if (changeset.player_spawn) parts.push('spawn point');
+    if (totalNotes) parts.push(`${totalNotes} notes`);
+    showToast(`Exported: ${parts.join(', ') || 'metadata only'}. Baseline updated.`);
+}
+
+function exportFullMap() {
+    if (!terrainReady) { showToast('Terrain not loaded yet', true); return; }
+    const author = document.getElementById('author-name').value || 'Anonymous';
+    showToast('Building full map export... this may take a moment');
+
+    setTimeout(() => {
+        const fullMap = {
+            version: 2,
+            type: 'full_map',
+            author,
+            timestamp: new Date().toISOString(),
+            layer_paints: { ground: [], paths: [], buildings: [], objects: [], decor: [] },
+        };
+
+        // Collect all world tile coordinates from all sources
+        const allKeys = new Set();
+        for (const key in terrainGround) allKeys.add(key);
+        for (const key in terrainOverlay) allKeys.add(key);
+        for (const layerDef of PAINT_LAYERS) {
+            for (const key in layerPaints[layerDef.id]) allKeys.add(key);
+        }
+
+        let groundCount = 0, upperCount = 0;
+
+        for (const key of allKeys) {
+            const [tx, ty] = key.split(',').map(Number);
+
+            // Ground: paint override > overlay > base terrain
+            const groundPaint = layerPaints.ground[key];
+            let groundTile;
+            if (groundPaint !== undefined) {
+                groundTile = groundPaint;
+            } else {
+                const overlay = terrainOverlay ? terrainOverlay[key] : undefined;
+                const base = terrainGround ? terrainGround[key] : undefined;
+                if (overlay !== undefined && overlay >= 0) {
+                    groundTile = overlay;
+                } else if (base !== undefined) {
+                    groundTile = base;
+                } else {
+                    groundTile = -1;
+                }
+            }
+            if (groundTile !== undefined && groundTile >= 0) {
+                fullMap.layer_paints.ground.push([tx, ty, groundTile]);
+                groundCount++;
+            }
+
+            // Upper layers: emit paint data
+            for (let li = 1; li < PAINT_LAYERS.length; li++) {
+                const lid = PAINT_LAYERS[li].id;
+                const v = layerPaints[lid][key];
+                if (v !== undefined && v >= 0) {
+                    fullMap.layer_paints[lid].push([tx, ty, v]);
+                    upperCount++;
+                }
+            }
+        }
+
+        // Remove empty layers
+        for (const lid in fullMap.layer_paints) {
+            if (fullMap.layer_paints[lid].length === 0) delete fullMap.layer_paints[lid];
+        }
+
+        // Include all metadata
+        if (Object.keys(npcMoves).length) fullMap.npc_moves = npcMoves;
+        const fmEnemySpawns = customAreas.filter(a => a.type === 'enemy_spawn').map(a => ({name: a.name, x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2}));
+        const fmOtherAreas = customAreas.filter(a => a.type !== 'enemy_spawn');
+        if (fmOtherAreas.length) fullMap.custom_areas = fmOtherAreas;
+        if (fmEnemySpawns.length) fullMap.enemy_spawns = fmEnemySpawns;
+        if (Object.keys(zoneOverrides).length) fullMap.zone_overrides = zoneOverrides;
+        if (Object.keys(npcDialogueOverrides).length) fullMap.npc_dialogue = npcDialogueOverrides;
+        if (playerSpawn) fullMap.player_spawn = playerSpawn;
+
+        // Zone + NPC data
+        const zoneData = {};
+        for (const z of zones) {
+            const zd = zonesMap[z.id];
+            if (!zd) continue;
+            zoneData[z.id] = {
+                zone_name: z.zone_name,
+                baked_offset: z.baked_offset,
+                baked_scale: z.baked_scale,
+                width: z.width, height: z.height,
+                tileset: z.tileset,
+                npcs: (zd.npcs || []).map((npc, idx) => {
+                    const pos = getNpcPos(z.id, idx, npc);
+                    return { name: npc.name || npc.id, type: npc.type, x: pos.x, y: pos.y, tile: npc.tile || 0 };
+                }),
+            };
+        }
+        fullMap.zones = zoneData;
+
+        // Annotations and ideas
+        const anns = {};
+        for (const [zid, a] of Object.entries(annotations)) {
+            if (a.length) anns[zid] = a;
+        }
+        if (Object.keys(anns).length) fullMap.annotations = anns;
+        const ideas = {};
+        for (const key of ['npcs','dungeons','quests','general']) {
+            if (savedIdeas[key] && savedIdeas[key].trim()) ideas[key] = savedIdeas[key].trim();
+        }
+        if (Object.keys(ideas).length) fullMap.ideas = ideas;
+
+        const totalTiles = groundCount + upperCount;
+        const blob = new Blob([JSON.stringify(fullMap)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `fullmap_${author.replace(/\s+/g,'_')}_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+        _snapshotBaseline();
+        showToast(`Full map exported: ${totalTiles.toLocaleString()} tiles (${sizeMB} MB). Baseline updated.`);
+    }, 50);
 }
 
 function importChangeset() {
@@ -1358,6 +3047,73 @@ function handleImportFile(e) {
                     if (!dup) { annotations[zid].push(ann); an++; }
                 }
             }
+            // Merge NPC moves
+            if (importedChangeset.npc_moves) {
+                Object.assign(npcMoves, importedChangeset.npc_moves);
+            }
+            // Merge custom areas
+            if (importedChangeset.custom_areas) {
+                for (const a of importedChangeset.custom_areas) {
+                    if (!customAreas.some(e => e.name === a.name)) customAreas.push(a);
+                }
+            }
+            // Merge zone overrides
+            if (importedChangeset.zone_overrides) {
+                for (const [zid, ov] of Object.entries(importedChangeset.zone_overrides)) {
+                    if (!zoneOverrides[zid]) zoneOverrides[zid] = {};
+                    Object.assign(zoneOverrides[zid], ov);
+                }
+            }
+            // Merge NPC dialogue overrides
+            if (importedChangeset.npc_dialogue) {
+                Object.assign(npcDialogueOverrides, importedChangeset.npc_dialogue);
+            }
+            // Player spawn
+            if (importedChangeset.player_spawn) {
+                playerSpawn = importedChangeset.player_spawn;
+            }
+            // Merge per-layer paints (new format)
+            let tp = 0;
+            if (importedChangeset.layer_paints) {
+                for (const [lid, entries] of Object.entries(importedChangeset.layer_paints)) {
+                    if (!layerPaints[lid]) layerPaints[lid] = {};
+                    for (const entry of entries) {
+                        const key = entry[0] + ',' + entry[1];
+                        layerPaints[lid][key] = entry[2];
+                        tp++;
+                        const cx = Math.floor(entry[0] / TERRAIN_CHUNK), cy = Math.floor(entry[1] / TERRAIN_CHUNK);
+                        delete terrainChunks[cx + ',' + cy];
+                    }
+                }
+            } else if (importedChangeset.terrain_paints) {
+                // Legacy: import into ground layer
+                for (const entry of importedChangeset.terrain_paints) {
+                    const key = entry[0] + ',' + entry[1];
+                    layerPaints.ground[key] = entry[2];
+                    tp++;
+                    const cx = Math.floor(entry[0] / TERRAIN_CHUNK), cy = Math.floor(entry[1] / TERRAIN_CHUNK);
+                    delete terrainChunks[cx + ',' + cy];
+                }
+            }
+            terrainPaints = layerPaints.ground;
+            // Post-import migration: move misplaced tiles from buildings/objects to decor
+            let migrated = 0;
+            for (const fromId of ['buildings', 'objects']) {
+                const src = layerPaints[fromId];
+                if (!src) continue;
+                for (const [key, idx] of Object.entries(src)) {
+                    if (idx < 0) continue; // skip void
+                    if (!layerPaints.decor[key] || layerPaints.decor[key] < 0) {
+                        layerPaints.decor[key] = idx;
+                    }
+                    delete src[key];
+                    migrated++;
+                    const [tx, ty] = key.split(',').map(Number);
+                    const cx = Math.floor(tx / TERRAIN_CHUNK), cy = Math.floor(ty / TERRAIN_CHUNK);
+                    delete terrainChunks[cx + ',' + cy];
+                }
+            }
+            if (migrated > 0) console.log(`Migrated ${migrated} tiles from buildings/objects → decor`);
             // Merge imported ideas
             const imp = importedChangeset.ideas || {};
             for (const key of ['npcs','dungeons','quests','general']) {
@@ -1366,7 +3122,7 @@ function handleImportFile(e) {
                 }
             }
             saveAnnotations();
-            showToast(`Imported: ${importedChangeset.author} — ${tc} tiles, ${an} notes merged`);
+            showToast(`Imported: ${importedChangeset.author} — ${tc + tp} tiles, ${an} notes merged`);
             render();
         } catch (err) {
             showToast('Invalid changeset file', true);
@@ -1384,7 +3140,8 @@ function updateStatus() {
     document.getElementById('status-zoom').textContent = `Zoom: ${(zoom*100).toFixed(0)}%`;
     let tc = 0;
     for (const m of Object.values(tileChanges)) tc += m.size;
-    document.getElementById('status-changes').textContent = `Changes: ${tc}`;
+    for (const lp of Object.values(layerPaints)) tc += Object.keys(lp).length;
+    document.getElementById('status-changes').textContent = `Changes: ${tc} | Layer: ${activeLayer}`;
     let nc = 0;
     for (const a of Object.values(annotations)) nc += a.length;
     document.getElementById('status-notes').textContent = `Notes: ${nc}`;
@@ -1397,6 +3154,102 @@ function showToast(msg, isError) {
     t.style.color = isError ? '#fff' : '#000';
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Tile Remover ────────────────────────────────────────────────────────
+function toggleReplaceWith() {
+    const action = document.getElementById('tr-action').value;
+    document.getElementById('tr-replace-row').style.display = action === 'replace' ? '' : 'none';
+}
+
+function openTileRemover() {
+    const modal = document.getElementById('tile-remover-modal');
+    modal.style.display = 'flex';
+    // Populate area dropdown
+    const sel = document.getElementById('tr-area');
+    sel.innerHTML = '';
+    for (const z of zones) {
+        const opt = document.createElement('option');
+        opt.value = 'zone:' + z.id;
+        opt.textContent = z.zone_name || z.id;
+        // Pre-select current zone
+        if (selectedZone === z.id) opt.selected = true;
+        sel.appendChild(opt);
+    }
+    for (const area of customAreas) {
+        const opt = document.createElement('option');
+        opt.value = 'custom:' + area.name;
+        opt.textContent = area.name + ' (custom)';
+        sel.appendChild(opt);
+    }
+    updateTileRemoverPreview();
+    toggleReplaceWith();
+}
+
+function updateTileRemoverPreview() {
+    const preview = document.getElementById('tr-tile-preview');
+    const { sheet, localIdx } = getSheetLocalIdx(selectedTileIdx);
+    if (sheet.img) {
+        const sz = 32;
+        preview.style.backgroundImage = `url('${sheet.file}')`;
+        preview.style.backgroundSize = `${sheet.cols*sz}px ${sheet.rows*sz}px`;
+        preview.style.backgroundPosition = `-${(localIdx%sheet.cols)*sz}px -${Math.floor(localIdx/sheet.cols)*sz}px`;
+        preview.style.imageRendering = 'pixelated';
+    }
+    document.getElementById('tr-tile-label').textContent = `Tile #${selectedTileIdx} (${sheet.id}:${localIdx})`;
+}
+
+function closeTileRemover() {
+    document.getElementById('tile-remover-modal').style.display = 'none';
+}
+
+function executeTileRemoval() {
+    const areaVal = document.getElementById('tr-area').value;
+    const action = document.getElementById('tr-action').value;
+    const replaceWith = action === 'replace' ? parseInt(document.getElementById('tr-replace-idx').value) : -1;
+    const targetTile = selectedTileIdx;
+
+    let x1, y1, x2, y2;
+    if (areaVal.startsWith('zone:')) {
+        const zid = areaVal.slice(5);
+        const z = zonesMap[zid];
+        if (!z) { showToast('Zone not found', true); return; }
+        const off = z.baked_offset || {x:0,y:0};
+        const s = z.baked_scale || 1;
+        x1 = Math.floor(off.x); y1 = Math.floor(off.y);
+        x2 = Math.floor(off.x + (z.width||25)*s);
+        y2 = Math.floor(off.y + (z.height||25)*s);
+    } else if (areaVal.startsWith('custom:')) {
+        const name = areaVal.slice(7);
+        const area = customAreas.find(a => a.name === name);
+        if (!area) { showToast('Area not found', true); return; }
+        x1 = area.x1; y1 = area.y1; x2 = area.x2; y2 = area.y2;
+    }
+
+    const gid = ++undoGroupId;
+    const paintLayer = layerPaints[activeLayer];
+    let count = 0;
+    const chunksToInvalidate = new Set();
+    for (let ty = y1; ty <= y2; ty++) {
+        for (let tx = x1; tx <= x2; tx++) {
+            const key = tx + ',' + ty;
+            let current = getLayerTile(key);
+            if (current === targetTile) {
+                paintLayer[key] = replaceWith;
+                undoStack.push({ terrain: true, layer: activeLayer, wx: tx, wy: ty, oldIdx: current, newIdx: replaceWith, group: gid });
+                chunksToInvalidate.add(Math.floor(tx / TERRAIN_CHUNK) + ',' + Math.floor(ty / TERRAIN_CHUNK));
+                count++;
+            }
+        }
+    }
+    redoStack = [];
+    invalidateChunks(chunksToInvalidate);
+    saveAnnotations();
+    closeTileRemover();
+    const verb = action === 'replace' ? `Replaced ${count} tiles with #${replaceWith}` : `Removed ${count} tiles`;
+    showToast(verb);
+    updateStatus();
+    render();
 }
 
 document.addEventListener('keydown', e => {
@@ -1412,6 +3265,23 @@ document.addEventListener('keydown', e => {
     if (inInput) return;
 
     if (e.key === 'Escape') {
+        // Cancel in-progress box draw
+        if (boxStart) {
+            boxStart = null; boxCurrent = null; isPainting = false;
+            render();
+            return;
+        }
+        // Cancel in-progress selection draw
+        if (selectionStart) {
+            selectionStart = null; boxCurrent = null; isPainting = false;
+            render();
+            return;
+        }
+        // Clear existing selection
+        if (selection) {
+            clearSelection();
+            return;
+        }
         document.getElementById('ann-popup').style.display = 'none';
         importedChangeset = null;
         selectedAnnotation = null;
@@ -1421,6 +3291,8 @@ document.addEventListener('keydown', e => {
     if (e.key === 'v') setMode('pan');
     if (e.key === 'n') setMode('annotate');
     if (e.key === 'e') toggleEraser();
+    if (e.key === 'i') { setMode('paint'); eyedropMode(); }
+    if (e.key === 's') { setMode('paint'); toggleBoxSelect(); }
 });
 
 init();

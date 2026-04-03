@@ -7,6 +7,10 @@ extends Resource
 @export var level: int = 1
 @export var location: String = ""          # Zone where quest is offered
 @export var target_location: String = ""   # Zone for turn-in
+@export var prerequisite: String = ""          # Single quest ID that must be completed first
+@export var prerequisite_list: Array[String] = []  # AND logic: ALL must be completed
+@export var boss_dungeon: String = ""          # Dungeon biome prefix for quest boss override
+@export var boss_enemy_path: String = ""       # EnemyDefinition .tres path for quest boss
 @export var properties: Array = []  # [{name, type, index}]
 @export var start_script: Array = []
 @export var cancel_script: Array = []

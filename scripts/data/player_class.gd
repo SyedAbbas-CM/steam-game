@@ -27,6 +27,9 @@ extends Resource
 @export var base_mp: int = 20
 @export var base_weight: float = 1.0
 @export var base_acceleration: float = 1.0
+@export var base_poise: float = 3.0
+@export var base_tenacity: float = 0.0
+@export var base_thorns: float = 0.0
 
 @export_group("Visuals")
 @export var loy_tile_index: int = 160  # LoY char sprite index

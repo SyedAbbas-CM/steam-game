@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="DungeonBiome" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/demon/devil.tres" id="2"]
@@ -6,12 +6,18 @@
 [ext_resource type="Resource" path="res://resources/enemies/loy/undead/mummy.tres" id="4"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/undead/vampire.tres" id="5"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/animal/wild_dog.tres" id="6"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/bone_guard.tres" id="7"]
+[ext_resource type="Resource" path="res://resources/enemies/wilderness/dire_wolf.tres" id="8"]
+[ext_resource type="Resource" path="res://resources/enemies/wilderness/carrion_crow.tres" id="9"]
+[ext_resource type="Resource" path="res://resources/enemies/wilderness/swamp_thing.tres" id="10"]
+[ext_resource type="Resource" path="res://resources/enemies/wilderness/feral_bear.tres" id="11"]
+[ext_resource type="Resource" path="res://resources/enemies/wilderness/wight.tres" id="12"]
 
 [resource]
 script = ExtResource("1")
 biome_name = "Wild Dungeons"
 theme = "grey"
-enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6")]
+enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12")]
 min_floor = 1
 max_floor = 5
 room_count = 20

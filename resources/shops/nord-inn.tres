@@ -13,4 +13,4 @@ welcome = "What brings you to the Barnacle? / / Food, drink, something else?"
 nomoney = "You don't have the coins boy."
 buy_text = "Fill your boots!"
 sell_text = "I shall make use of it!"
-stock = [{ "item_name": "Meat", "required_quest": "" }, { "item_name": "Trap", "required_quest": "" }, { "item_name": "Fishing Pole", "required_quest": "" }, { "item_name": "Spade", "required_quest": "" }, { "item_name": "Powder Keg", "required_quest": "" }, { "item_name": "Attack Elixir", "required_quest": "" }, { "item_name": "Pet Food", "required_quest": "" }]
+stock = [{ "item_name": "Meat", "required_quest": "" }, { "item_name": "Trap", "required_quest": "" }, { "item_name": "Fishing Pole", "required_quest": "" }, { "item_name": "Spade", "required_quest": "" }, { "item_name": "Powder Keg", "required_quest": "" }, { "item_name": "Attack Elixir", "required_quest": "" }, { "item_name": "Pet Food", "required_quest": "" }, { "item_name": "Iron Ore", "required_quest": "" }, { "item_name": "Cave Crystal", "required_quest": "" }, { "item_name": "Feather", "required_quest": "" }]

@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+commands = [{
+"cmd": "showDialog",
+"name": "Muraad",
+"portrait": 165,
+"text": "Ah, a fellow traveler! I've walked roads you haven't dreamed of yet. Each one changed me into someone new.",
+"options": [{
+"name": "Where from?",
+"script": [{
+"cmd": "showDialog",
+"name": "Muraad",
+"portrait": 165,
+"text": "Everywhere and nowhere. I started seeking truth out there in the world. Then I realized the journey was turning inward. Now I walk to bring what I've learned back to others.",
+"options": [{
+"name": "What did you learn?",
+"script": [{
+"cmd": "showDialog",
+"name": "Muraad",
+"portrait": 165,
+"text": "That you leave home one person and return another. And that's not the end — it's barely the middle. The real journey is what you do with the change.",
+"options": [{
+"name": "Any quests?",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "haven"
+}]
+}, {
+"name": "Safe travels",
+"script": []
+}]
+}]
+}, {
+"name": "Sounds tiring",
+"script": [{
+"cmd": "showDialog",
+"name": "Muraad",
+"portrait": 165,
+"text": "Ha! The body tires, yes. But the soul? It wakes up. Sitting still is what's truly exhausting — you just don't notice until you start moving.",
+"options": [{
+"name": "Farewell",
+"script": []
+}]
+}]
+}]
+}]
+}, {
+"name": "Any quests?",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "haven"
+}]
+}, {
+"name": "Farewell",
+"script": []
+}]
+}]

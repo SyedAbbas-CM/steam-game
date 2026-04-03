@@ -8,7 +8,7 @@ id = "z8"
 title = "End the Endermen"
 level = 140
 location = "kor"
-target_location = "peaks"
+target_location = "stormcrag"
 properties = [{
 "index": 0,
 "name": "Endermans Killed",

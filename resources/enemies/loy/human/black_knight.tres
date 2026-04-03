@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Black Knight"
 description = "Impenetrable dark warrior with a shield that absorbs damage, drains life force"
-max_hp = 405
+max_hp = 324
 move_speed = 39.2
 contact_damage = 8
 level = 50

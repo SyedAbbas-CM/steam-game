@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Cobra"
 description = "Small but deadly, spits venomous projectiles that poison on contact"
-max_hp = 6
+max_hp = 5
 move_speed = 28.9
 contact_damage = 1
 level = 1

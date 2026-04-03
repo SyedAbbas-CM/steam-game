@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Frozen Ancient"
 description = "A frozen chaoatic dwarf"
-max_hp = 108
+max_hp = 86
 move_speed = 27.7
 contact_damage = 5
 level = 19

@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 20.0
+flat_bonus = 17.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 3
+flat_bonus = 0.15
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Lava Bow"
 loy_tile_index = 221
 description = "A burning bow of pain"
 slot_type = 1
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 460
-sell_value = 115
-bullet_sprite_index = 104
+buy_price = 908
+sell_value = 227
+bullet_sprite_index = 208
 weapon_range = 5.0
+weapon_type = "bow"

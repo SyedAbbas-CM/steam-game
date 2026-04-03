@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Ystrad"
 description = "Yellow zombie giant"
-max_hp = 39
+max_hp = 31
 move_speed = 24.6
 contact_damage = 5
 level = 16

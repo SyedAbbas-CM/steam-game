@@ -1,0 +1,56 @@
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=26 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/fire_empling.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/imp.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/devil.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/fire_elemental.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/animal/fire_lurker.tres" id="6"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/demon/fire_beast.tres" id="7"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/scorch_hound.tres" id="8"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/flame_sprite.tres" id="9"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/molten_crawler.tres" id="10"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/cinder_bomber.tres" id="11"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/flame_dancer.tres" id="12"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/ember_swarm.tres" id="13"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/magma_golem.tres" id="14"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/lava_serpent.tres" id="15"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/inferno_wraith.tres" id="16"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/ash_phantom.tres" id="17"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/pyroclast.tres" id="18"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/volcanic_worm.tres" id="19"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/magma_slinger.tres" id="20"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/blazing_charger.tres" id="21"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/fire_spitter.tres" id="22"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/magma_mine_layer.tres" id="23"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/infernal_gatekeeper.tres" id="24"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/hellfire_sentinel.tres" id="25"]
+
+[resource]
+script = ExtResource("1")
+biome_name = "Fire Caves"
+theme = "red"
+enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12"), ExtResource("13"), ExtResource("14"), ExtResource("15"), ExtResource("16"), ExtResource("17"), ExtResource("18"), ExtResource("19"), ExtResource("20"), ExtResource("21"), ExtResource("22"), ExtResource("23")]
+liquid_type = "lava"
+hazard_damage = 2
+hazard_interval = 0.8
+hazard_intensity = 0.4
+trap_density = 0.03
+web_bridge_density = 0.0
+allowed_transitions = [0, 1, 2, 3]
+min_floor = 1
+max_floor = 3
+room_count = 30
+map_width = 55
+map_height = 45
+chest_count = 6
+min_monsters = 2
+max_monsters = 5
+has_locked_doors = true
+boss_name = "Fire Beast"
+boss_definition = ExtResource("7")
+difficulty_tier = 3
+base_difficulty = 5
+loy_level_id = "FireCave-Dungeons"
+loy_tileset_offset = 56
+floor_count = 3

@@ -7,3 +7,15 @@ node_modules/
 dist/
 *.exe
 *.dmg
+
+# Build exports
+builds/
+
+# Local workflow artifacts generated per machine
+docs/workflow/local/
+
+# OS junk
+.DS_Store
+
+# Editor metadata
+.obsidian/

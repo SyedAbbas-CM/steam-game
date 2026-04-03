@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "life_drain"
+spell_name = "Life Drain"
+description = "Cone attack that heals you for 50% of damage dealt"
+effect_type = 5
+delivery = 3
+magnitude = 20
+duration = 0.0
+mp_cost = 15.0
+cooldown = 6.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

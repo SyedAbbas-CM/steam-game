@@ -6,6 +6,11 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
+flat_bonus = 3.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 5
 flat_bonus = 1.0
 
 [resource]
@@ -14,9 +19,10 @@ item_name = "Beholder Staff"
 loy_tile_index = 275
 description = "A bloody eye on a stick"
 slot_type = 2
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 0
-buy_price = 23
-sell_value = 5
-bullet_sprite_index = 111
+buy_price = 102
+sell_value = 25
+bullet_sprite_index = 224
 weapon_range = 4.0
+weapon_type = "staff"

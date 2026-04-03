@@ -1,0 +1,150 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "pq_cave"
+title = "Shadows Below"
+summary = "Solmund wants you to observe the creatures in the dungeon. Go below and look carefully at what you're really fighting."
+level = 3
+location = "haven"
+properties = [{
+"index": 0,
+"name": "Creatures Observed",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Solmund",
+"portrait": 163,
+"text": "You look like someone who actually uses their eyes. I have a task for you, if you're willing.",
+"options": [{
+"name": "What task?",
+"script": [{
+"cmd": "showDialog",
+"name": "Solmund",
+"portrait": 163,
+"text": "Go down into the crypts. Observe 10 creatures. Really look at them. Not just as things to hit — as things that exist. Then come back and tell me what you saw.",
+"options": [{
+"name": "I'll do it",
+"script": [{
+"cmd": "startQuest",
+"id": "pq_cave"
+}]
+}, {
+"name": "Not now",
+"script": []
+}]
+}]
+}]
+}]
+events = [{
+"param": "Skeleton",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "Zombie",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "Ghost",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "Mummy",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "Vampire",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "haven",
+"script": [{
+"attribute": "session-pq_cave-0",
+"cmd": "if",
+"compare": "10",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Solmund",
+"portrait": 163,
+"options": [{
+"name": "I will",
+"script": []
+}],
+"text": "Not enough yet. Go deeper. Observe more creatures. You need to see at least 10."
+}]
+}, {
+"attribute": "session-pq_cave-0",
+"cmd": "if",
+"compare": "9",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Solmund",
+"portrait": 163,
+"text": "You're back. I can see it in your eyes — you went below. So tell me. What did you see?",
+"options": [{
+"name": "Monsters",
+"script": [{
+"cmd": "showDialog",
+"name": "Solmund",
+"portrait": 163,
+"text": "You saw the shadows. Most do. There's no shame in it. Perhaps next time you'll notice what's casting them.",
+"options": [{
+"name": "Thanks",
+"script": [{
+"cmd": "getExp",
+"value": "200"
+}, {
+"cmd": "getItem",
+"count": "200",
+"name": "Gold"
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}]
+}, {
+"name": "Something deeper",
+"script": [{
+"cmd": "showDialog",
+"name": "Solmund",
+"portrait": 163,
+"text": "You looked past the fire. Good. Most people fight the shapes on the wall their entire lives without once wondering what's making them. Remember that feeling.",
+"options": [{
+"name": "Thanks",
+"script": [{
+"cmd": "getExp",
+"value": "300"
+}, {
+"cmd": "getItem",
+"count": "200",
+"name": "Gold"
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}]
+}]
+}]
+}],
+"type": "quest"
+}]

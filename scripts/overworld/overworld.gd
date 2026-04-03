@@ -19,7 +19,7 @@ var _nearby_entrance: Area2D = null  # entrance the player is standing near
 var _tile_inspector: TileInspector = null  # tile inspection popup
 var _zone_spawn_data: Array = []  # [{zone, spawn_data, enemy_def, ox, oy, s}] for respawning
 var _respawn_timer: float = 0.0
-const RESPAWN_INTERVAL: float = 45.0  # seconds between respawn checks
+const RESPAWN_INTERVAL: float = 8.0  # seconds between spawn ticks (enemies appear gradually)
 const MAX_ENEMIES_PER_ZONE: int = 6
 
 ## Zone-based loading: only load chunks in current zone + connected zones
@@ -29,6 +29,45 @@ var _zone_bboxes: Dictionary = {}  # zone_id -> Rect2i (tile bounding box with c
 var _zone_gates: Array = []  # Area2D gate triggers at zone exits
 var _zone_label: Label = null  # zone name HUD
 var _zone_label_tween: Tween = null
+var _last_zone_chime_msec: int = 0
+var _last_zone_change_msec: int = 0  # cooldown for zone transitions
+var _last_shown_zone_id: String = ""  # prevent re-showing same zone
+const ZONE_CHANGE_COOLDOWN_MSEC: int = 3000  # min ms between zone transitions
+const TOWN_SPEED_MULT: float = 3.0  # speed multiplier in safe/town zones
+var _town_speed_active: bool = false
+
+# Battle region waypoint pairs — zone_id -> { "ps": Vector2i (player spawn tile), "es": Vector2i (enemy spawn tile) }
+const BATTLE_REGIONS := {
+	# Darl Woods area
+	"wastes": {"ps": Vector2i(276, -1), "es": Vector2i(406, -47)},
+	"rotgrove": {"ps": Vector2i(276, -1), "es": Vector2i(406, -47)},
+	"witchglade": {"ps": Vector2i(276, -1), "es": Vector2i(406, -47)},
+	"darlwood": {"ps": Vector2i(276, -1), "es": Vector2i(406, -47)},
+	# Staging Grounds area
+	"gallows": {"ps": Vector2i(265, 37), "es": Vector2i(321, 39)},
+	"wardens": {"ps": Vector2i(265, 37), "es": Vector2i(321, 39)},
+	# Farm area
+	"duskfarm": {"ps": Vector2i(124, 64), "es": Vector2i(224, 45)},
+	# Highway area
+	"dreadbridge": {"ps": Vector2i(137, -58), "es": Vector2i(254, -70)},
+	"brg2": {"ps": Vector2i(137, -58), "es": Vector2i(254, -70)},
+	# Wilderness area
+	"cutthroat": {"ps": Vector2i(106, -47), "es": Vector2i(-24, -53)},
+	"frostpass": {"ps": Vector2i(-15, -206), "es": Vector2i(-57, -135)},
+	"cold2": {"ps": Vector2i(-15, -206), "es": Vector2i(-57, -135)},
+	# Graveyard area
+	"barrows": {"ps": Vector2i(32, 125), "es": Vector2i(32, 217)},
+}
+# Fallback: all waypoint pairs for nearest-match lookup
+const _ALL_WAYPOINT_PAIRS := [
+	[Vector2i(276, -1), Vector2i(406, -47)],      # Darl Woods
+	[Vector2i(265, 37), Vector2i(321, 39)],        # Staging Grounds
+	[Vector2i(124, 64), Vector2i(224, 45)],        # Farm
+	[Vector2i(137, -58), Vector2i(254, -70)],      # Highway
+	[Vector2i(106, -47), Vector2i(-24, -53)],      # Wilderness 1
+	[Vector2i(-15, -206), Vector2i(-57, -135)],    # Wilderness 2
+	[Vector2i(32, 125), Vector2i(32, 217)],        # Graveyard
+]
 
 const CHUNK_SIZE = 64  # tiles per chunk side
 const LOAD_RADIUS = 3  # chunks loaded around player
@@ -52,11 +91,17 @@ func _ready() -> void:
 	# Skip _ready when running headless (e.g., rebuild scripts)
 	if DisplayServer.get_name() == "headless":
 		return
+	add_to_group("overworld")
 
 	var t0 = Time.get_ticks_msec()
 	var player = $Player
 	# Scale visuals only — scaling CharacterBody2D breaks move_and_slide()
-	player.get_node("Sprite2D").scale = Vector2(4, 4)
+	# chars.png sprites are 32x32 (already match tile size), lofi_char is 8x8 (needs 4x)
+	var spr = player.get_node("Sprite2D")
+	if spr.texture is AtlasTexture:
+		spr.scale = Vector2(1, 1)  # 32x32 atlas from chars.png — already tile-sized
+	else:
+		spr.scale = Vector2(4, 4)  # 8x8 lofi_char.png — scale up to 32px
 	var _col = player.get_node("CollisionShape2D")
 	_col.shape = RectangleShape2D.new()
 	_col.shape.size = Vector2(24, 24)
@@ -72,10 +117,19 @@ func _ready() -> void:
 	if cam:
 		cam.zoom = Vector2(1.6, 1.6)
 
-	# Set player to spawn position (tile coords → pixel coords)
+	# Set player position: return to dungeon entrance if coming back, else default spawn
+	var gm = get_node_or_null("/root/GameManager")
 	var spawn_px = Vector2(player_spawn_tile.x * 32 + 16, player_spawn_tile.y * 32 + 16)
+	if gm and gm.overworld_return_position != Vector2.ZERO:
+		spawn_px = gm.overworld_return_position
+		gm.overworld_return_position = Vector2.ZERO  # clear so next fresh load uses default
 	player.global_position = spawn_px
-	print("Player spawn: tile %s → pixel %s" % [player_spawn_tile, spawn_px])
+	print("Player spawn: pixel %s" % spawn_px)
+
+	# Spawn temporary town portal if returning from boss kill
+	if gm and gm.has_meta("spawn_overworld_portal") and gm.get_meta("spawn_overworld_portal"):
+		gm.remove_meta("spawn_overworld_portal")
+		_spawn_temp_portal(spawn_px + Vector2(0, 40))
 
 	# Phase 1: Essential setup
 	_load_zone_data()
@@ -96,6 +150,15 @@ func _ready() -> void:
 
 	_setup_game_hud(player)
 
+	# Pass zone data to QuestManager for objective position resolution + quest arrow
+	var qm = get_node_or_null("/root/QuestManager")
+	if qm and qm.has_method("set_zone_data"):
+		qm.set_zone_data(zone_data)
+		qm.quest_started.connect(_on_quest_arrow_update)
+		qm.quest_completed.connect(_on_quest_arrow_update)
+		qm.quest_progressed.connect(func(_qid, _pname, _val): _on_quest_arrow_update(""))
+		_update_quest_arrow()
+
 	if has_node("TouchControls"):
 		player.touch_controls = $TouchControls
 	if has_node("InventoryScreen"):
@@ -109,6 +172,12 @@ func _ready() -> void:
 	# Phase 3: Defer heavy work
 	_deferred_init.call_deferred()
 	print("TIMING: overworld _ready took %d ms (deferred init pending)" % (Time.get_ticks_msec() - t0))
+
+	# Show victory notification if returning from a won battle
+	if gm and gm.has_meta("last_battle_victory_zone"):
+		var won_zone: String = gm.get_meta("last_battle_victory_zone")
+		gm.remove_meta("last_battle_victory_zone")
+		_show_battle_victory_notification.call_deferred(won_zone)
 
 var _use_file_chunks: bool = true  # true = load from .tres files, false = extracted from scene
 
@@ -160,6 +229,7 @@ func _init_chunk_system() -> void:
 	_current_zone = _find_zone_data_for_tile(tile_pos)
 	if _current_zone:
 		_rebuild_allowed_zones()
+		_update_town_speed(_current_zone)
 		print("Starting zone: %s (%s)" % [_current_zone.id, _current_zone.zone_name])
 	else:
 		print("WARNING: Player spawn tile not in any zone — loading all chunks")
@@ -218,16 +288,13 @@ func _load_initial_chunks(center: Vector2i) -> void:
 	for dy in range(-1, 2):
 		for dx in range(-1, 2):
 			var key = Vector2i(center.x + dx, center.y + dy)
-			if _chunk_in_allowed_zones(key):
-				_load_chunk_immediate(key)
+			_load_chunk_immediate(key)
 	# Request the rest of LOAD_RADIUS async (will paint incrementally)
 	for dy in range(-LOAD_RADIUS, LOAD_RADIUS + 1):
 		for dx in range(-LOAD_RADIUS, LOAD_RADIUS + 1):
 			if abs(dx) <= 1 and abs(dy) <= 1:
 				continue  # already loaded sync
 			var key = Vector2i(center.x + dx, center.y + dy)
-			if not _chunk_in_allowed_zones(key):
-				continue
 			var key_str = "%d_%d" % [key.x, key.y]
 			if _chunk_keys_set.has(key_str):
 				_request_chunk_load(key_str)
@@ -273,11 +340,17 @@ func _async_init() -> void:
 	await get_tree().process_frame
 
 	t1 = Time.get_ticks_msec()
-	# Old zone-based enemy spawning disabled — replaced by editor-defined spawn regions
-	# _spawn_zone_enemies()
+	# Zone-based spawning for passive creatures + zone-specific enemies
+	_spawn_zone_enemies()
+	# Editor-defined spawn regions for hostile area enemies
 	_spawn_editor_enemies()
 	print("TIMING: overworld spawn enemies took %d ms" % (Time.get_ticks_msec() - t1))
 	_spawn_equipment_bag()
+	_spawn_test_arena_entrance()
+
+	t1 = Time.get_ticks_msec()
+	_spawn_harvest_nodes()
+	print("TIMING: overworld spawn harvest nodes took %d ms" % (Time.get_ticks_msec() - t1))
 
 	# UI overlays
 	var dialogue_ui = DialogueUI.new()
@@ -287,13 +360,40 @@ func _async_init() -> void:
 	var shop_ui = ShopUI.new()
 	add_child(shop_ui)
 
+	# Territory/diplomacy attack notifications
+	_setup_attack_notifications()
+
 	# Zone gates and HUD
 	_create_zone_gates()
 	if _current_zone:
+		_last_shown_zone_id = _current_zone.id
+		_last_zone_change_msec = Time.get_ticks_msec()
 		_show_zone_name(_current_zone.zone_name if _current_zone.zone_name != "" else _current_zone.id)
 	var qm = get_node_or_null("/root/QuestManager")
 	if qm and _current_zone:
 		qm.on_zone_entered(_current_zone.id)
+
+	# 3D first-person view (L key toggle)
+	var fpv = FirstPersonView.new()
+	fpv.name = "FirstPersonView"
+	fpv.visible = false
+	add_child(fpv)
+	fpv.setup(32.0)
+	# Overworld tile sources
+	fpv.add_source(0, "res://assets/sprites/loy/maptiles.png", 16, 16)      # ground + walls
+	fpv.add_source(1, "res://assets/sprites/lofiEnvironment_32.png", 16, 26) # env tiles
+	fpv.add_source(2, "res://assets/sprites/lofi_dungeon_features_32.png", 12, 9)
+	fpv.add_source(3, "res://assets/sprites/lofi_obj_32.png", 16, 16)       # objects
+	fpv.add_source(4, "res://assets/sprites/lofi_obj_packB_32.png", 9, 8)   # more objects
+	fpv.add_source(5, "res://assets/sprites/loy/tiles.png", 16, 16)         # extra ground
+	fpv.add_source(6, "res://assets/sprites/loy/tiles2.png", 16, 16)        # extra ground
+	fpv.set_layers(ground, buildings)
+	fpv.add_object_layer(decorations, "decorations")
+	fpv.add_object_layer(buildings, "buildings")  # source 3/4 objects rendered as quads
+	fpv.add_floor_overlay_layer(paths, "paths")
+	fpv.add_floor_overlay_layer(water, "water")
+	fpv.setup_overworld(self, buildings, fences, water)
+	player._first_person_view = fpv
 
 	print("TIMING: overworld TOTAL _async_init took %d ms" % (Time.get_ticks_msec() - t0))
 
@@ -303,18 +403,10 @@ func _async_init() -> void:
 		gm._hide_loading_screen()
 
 func _load_zone_data() -> void:
-	var zone_dir = "res://resources/world/zones/"
-	var dir = DirAccess.open(zone_dir)
-	if not dir:
-		return
-	dir.list_dir_begin()
-	var fname = dir.get_next()
-	while fname != "":
-		if fname.ends_with(".tres"):
-			var zone = load(zone_dir + fname) as LoyZoneData
-			if zone:
-				zone_data.append(zone)
-		fname = dir.get_next()
+	for path in ResourceRegistry.zones():
+		var zone = load(path) as LoyZoneData
+		if zone:
+			zone_data.append(zone)
 
 # _create_dungeon_entrances is now handled per-chunk in _create_chunk_entrances
 
@@ -403,22 +495,24 @@ func _update_current_zone() -> void:
 	var player = get_node_or_null("Player")
 	if not player:
 		return
+	var now = Time.get_ticks_msec()
+	if now - _last_zone_change_msec < ZONE_CHANGE_COOLDOWN_MSEC:
+		return  # cooldown active — prevent flickering at zone borders
 	var tile = Vector2i(int(player.position.x / 32), int(player.position.y / 32))
+	# If player is still inside current zone, don't switch (prevents overlap flicker)
+	if _current_zone and _tile_in_zone(tile, _current_zone):
+		return
 	var zone = _find_zone_data_for_tile(tile)
 	if zone and zone != _current_zone:
-		var old_zone = _current_zone
-		_current_zone = zone
-		_rebuild_allowed_zones()
-		_create_zone_gates()
-		_show_zone_name(zone.zone_name if zone.zone_name != "" else zone.id)
-		# Notify quest system
-		var qm = get_node_or_null("/root/QuestManager")
-		if qm:
-			qm.on_zone_entered(zone.id)
-		# Unload chunks outside new allowed zones
-		for key in _loaded_chunks.keys():
-			if not _chunk_in_allowed_zones(key) and key not in _unload_queue:
-				_unload_queue.append(key)
+		_switch_to_zone(zone)
+
+func _tile_in_zone(cell: Vector2i, zone: LoyZoneData) -> bool:
+	if zone.baked_offset == Vector2i(-99999, -99999):
+		return false
+	var s: int = zone.baked_scale if zone.baked_scale > 0 else 1
+	var w: int = (zone.width if zone.width > 0 else 50) * s
+	var h: int = (zone.height if zone.height > 0 else 50) * s
+	return cell.x >= zone.baked_offset.x and cell.x < zone.baked_offset.x + w and cell.y >= zone.baked_offset.y and cell.y < zone.baked_offset.y + h
 
 func _create_zone_gates() -> void:
 	## Remove old gates
@@ -501,21 +595,40 @@ func _create_zone_gates() -> void:
 func _on_zone_gate_entered(body: Node, target_zone_id: String) -> void:
 	if not body.is_in_group("player"):
 		return
+	var now = Time.get_ticks_msec()
+	if now - _last_zone_change_msec < ZONE_CHANGE_COOLDOWN_MSEC:
+		return
 	var target = _find_zone_by_id(target_zone_id)
 	if target and target != _current_zone:
-		_current_zone = target
-		_rebuild_allowed_zones()
-		_create_zone_gates()
-		_show_zone_name(target.zone_name if target.zone_name != "" else target.id)
-		var qm = get_node_or_null("/root/QuestManager")
-		if qm:
-			qm.on_zone_entered(target.id)
-		# Unload out-of-zone chunks
-		for key in _loaded_chunks.keys():
-			if not _chunk_in_allowed_zones(key) and key not in _unload_queue:
-				_unload_queue.append(key)
+		_switch_to_zone(target)
+
+func _switch_to_zone(zone: LoyZoneData) -> void:
+	_current_zone = zone
+	_last_zone_change_msec = Time.get_ticks_msec()
+	_rebuild_allowed_zones()
+	_create_zone_gates()
+	_update_town_speed(zone)
+	var zone_name = zone.zone_name if zone.zone_name != "" else zone.id
+	# Only show name + chime if this is a different zone than last shown
+	if zone.id != _last_shown_zone_id:
+		_last_shown_zone_id = zone.id
+		_show_zone_name(zone_name)
+	var qm = get_node_or_null("/root/QuestManager")
+	if qm:
+		qm.on_zone_entered(zone.id)
+	# Unload chunks outside new allowed zones (but keep chunks near player)
+	for key in _loaded_chunks.keys():
+		var near_player = abs(key.x - _last_chunk.x) <= LOAD_RADIUS and abs(key.y - _last_chunk.y) <= LOAD_RADIUS
+		if not near_player and not _chunk_in_allowed_zones(key) and key not in _unload_queue:
+			_unload_queue.append(key)
 
 func _show_zone_name(zone_name: String) -> void:
+	var now = Time.get_ticks_msec()
+	if now - _last_zone_chime_msec > 2000:
+		_last_zone_chime_msec = now
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("chime", -4.0, 0.0)
 	if not _zone_label:
 		_setup_zone_label()
 	if not _zone_label:
@@ -554,6 +667,23 @@ func _setup_zone_label() -> void:
 	_zone_label.visible = false
 	canvas.add_child(_zone_label)
 
+func _show_battle_victory_notification(zone_name: String) -> void:
+	if not _zone_label:
+		_setup_zone_label()
+	if not _zone_label:
+		return
+	_zone_label.text = "VICTORY! %s conquered!" % zone_name
+	_zone_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
+	_zone_label.modulate.a = 0.0
+	_zone_label.visible = true
+	if _zone_label_tween and _zone_label_tween.is_valid():
+		_zone_label_tween.kill()
+	_zone_label_tween = create_tween()
+	_zone_label_tween.tween_property(_zone_label, "modulate:a", 1.0, 0.3)
+	_zone_label_tween.tween_interval(3.0)
+	_zone_label_tween.tween_property(_zone_label, "modulate:a", 0.0, 1.0)
+	_zone_label_tween.tween_callback(func(): _zone_label.add_theme_color_override("font_color", Color.WHITE))
+
 func _add_entrance(pos: Vector2, biome_name: String, tile_size: int = 32, display_name: String = "") -> Array:
 	if display_name == "":
 		display_name = biome_name
@@ -573,7 +703,7 @@ func _add_entrance(pos: Vector2, biome_name: String, tile_size: int = 32, displa
 
 	# E-key prompt label (hidden until player is nearby)
 	var prompt = Label.new()
-	prompt.text = "[E] Enter %s" % display_name
+	prompt.text = ("Tap to Enter %s" if TouchControls.is_mobile() else "[E] Enter %s") % display_name
 	prompt.position = Vector2(-40, -28)
 	prompt.add_theme_font_size_override("font_size", 10)
 	prompt.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
@@ -600,6 +730,11 @@ func _on_entrance_proximity(body: Node2D, entrance: Area2D) -> void:
 		var prompt = entrance.get_meta("prompt_label") as Label
 		if prompt:
 			prompt.visible = true
+		if TouchControls.is_mobile():
+			var tc = get_tree().get_first_node_in_group("touch_controls") as TouchControls
+			if tc:
+				var dn = str(entrance.get_meta("display_name"))
+				tc.show_interact_button("Enter " + dn)
 
 func _on_entrance_left(body: Node2D, entrance: Area2D) -> void:
 	if body.is_in_group("player") and _nearby_entrance == entrance:
@@ -607,6 +742,10 @@ func _on_entrance_left(body: Node2D, entrance: Area2D) -> void:
 		if prompt:
 			prompt.visible = false
 		_nearby_entrance = null
+		if TouchControls.is_mobile():
+			var tc = get_tree().get_first_node_in_group("touch_controls") as TouchControls
+			if tc:
+				tc.hide_interact_button()
 
 func _try_inspect_tile() -> void:
 	var player = get_node_or_null("Player")
@@ -676,6 +815,9 @@ func _spawn_npcs() -> void:
 			var nx = int(npc_data.get("x", 0))
 			var ny = int(npc_data.get("y", 0))
 			var s = zone.baked_scale if zone.baked_scale > 0 else 1
+			# Move elder NPCs into their office building
+			if str(npc_data.get("name", "")).to_lower().contains("elder"):
+				ny += 1
 			npc.position = Vector2((ox + nx * s) * ts + half, (oy + ny * s) * ts + half)
 
 			var msg = str(npc_data.get("message", ""))
@@ -692,24 +834,72 @@ func _spawn_npcs() -> void:
 			add_child(npc)
 			npc_count += 1
 
-func _spawn_zone_enemies() -> void:
-	var ts = 32
+	# Spawn War Tables in all towns
+	_spawn_war_tables()
+
+const WAR_TABLE_ZONES := [
+	"haven", "briarvale", "ashheim", "windhold", "kor", "brackwater", "grimhold",
+	"mirage", "boghollow", "duskwatch", "thule", "duskport", "eldori", "cenneth", "scorchgate",
+]
+
+func _spawn_war_tables() -> void:
+	var ts := 32
 	if ground and ground.tile_set:
 		ts = ground.tile_set.tile_size.x
-	var half = ts / 2
-
-	var enemy_scene_path = "res://scenes/enemy.tscn"
-	if not ResourceLoader.exists(enemy_scene_path):
+	var wt_script = load("res://scripts/objects/war_table.gd")
+	if not wt_script:
 		return
-	var enemy_scene = load(enemy_scene_path) as PackedScene
-	var container = $EnemyContainer
+	for zone in zone_data:
+		if zone.id not in WAR_TABLE_ZONES:
+			continue
+		if zone.baked_offset == Vector2i(-99999, -99999):
+			continue
+		var ox := zone.baked_offset.x
+		var oy := zone.baked_offset.y
+		var s: int = zone.baked_scale if zone.baked_scale > 0 else 1
+		# Find anchor NPC: prioritize by name "Elder", then type elder/scriptfile/shop, then first NPC
+		var anchor_x := zone.width / 2
+		var anchor_y := zone.height / 2
+		var found := false
+		# Pass 1: NPC named "Elder"
+		for npc_data in zone.npcs:
+			if str(npc_data.get("name", "")).to_lower().contains("elder"):
+				anchor_x = int(npc_data.get("x", anchor_x))
+				anchor_y = int(npc_data.get("y", anchor_y))
+				found = true
+				break
+		# Pass 2: type priority
+		if not found:
+			for priority_type in ["elder", "scriptfile", "shop"]:
+				for npc_data in zone.npcs:
+					if str(npc_data.get("type", "")) == priority_type:
+						anchor_x = int(npc_data.get("x", anchor_x))
+						anchor_y = int(npc_data.get("y", anchor_y))
+						found = true
+						break
+				if found:
+					break
+		# Pass 3: first NPC
+		if not found and not zone.npcs.is_empty():
+			var npc_data = zone.npcs[0]
+			anchor_x = int(npc_data.get("x", anchor_x))
+			anchor_y = int(npc_data.get("y", anchor_y))
+		# Place war table 1 tile east of elder, same row
+		var table_x := mini(anchor_x + 1, (zone.width if zone.width > 0 else 25) - 2)
+		var table_y := anchor_y + 1
+		var table = wt_script.new()
+		table.position = Vector2((ox + table_x * s) * ts + ts / 2, (oy + table_y * s) * ts + ts / 2)
+		table.z_index = 3
+		add_child(table)
+		print("Overworld: War Table spawned in %s at %s" % [zone.id, str(table.position)])
 
+func _spawn_zone_enemies() -> void:
+	# Register zone spawn data — actual spawning deferred to _respawn_zone_enemies()
 	for zone in zone_data:
 		if zone.baked_offset == Vector2i(-99999, -99999):
 			continue
-		if zone.id in SAFE_ZONES:
-			continue
 
+		var is_safe = zone.id in SAFE_ZONES
 		var ox = zone.baked_offset.x
 		var oy = zone.baked_offset.y
 		var s = zone.baked_scale if zone.baked_scale > 0 else 1
@@ -719,26 +909,17 @@ func _spawn_zone_enemies() -> void:
 			var enemy_def = _get_cached_enemy_def(monster_type)
 			if not enemy_def:
 				continue
+			# Safe zones: only spawn passive creatures (chickens, fairies)
+			if is_safe and enemy_def.hostile:
+				continue
 
-			# Store for respawning
 			_zone_spawn_data.append({
 				"zone_id": zone.id,
 				"spawn_data": spawn_data,
 				"enemy_def": enemy_def,
 				"ox": ox, "oy": oy, "s": s
 			})
-
-			var sx = int(spawn_data.get("x", 0))
-			var sy = int(spawn_data.get("y", 0))
-			var sw = int(spawn_data.get("width", 1))
-			var sh = int(spawn_data.get("height", 1))
-			var chance = int(spawn_data.get("chance", 50))
-
-			var num_spawns = maxi(1, (sw * sh) / 30)
-			for _i in range(num_spawns):
-				if randi() % 100 >= chance:
-					continue
-				_spawn_overworld_enemy(enemy_scene, container, enemy_def, ox, oy, s, sx, sy, sw, sh, ts, half, zone.id)
+	print("Registered %d zone spawn entries (lazy)" % _zone_spawn_data.size())
 
 func _spawn_overworld_enemy(enemy_scene: PackedScene, container: Node, enemy_def: EnemyDefinition, ox: int, oy: int, s: int, sx: int, sy: int, sw: int, sh: int, ts: int, half: int, zone_id: String) -> void:
 	var ex = sx + randi() % maxi(1, sw)
@@ -755,18 +936,143 @@ func _spawn_overworld_enemy(enemy_scene: PackedScene, container: Node, enemy_def
 	enemy.global_position = pos
 	if enemy.has_method("setup"):
 		var ow_def = enemy_def.duplicate()
-		ow_def.attack_type = EnemyDefinition.AttackType.NONE
-		ow_def.move_speed = 15.0
-		ow_def.preferred_distance = 0.0
-		ow_def.bullet_count = 0
+		if enemy_def.hostile:
+			# Hostile: scale stats for overworld (32px tiles vs 8px dungeon = 4x)
+			ow_def.move_speed = enemy_def.move_speed * 4.0
+			ow_def.aggro_range = enemy_def.aggro_range * 4.0
+			ow_def.preferred_distance = enemy_def.preferred_distance * 4.0
+			ow_def.bullet_speed = enemy_def.bullet_speed * 4.0
+			ow_def.charge_speed = enemy_def.charge_speed * 4.0
+		else:
+			# Passive: disarm, slow wander
+			ow_def.attack_type = EnemyDefinition.AttackType.NONE
+			ow_def.move_speed = 15.0
+			ow_def.preferred_distance = 0.0
+			ow_def.bullet_count = 0
 		enemy.setup(ow_def)
+	# LoY sprites are 32x32 native; setup() scales to 0.25 for dungeon (8px tiles)
+	# Override to 1.0 for overworld (32px tiles) = native size
 	var _enemy_spr = enemy.get_node_or_null("Sprite2D")
 	if _enemy_spr:
-		_enemy_spr.scale = Vector2(4, 4)
+		_enemy_spr.scale = Vector2(1, 1)
 	enemy.set_meta("zone_id", zone_id)
 	enemy.set_meta("spawn_pos", pos)
 	enemy.set_meta("leash_radius", float(maxi(sw, sh) * s * ts))
+	if enemy_def.hostile:
+		enemy.set_meta("behavior", "wander")
+		enemy.set_meta("hostile", true)
+	else:
+		enemy.set_meta("behavior", "wander")
+		enemy.set_meta("passive_until_hit", true)
 	container.add_child(enemy)
+
+## ── Harvest Nodes ────────────────────────────────────────────────────────────
+
+const HARVEST_NODE_CONFIGS = {
+	"herb": {
+		"drop_table": [
+			"res://resources/items/crafting/healing_herb.tres",
+			"res://resources/items/crafting/swamp_root.tres",
+		],
+		"sprite_tile": 123,
+	},
+	"ore": {
+		"drop_table": [
+			"res://resources/items/crafting/iron_ore.tres",
+			"res://resources/items/crafting/cave_crystal.tres",
+		],
+		"sprite_tile": 116,
+	},
+	"tree": {
+		"drop_table": [
+			"res://resources/items/crafting/ancient_bark.tres",
+			"res://resources/items/crafting/healing_herb.tres",
+		],
+		"sprite_tile": 126,
+	},
+	"mushroom": {
+		"drop_table": [
+			"res://resources/items/crafting/wild_mushroom.tres",
+		],
+		"sprite_tile": 124,
+	},
+	"bug_nest": {
+		"drop_table": [
+			"res://resources/items/crafting/venom_sac.tres",
+			"res://resources/items/crafting/leather_scraps.tres",
+		],
+		"sprite_tile": 119,
+	},
+}
+
+func _get_zone_harvest_types(zone: LoyZoneData) -> Array[String]:
+	# Town zones — no harvest
+	if zone.id in SAFE_ZONES:
+		return []
+	var types: Array[String] = []
+	match zone.tileset:
+		112:  # town — skip
+			return []
+		0, 8:  # grey/brown — forest/mountain
+			types = ["herb", "herb", "tree"]
+		16:  # blue — cave
+			types = ["ore", "ore", "mushroom"]
+		144:  # ice
+			types = ["ore", "tree"]
+		192:  # jungle
+			types = ["herb", "bug_nest", "mushroom"]
+		224:  # desert
+			types = ["ore", "herb"]
+		240:  # mountain
+			types = ["ore", "ore", "tree"]
+		_:  # default forest-like
+			types = ["herb", "tree", "mushroom"]
+	return types
+
+func _spawn_harvest_nodes() -> void:
+	var ts = 32
+	if ground and ground.tile_set:
+		ts = ground.tile_set.tile_size.x
+	var half = ts / 2
+
+	var node_count = 0
+	for zone in zone_data:
+		if zone.baked_offset == Vector2i(-99999, -99999):
+			continue
+		var harvest_types = _get_zone_harvest_types(zone)
+		if harvest_types.is_empty():
+			continue
+
+		var ox = zone.baked_offset.x
+		var oy = zone.baked_offset.y
+		var s = zone.baked_scale if zone.baked_scale > 0 else 1
+		var zw = zone.width
+		var zh = zone.height
+
+		for i in range(harvest_types.size()):
+			var htype = harvest_types[i]
+			var config = HARVEST_NODE_CONFIGS[htype]
+
+			var node = HarvestNode.new()
+			node.harvest_type = htype
+			node.drop_table.assign(config["drop_table"])
+			node.sprite_tile_index = config["sprite_tile"]
+			node.respawn_time = 90.0
+			node.persist_key = "%s:%d" % [zone.id, i]
+			node.collision_radius = 48.0  # same as NPC detection range
+			node.sprite_scale = 1.0  # native 32x32, same size as NPCs
+
+			# Random position within zone bounds
+			var rx = randi() % maxi(1, zw - 4) + 2
+			var ry = randi() % maxi(1, zh - 4) + 2
+			node.position = Vector2(
+				(ox + rx * s) * ts + half,
+				(oy + ry * s) * ts + half
+			)
+
+			node.z_index = 2
+			add_child(node)
+			node_count += 1
 
 func _check_respawns(delta: float) -> void:
 	_respawn_timer += delta
@@ -774,6 +1080,8 @@ func _check_respawns(delta: float) -> void:
 		return
 	_respawn_timer = 0.0
 	_respawn_editor_enemies()
+	_respawn_zone_enemies()
+	_despawn_far_enemies()
 
 ## ── Editor-defined spawn regions ─────────────────────────────────────────────
 ## Loaded from res://resources/world/enemy_spawns.tres (created by import pipeline)
@@ -794,65 +1102,76 @@ func _load_editor_spawns() -> void:
 	print("Loaded %d editor spawn regions" % _editor_spawn_regions.size())
 
 func _spawn_editor_enemies() -> void:
+	## Just loads spawn regions — actual spawning happens over time via _respawn_editor_enemies
 	_load_editor_spawns()
 	if _editor_spawn_regions.is_empty():
 		return
-	var enemy_scene_path = "res://scenes/enemy.tscn"
-	if not ResourceLoader.exists(enemy_scene_path):
-		return
-	var enemy_scene = load(enemy_scene_path) as PackedScene
-	var container = $EnemyContainer
+	print("Editor spawn regions loaded: %d — enemies will spawn over time" % _editor_spawn_regions.size())
+
+func _pick_from_spawn_table(region: Dictionary) -> String:
+	## Pick a random enemy type from a region's spawn_table (weighted) or single enemy_type
+	var table = region.get("spawn_table", [])
+	if table is Array and table.size() > 0:
+		var total_weight: float = 0.0
+		for entry in table:
+			total_weight += float(entry.get("weight", 1))
+		var roll = randf() * total_weight
+		var cumulative: float = 0.0
+		for entry in table:
+			cumulative += float(entry.get("weight", 1))
+			if roll <= cumulative:
+				return str(entry.get("type", "Goblin"))
+		return str(table[0].get("type", "Goblin"))
+	return str(region.get("enemy_type", "Goblin"))
+
+func _spawn_one_enemy(region: Dictionary, container: Node, enemy_scene: PackedScene) -> void:
 	var ts = 32
 	var half = ts / 2
+	var x1 = int(region.get("x1", 0))
+	var y1 = int(region.get("y1", 0))
+	var x2 = int(region.get("x2", 0))
+	var y2 = int(region.get("y2", 0))
+	var hostile = bool(region.get("hostile", true))
+	var behavior = str(region.get("behavior", "chase"))
+	var region_name = str(region.get("name", ""))
+	var w = maxi(1, x2 - x1)
+	var h = maxi(1, y2 - y1)
+	var leash = float(maxi(w, h) * ts)
 
-	for region in _editor_spawn_regions:
-		var enemy_type = str(region.get("enemy_type", "Goblin"))
-		var enemy_def = _get_cached_enemy_def(enemy_type)
-		if not enemy_def:
-			continue
-		var max_count = int(region.get("max_count", 3))
-		var x1 = int(region.get("x1", 0))
-		var y1 = int(region.get("y1", 0))
-		var x2 = int(region.get("x2", 0))
-		var y2 = int(region.get("y2", 0))
-		var hostile = bool(region.get("hostile", true))
-		var behavior = str(region.get("behavior", "chase"))  # wander, chase, passive
-		var region_name = str(region.get("name", ""))
+	var enemy_type = _pick_from_spawn_table(region)
+	var enemy_def = _get_cached_enemy_def(enemy_type)
+	if not enemy_def:
+		return
 
-		var w = maxi(1, x2 - x1)
-		var h = maxi(1, y2 - y1)
-		var leash = float(maxi(w, h) * ts)
-
-		for _i in range(max_count):
-			var ex = x1 + randi() % w
-			var ey = y1 + randi() % h
-			var pos = Vector2(ex * ts + half, ey * ts + half)
-			# Exclusion near player spawn
-			var spawn_px = Vector2(player_spawn_tile.x * ts + half, player_spawn_tile.y * ts + half)
-			if pos.distance_to(spawn_px) < ts * 10:
-				continue
-			var enemy = enemy_scene.instantiate()
-			enemy.global_position = pos
-			if enemy.has_method("setup"):
-				var ow_def = enemy_def.duplicate()
-				if not hostile or behavior == "passive":
-					ow_def.attack_type = EnemyDefinition.AttackType.NONE
-				ow_def.move_speed = 20.0 if behavior == "chase" else 10.0
-				ow_def.preferred_distance = 0.0
-				ow_def.bullet_count = 0
-				enemy.setup(ow_def)
-			var _enemy_spr = enemy.get_node_or_null("Sprite2D")
-			if _enemy_spr:
-				_enemy_spr.scale = Vector2(4, 4)
-			enemy.set_meta("spawn_region", region_name)
-			enemy.set_meta("spawn_pos", pos)
-			enemy.set_meta("leash_radius", leash)
-			enemy.set_meta("behavior", behavior)
-			enemy.set_meta("hostile", hostile)
-			# Passive enemies: start non-hostile, become hostile when hit
-			if not hostile or behavior == "passive":
-				enemy.set_meta("passive_until_hit", true)
-			container.add_child(enemy)
+	var ex = x1 + randi() % w
+	var ey = y1 + randi() % h
+	var pos = Vector2(ex * ts + half, ey * ts + half)
+	var enemy = enemy_scene.instantiate()
+	enemy.global_position = pos
+	if enemy.has_method("setup"):
+		var ow_def = enemy_def.duplicate()
+		if not hostile or behavior == "passive":
+			ow_def.attack_type = EnemyDefinition.AttackType.NONE
+		# Scale all distances/speeds for overworld (32px tiles vs 8px dungeon = 4x)
+		ow_def.move_speed = enemy_def.move_speed * 4.0
+		ow_def.aggro_range = enemy_def.aggro_range * 4.0
+		ow_def.preferred_distance = enemy_def.preferred_distance * 4.0
+		ow_def.bullet_speed = enemy_def.bullet_speed * 4.0
+		ow_def.charge_speed = enemy_def.charge_speed * 4.0
+		enemy.setup(ow_def)
+	# LoY sprites are 32x32, setup() scales to 0.25 for dungeon (8px tiles)
+	# Overworld tiles are 32px, so set scale to 1.0 (native size)
+	var _enemy_spr = enemy.get_node_or_null("Sprite2D")
+	if _enemy_spr:
+		_enemy_spr.scale = Vector2(1, 1)
+	enemy.set_meta("spawn_region", region_name)
+	enemy.set_meta("spawn_pos", pos)
+	enemy.set_meta("leash_radius", leash)
+	enemy.set_meta("behavior", behavior)
+	enemy.set_meta("hostile", hostile)
+	if not hostile or behavior == "passive":
+		enemy.set_meta("passive_until_hit", true)
+	container.add_child(enemy)
 
 func _respawn_editor_enemies() -> void:
 	if _editor_spawn_regions.is_empty():
@@ -864,7 +1183,6 @@ func _respawn_editor_enemies() -> void:
 	if not player_node:
 		return
 	var ts = 32
-	var half = ts / 2
 	var enemy_scene = load("res://scenes/enemy.tscn") as PackedScene
 	if not enemy_scene:
 		return
@@ -882,7 +1200,7 @@ func _respawn_editor_enemies() -> void:
 		var current = region_counts.get(region_name, 0)
 		if current >= max_count:
 			continue
-		# Only respawn if region center is near player
+		# Only spawn if region is in an allowed zone (near player)
 		var x1 = int(region.get("x1", 0))
 		var y1 = int(region.get("y1", 0))
 		var x2 = int(region.get("x2", 0))
@@ -890,40 +1208,84 @@ func _respawn_editor_enemies() -> void:
 		var center = Vector2((x1 + x2) / 2.0 * ts, (y1 + y2) / 2.0 * ts)
 		if player_node.global_position.distance_to(center) > 3000:
 			continue
-		var enemy_type = str(region.get("enemy_type", "Goblin"))
-		var enemy_def = _get_cached_enemy_def(enemy_type)
-		if not enemy_def:
+		# Spawn multiple enemies per tick to fill regions faster
+		var to_spawn = mini(3, max_count - current)
+		for _i in range(to_spawn):
+			_spawn_one_enemy(region, container, enemy_scene)
+
+const ZONE_SPAWN_RADIUS: float = 3000.0   # spawn zone enemies within this range
+const ZONE_DESPAWN_RADIUS: float = 4500.0  # despawn enemies beyond this range
+
+func _respawn_zone_enemies() -> void:
+	if _zone_spawn_data.is_empty():
+		return
+	var container = get_node_or_null("EnemyContainer")
+	if not container:
+		return
+	var player_node = get_tree().get_first_node_in_group("player")
+	if not player_node:
+		return
+	var ts: int = 32
+	var half: int = ts / 2
+	var enemy_scene = load("res://scenes/enemy.tscn") as PackedScene
+	if not enemy_scene:
+		return
+
+	# Count living enemies per zone
+	var zone_counts: Dictionary = {}
+	for child in container.get_children():
+		if child is CharacterBody2D and child.has_meta("zone_id"):
+			var zid = child.get_meta("zone_id")
+			zone_counts[zid] = zone_counts.get(zid, 0) + 1
+
+	for entry in _zone_spawn_data:
+		var zone_id: String = entry["zone_id"]
+		var current = zone_counts.get(zone_id, 0)
+		if current >= MAX_ENEMIES_PER_ZONE:
 			continue
-		var hostile = bool(region.get("hostile", true))
-		var behavior = str(region.get("behavior", "chase"))
-		var w = maxi(1, x2 - x1)
-		var h = maxi(1, y2 - y1)
-		var leash = float(maxi(w, h) * ts)
-		# Spawn one per cycle
-		var ex = x1 + randi() % w
-		var ey = y1 + randi() % h
-		var pos = Vector2(ex * ts + half, ey * ts + half)
-		var enemy = enemy_scene.instantiate()
-		enemy.global_position = pos
-		if enemy.has_method("setup"):
-			var ow_def = enemy_def.duplicate()
-			if not hostile or behavior == "passive":
-				ow_def.attack_type = EnemyDefinition.AttackType.NONE
-			ow_def.move_speed = 20.0 if behavior == "chase" else 10.0
-			ow_def.preferred_distance = 0.0
-			ow_def.bullet_count = 0
-			enemy.setup(ow_def)
-		var _enemy_spr = enemy.get_node_or_null("Sprite2D")
-		if _enemy_spr:
-			_enemy_spr.scale = Vector2(4, 4)
-		enemy.set_meta("spawn_region", region_name)
-		enemy.set_meta("spawn_pos", pos)
-		enemy.set_meta("leash_radius", leash)
-		enemy.set_meta("behavior", behavior)
-		enemy.set_meta("hostile", hostile)
-		if not hostile or behavior == "passive":
-			enemy.set_meta("passive_until_hit", true)
-		container.add_child(enemy)
+
+		var spawn_data: Dictionary = entry["spawn_data"]
+		var enemy_def: EnemyDefinition = entry["enemy_def"]
+		var ox: int = entry["ox"]
+		var oy: int = entry["oy"]
+		var s: int = entry["s"]
+		var sx: int = int(spawn_data.get("x", 0))
+		var sy: int = int(spawn_data.get("y", 0))
+		var sw: int = int(spawn_data.get("width", 4))
+		var sh: int = int(spawn_data.get("height", 4))
+
+		# Center of spawn region in world pixels
+		var center_x = (ox + (sx + sw / 2.0) * s) * ts
+		var center_y = (oy + (sy + sh / 2.0) * s) * ts
+		var center = Vector2(center_x, center_y)
+
+		if player_node.global_position.distance_to(center) > ZONE_SPAWN_RADIUS:
+			continue
+
+		# Roll spawn chance
+		var chance = int(spawn_data.get("chance", 100))
+		if randi() % 100 >= chance:
+			continue
+
+		# Spawn up to 2 per tick
+		var to_spawn = mini(2, MAX_ENEMIES_PER_ZONE - current)
+		for _i in range(to_spawn):
+			_spawn_overworld_enemy(enemy_scene, container, enemy_def, ox, oy, s, sx, sy, sw, sh, ts, half, zone_id)
+		zone_counts[zone_id] = current + to_spawn
+
+func _despawn_far_enemies() -> void:
+	var container = get_node_or_null("EnemyContainer")
+	if not container:
+		return
+	var player_node = get_tree().get_first_node_in_group("player")
+	if not player_node:
+		return
+	var player_pos = player_node.global_position
+	for child in container.get_children():
+		if not (child is CharacterBody2D):
+			continue
+		if child.global_position.distance_to(player_pos) > ZONE_DESPAWN_RADIUS:
+			child.queue_free()
 
 func _get_cached_enemy_def(monster_type: String) -> EnemyDefinition:
 	if _enemy_def_cache.has(monster_type):
@@ -942,17 +1304,49 @@ func _spawn_equipment_bag() -> void:
 	bag.position = Vector2(player_spawn_tile.x * 32 + 16, player_spawn_tile.y * 32 + 16)
 	add_child(bag)
 
+## Spawn Test Arena entrance near player spawn in Aria town
+func _spawn_test_arena_entrance() -> void:
+	var spawn_px = Vector2(player_spawn_tile.x * 32 + 16, player_spawn_tile.y * 32 + 16)
+	# Place entrance further right so it doesn't overlap flags
+	var entrance_pos = spawn_px + Vector2(128, 0)
+	var nodes = _add_entrance(entrance_pos, "Test-Arena", 32, "Test Arena")
+	# Add stairs sprite so entrance is visible
+	if nodes.size() > 0:
+		var entrance = nodes[0]
+		var sprite = Sprite2D.new()
+		sprite.texture = load("res://assets/sprites/loy/maptiles.png")
+		sprite.region_enabled = true
+		sprite.region_rect = Rect2(5 * 32, 0, 32, 32)  # stairs tile at atlas (5,0)
+		sprite.z_index = 1
+		entrance.add_child(sprite)
+
 ## Safe zones where no enemies should spawn (towns, settlements, etc.)
 const SAFE_ZONES: Array = [
-	"aria", "farm", "camp", "sthel", "heim", "gomb", "nord1", "tor1", "tor2",
-	"tor4", "tor5", "tor6", "paititi", "thule", "shrine", "cennyn", "naleg",
-	"kor", "talmita", "talnivek", "airlon", "ynys", "bch1", "blf1", "cel1",
-	"crt1", "end1", "pst1", "llecudd", "willows", "tempid",
+	"haven", "duskfarm", "wardens", "mirage", "ashheim", "briarvale", "grimhold", "driftport", "saltmere",
+	"scorchgate", "smugglers", "wharves", "eldori", "thule", "shrine", "cenneth", "brackwater",
+	"kor", "boghollow", "duskwatch", "windhold", "duskport", "bleachbone", "cliffs", "moloch",
+	"spire", "hellgate", "sanctum", "llecudd", "willows", "tempid",
 ]
+
+## Apply or remove town speed boost based on zone safety
+func _update_town_speed(zone: LoyZoneData) -> void:
+	var player = get_node_or_null("Player")
+	if not player or not player.get_node_or_null("StatusEffectManager"):
+		return
+	var is_safe = zone.id in SAFE_ZONES
+	if is_safe and not _town_speed_active:
+		_town_speed_active = true
+		player.status_effects.apply_buff("town_speed", 9999.0, TOWN_SPEED_MULT - 1.0)
+	elif not is_safe and _town_speed_active:
+		_town_speed_active = false
+		player.status_effects._buffs.erase("town_speed")
 
 func _get_enemy_def_path(monster_name: String) -> String:
 	var name_map: Dictionary = {
 		"Skeleton": "res://resources/enemies/loy/undead/skeleton.tres",
+		"Skeleton Archer": "res://resources/enemies/loy/undead/skeleton_archer.tres",
+		"Skeleton Frostbow": "res://resources/enemies/loy/undead/skeleton_frostbow.tres",
+		"Bone Bombardier": "res://resources/enemies/loy/undead/bone_bombardier.tres",
 		"Ghost": "res://resources/enemies/loy/undead/ghost.tres",
 		"Goblin": "res://resources/enemies/loy/orc/goblin.tres",
 		"Kobold": "res://resources/enemies/loy/orc/kobold.tres",
@@ -1009,6 +1403,12 @@ func _get_enemy_def_path(monster_name: String) -> String:
 		"Faca": "res://resources/enemies/loy/orc/ogre.tres",
 		"Cannibal": "res://resources/enemies/loy/human/bandit.tres",
 		"Water Elemental": "res://resources/enemies/loy/demon/ice_elemental.tres",
+		"Chicken": "res://resources/enemies/overworld/ow_chicken.tres",
+		"Overworld Skeleton": "res://resources/enemies/overworld/ow_skeleton.tres",
+		"Overworld Archer": "res://resources/enemies/overworld/ow_skeleton_archer.tres",
+		"Golden Skeleton": "res://resources/enemies/overworld/golden_skeleton.tres",
+		"Fairy": "res://resources/enemies/overworld/fairy.tres",
+		"Overworld Ghost": "res://resources/enemies/overworld/ow_ghost.tres",
 	}
 	return name_map.get(monster_name, "")
 
@@ -1049,6 +1449,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		# Priority 1: Dungeon entrance
 		if _nearby_entrance:
+			var sfx = get_node_or_null("/root/SFXManager")
+			if sfx:
+				sfx.play("teleport", -2.0, 0.0)
 			var biome_name = _nearby_entrance.get_meta("biome_name", "Dungeon") as String
 			var gm = get_node_or_null("/root/GameManager")
 			if gm:
@@ -1130,6 +1533,422 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not _debug_tile_labels_visible:
 			_debug_clear_labels()
 		print("DEBUG: Tile labels = %s" % _debug_tile_labels_visible)
+
+	# Press B to start a battle in current zone (invasion)
+	if event is InputEventKey and event.pressed and event.keycode == KEY_B:
+		_try_start_battle()
+
+	# Territory panel is now accessed via DIPLOMACY button in WorldMapScreen (M key)
+
+func _get_battle_region_for_zone(zone_id: String) -> Dictionary:
+	## Returns {battle_region: Rect2i, player_spawn_rect: Rect2, enemy_spawn_rect: Rect2}
+	var ps: Vector2i
+	var es: Vector2i
+	if BATTLE_REGIONS.has(zone_id):
+		ps = BATTLE_REGIONS[zone_id]["ps"]
+		es = BATTLE_REGIONS[zone_id]["es"]
+	else:
+		# Fallback: find nearest waypoint pair by zone baked_offset center
+		var zone_center := Vector2.ZERO
+		if _current_zone:
+			zone_center = Vector2(_current_zone.baked_offset) + Vector2(_current_zone.width, _current_zone.height) * 0.5
+		var best_dist := INF
+		ps = Vector2i(276, -1)
+		es = Vector2i(406, -47)
+		for pair in _ALL_WAYPOINT_PAIRS:
+			var mid := Vector2(pair[0] + pair[1]) * 0.5
+			var d := zone_center.distance_squared_to(mid)
+			if d < best_dist:
+				best_dist = d
+				ps = pair[0]
+				es = pair[1]
+
+	# Compute battle_region bounding both spawns + 20 tile margin
+	var min_x := mini(ps.x, es.x) - 20
+	var min_y := mini(ps.y, es.y) - 20
+	var max_x := maxi(ps.x, es.x) + 20
+	var max_y := maxi(ps.y, es.y) + 20
+	var region := Rect2i(min_x, min_y, max_x - min_x, max_y - min_y)
+
+	# Spawn rects: 800x400 pixel rects centered on each spawn tile
+	var ps_px := Vector2(ps.x * 32.0, ps.y * 32.0)
+	var es_px := Vector2(es.x * 32.0, es.y * 32.0)
+	return {
+		"battle_region": region,
+		"player_spawn_rect": Rect2(ps_px.x - 400, ps_px.y - 200, 800, 400),
+		"enemy_spawn_rect": Rect2(es_px.x - 400, es_px.y - 200, 800, 400),
+	}
+
+func _try_start_battle() -> void:
+	if not _current_zone:
+		return
+	var gm = get_node_or_null("/root/GameManager")
+	if not gm:
+		return
+	var zone_id := _current_zone.id
+	var zone_display := _current_zone.zone_name if _current_zone.zone_name != "" else zone_id
+	# Check if already owned (use zone ID for consistent key matching)
+	if gm.save_data and gm.save_data.has_meta("owned_territories"):
+		var owned: Array = gm.save_data.get_meta("owned_territories")
+		if zone_id in owned:
+			print("Already own %s" % zone_id)
+			return
+
+	# --- Player army: hired fighters only ---
+	var hired: Dictionary = {}
+	if gm.save_data and gm.save_data.army_state.has("hired_fighters"):
+		hired = gm.save_data.army_state["hired_fighters"]
+
+	var player_army: Array = []
+
+	# Type mapping for hired fighters
+	var type_map := {
+		"infantry": BattleUnitSystem.UnitType.INFANTRY,
+		"archer": BattleUnitSystem.UnitType.ARCHER,
+		"heavy_infantry": BattleUnitSystem.UnitType.HEAVY_INFANTRY,
+		"cavalry": BattleUnitSystem.UnitType.CAVALRY,
+		"mage": BattleUnitSystem.UnitType.MAGE,
+		"heavy_cavalry": BattleUnitSystem.UnitType.HEAVY_CAVALRY,
+		"spear": BattleUnitSystem.UnitType.SPEAR,
+		"horse_archer": BattleUnitSystem.UnitType.HORSE_ARCHER,
+		"ranged_infantry": BattleUnitSystem.UnitType.RANGED_INFANTRY,
+	}
+	var formation_map := {
+		"infantry": BattleUnitSystem.FormationType.LINE,
+		"archer": BattleUnitSystem.FormationType.LOOSE_LINE,
+		"heavy_infantry": BattleUnitSystem.FormationType.SHIELD_WALL,
+		"cavalry": BattleUnitSystem.FormationType.WEDGE,
+		"mage": BattleUnitSystem.FormationType.LOOSE_LINE,
+		"heavy_cavalry": BattleUnitSystem.FormationType.WEDGE,
+		"spear": BattleUnitSystem.FormationType.LINE,
+		"horse_archer": BattleUnitSystem.FormationType.LOOSE_LINE,
+		"ranged_infantry": BattleUnitSystem.FormationType.LOOSE_LINE,
+	}
+
+	# Only use hired fighters — no free militia
+	var hired_infantry := int(hired.get("infantry", 0))
+	# Minimum 5 militia so the player isn't completely empty if they hired nothing
+	var total_infantry := maxi(5, hired_infantry)
+	player_army.append({"type": BattleUnitSystem.UnitType.INFANTRY, "count": total_infantry, "formation": BattleUnitSystem.FormationType.LINE})
+
+	# Add other hired types
+	for type_name in hired:
+		if type_name == "infantry":
+			continue  # already merged above
+		var count: int = int(hired[type_name])
+		if count > 0 and type_map.has(type_name):
+			player_army.append({"type": type_map[type_name], "count": count, "formation": formation_map[type_name]})
+
+	# --- Enemy army: use faction or bandit army builder ---
+	var fm = get_node_or_null("/root/FactionManager")
+	var enemy_army: Array = []
+	if fm:
+		var zone_owner: String = fm.get_zone_owner(zone_id)
+		if zone_owner == "bandit":
+			enemy_army = fm.build_bandit_army(zone_id)
+		elif zone_owner != "" and zone_owner != "player" and fm.factions.has(zone_owner):
+			enemy_army = fm.build_faction_army(zone_owner)
+	if enemy_army.is_empty():
+		enemy_army = _build_army_from_budget(40, false)
+
+	# --- Battle region from zone waypoints ---
+	var region_info := _get_battle_region_for_zone(_current_zone.id)
+
+	# Get enemy faction tier and zone count for scaling
+	var enemy_tier := 1
+	var enemy_zone_count := 0
+	if fm:
+		var zo: String = fm.get_zone_owner(zone_id)
+		if zo != "" and zo != "player" and zo != "bandit" and fm.factions.has(zo):
+			enemy_tier = fm.factions[zo].get("tier", 1)
+			for zid in fm.territory_owners:
+				if fm.territory_owners[zid] == zo:
+					enemy_zone_count += 1
+
+	var config := {
+		"zone_name": zone_id,
+		"zone_display_name": zone_display,
+		"tileset": _current_zone.tileset,
+		"player_army": player_army,
+		"enemy_army": enemy_army,
+		"enemy_tier": enemy_tier,
+		"enemy_zone_count": enemy_zone_count,
+		"battle_region": region_info["battle_region"],
+		"player_spawn_rect": region_info["player_spawn_rect"],
+		"enemy_spawn_rect": region_info["enemy_spawn_rect"],
+	}
+	var p_total := 0
+	for entry in player_army:
+		p_total += entry["count"]
+	var e_total := 0
+	for entry in enemy_army:
+		e_total += entry["count"]
+	print("Starting battle for %s — Player: %d units, Enemy: %d units (tier=%d, zones=%d), Region: %s" % [zone_id, p_total, e_total, enemy_tier, enemy_zone_count, str(region_info["battle_region"])])
+	gm.start_battle(config)
+
+func _build_army_from_budget(budget: int, is_player: bool) -> Array:
+	# Distribute budget across unit types using percentage allocation
+	# Budget unit costs: inf=1, archer=2, spear=1.5, ranged_inf=2, cav=4, heavy_inf=3, heavy_cav=6, horse_archer=4, mage=3
+	var army := []
+	# Allocate by percentage of budget
+	var inf_budget := int(budget * 0.25)
+	var archer_budget := int(budget * 0.12)
+	var spear_budget := int(budget * 0.12)
+	var cav_budget := int(budget * 0.15)
+	var heavy_inf_budget := int(budget * 0.10)
+	var ranged_inf_budget := int(budget * 0.06)
+	var horse_archer_budget := int(budget * 0.08)
+	var mage_budget := int(budget * 0.05)
+	var heavy_cav_budget := budget - inf_budget - archer_budget - spear_budget - cav_budget - heavy_inf_budget - ranged_inf_budget - horse_archer_budget - mage_budget
+
+	# Convert budget to unit counts (divide by unit cost)
+	var entries := [
+		[BattleUnitSystem.UnitType.INFANTRY, maxi(5, inf_budget), BattleUnitSystem.FormationType.LINE],
+		[BattleUnitSystem.UnitType.SPEAR, maxi(2, int(spear_budget / 1.5)), BattleUnitSystem.FormationType.LINE],
+		[BattleUnitSystem.UnitType.HEAVY_INFANTRY, maxi(2, int(heavy_inf_budget / 3.0)), BattleUnitSystem.FormationType.SHIELD_WALL],
+		[BattleUnitSystem.UnitType.ARCHER, maxi(2, int(archer_budget / 2.0)), BattleUnitSystem.FormationType.LOOSE_LINE],
+		[BattleUnitSystem.UnitType.RANGED_INFANTRY, maxi(1, int(ranged_inf_budget / 2.0)), BattleUnitSystem.FormationType.LOOSE_LINE],
+		[BattleUnitSystem.UnitType.CAVALRY, maxi(2, int(cav_budget / 4.0)), BattleUnitSystem.FormationType.WEDGE],
+		[BattleUnitSystem.UnitType.HEAVY_CAVALRY, maxi(1, int(heavy_cav_budget / 6.0)), BattleUnitSystem.FormationType.WEDGE],
+		[BattleUnitSystem.UnitType.HORSE_ARCHER, maxi(1, int(horse_archer_budget / 4.0)), BattleUnitSystem.FormationType.LOOSE_LINE],
+		[BattleUnitSystem.UnitType.MAGE, maxi(1, int(mage_budget / 3.0)), BattleUnitSystem.FormationType.LOOSE_LINE],
+	]
+	for e in entries:
+		if int(e[1]) > 0:
+			army.append({"type": e[0], "count": int(e[1]), "formation": e[2]})
+	return army
+
+# --- Territory Panel ---
+var _territory_panel = null  # TerritoryPanel instance or null
+var _attack_notification_label: Label = null
+var _attack_notification_tween: Tween = null
+var _pending_attack: Dictionary = {}  # {zone_id, faction, army, auto_resolve_time}
+
+func _toggle_territory_panel() -> void:
+	if _territory_panel and is_instance_valid(_territory_panel):
+		_territory_panel.queue_free()
+		_territory_panel = null
+		return
+	var panel_script = load("res://scripts/ui/territory_panel.gd")
+	if not panel_script:
+		return
+	_territory_panel = panel_script.new()
+	_territory_panel.attack_zone.connect(_on_territory_attack)
+	_territory_panel.travel_to_zone.connect(_on_territory_travel)
+	_territory_panel.closed.connect(func(): _territory_panel = null)
+	add_child(_territory_panel)
+
+func get_current_zone_id() -> String:
+	if _current_zone:
+		return _current_zone.id
+	return ""
+
+func _on_territory_travel(zone_id: String) -> void:
+	## Player chose to fast-travel to an owned zone.
+	var zone_path := "res://resources/world/zones/%s.tres" % zone_id
+	if not ResourceLoader.exists(zone_path):
+		print("Travel failed: zone %s not found" % zone_id)
+		return
+	var zd = load(zone_path) as LoyZoneData
+	if not zd or zd.baked_offset == Vector2i(-99999, -99999):
+		print("Travel failed: zone %s has no baked offset" % zone_id)
+		return
+
+	# Calculate zone center in pixel coordinates
+	var s: int = zd.baked_scale if zd.baked_scale > 0 else 1
+	var w: int = (zd.width if zd.width > 0 else 50) * s
+	var h: int = (zd.height if zd.height > 0 else 50) * s
+	var center_tile := Vector2(zd.baked_offset.x + w * 0.5, zd.baked_offset.y + h * 0.5)
+	var target_px := center_tile * 32.0
+
+	# Teleport player
+	var player = get_tree().get_first_node_in_group("player")
+	if not player:
+		player = $Player
+	if player:
+		player.global_position = target_px
+		# Force zone switch
+		_current_zone = zd
+		_switch_to_zone(zd)
+		# Force chunk reload by resetting last chunk tracker
+		_last_chunk = Vector2i(-99999, -99999)
+		var display: String = zd.zone_name if zd.zone_name != "" else zd.id
+		_show_zone_name("Traveled to %s" % display)
+		print("Fast travel to %s at pixel %s" % [zone_id, target_px])
+
+func _on_territory_attack(zone_id: String) -> void:
+	## Player chose to attack a zone from the territory panel.
+	if not _current_zone:
+		return
+	var gm = get_node_or_null("/root/GameManager")
+	var fm = get_node_or_null("/root/FactionManager")
+	if not gm or not fm:
+		return
+
+	var zone_display := zone_id
+	var zone_path := "res://resources/world/zones/%s.tres" % zone_id
+	if ResourceLoader.exists(zone_path):
+		var zd = load(zone_path)
+		if zd and zd is LoyZoneData and zd.zone_name != "":
+			zone_display = zd.zone_name
+
+	# Build player army (same as _try_start_battle)
+	var hired: Dictionary = {}
+	if gm.save_data and gm.save_data.army_state.has("hired_fighters"):
+		hired = gm.save_data.army_state["hired_fighters"]
+	var player_army: Array = []
+	var type_map := {
+		"infantry": BattleUnitSystem.UnitType.INFANTRY,
+		"archer": BattleUnitSystem.UnitType.ARCHER,
+		"heavy_infantry": BattleUnitSystem.UnitType.HEAVY_INFANTRY,
+		"cavalry": BattleUnitSystem.UnitType.CAVALRY,
+		"mage": BattleUnitSystem.UnitType.MAGE,
+		"heavy_cavalry": BattleUnitSystem.UnitType.HEAVY_CAVALRY,
+		"spear": BattleUnitSystem.UnitType.SPEAR,
+		"horse_archer": BattleUnitSystem.UnitType.HORSE_ARCHER,
+		"ranged_infantry": BattleUnitSystem.UnitType.RANGED_INFANTRY,
+	}
+	var formation_map := {
+		"infantry": BattleUnitSystem.FormationType.LINE,
+		"archer": BattleUnitSystem.FormationType.LOOSE_LINE,
+		"heavy_infantry": BattleUnitSystem.FormationType.SHIELD_WALL,
+		"cavalry": BattleUnitSystem.FormationType.WEDGE,
+		"mage": BattleUnitSystem.FormationType.LOOSE_LINE,
+		"heavy_cavalry": BattleUnitSystem.FormationType.WEDGE,
+		"spear": BattleUnitSystem.FormationType.LINE,
+		"horse_archer": BattleUnitSystem.FormationType.LOOSE_LINE,
+		"ranged_infantry": BattleUnitSystem.FormationType.LOOSE_LINE,
+	}
+	var hired_infantry := int(hired.get("infantry", 0))
+	var total_infantry := maxi(5, hired_infantry)
+	player_army.append({"type": BattleUnitSystem.UnitType.INFANTRY, "count": total_infantry, "formation": BattleUnitSystem.FormationType.LINE})
+	for type_name in hired:
+		if type_name == "infantry":
+			continue
+		var count: int = int(hired[type_name])
+		if count > 0 and type_map.has(type_name):
+			player_army.append({"type": type_map[type_name], "count": count, "formation": formation_map[type_name]})
+
+	# Enemy army from faction or bandit army builder
+	var owner: String = fm.get_zone_owner(zone_id)
+	var enemy_army: Array = []
+	if owner == "bandit":
+		enemy_army = fm.build_bandit_army(zone_id)
+	elif owner != "" and owner != "player" and fm.factions.has(owner):
+		enemy_army = fm.build_faction_army(owner)
+	if enemy_army.is_empty():
+		enemy_army = _build_army_from_budget(40, false)
+
+	var enemy_tier: int = 1
+	var enemy_zone_count: int = 0
+	if fm.factions.has(owner):
+		enemy_tier = int(fm.factions[owner].get("tier", 1))
+		enemy_zone_count = int(fm.factions[owner].get("zones", []).size())
+	var zone_tileset: int = 0
+	if ResourceLoader.exists(zone_path):
+		var zd2 = load(zone_path)
+		if zd2 and zd2 is LoyZoneData:
+			zone_tileset = zd2.tileset
+
+	var region_info := _get_battle_region_for_zone(zone_id)
+	var config := {
+		"zone_name": zone_id,
+		"zone_display_name": zone_display,
+		"tileset": zone_tileset,
+		"player_army": player_army,
+		"enemy_army": enemy_army,
+		"enemy_tier": enemy_tier,
+		"enemy_zone_count": enemy_zone_count,
+		"battle_region": region_info["battle_region"],
+		"player_spawn_rect": region_info["player_spawn_rect"],
+		"enemy_spawn_rect": region_info["enemy_spawn_rect"],
+	}
+	print("Territory attack: %s (owner=%s, tier=%d, zones=%d)" % [zone_id, owner, enemy_tier, enemy_zone_count])
+	gm.start_battle(config)
+
+func _setup_attack_notifications() -> void:
+	var fm = get_node_or_null("/root/FactionManager")
+	if fm and not fm.territory_attacked.is_connected(_on_territory_attacked):
+		fm.territory_attacked.connect(_on_territory_attacked)
+
+func _on_territory_attacked(zone_id: String, attacker_faction: String, attacker_army: Array) -> void:
+	var fm = get_node_or_null("/root/FactionManager")
+	var faction_name := attacker_faction
+	if fm and fm.factions.has(attacker_faction):
+		faction_name = str(fm.factions[attacker_faction].get("name", attacker_faction))
+
+	_pending_attack = {
+		"zone_id": zone_id,
+		"faction": attacker_faction,
+		"army": attacker_army,
+		"auto_resolve_time": Time.get_ticks_msec() + 60000,  # 60 second window
+	}
+
+	# Show attack notification
+	_show_attack_notification("%s is attacking %s!" % [faction_name, zone_id.capitalize()])
+	print("ATTACK: %s attacks %s — press B near zone to defend, auto-resolves in 60s" % [faction_name, zone_id])
+
+func _show_attack_notification(text: String) -> void:
+	if _attack_notification_label and is_instance_valid(_attack_notification_label):
+		_attack_notification_label.queue_free()
+	if _attack_notification_tween:
+		_attack_notification_tween.kill()
+
+	var canvas := CanvasLayer.new()
+	canvas.layer = 100
+	add_child(canvas)
+
+	_attack_notification_label = Label.new()
+	_attack_notification_label.text = text
+	_attack_notification_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_attack_notification_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_attack_notification_label.position.y = 60
+	var ls := LabelSettings.new()
+	ls.font_size = 26
+	ls.font_color = Color(1.0, 0.3, 0.2)
+	ls.outline_size = 3
+	ls.outline_color = Color(0, 0, 0)
+	_attack_notification_label.label_settings = ls
+	canvas.add_child(_attack_notification_label)
+
+	# Fade in, hold, fade out
+	_attack_notification_tween = create_tween()
+	_attack_notification_label.modulate.a = 0.0
+	_attack_notification_tween.tween_property(_attack_notification_label, "modulate:a", 1.0, 0.5)
+	_attack_notification_tween.tween_interval(5.0)
+	_attack_notification_tween.tween_property(_attack_notification_label, "modulate:a", 0.0, 1.0)
+	_attack_notification_tween.tween_callback(func():
+		if is_instance_valid(canvas):
+			canvas.queue_free()
+	)
+
+func _check_pending_attack_auto_resolve() -> void:
+	if _pending_attack.is_empty():
+		return
+	if Time.get_ticks_msec() > _pending_attack.get("auto_resolve_time", 0):
+		# Auto-resolve: garrison vs attacker
+		var fm = get_node_or_null("/root/FactionManager")
+		var gm = get_node_or_null("/root/GameManager")
+		if fm:
+			var garrison_strength := 0
+			if gm and gm.save_data and gm.save_data.army_state.has("garrisons"):
+				var garrisons: Dictionary = gm.save_data.army_state["garrisons"]
+				var zone_garrison: Dictionary = garrisons.get(_pending_attack["zone_id"], {})
+				for type_name in zone_garrison:
+					garrison_strength += int(zone_garrison[type_name])
+			var defended: bool = fm.auto_resolve_attack(
+				str(_pending_attack["zone_id"]),
+				str(_pending_attack["faction"]),
+				garrison_strength
+			)
+			if defended:
+				_show_attack_notification("Garrison defended %s!" % str(_pending_attack["zone_id"]).capitalize())
+			else:
+				_show_attack_notification("%s has fallen!" % str(_pending_attack["zone_id"]).capitalize())
+				if fm:
+					fm.save_to(gm.save_data)
+					gm.save_data.save_to_slot()
+		_pending_attack = {}
 
 var _debug_tile_labels_visible: bool = false
 var _debug_labels: Array = []
@@ -1281,6 +2100,9 @@ func _try_open_door() -> void:
 		_open_door(cell, best_area)
 
 func _open_door(cell: Vector2i, area: Area2D) -> void:
+	var sfx_dr = get_node_or_null("/root/SFXManager")
+	if sfx_dr:
+		sfx_dr.play("bay_door_open", -4.0, 0.1)
 	if _door_shapes.has(cell):
 		var shape = _door_shapes[cell]
 		if is_instance_valid(shape):
@@ -1308,51 +2130,196 @@ func _setup_game_hud(player_node: CharacterBody2D) -> void:
 	add_child(loot_ui)
 	loot_ui.setup(player_node.equipment_manager)
 
+	# Chest UI (scrollable container UI for test chests)
+	var chest_ui = ChestUI.new()
+	add_child(chest_ui)
+	chest_ui.setup(player_node.equipment_manager)
+
 	# Tile inspector popup
 	_tile_inspector = TileInspector.new()
 	add_child(_tile_inspector)
 
+func _on_quest_arrow_update(_quest_id: String) -> void:
+	_update_quest_arrow()
+
+func _update_quest_arrow() -> void:
+	if not _game_hud:
+		return
+	var qm = get_node_or_null("/root/QuestManager")
+	if not qm:
+		_game_hud.clear_quest_objective()
+		return
+	var quest_id = qm.get_first_active_quest_id()
+	if quest_id == "":
+		_game_hud.clear_quest_objective()
+		return
+	var pos = qm.get_quest_objective_position(quest_id)
+	if pos == Vector2.ZERO:
+		_game_hud.clear_quest_objective()
+		return
+	var quest = qm.definitions.get(quest_id) as QuestDefinition
+	var label = quest.title if quest else ""
+	_game_hud.set_quest_objective(pos, label)
+
 func _on_player_died() -> void:
 	var player_node = get_node_or_null("Player")
-	if player_node:
-		# Drop all equipment — fresh start
-		player_node.equipment_manager.equipped.clear()
-		player_node.equipment_manager.inventory.clear()
-		player_node.equipment_manager.stats_changed.emit()
-		player_node.equipment_manager.inventory_changed.emit()
+	if not player_node:
+		return
 
-		# Give fresh starting items
-		player_node._give_starting_items()
+	# Pause game and show death screen overlay
+	get_tree().paused = true
+	player_node.process_mode = Node.PROCESS_MODE_DISABLED
 
-		# Reset HP/MP to new max
-		player_node.max_hp = player_node.equipment_manager.get_max_hp()
-		player_node.hp = player_node.max_hp
-		player_node.max_mp = player_node.equipment_manager.get_max_mp()
-		player_node.mp = player_node.max_mp
-		player_node.hp_changed.emit(player_node.hp)
-		player_node.mp_changed.emit(player_node.mp)
+	var death_overlay = _build_death_overlay()
+	add_child(death_overlay)
 
-		# Reset level
-		player_node.level_system.level = 1
-		player_node.level_system.xp = 0
-		player_node.level_system.unspent_stat_points = 0
-		player_node.level_system.allocated.clear()
-		player_node.xp_changed.emit(0, player_node.level_system.xp_to_next_level())
+	# Wait for player to click Respawn (overlay removes itself)
+	await death_overlay.tree_exited
 
-		# Save cleared state
-		var gm = get_node_or_null("/root/GameManager")
-		if gm:
-			gm.save_equipment(player_node.equipment_manager)
-			gm.save_level_data(player_node.level_system)
+	# Drop all equipment — fresh start
+	player_node.equipment_manager.equipped.clear()
+	player_node.equipment_manager.inventory.clear()
+	player_node.equipment_manager.stats_changed.emit()
+	player_node.equipment_manager.inventory_changed.emit()
 
-		# Teleport to spawn point
-		player_node.global_position = Vector2(player_spawn_tile.x * 32 + 16, player_spawn_tile.y * 32 + 16)
-		player_node.invincible = true
-		var tween = create_tween()
-		for i in range(8):
-			tween.tween_property(player_node.sprite, "modulate:a", 0.2, 0.1)
-			tween.tween_property(player_node.sprite, "modulate:a", 1.0, 0.1)
-		tween.tween_callback(func(): player_node.invincible = false)
+	# Give fresh starting items
+	player_node._give_starting_items()
+
+	# Reset HP/MP/Stamina to new max
+	player_node.max_hp = player_node.equipment_manager.get_max_hp()
+	player_node.hp = player_node.max_hp
+	player_node.max_mp = player_node.equipment_manager.get_max_mp()
+	player_node.mp = player_node.max_mp
+	player_node.max_stamina = player_node.equipment_manager.get_max_stamina()
+	player_node.stamina = player_node.max_stamina
+	player_node.hp_changed.emit(player_node.hp)
+	player_node.mp_changed.emit(player_node.mp)
+	player_node.stamina_changed.emit(player_node.stamina)
+
+	# Reset level
+	player_node.level_system.level = 1
+	player_node.level_system.xp = 0
+	player_node.level_system.unspent_stat_points = 0
+	player_node.level_system.allocated.clear()
+	player_node.xp_changed.emit(0, player_node.level_system.xp_to_next_level())
+
+	# Reset quickbar
+	if _game_hud:
+		_game_hud._quickbar_items = ["", "", "", "", "", ""]
+		_game_hud._quickbar_items[0] = "Red Potion"
+		_game_hud._quickbar_items[1] = "Apple"
+		_game_hud._refresh_quickbar()
+
+	# Save cleared state
+	var gm = get_node_or_null("/root/GameManager")
+	if gm:
+		gm.save_equipment(player_node.equipment_manager)
+		gm.save_level_data(player_node.level_system)
+		if _game_hud:
+			gm.save_quickbar(_game_hud)
+
+	# Teleport to spawn point and unpause
+	player_node.global_position = Vector2(player_spawn_tile.x * 32 + 16, player_spawn_tile.y * 32 + 16)
+	player_node.process_mode = Node.PROCESS_MODE_INHERIT
+	player_node.invincible = true
+	get_tree().paused = false
+
+	var tween = create_tween()
+	for i in range(8):
+		tween.tween_property(player_node.sprite, "modulate:a", 0.2, 0.1)
+		tween.tween_property(player_node.sprite, "modulate:a", 1.0, 0.1)
+	tween.tween_callback(func(): player_node.invincible = false)
+
+func _build_death_overlay() -> CanvasLayer:
+	var layer = CanvasLayer.new()
+	layer.layer = 200
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+
+	var vp_size = Vector2(1920, 1080)  # match project viewport
+
+	# Dark overlay background — explicit size since CanvasLayer has no layout
+	var overlay = ColorRect.new()
+	overlay.position = Vector2.ZERO
+	overlay.size = vp_size
+	overlay.color = Color(0.02, 0.02, 0.05, 0.0)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.add_child(overlay)
+
+	# Fade in dark overlay
+	var fade = overlay.create_tween()
+	fade.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	fade.tween_property(overlay, "color:a", 0.92, 0.8)
+
+	# Centered VBox — explicit size, centers children vertically
+	var center = VBoxContainer.new()
+	center.position = Vector2.ZERO
+	center.size = vp_size
+	center.add_theme_constant_override("separation", 20)
+	center.alignment = BoxContainer.ALIGNMENT_CENTER
+	layer.add_child(center)
+
+	# "YOU DIED" title
+	var title = Label.new()
+	title.text = "YOU DIED"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var title_s = LabelSettings.new()
+	title_s.font_size = 64
+	title_s.font_color = Color(0.9, 0.12, 0.12)
+	title_s.outline_size = 4
+	title_s.outline_color = Color(0.3, 0.0, 0.0)
+	title.label_settings = title_s
+	title.modulate.a = 0.0
+	center.add_child(title)
+
+	var t_tw = title.create_tween()
+	t_tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	t_tw.tween_interval(0.5)
+	t_tw.tween_property(title, "modulate:a", 1.0, 0.6)
+
+	# Subtitle
+	var sub = Label.new()
+	sub.text = "Your equipment has been lost..."
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var sub_s = LabelSettings.new()
+	sub_s.font_size = 20
+	sub_s.font_color = Color(0.7, 0.6, 0.6)
+	sub.label_settings = sub_s
+	sub.modulate.a = 0.0
+	center.add_child(sub)
+
+	var s_tw = sub.create_tween()
+	s_tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	s_tw.tween_interval(1.2)
+	s_tw.tween_property(sub, "modulate:a", 1.0, 0.5)
+
+	# Respawn button
+	var btn = Button.new()
+	btn.text = "Respawn"
+	btn.custom_minimum_size = Vector2(200, 50)
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	btn.add_theme_font_size_override("font_size", 22)
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.modulate.a = 0.0
+
+	var sty = StyleBoxFlat.new()
+	sty.bg_color = Color(0.15, 0.08, 0.08, 0.9)
+	sty.border_color = Color(0.7, 0.2, 0.2)
+	sty.set_border_width_all(2)
+	sty.set_corner_radius_all(8)
+	btn.add_theme_stylebox_override("normal", sty)
+	var hover = sty.duplicate()
+	hover.bg_color = Color(0.3, 0.1, 0.1, 0.95)
+	hover.border_color = Color(1.0, 0.3, 0.3)
+	btn.add_theme_stylebox_override("hover", hover)
+	center.add_child(btn)
+
+	var b_tw = btn.create_tween()
+	b_tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	b_tw.tween_interval(2.0)
+	b_tw.tween_property(btn, "modulate:a", 1.0, 0.4)
+
+	btn.pressed.connect(func(): layer.queue_free())
+	return layer
 
 func _update_gold_label() -> void:
 	if not _game_hud:
@@ -1372,6 +2339,7 @@ func _process(_delta: float) -> void:
 	_process_ready_chunks()
 	_drain_tile_queue()
 	_check_respawns(_delta)
+	_check_pending_attack_auto_resolve()
 	if _debug_tile_labels_visible:
 		_debug_update_labels()
 
@@ -1403,9 +2371,9 @@ func _load_chunks_around(center: Vector2i) -> void:
 	for dy in range(-LOAD_RADIUS, LOAD_RADIUS + 1):
 		for dx in range(-LOAD_RADIUS, LOAD_RADIUS + 1):
 			var key = Vector2i(center.x + dx, center.y + dy)
-			# Zone filter: only load chunks in allowed zones
-			if _chunk_in_allowed_zones(key):
-				needed[key] = true
+			# Always load chunks within LOAD_RADIUS of player (no zone filter)
+			# Zone filter only applies to prefetch beyond LOAD_RADIUS
+			needed[key] = true
 
 	# Queue chunks for incremental unloading (not all at once)
 	for key in _loaded_chunks:
@@ -1659,6 +2627,9 @@ func _is_blocking_tile(layer_name: String, source: int, atlas: Vector2i) -> bool
 				return false
 			# Everything else (walls, fences, trees) blocks
 			return true
+		# Source 5/6 (tiles.png, tiles2.png) on fences = trees/barriers — block
+		if source == 5 or source == 6:
+			return true
 	# Decorations layer = walkable scatter (flowers, grass) — never blocks
 	return false
 
@@ -1798,3 +2769,51 @@ func _create_chunk_entrances_from_layer(chunk_key: Vector2i, chunk_info: Diction
 				display_name = zone.zone_name if zone.zone_name != "" else zone.id
 			var nodes = _add_entrance(pixel_pos, biome_name, tile_size, display_name)
 			chunk_info["entrances"].append_array(nodes)
+
+func _spawn_temp_portal(pos: Vector2) -> void:
+	var portal = Area2D.new()
+	portal.name = "TempTownPortal"
+	portal.position = pos
+	portal.collision_layer = 0
+	portal.collision_mask = 1
+	# Visual
+	var sprite = Sprite2D.new()
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var tex = load("res://assets/sprites/loy/tiles.png") as Texture2D
+	if tex:
+		var atlas = AtlasTexture.new()
+		atlas.atlas = tex
+		atlas.region = Rect2(3 * 32, 6 * 32, 32, 32)
+		sprite.texture = atlas
+	sprite.modulate = Color(0.5, 0.8, 1.5, 1.0)
+	portal.add_child(sprite)
+	# Collision
+	var shape = CollisionShape2D.new()
+	var circle = CircleShape2D.new()
+	circle.radius = 16.0
+	shape.shape = circle
+	portal.add_child(shape)
+	# Label
+	var label = Label.new()
+	label.text = "Portal"
+	var settings = LabelSettings.new()
+	settings.font_size = 10
+	settings.font_color = Color(0.6, 0.9, 1.0)
+	settings.outline_size = 2
+	settings.outline_color = Color.BLACK
+	label.label_settings = settings
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.position = Vector2(-30, -24)
+	label.size = Vector2(60, 14)
+	portal.add_child(label)
+	# Pulsing glow
+	var tween = portal.create_tween().set_loops()
+	tween.tween_property(sprite, "modulate", Color(0.8, 1.0, 2.0, 1.0), 0.8)
+	tween.tween_property(sprite, "modulate", Color(0.5, 0.8, 1.5, 1.0), 0.8)
+	add_child(portal)
+	# Auto-remove after 10 seconds with fade
+	var fade_tween = portal.create_tween()
+	fade_tween.tween_interval(8.0)
+	fade_tween.tween_property(sprite, "modulate:a", 0.0, 2.0)
+	fade_tween.tween_callback(portal.queue_free)
+	print("Overworld: Temporary town portal spawned at %s (10s lifetime)" % pos)

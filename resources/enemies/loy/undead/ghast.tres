@@ -4,34 +4,34 @@
 
 [resource]
 script = ExtResource("1")
-
 enemy_name = "Ghast"
-description = "An ancient undead warrior bound to guard the crypt for eternity"
-max_hp = 50
-move_speed = 20.0
+description = "Ancient necromancer that summons minions and rains death from afar."
+max_hp = 130
+move_speed = 12.0
 contact_damage = 2
-level = 10
+level = 5
 kingdom = "undead"
-size_class = 1
+size_class = 2
 hostile = true
 attack_type = 6
-attack_damage = 2
+attack_damage = 4
 attack_speed = 1.8
-bullet_speed = 55
+bullet_speed = 55.0
 bullet_count = 4
 preferred_distance = 45.0
 charge_speed = 80.0
 charge_duration = 0.3
 aggro_range = 100.0
-ignores_terrain = false
 shield_hp = 3
 boss_phases = 2
-phase_2_attack = 14
+phase_2_attack = 45
 phase_2_bullet_count = 6
+bomb_aoe_radius = 16.0
+bomb_flight_time = 0.6
 summon_on_phase_change = true
-summon_phase_count = 2
+summon_phase_count = 3
 use_loy_sprite = true
 loy_tile_index = 108
 sprite_color = Color(0.7, 0.65, 0.85, 1)
-xp_value = 125
-score_value = 250
+xp_value = 80
+score_value = 120

@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Monkey"
 description = "A cute squeaky monkey"
-max_hp = 16
+max_hp = 13
 move_speed = 26.7
 contact_damage = 1
 level = 1

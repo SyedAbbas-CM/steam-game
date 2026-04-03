@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Ghoul Brute"
+description = "Hulking ghoul that slams the ground with devastating force. The shockwave hits hard."
+max_hp = 38
+move_speed = 10.0
+contact_damage = 4
+level = 3
+kingdom = "undead"
+size_class = 1
+hostile = true
+attack_type = 7
+attack_damage = 5
+attack_speed = 2.0
+bullet_speed = 50.0
+bullet_count = 1
+preferred_distance = 15.0
+aggro_range = 65.0
+slam_radius = 30.0
+use_loy_sprite = true
+loy_tile_index = 63
+sprite_color = Color(0.4, 0.7, 0.35, 1)
+xp_value = 15
+score_value = 30

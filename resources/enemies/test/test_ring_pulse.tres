@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Test Ring Pulse"
+description = "Multiple timed rings that expand outward with gaps to dodge through"
+max_hp = 5
+move_speed = 10.0
+contact_damage = 1
+level = 3
+kingdom = "mecha"
+hostile = true
+attack_type = 51
+attack_damage = 1
+attack_speed = 3.5
+bullet_speed = 55.0
+bullet_count = 8
+preferred_distance = 40.0
+aggro_range = 70.0
+use_loy_sprite = true
+loy_tile_index = 56
+sprite_color = Color(0.5, 0.5, 0.7, 1)
+xp_value = 5
+score_value = 10

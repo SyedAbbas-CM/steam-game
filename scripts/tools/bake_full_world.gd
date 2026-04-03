@@ -1,6 +1,6 @@
 extends SceneTree
 
-# Bakes the FULL Legends of Yore world into overworld.tscn
+# Bakes the FULL Legends of Ashenmoor world into overworld.tscn
 # Uses world_pos (mx, my) from zone data for placement
 # Reads map text files + zone XMLs for terrain/buildings
 
@@ -98,35 +98,35 @@ var SCALE = 4
 
 # Zone-specific tree density overrides (0.0 = no trees, used for towns/camps)
 var ZONE_TREE_OVERRIDES = {
-	"aria": 0.0,       # Town — trees placed manually in post-process
-	"aria-g": 0.0,     # Graveyard — sparse dead trees in post-process
-	"camp": 0.01,      # Military camp — mostly clear
-	"farm": 0.02,      # Farmland — open fields with scattered trees
+	"haven": 0.0,       # Town — trees placed manually in post-process
+	"barrows": 0.0,     # Graveyard — sparse dead trees in post-process
+	"wardens": 0.01,      # Military camp — mostly clear
+	"duskfarm": 0.02,      # Farmland — open fields with scattered trees
 }
 
 # Only bake original LoY zones (no custom zones)
 var LOY_ONLY = true
-var CUSTOM_ZONE_IDS = ["riverside", "millford", "quarry", "thornfield",
-	"harbormouth", "oldcapital", "crossroads", "banditwood",
-	"lakeshore", "highroad", "marshgate"]
+var CUSTOM_ZONE_IDS = ["millcross", "oldmill", "bonequarry", "blightmoor",
+	"fenport", "ruincrown", "gallows", "cutthroat",
+	"deadshore", "kingsroad", "rotgate"]
 
 var ZONE_MAP_FILES: Dictionary = {
-	"airlon": "airlon", "bch1": "beach", "blf1": "bluff", "brg1": "bridge",
-	"camp": "camp", "cel1": "cellar", "cennyn": "cennyn", "clearing": "clearing",
-	"crt1": "courtyard", "end1": "end1", "farm": "farm", "for1": "forest",
-	"for2": "forest2", "for3": "forest3", "for4": "forest4", "frozen": "frozen",
-	"gomb": "gombard", "island": "island", "jungle1": "jungle1", "jungle2": "jungle2",
-	"kor": "kor", "llecudd": "llecudd", "moors": "moors", "naleg": "naleg",
-	"nord1": "nordolk", "paititi": "paititi", "peaks": "peaks", "plains": "plains",
-	"shrine": "shrine", "swamp": "swamp", "talmita": "talmita", "talnivek": "talnivek",
-	"thicket": "thicket", "thicket2": "thicket2", "thule": "thule",
-	"tor1": "tor1", "tor2": "tor2", "tor3": "tor3", "tor4": "tor4",
-	"tor5": "tor5", "tor6": "tor6", "tundra": "tundra", "und1": "under1",
-	"vale": "vale", "willows": "willows", "ynys": "ynys",
-	"riverside": "riverside", "millford": "millford", "quarry": "quarry",
-	"thornfield": "thornfield", "harbormouth": "harbormouth", "oldcapital": "oldcapital",
-	"crossroads": "crossroads", "banditwood": "banditwood", "lakeshore": "lakeshore",
-	"highroad": "highroad", "marshgate": "marshgate",
+	"windhold": "windhold", "bleachbone": "beach", "cliffs": "bluff", "dreadbridge": "bridge",
+	"wardens": "wardens", "moloch": "cellar", "cenneth": "cenneth", "witchglade": "witchglade",
+	"spire": "courtyard", "hellgate": "hellgate", "duskfarm": "duskfarm", "rotgrove": "forest",
+	"thorndeep": "forest2", "shroudwood": "forest3", "ashglade": "forest4", "frostgrave": "frostgrave",
+	"briarvale": "gombard", "drownisle": "drownisle", "feverjungle": "feverjungle", "deepwild": "deepwild",
+	"kor": "kor", "llecudd": "llecudd", "bleakmoor": "bleakmoor", "brackwater": "brackwater",
+	"grimhold": "nordolk", "eldori": "eldori", "stormcrag": "stormcrag", "ashplains": "ashplains",
+	"shrine": "shrine", "miredeep": "miredeep", "boghollow": "boghollow", "duskwatch": "duskwatch",
+	"briarmarsh": "briarmarsh", "briardeep": "briardeep", "thule": "thule",
+	"driftport": "driftport", "saltmere": "saltmere", "tidegate": "tidegate", "scorchgate": "scorchgate",
+	"smugglers": "smugglers", "wharves": "wharves", "permafrost": "permafrost", "undercroft": "under1",
+	"hollowvale": "hollowvale", "willows": "willows", "duskport": "duskport",
+	"millcross": "millcross", "oldmill": "oldmill", "bonequarry": "bonequarry",
+	"blightmoor": "blightmoor", "fenport": "fenport", "ruincrown": "ruincrown",
+	"gallows": "gallows", "cutthroat": "cutthroat", "deadshore": "deadshore",
+	"kingsroad": "kingsroad", "rotgate": "rotgate",
 }
 
 # Layers
@@ -296,30 +296,30 @@ func _layout_zones(zone_map: Dictionary) -> void:
 			})
 
 	# Start with aria at origin
-	if not zone_map.has("aria"):
+	if not zone_map.has("haven"):
 		print("ERROR: No aria zone")
 		return
 
-	zone_offsets["aria"] = Vector2i(-12, -12)  # Center aria around origin
-	placed["aria"] = true
-	queue.append("aria")
+	zone_offsets["haven"] = Vector2i(-12, -12)  # Center aria around origin
+	placed["haven"] = true
+	queue.append("haven")
 
 	# Seed disconnected clusters that aren't reachable from aria
 	# These connect via portals in LoY but we place them in empty space
 	# moors cluster (moors, airlon, clearing, ynys)
 	var cluster_x = -200 * SCALE
-	if zone_map.has("moors"):
-		zone_offsets["moors"] = Vector2i(cluster_x, -180 * SCALE)
-		placed["moors"] = true
-		queue.append("moors")
-	if zone_map.has("talnivek"):
-		zone_offsets["talnivek"] = Vector2i(cluster_x, -120 * SCALE)
-		placed["talnivek"] = true
-		queue.append("talnivek")
-	if zone_map.has("pst1"):
-		zone_offsets["pst1"] = Vector2i(cluster_x, -60 * SCALE)
-		placed["pst1"] = true
-		queue.append("pst1")
+	if zone_map.has("bleakmoor"):
+		zone_offsets["bleakmoor"] = Vector2i(cluster_x, -180 * SCALE)
+		placed["bleakmoor"] = true
+		queue.append("bleakmoor")
+	if zone_map.has("duskwatch"):
+		zone_offsets["duskwatch"] = Vector2i(cluster_x, -120 * SCALE)
+		placed["duskwatch"] = true
+		queue.append("duskwatch")
+	if zone_map.has("sanctum"):
+		zone_offsets["sanctum"] = Vector2i(cluster_x, -60 * SCALE)
+		placed["sanctum"] = true
+		queue.append("sanctum")
 
 	while queue.size() > 0:
 		var current_id = queue.pop_front()
@@ -1117,14 +1117,14 @@ func _create_loy_tileset() -> TileSet:
 # ─── Post-process specific zones ───────────────────────────────────────────
 
 func _post_process_zones(zone_map: Dictionary) -> void:
-	if zone_offsets.has("aria"):
-		_enhance_aria(zone_map.get("aria"))
-	if zone_offsets.has("aria-g"):
-		_enhance_graveyard(zone_map.get("aria-g"))
-	if zone_offsets.has("farm"):
-		_enhance_farm(zone_map.get("farm"))
-	if zone_offsets.has("camp"):
-		_enhance_camp(zone_map.get("camp"))
+	if zone_offsets.has("haven"):
+		_enhance_aria(zone_map.get("haven"))
+	if zone_offsets.has("barrows"):
+		_enhance_graveyard(zone_map.get("barrows"))
+	if zone_offsets.has("duskfarm"):
+		_enhance_farm(zone_map.get("duskfarm"))
+	if zone_offsets.has("wardens"):
+		_enhance_camp(zone_map.get("wardens"))
 
 func _clear_interior_trees(zone, edge_keep: int = 3) -> int:
 	# Remove gap-fill trees from zone INTERIOR only, preserving edge border trees
@@ -1230,7 +1230,7 @@ func _build_house(bx: int, by: int, bw: int, bh: int, door_side: String, tileset
 func _enhance_aria(zone) -> void:
 	if not zone:
 		return
-	var off = zone_offsets["aria"]
+	var off = zone_offsets["haven"]
 	var ox = off.x
 	var oy = off.y
 	var w = zone.width * SCALE   # 100 at 4x
@@ -1344,7 +1344,7 @@ func _enhance_aria(zone) -> void:
 func _enhance_graveyard(zone) -> void:
 	if not zone:
 		return
-	var off = zone_offsets["aria-g"]
+	var off = zone_offsets["barrows"]
 	var ox = off.x
 	var oy = off.y
 	var w = zone.width * SCALE   # 80 at 4x
@@ -1427,7 +1427,7 @@ func _enhance_graveyard(zone) -> void:
 func _enhance_farm(zone) -> void:
 	if not zone:
 		return
-	var off = zone_offsets["farm"]
+	var off = zone_offsets["duskfarm"]
 	var ox = off.x
 	var oy = off.y
 	var w = zone.width * SCALE
@@ -1467,7 +1467,7 @@ func _enhance_farm(zone) -> void:
 func _enhance_camp(zone) -> void:
 	if not zone:
 		return
-	var off = zone_offsets["camp"]
+	var off = zone_offsets["wardens"]
 	var ox = off.x
 	var oy = off.y
 	var w = zone.width * SCALE

@@ -46,8 +46,14 @@ def bake_data():
         f.write(html)
     print(f"Wrote {out_html} ({os.path.getsize(out_html) // 1024} KB)")
 
-    # Copy sprites
-    for sprite in ['maptiles.png', 'chars.png', 'chars2.png']:
+    # Copy sprites — all sheets used by the editor
+    SPRITES = [
+        'maptiles.png', 'chars.png', 'chars2.png',
+        'tiles.png', 'tiles2.png',
+        'lofiEnvironment.png', 'lofi_dungeon_features.png',
+        'lofi_obj.png', 'lofi_obj_packB.png',
+    ]
+    for sprite in SPRITES:
         src = os.path.join(SPRITES_DIR, sprite)
         dst = os.path.join(APP_DIR, sprite)
         if os.path.exists(src):

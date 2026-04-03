@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Shadow Dancer"
+description = "Stealths then dash-strikes through the player, leaving a trail of bullets."
+max_hp = 4
+move_speed = 25.0
+contact_damage = 2
+kingdom = "undead"
+attack_type = 55
+attack_damage = 2
+attack_speed = 2.5
+bullet_speed = 60.0
+bullet_count = 5
+preferred_distance = 40.0
+charge_speed = 120.0
+charge_duration = 0.35
+stealth_duration = 2.0
+use_loy_sprite = true
+loy_tile_index = 0
+sprite_color = Color(0.3, 0.3, 0.4, 1)
+xp_value = 5
+score_value = 35

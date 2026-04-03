@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1")
 biome_name = "Sthel3"
+base_difficulty = 18
 theme = "red"
 enemy_pool = [ExtResource("2")]
 liquid_type = "lava"

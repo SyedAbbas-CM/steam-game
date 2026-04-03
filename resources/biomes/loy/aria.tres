@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="DungeonBiome" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="2"]
@@ -6,20 +6,35 @@
 [ext_resource type="Resource" path="res://resources/enemies/loy/undead/ghoul.tres" id="4"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/undead/bone_guard.tres" id="5"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/undead/spectre.tres" id="6"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/bone_acolyte.tres" id="7"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/kamikaze_skull.tres" id="8"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/bone_tosser.tres" id="9"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/shield_skeleton.tres" id="10"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/bone_crawler.tres" id="11"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/risen_corpse.tres" id="12"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/phantom.tres" id="13"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/corpse_spitter.tres" id="14"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/bone_charger.tres" id="15"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/crypt_guardian.tres" id="16"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/ghoul_brute.tres" id="17"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/death_rattle.tres" id="18"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/bone_giant.tres" id="19"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/undead_guardian.tres" id="20"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/wandering_wisp.tres" id="21"]
 
 [resource]
 script = ExtResource("1")
 biome_name = "Aria Dungeons"
-theme = "grey"
-enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5")]
+theme = "brown"
+enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12"), ExtResource("13"), ExtResource("14"), ExtResource("15"), ExtResource("16"), ExtResource("17"), ExtResource("18"), ExtResource("19"), ExtResource("20"), ExtResource("21")]
 min_floor = 1
 max_floor = 10
 room_count = 35
 map_width = 60
 map_height = 60
 chest_count = 10
-min_monsters = 0
-max_monsters = 3
+min_monsters = 1
+max_monsters = 4
 has_locked_doors = true
 boss_name = "Spectre"
 boss_definition = ExtResource("6")

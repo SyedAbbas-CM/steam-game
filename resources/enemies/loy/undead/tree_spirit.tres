@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Tree Spirit"
 description = "An ancient oak brought to life by dark magic"
-max_hp = 118
+max_hp = 94
 move_speed = 28.3
 contact_damage = 5
 level = 21

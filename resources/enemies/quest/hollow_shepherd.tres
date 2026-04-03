@@ -1,0 +1,69 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Hollow Shepherd"
+description = "A cowled figure commanding the hollowed. Its voice drains the will from the living."
+max_hp = 450
+move_speed = 18.0
+contact_damage = 8
+level = 10
+
+kingdom = "demon"
+size_class = 2
+hostile = true
+
+attack_type = 6
+attack_damage = 7
+attack_speed = 2.0
+bullet_speed = 60
+bullet_count = 3
+bullet_sprite_index = -1
+
+preferred_distance = 70.0
+charge_speed = 40.0
+charge_duration = 0.3
+aggro_range = 120.0
+ignores_terrain = false
+
+summon_count = 3
+slam_radius = 24.0
+teleport_cooldown = 4.0
+heal_amount = 0
+heal_range = 48.0
+leaves_trail = false
+trail_type = ""
+explodes_on_death = false
+explode_radius = 20.0
+drains_resource = false
+poison_chance = 0.0
+split_count = 2
+stealth_duration = 2.0
+shield_hp = 0
+beam_duration = 1.0
+beam_sweep_speed = 1.5
+death_bullet_pattern = 0
+bounce_count = 0
+bomb_aoe_radius = 16.0
+bomb_flight_time = 0.6
+
+boss_phases = 2
+phase_2_attack = 14
+phase_2_bullet_count = 5
+phase_3_attack = 0
+phase_3_bullet_count = 0
+summon_on_phase_change = true
+summon_phase_count = 4
+
+sprite_frame = 48
+sprite_color = Color(0.3, 0.1, 0.4, 1)
+use_loy_sprite = true
+loy_tile_index = 432
+
+quest_kill_name = "Hollow Shepherd"
+
+xp_value = 800
+score_value = 1600

@@ -9,6 +9,7 @@
 [resource]
 script = ExtResource("1")
 biome_name = "Komb"
+base_difficulty = 10
 theme = "grey"
 enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4")]
 min_floor = 1

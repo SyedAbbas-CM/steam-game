@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Duskfarm-2"
+tileset = 8
+chests = 2
+width = 40
+height = 30
+rooms = 12
+min_monsters = 3
+max_monsters = 5
+aggro_chance = 0
+requires_key = false
+legend = "Grave Worm"
+recommended_level = 11
+monster_pool = [{ "type": "Giant Rat", "chance": 5 }, { "type": "Cave Beetle", "chance": 5 }, { "type": "Giant Weevil", "chance": 5 }, { "type": "Crop Blight", "chance": 4 }, { "type": "Tomb Spider", "chance": 4 }, { "type": "Burrower", "chance": 3 }, { "type": "Scarecrow", "chance": 3 }, { "type": "Grave Worm", "chance": 3 }, { "type": "Wandering Wisp", "chance": 2 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 2, "trap_chance": 0, "items": [{ "name": "Apple", "chance": 4, "min": 1, "max": 1 }, { "name": "Red Potion", "chance": 3, "min": 1, "max": 1 }, { "name": "Gold", "chance": 3, "min": 3, "max": 8 }] }]

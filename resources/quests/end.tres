@@ -7,7 +7,7 @@ script = ExtResource("1_qh7fr")
 id = "end"
 title = "Vanquish Evil"
 level = 175
-location = "aria"
+location = "haven"
 start_script = [{
 "cmd": "showDialog",
 "name": "Elder",
@@ -39,14 +39,14 @@ start_script = [{
 "script": []
 }],
 "portrait": 147,
-"text": "Yore has been invested with evil due to the presence of a evil being."
+"text": "Ashenmoor has been invested with evil due to the presence of a evil being."
 }]
 }, {
 "name": "No!",
 "script": []
 }],
 "portrait": 147,
-"text": "Deathbringer has been sealed in a catacomb south of Thule"
+"text": "Deathbringer has been sealed in a catacomb south of Ultima Thule"
 }]
 }],
 "portrait": 147,
@@ -54,7 +54,7 @@ start_script = [{
 }]
 }],
 "portrait": 147,
-"text": "Then go! Slay Deathbringer and become a Legend of Yore!"
+"text": "Then go! Slay Deathbringer and become a Legend of Ashenmoor!"
 }]
 events = [{
 "param": "Smorag",
@@ -88,7 +88,7 @@ events = [{
 }],
 "type": "kill"
 }, {
-"param": "aria",
+"param": "haven",
 "script": [{
 "attribute": "session-end-1",
 "cmd": "if",
@@ -125,7 +125,7 @@ events = [{
 "script": []
 }],
 "portrait": 147,
-"text": "The land rejoices for your victory! You shall be honoured across the land of Yore!"
+"text": "The land rejoices for your victory! You shall be honoured across the land of Ashenmoor!"
 }]
 }],
 "portrait": 147,

@@ -21,11 +21,19 @@ func _process(delta: float) -> void:
 	_timer -= delta
 	if _timer <= 0:
 		_timer = interval
+		var sfx_hz = get_node_or_null("/root/SFXManager")
+		if sfx_hz and not _bodies_inside.is_empty():
+			if status_effect_type == StatusEffect.Type.BURNING:
+				sfx_hz.play("sear", -8.0, 0.15)
+			elif status_effect_type == StatusEffect.Type.POISONED:
+				sfx_hz.play("poison", -8.0, 0.15)
+			else:
+				sfx_hz.play("drip", -8.0, 0.1)
 		for body in _bodies_inside:
 			if not is_instance_valid(body):
 				continue
 			if damage > 0 and body.has_method("take_damage"):
-				body.take_damage(damage)
+				body.take_damage(damage, global_position)
 			if status_effect_type >= 0:
 				var sem = body.get_node_or_null("StatusEffectManager")
 				if sem:

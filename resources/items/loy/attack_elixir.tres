@@ -9,5 +9,5 @@ loy_tile_index = 76
 description = "Increase attack by one permanently (max 3)"
 slot_type = 10
 rarity = 2
-buy_price = 150
-sell_value = 37
+buy_price = 300
+sell_value = 75

@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Mutant Guard"
 description = "A mutated human guard"
-max_hp = 100
+max_hp = 80
 move_speed = 28.1
 contact_damage = 5
 level = 13

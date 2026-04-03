@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Centaur"
 description = "Swift archer that kites relentlessly, firing rapid volleys of piercing arrows"
-max_hp = 78
+max_hp = 62
 move_speed = 34.8
 contact_damage = 4
 level = 50

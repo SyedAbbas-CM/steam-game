@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Creeper"
 description = "Suicidal stalker that rushes in and detonates — keep your distance"
-max_hp = 28
+max_hp = 22
 move_speed = 30.1
 contact_damage = 4
 level = 5

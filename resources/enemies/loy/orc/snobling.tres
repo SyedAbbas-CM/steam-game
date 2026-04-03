@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Snobling"
 description = "A tiny green orcan"
-max_hp = 175
+max_hp = 140
 move_speed = 21.2
 contact_damage = 5
 level = 12

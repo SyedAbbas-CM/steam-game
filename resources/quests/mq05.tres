@@ -1,0 +1,55 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq05"
+title = "The Hollow Shepherd"
+summary = "A silent village — residents stand motionless, eyes black. The Hollow Shepherd commands them. Pursue into the dungeon."
+level = 7
+location = "wastes"
+target_location = "mirage"
+prerequisite = "mq04"
+boss_dungeon = "sthel"
+boss_enemy_path = "res://resources/enemies/quest/hollow_shepherd.tres"
+start_script = [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Pursue the figure",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 0,
+"text": "The valley village is silent. People stand in the streets, unmoving. Their eyes are black — empty. A cowled figure watches from the dungeon entrance."
+}]
+events = [{
+"param": "Hollow Shepherd",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Read the letter",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Take the letter to Heim.",
+"script": [{
+"cmd": "getExp",
+"value": "800"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "The letter speaks of 'the Tide rising on schedule' and 'the second seal already weakened.' It's signed with your brand symbol."
+}]
+}],
+"portrait": 0,
+"text": "The Shepherd crumbles. In its robes you find a sealed letter addressed to 'The Warden of Heim.' The villagers begin to stir — confused, terrified, alive."
+}],
+"type": "boss_killed"
+}]

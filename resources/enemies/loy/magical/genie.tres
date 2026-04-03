@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Genie"
 description = "Teleporting trickster that warps around the arena unleashing burst after burst"
-max_hp = 107
+max_hp = 86
 move_speed = 34.8
 contact_damage = 5
 level = 50

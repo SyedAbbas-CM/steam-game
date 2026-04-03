@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Giant Snail"
 description = "A huge ponderous snail"
-max_hp = 32
+max_hp = 26
 move_speed = 29.5
 contact_damage = 3
 level = 3

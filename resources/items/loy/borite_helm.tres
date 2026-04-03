@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
-flat_bonus = 6.0
+flat_bonus = 7.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 13
+flat_bonus = 0.05
 
 [resource]
 script = ExtResource("1")
@@ -14,7 +19,7 @@ item_name = "Borite Helm"
 loy_tile_index = 134
 description = "A helmet made from the precious mineral borite"
 slot_type = 3
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 0
-buy_price = 63
-sell_value = 15
+buy_price = 156
+sell_value = 39

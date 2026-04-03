@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Test Teleport"
+description = "Blinks around and shoots"
+max_hp = 3
+move_speed = 16.0
+contact_damage = 1
+level = 2
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 8
+attack_damage = 1
+attack_speed = 2.0
+bullet_speed = 55
+bullet_count = 1
+preferred_distance = 45.0
+teleport_cooldown = 3.0
+aggro_range = 80.0
+ignores_terrain = true
+use_loy_sprite = true
+loy_tile_index = 24
+sprite_color = Color(0.5, 0.7, 0.9, 0.7)
+xp_value = 5
+score_value = 10

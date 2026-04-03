@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Giant Rat"
+description = "A big angry rat that charges. Tougher than its smaller cousins."
+max_hp = 8
+move_speed = 26.0
+contact_damage = 1
+level = 2
+kingdom = "crawler"
+size_class = 0
+hostile = true
+attack_type = 4
+attack_damage = 1
+attack_speed = 2.0
+bullet_speed = 45
+bullet_count = 1
+preferred_distance = 15.0
+charge_speed = 70.0
+charge_duration = 0.3
+aggro_range = 60.0
+ignores_terrain = false
+use_loy_sprite = true
+loy_tile_index = 29
+sprite_color = Color(0.65, 0.5, 0.35, 1)
+xp_value = 3
+score_value = 5

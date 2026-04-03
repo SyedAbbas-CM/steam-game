@@ -1,0 +1,137 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "pq_doubt"
+title = "The Burning"
+summary = "Heshem wants a Red Potion and a Blue Potion. He says he needs them for something important."
+level = 5
+location = "haven"
+prerequisite = "pq_cave"
+properties = [{
+"index": 0,
+"name": "Delivered",
+"type": "yesno"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Heshem",
+"portrait": 167,
+"text": "You completed Solmund's task? Good. You're starting to ask questions. I have one of my own for you.",
+"options": [{
+"name": "Go on",
+"script": [{
+"cmd": "showDialog",
+"name": "Heshem",
+"portrait": 167,
+"text": "Bring me a Red Potion and a Blue Potion. Common enough to find in dungeon chests. When you return, I'll show you something about yourself you didn't know.",
+"options": [{
+"name": "I'll find them",
+"script": [{
+"cmd": "startQuest",
+"id": "pq_doubt"
+}]
+}, {
+"name": "Not interested",
+"script": []
+}]
+}]
+}]
+}]
+events = [{
+"param": "haven",
+"script": [{
+"attribute": "count-Red Potion",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Heshem",
+"portrait": 167,
+"options": [{
+"name": "I'll find them",
+"script": []
+}],
+"text": "I need a Red Potion and a Blue Potion. Search the dungeon chests."
+}]
+}, {
+"attribute": "count-Red Potion",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"attribute": "count-Blue Potion",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Heshem",
+"portrait": 167,
+"options": [{
+"name": "On it",
+"script": []
+}],
+"text": "You have the Red Potion. Good. Now I still need a Blue Potion."
+}]
+}, {
+"attribute": "count-Blue Potion",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Heshem",
+"portrait": 167,
+"text": "You have both potions. Now — here is the real question. I'm going to pour them out. Destroy them. Waste them. Will you let me?",
+"options": [{
+"name": "Destroy them",
+"script": [{
+"cmd": "takeItem",
+"count": "1",
+"name": "Red Potion"
+}, {
+"cmd": "takeItem",
+"count": "1",
+"name": "Blue Potion"
+}, {
+"cmd": "showDialog",
+"name": "Heshem",
+"portrait": 167,
+"text": "What you just felt — that resistance, that flinch — THAT is what you were really holding onto. Not the potions. The certainty that you needed them. Letting go of certainty is the hardest thing.",
+"options": [{
+"name": "...",
+"script": [{
+"cmd": "getExp",
+"value": "500"
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}]
+}, {
+"name": "Keep them",
+"script": [{
+"cmd": "showDialog",
+"name": "Heshem",
+"portrait": 167,
+"text": "A practical choice. Not wrong. But you chose comfort over the unknown. Remember this moment the next time you think you're being brave.",
+"options": [{
+"name": "...",
+"script": [{
+"cmd": "getExp",
+"value": "250"
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}]
+}]
+}]
+}]
+}],
+"type": "quest"
+}]

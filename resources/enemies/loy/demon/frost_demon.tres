@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Frost Demon"
 description = "Frostie demonic being"
-max_hp = 542
+max_hp = 434
 move_speed = 27.4
 contact_damage = 5
 level = 18

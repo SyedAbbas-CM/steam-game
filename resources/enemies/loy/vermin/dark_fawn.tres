@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Dark Fawn"
 description = "An enchanted hooven opponent"
-max_hp = 29
+max_hp = 16
 move_speed = 23.2
 contact_damage = 2
 level = 4

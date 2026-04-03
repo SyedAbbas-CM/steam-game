@@ -257,7 +257,7 @@ def apply_enemy_spawns(spawns):
     """Save editor enemy spawn regions to enemy_spawns.tres.
 
     The runtime (overworld.gd) loads this resource and reads regions from metadata.
-    Each region dict: {name, x1, y1, x2, y2, enemy_type, max_count, behavior, hostile}
+    Each region supports either a single enemy_type or a spawn_table with weighted types.
     Coordinates are world tiles (already in baked tile space from the editor).
     """
     out_path = os.path.join(PROJECT, "resources", "world", "enemy_spawns.tres")
@@ -270,17 +270,36 @@ def apply_enemy_spawns(spawns):
         y1 = int(s.get("y1", 0))
         x2 = int(s.get("x2", 0))
         y2 = int(s.get("y2", 0))
-        enemy_type = str(s.get("enemy_type", "Goblin"))
         max_count = int(s.get("max_count", 3))
         behavior = str(s.get("behavior", "chase"))
         hostile = bool(s.get("hostile", True))
         hostile_str = "true" if hostile else "false"
-        region_strs.append(
-            f'{{\n"name": "{name}",\n"x1": {x1},\n"y1": {y1},\n'
-            f'"x2": {x2},\n"y2": {y2},\n'
-            f'"enemy_type": "{enemy_type}",\n"max_count": {max_count},\n'
-            f'"behavior": "{behavior}",\n"hostile": {hostile_str}\n}}'
-        )
+
+        parts = [
+            f'"name": "{name}"',
+            f'"x1": {x1}',
+            f'"y1": {y1}',
+            f'"x2": {x2}',
+            f'"y2": {y2}',
+            f'"max_count": {max_count}',
+            f'"behavior": "{behavior}"',
+            f'"hostile": {hostile_str}',
+        ]
+
+        # Support spawn_table (weighted) or single enemy_type
+        spawn_table = s.get("spawn_table", [])
+        if spawn_table:
+            table_entries = []
+            for entry in spawn_table:
+                t = str(entry.get("type", "Goblin"))
+                w = int(entry.get("weight", 1))
+                table_entries.append(f'{{\n"type": "{t}",\n"weight": {w}\n}}')
+            parts.append(f'"spawn_table": [{", ".join(table_entries)}]')
+        else:
+            enemy_type = str(s.get("enemy_type", "Goblin"))
+            parts.append(f'"enemy_type": "{enemy_type}"')
+
+        region_strs.append("{\n" + ",\n".join(parts) + "\n}")
 
     regions_str = ", ".join(region_strs)
 
@@ -295,9 +314,39 @@ metadata/regions = [{regions_str}]
         f.write(content)
     print(f"  Wrote {len(spawns)} spawn regions → {os.path.relpath(out_path, PROJECT)}")
     for s in spawns:
-        print(f"    {s.get('name', '?')}: {s.get('enemy_type', '?')} x{s.get('max_count', 3)} "
+        table = s.get("spawn_table", [])
+        if table:
+            types_str = ", ".join(f"{e.get('type')}({e.get('weight')})" for e in table)
+        else:
+            types_str = s.get("enemy_type", "?")
+        print(f"    {s.get('name', '?')}: [{types_str}] x{s.get('max_count', 3)} "
               f"({s.get('x1')},{s.get('y1')})→({s.get('x2')},{s.get('y2')}) "
               f"[{s.get('behavior', 'chase')}, hostile={s.get('hostile', True)}]")
+
+
+def apply_waypoints(waypoints):
+    """Save waypoints to waypoints.tres resource for runtime use (army spawns, etc)."""
+    out_path = os.path.join(PROJECT, "resources", "world", "waypoints.tres")
+
+    wp_strs = []
+    for wp in waypoints:
+        name = str(wp.get("name", "unnamed"))
+        x = int(wp.get("x", 0))
+        y = int(wp.get("y", 0))
+        wp_strs.append(f'{{\n"name": "{name}",\n"x": {x},\n"y": {y}\n}}')
+
+    content = f'''[gd_resource type="Resource" format=3]
+
+[resource]
+metadata/waypoints = [{", ".join(wp_strs)}]
+'''
+
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, 'w') as f:
+        f.write(content)
+    print(f"  Wrote {len(waypoints)} waypoints → {os.path.relpath(out_path, PROJECT)}")
+    for wp in waypoints:
+        print(f"    {wp.get('name', '?')}: ({wp.get('x')}, {wp.get('y')})")
 
 
 def _find_zone_file(zone_id):
@@ -395,6 +444,7 @@ def import_diff(json_path, no_rebuild=False):
     if clutter_removed:
         print(f"  Removed {clutter_removed} old baked clutter")
 
+
     # Apply tile paints
     modified_chunks = set()
     total_placed = 0
@@ -471,6 +521,12 @@ def import_diff(json_path, no_rebuild=False):
     if enemy_spawns:
         print(f"\nEnemy spawn regions: {len(enemy_spawns)}")
         apply_enemy_spawns(enemy_spawns)
+
+    # Waypoints (army spawn points, etc.)
+    waypoints = data.get("waypoints", [])
+    if waypoints:
+        print(f"\nWaypoints: {len(waypoints)}")
+        apply_waypoints(waypoints)
 
     elapsed = time.time() - t0
     print(f"\nChunk import done in {elapsed:.1f}s")

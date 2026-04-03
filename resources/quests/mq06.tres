@@ -1,0 +1,57 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq06"
+title = "The Warden's Warning"
+summary = "Deliver the Shepherd's letter to the Warden in Heim. Learn the truth about the Tide and receive Key Fragment 1/3."
+level = 8
+location = "mirage"
+target_location = "ashheim"
+prerequisite = "mq05"
+start_script = [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Travel to Heim.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 0,
+"text": "The letter must reach the Warden of Heim. He'll know what the Hollow Shepherd was planning."
+}]
+events = [{
+"param": "ashheim",
+"script": [{
+"cmd": "showDialog",
+"name": "Warden Aldric",
+"options": [{
+"name": "The seals are breaking.",
+"script": [{
+"cmd": "showDialog",
+"name": "Warden Aldric",
+"options": [{
+"name": "I won't fail.",
+"script": [{
+"cmd": "getExp",
+"value": "600"
+}, {
+"cmd": "getItem",
+"count": "1",
+"name": "Key Fragment"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 148,
+"text": "Three fragments of the Seal Key were hidden across the land. Take this one. Find the others before the Tide consumes everything. The frozen north and the southern coast hold the rest."
+}]
+}],
+"portrait": 148,
+"text": "That letter... I'd hoped we had more time. The Hollow Tide — it happened before, centuries ago. An ancient king broke the seals seeking immortality. We bound him beneath Ultima Thule."
+}],
+"type": "zone_enter"
+}]

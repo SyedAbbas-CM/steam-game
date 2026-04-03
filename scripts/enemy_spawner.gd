@@ -14,6 +14,8 @@ func _ready() -> void:
 	timer.start()
 
 func _spawn_enemy() -> void:
+	if not is_inside_tree():
+		return
 	var player = get_tree().get_first_node_in_group("player")
 	if not player:
 		return

@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Mutant Farseer"
 description = "A half man half lizard mage"
-max_hp = 100
+max_hp = 80
 move_speed = 31.1
 contact_damage = 5
 level = 23

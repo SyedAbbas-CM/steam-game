@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 3.0
+flat_bonus = 4.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 13
+flat_bonus = 0.05
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Tooth Dagger"
 loy_tile_index = 212
 description = "A mighty tooth dagger"
 slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 0
-buy_price = 39
-sell_value = 9
-bullet_sprite_index = 120
-weapon_range = 1.5
+buy_price = 102
+sell_value = 25
+bullet_sprite_index = 240
+weapon_range = 1.0
+weapon_type = "dagger"

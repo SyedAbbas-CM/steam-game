@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+commands = [{
+"cmd": "showDialog",
+"name": "Navid",
+"portrait": 173,
+"text": "La la la... oh! Don't mind me, friend. I was just singing to the wind. It sings back, you know, if you listen with more than your ears.",
+"options": [{
+"name": "You seem happy",
+"script": [{
+"cmd": "showDialog",
+"name": "Navid",
+"portrait": 173,
+"text": "Happy? I'm on fire! Not the burning kind — the kind that makes you want to dance in a graveyard and laugh at the bones. Pain and joy are the same river, friend. I just learned to swim.",
+"options": [{
+"name": "Same river?",
+"script": [{
+"cmd": "showDialog",
+"name": "Navid",
+"portrait": 173,
+"text": "The wound is where the light gets in! Every scar you carry from those dungeons — that's not damage, it's a door. You just have to stop calling it a wound and start calling it a window.",
+"options": [{
+"name": "Beautiful",
+"script": []
+}]
+}]
+}, {
+"name": "You're strange",
+"script": [{
+"cmd": "showDialog",
+"name": "Navid",
+"portrait": 173,
+"text": "Strange? I'm the most normal one here! Everyone else is pretending they're not burning alive with questions. I just stopped pretending and started dancing.",
+"options": [{
+"name": "Ha!",
+"script": []
+}]
+}]
+}]
+}]
+}, {
+"name": "Sing something",
+"script": [{
+"cmd": "showDialog",
+"name": "Navid",
+"portrait": 173,
+"text": "Out beyond ideas of right and wrong, there is a field... I'll meet you there. When the soul lies down in that grass, the world is too full to talk about. Hmm hmm hmm...",
+"options": [{
+"name": "Lovely",
+"script": []
+}]
+}]
+}, {
+"name": "Farewell",
+"script": []
+}]
+}]

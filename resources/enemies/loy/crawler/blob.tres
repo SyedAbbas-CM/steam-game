@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Blob"
 description = "Splits into smaller blobs when killed — clear the fragments fast"
-max_hp = 7
+max_hp = 4
 move_speed = 28.9
 contact_damage = 1
 level = 1

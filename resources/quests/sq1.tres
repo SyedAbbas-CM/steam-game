@@ -8,7 +8,7 @@ id = "sq1"
 title = "Potion Hoarder"
 summary = "Jimbob wants 5 Red Potions for his experiments. Find them in dungeon chests and bring them to him."
 level = 5
-location = "aria"
+location = "haven"
 properties = [{
 "index": 0,
 "name": "Delivered",

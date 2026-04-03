@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1")
 biome_name = "Chidden1"
+base_difficulty = 18
 theme = "blue"
 enemy_pool = [ExtResource("2")]
 liquid_type = "water"

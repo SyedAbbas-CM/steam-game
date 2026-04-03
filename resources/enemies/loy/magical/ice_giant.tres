@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Ice Giant"
 description = "A hulking giant beast made of pure ice"
-max_hp = 60
+max_hp = 48
 move_speed = 24.3
 contact_damage = 5
 level = 15

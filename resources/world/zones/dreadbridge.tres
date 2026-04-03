@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "dreadbridge"
+zone_name = "Dreadbridge"
+tileset = 112
+width = 40
+height = 14
+world_pos = Vector2i(49, 60)
+dungeon_base = "Dread-Dungeons"
+baked_offset = Vector2i(452, -64)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "thorndeep",
+"tx": 48,
+"ty": 2,
+"x": 0,
+"y": 3
+}, {
+"target": "cliffs",
+"tx": 1,
+"ty": 7,
+"x": 39,
+"y": 7
+}])
+signs = Array[Dictionary]([{
+"message": "To The Rotgrove",
+"x": 1,
+"y": 6
+}])
+spawns = Array[Dictionary]([{
+"chance": 300,
+"type": "Water Elemental",
+"x": 3,
+"y": 3
+}])

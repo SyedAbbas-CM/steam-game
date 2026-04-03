@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "duskport-magic"
+shop_type = "magic"
+shop_name = "Nazam"
+portrait = 201
+title = "Nazam's Dark Magic"
+welcome = "What brings you to the dark path mage?"
+nomoney = "The gods can not be paid without gold."
+buy_text = "May it aid you in your journey!"
+sell_text = "I shall offer it to the dark gods, the power will be mine!"
+stock = [{ "item_name": "Town Portal", "required_quest": "" }, { "item_name": "Magic Missile", "required_quest": "" }, { "item_name": "Red Potion", "required_quest": "" }, { "item_name": "Blue Potion", "required_quest": "" }, { "item_name": "Purple Potion", "required_quest": "" }, { "item_name": "Turq Potion", "required_quest": "" }, { "item_name": "Orange Potion", "required_quest": "" }, { "item_name": "Green Potion", "required_quest": "" }, { "item_name": "Aqua Potion", "required_quest": "" }, { "item_name": "Gold Potion", "required_quest": "" }, { "item_name": "Pale Potion", "required_quest": "" }]

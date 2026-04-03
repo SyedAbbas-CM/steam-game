@@ -1,14 +1,25 @@
-[gd_resource type="Resource" script_class="DungeonBiome" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
-[ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/cycarrior.tres" id="2"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/human/black_knight.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/cycage.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/magical/fire_giant.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/magical/frost_giant.tres" id="6"]
+[ext_resource type="Resource" path="res://resources/enemies/forest/thorn_vine.tres" id="7"]
+[ext_resource type="Resource" path="res://resources/enemies/forest/forest_spider.tres" id="8"]
+[ext_resource type="Resource" path="res://resources/enemies/forest/treant.tres" id="9"]
+[ext_resource type="Resource" path="res://resources/enemies/forest/moss_wolf.tres" id="10"]
+[ext_resource type="Resource" path="res://resources/enemies/forest/cyclops_archer.tres" id="11"]
+[ext_resource type="Resource" path="res://resources/enemies/forest/cyclops_shaman.tres" id="12"]
+[ext_resource type="Resource" path="res://resources/enemies/forest/poison_ivy.tres" id="13"]
 
 [resource]
 script = ExtResource("1")
 biome_name = "Forest"
+base_difficulty = 5
 theme = "green"
-enemy_pool = [ExtResource("2")]
+enemy_pool = [ExtResource("2"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12"), ExtResource("13")]
 liquid_type = "poison"
 hazard_damage = 1
 min_floor = 1

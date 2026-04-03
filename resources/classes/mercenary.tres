@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="PlayerClass" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/player_class.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+class_name_str = "Mercenary"
+description = "A versatile fighter who wields both blade and bow. Swap weapons mid-combat with Shift for tactical advantage."
+base_hp = 50
+base_speed = 110.0
+base_damage = 0.0
+resource_type = "rage"
+resource_max = 15
+starting_weapon_pattern = "spread"
+bullet_count = 2
+bullet_speed = 100.0
+attack_speed = 0.3
+preferred_range = 30.0
+ability_name = "Weapon Swap"
+ability_description = "Instantly swap between sword and short bow"
+ability_cost = 0
+base_mp = 20
+base_weight = 1.0
+base_acceleration = 1.0
+base_poise = 3.0
+base_tenacity = 10.0
+base_thorns = 1.0
+loy_tile_index = 240
+sprite_color = Color(1, 0.85, 0.7, 1)

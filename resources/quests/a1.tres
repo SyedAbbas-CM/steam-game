@@ -7,7 +7,7 @@ script = ExtResource("1_j01im")
 id = "a1"
 title = "3 wishes"
 level = 27
-location = "heim"
+location = "ashheim"
 start_script = [{
 "cmd": "showDialog",
 "name": "Odin",
@@ -68,7 +68,7 @@ events = [{
 }],
 "type": "kill"
 }, {
-"param": "heim",
+"param": "ashheim",
 "script": [{
 "attribute": "count-Genie Lamp",
 "cmd": "if",

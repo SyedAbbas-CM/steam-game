@@ -6,6 +6,11 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
+flat_bonus = 10.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 12
 flat_bonus = 4.0
 
 [resource]
@@ -14,7 +19,7 @@ item_name = "Ring of Tra"
 loy_tile_index = 35
 description = "A powerful ring"
 slot_type = 8
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 332
-sell_value = 83
+buy_price = 852
+sell_value = 213

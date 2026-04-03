@@ -13,10 +13,11 @@ func _ready() -> void:
 	collision_mask = 1  # detect player
 	add_to_group("loot_bag")
 
-	# Collision shape
+	# Collision shape — bigger in overworld for easier pickup
 	var shape = CollisionShape2D.new()
 	var circle = CircleShape2D.new()
-	circle.radius = 10.0
+	var in_ow2 = get_tree() and get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	circle.radius = 24.0 if in_ow2 else 10.0
 	shape.shape = circle
 	add_child(shape)
 
@@ -29,7 +30,12 @@ func _ready() -> void:
 		atlas.atlas = tex
 		atlas.region = Rect2(64, 160, 32, 32)
 		sprite.texture = atlas
-		sprite.scale = Vector2(0.18, 0.18)
+		# Scale up in overworld (32px tiles), smaller in dungeon (8px tiles)
+		var in_ow = get_tree() and get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+		if in_ow:
+			sprite.scale = Vector2(0.7, 0.7)  # 4x bigger than before
+		else:
+			sprite.scale = Vector2(0.18, 0.18)
 	else:
 		var img = Image.create(8, 8, false, Image.FORMAT_RGBA8)
 		img.fill(Color(0.55, 0.35, 0.15))
@@ -59,6 +65,10 @@ func _on_body_entered(body: Node2D) -> void:
 			gm.add_gold(gold)
 		gold = 0
 
+	# SFX: bag open
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("open", -3.0)
 	# Show bag UI
 	_notify_bag_ui(true)
 
@@ -70,7 +80,10 @@ func _on_body_exited(body: Node2D) -> void:
 	if not body.is_in_group("player"):
 		return
 	_player_nearby = false
-	_notify_bag_ui(false)
+	# Only hide if this bag is the one currently shown
+	var ui = get_tree().get_first_node_in_group("loot_bag_ui")
+	if ui and ui.get("_current_bag") == self:
+		_notify_bag_ui(false)
 
 func _notify_bag_ui(opened: bool) -> void:
 	var ui = get_tree().get_first_node_in_group("loot_bag_ui")

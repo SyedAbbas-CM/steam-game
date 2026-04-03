@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
-flat_bonus = 3.0
+flat_bonus = 7.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 3
+flat_bonus = 0.1
 
 [resource]
 script = ExtResource("1")
@@ -14,7 +19,7 @@ item_name = "Goif Gloves"
 loy_tile_index = 146
 description = "Magic conducting gloves"
 slot_type = 7
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 1
-buy_price = 104
-sell_value = 26
+buy_price = 277
+sell_value = 69

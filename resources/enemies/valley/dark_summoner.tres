@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/valley/shadow_hound.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Dark Summoner"
+description = "Dark mage that summons shadow hounds to overwhelm intruders."
+max_hp = 24
+move_speed = 17.0
+contact_damage = 2
+level = 5
+kingdom = "human"
+size_class = 0
+hostile = true
+attack_type = 6
+attack_damage = 2
+attack_speed = 2.5
+bullet_speed = 65.0
+bullet_count = 1
+preferred_distance = 55.0
+aggro_range = 80.0
+summon_count = 2
+summon_definition = ExtResource("2")
+use_loy_sprite = true
+loy_tile_index = 26
+sprite_color = Color(0.35, 0.2, 0.5, 1)
+xp_value = 38
+score_value = 76

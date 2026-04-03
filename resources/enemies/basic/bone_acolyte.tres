@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Bone Acolyte"
+description = "A skeletal priest that heals nearby undead. Priority target."
+max_hp = 11
+move_speed = 16.0
+contact_damage = 1
+level = 3
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 9
+attack_damage = 1
+attack_speed = 2.5
+bullet_speed = 60.0
+bullet_count = 1
+preferred_distance = 55.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 70.0
+heal_amount = 4
+heal_range = 48.0
+use_loy_sprite = true
+loy_tile_index = 272
+sprite_color = Color(0.7, 0.8, 0.7, 1)
+xp_value = 10
+score_value = 15

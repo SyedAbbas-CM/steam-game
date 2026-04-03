@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "duskport-inn"
+shop_type = "inn"
+shop_name = "Zadan"
+portrait = 150
+title = "The Hook and Spear"
+welcome = "Welcome to the island, how can I help?"
+nomoney = "Are you slow? You give me gold, I give you goods. Got it?"
+buy_text = "Take these, go in joy."
+sell_text = "I'll buy it, right, nice."
+stock = [{ "item_name": "Meat", "required_quest": "" }, { "item_name": "Fishing Pole", "required_quest": "" }, { "item_name": "Spade", "required_quest": "" }, { "item_name": "Trap", "required_quest": "" }, { "item_name": "Powder Keg", "required_quest": "" }, { "item_name": "Gold Plate", "required_quest": "" }, { "item_name": "Lava Rod", "required_quest": "" }, { "item_name": "Pet Food", "required_quest": "" }]

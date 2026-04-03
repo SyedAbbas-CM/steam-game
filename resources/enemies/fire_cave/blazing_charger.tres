@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Blazing Charger"
+description = "A bull-like demon wreathed in flame that charges at high speed, firing a strafe-run of fireballs"
+max_hp = 56
+move_speed = 30.0
+contact_damage = 5
+level = 8
+kingdom = "demon"
+size_class = 0
+hostile = true
+attack_type = 27
+attack_damage = 4
+attack_speed = 2.0
+bullet_speed = 70
+bullet_count = 5
+preferred_distance = 25.0
+charge_speed = 130.0
+charge_duration = 0.5
+aggro_range = 90.0
+ignores_terrain = false
+leaves_trail = true
+trail_type = "fire"
+use_loy_sprite = true
+loy_tile_index = 408
+sprite_color = Color(1.0, 0.35, 0.15, 1)
+xp_value = 35
+score_value = 70

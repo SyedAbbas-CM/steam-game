@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Skull"
 description = "A demon skull floating in fire"
-max_hp = 16
+max_hp = 13
 move_speed = 21.0
 contact_damage = 3
 level = 4

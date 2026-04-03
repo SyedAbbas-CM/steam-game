@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Devil"
 description = "Teleporting demon that warps next to you and unleashes a burst of hellfire"
-max_hp = 84
+max_hp = 67
 move_speed = 24.1
 contact_damage = 3
 level = 7

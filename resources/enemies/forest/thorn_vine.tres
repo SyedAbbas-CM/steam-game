@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Thorn Vine"
+description = "Stationary plant that fires poison thorns in a cross pattern."
+max_hp = 16
+move_speed = 0.0
+contact_damage = 2
+level = 7
+kingdom = "crawler"
+size_class = 0
+hostile = true
+attack_type = 17
+attack_damage = 2
+attack_speed = 1.5
+bullet_speed = 65.0
+bullet_count = 4
+preferred_distance = 0.0
+aggro_range = 70.0
+poison_chance = 0.3
+use_loy_sprite = true
+loy_tile_index = 365
+sprite_color = Color(0.2, 0.6, 0.15, 1)
+xp_value = 40
+score_value = 80

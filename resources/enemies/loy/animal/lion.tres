@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Lion"
 description = "The king of the jungle"
-max_hp = 94
+max_hp = 75
 move_speed = 28.2
 contact_damage = 5
 level = 6

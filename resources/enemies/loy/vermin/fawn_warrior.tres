@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Fawn Warrior"
 description = "Armored hooven beast"
-max_hp = 16
+max_hp = 13
 move_speed = 22.3
 contact_damage = 1
 level = 1

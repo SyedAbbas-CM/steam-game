@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Giant-7"
+tileset = 0
+chests = 5
+width = 40
+height = 40
+rooms = 20
+min_monsters = 2
+max_monsters = 5
+aggro_chance = 0
+requires_key = false
+legend = ""
+recommended_level = 26
+monster_pool = [{ "type": "Orc Warrior", "chance": 1 }, { "type": "Ogre", "chance": 1 }, { "type": "Ogre Mage", "chance": 1 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 4, "items": [{ "name": "Gold", "chance": 30, "min": 10, "max": 90 }, { "name": "Blue Potion", "chance": 20, "min": 1, "max": 1 }, { "name": "Trap", "chance": 20, "min": 1, "max": 5 }, { "name": "Crafted Armor", "chance": 1, "min": 1, "max": 1 }] }]

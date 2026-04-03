@@ -6,17 +6,23 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 52.0
+flat_bonus = 45.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 13
+flat_bonus = 0.15
 
 [resource]
 script = ExtResource("1")
 item_name = "Smite"
 loy_tile_index = 118
 description = "Cast to damage the target"
-slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+slot_type = 2
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 716
-sell_value = 179
-bullet_sprite_index = 110
-weapon_range = 3.0
+buy_price = 1412
+sell_value = 353
+bullet_sprite_index = 224
+weapon_range = 4.0
+weapon_type = "staff"

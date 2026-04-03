@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Orc Witchdoctor"
 description = "A orcan mage with powerful attacks"
-max_hp = 91
+max_hp = 73
 move_speed = 18.8
 contact_damage = 5
 level = 4

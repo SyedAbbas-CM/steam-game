@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 enemy_name = "Healer"
-max_hp = 4
+max_hp = 3
 move_speed = 15.0
 contact_damage = 1
 attack_type = 9

@@ -221,7 +221,7 @@ static func get_bullet_sprite_for_weapon(weapon_name: String) -> int:
 	if "fire" in lower or "flame" in lower or "lava" in lower or "inferno" in lower:
 		return FIREBALL
 	# Ice weapons → ice bolts
-	if "ice" in lower or "frost" in lower or "frozen" in lower or "cold" in lower:
+	if "ice" in lower or "frost" in lower or "frostgrave" in lower or "cold" in lower:
 		return ICEBALL
 	# Poison weapons
 	if "poison" in lower or "venom" in lower or "toxic" in lower:

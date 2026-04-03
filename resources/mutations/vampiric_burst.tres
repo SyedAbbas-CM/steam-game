@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="MutationDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/mutation_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+mutation_id = "vampiric_burst"
+mutation_name = "Vampiric Burst"
+description = "Heal on enemy kill"
+type = 10
+tier = 1
+strength = 5.0
+max_stacks = 3
+tags = ["healing", "kill"]

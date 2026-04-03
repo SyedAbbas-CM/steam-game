@@ -7,8 +7,8 @@ script = ExtResource("1_iinog")
 id = "a15"
 title = "Dragons Egg Delivery"
 level = 21
-location = "nord1"
-target_location = "gomb"
+location = "grimhold"
+target_location = "briarvale"
 properties = [{
 "index": 0,
 "name": "Delivered",
@@ -80,7 +80,7 @@ events = [{
 }],
 "type": "activate"
 }, {
-"param": "nord1",
+"param": "grimhold",
 "script": [{
 "attribute": "session-a15-0",
 "cmd": "if",

@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1")
 biome_name = "Sthel6"
+base_difficulty = 22
 theme = "brown"
 enemy_pool = [ExtResource("2")]
 min_floor = 1

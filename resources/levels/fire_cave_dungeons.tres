@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "FireCave-Dungeons"
+tileset = 56
+chests = 3
+width = 45
+height = 35
+rooms = 20
+min_monsters = 3
+max_monsters = 5
+aggro_chance = 20
+requires_key = false
+legend = ""
+recommended_level = 15
+monster_pool = [{ "type": "Imp", "chance": 6 }, { "type": "Fire Empling", "chance": 4 }, { "type": "Fire Lurker", "chance": 3 }, { "type": "Scorch Hound", "chance": 5 }, { "type": "Flame Sprite", "chance": 5 }, { "type": "Molten Crawler", "chance": 4 }, { "type": "Cinder Bomber", "chance": 3 }, { "type": "Flame Dancer", "chance": 4 }, { "type": "Ember Swarm", "chance": 3 }, { "type": "Ember Mite", "chance": 2 }, { "type": "Drake", "chance": 3 }, { "type": "Magma Mine Layer", "chance": 2 }, { "type": "Fire Spitter", "chance": 2 }]
+fixed_monsters = [{ "type": "Infernal Gatekeeper", "count": 1 }]
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 10, "items": [{ "name": "Red Potion", "chance": 3, "min": 1, "max": 2 }, { "name": "Apple", "chance": 2, "min": 1, "max": 1 }, { "name": "Gold", "chance": 5, "min": 50, "max": 150 }, { "name": "Iron Shield", "chance": 1, "min": 1, "max": 1 }] }]

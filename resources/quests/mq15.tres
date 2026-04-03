@@ -1,0 +1,91 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq15"
+title = "The Last Garrison"
+summary = "Ultima Thule's garrison is under siege. Kill 15 Tide creatures. The commander will open the catacomb gate."
+level = 19
+location = "frostgrave"
+target_location = "thule"
+prerequisite = "mq14"
+properties = [{
+"index": 0,
+"name": "Tide Creatures Killed",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "For Ultima Thule.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 0,
+"text": "Ultima Thule's walls still hold — barely. The garrison fights a losing battle against waves of Tide creatures. Help them, and they may open the catacombs beneath the city."
+}]
+events = [{
+"param": "Zombie",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "Skeleton",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "Spectre",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "thule",
+"script": [{
+"attribute": "session-mq15-0",
+"cmd": "if",
+"compare": "14",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Commander Rhis",
+"options": [{
+"name": "I intend to.",
+"script": [{
+"cmd": "getExp",
+"value": "1000"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 149,
+"text": "You've done more than any soldier could. The catacombs are open. Whatever's down there... end it."
+}]
+}, {
+"attribute": "session-mq15-0",
+"cmd": "if",
+"compare": "15",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Commander Rhis",
+"options": [{
+"name": "I'll keep fighting.",
+"script": []
+}],
+"portrait": 149,
+"text": "The creatures keep coming. We need more of them put down before I can spare the men to open the gate."
+}]
+}],
+"type": "quest"
+}]

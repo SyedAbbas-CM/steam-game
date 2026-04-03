@@ -1,0 +1,121 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "mirage"
+zone_name = "The Mirage"
+tileset = 224
+world_pos = Vector2i(8, 52)
+dungeon_base = "Mirage-Dungeons"
+dungeon_count = 10
+description = "A desert oasis that shimmers and shifts. Nothing is quite what it seems here."
+baked_offset = Vector2i(-448, -212)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "ashvale",
+"tx": 1,
+"ty": 11,
+"x": 24,
+"y": 11
+}, {
+"target": "shrine",
+"tx": 16,
+"ty": 8,
+"x": 0,
+"y": 9
+}])
+npcs = Array[Dictionary]([{
+"name": "Booki",
+"portrait": 211,
+"shop": "maps",
+"tile": 210,
+"type": "maps",
+"x": 3,
+"y": 14
+}, {
+"name": "Metak",
+"portrait": 156,
+"tile": 140,
+"shop": "mirage-weapon",
+"type": "shop",
+"x": 10,
+"y": 18
+}, {
+"name": "K'atel",
+"portrait": 151,
+"tile": 135,
+"type": "elder",
+"x": 8,
+"y": 5
+}, {
+"name": "Polini",
+"portrait": 157,
+"tile": 141,
+"shop": "mirage-inn",
+"type": "shop",
+"x": 15,
+"y": 2
+}, {
+"name": "Squani",
+"portrait": 154,
+"tile": 138,
+"shop": "mirage-magic",
+"type": "shop",
+"x": 21,
+"y": 16
+}, {
+"file": "scripts/stable-sthel.xml",
+"name": "Stable",
+"portrait": 173,
+"tile": 172,
+"type": "scriptfile",
+"x": 2,
+"y": 3
+}, {
+"message": "Neigh!",
+"name": "Horse",
+"portrait": 175,
+"tile": 174,
+"type": "message",
+"x": 1,
+"y": 3
+}])
+houses = Array[Dictionary]([{
+"height": 6,
+"sign": "Treasure Hunters / / Maps for sale!",
+"width": 5,
+"x": 1,
+"y": 12
+}, {
+"height": 8,
+"sign": "Metak's Weapon Shop / / Rare weapons and armor for sale!",
+"width": 6,
+"x": 7,
+"y": 12
+}, {
+"height": 8,
+"sign": "Council Rooms / / Serving you and other tax payers",
+"width": 9,
+"x": 4,
+"y": 1
+}, {
+"height": 8,
+"sign": "The Spikey Cactus / / Exotic food for the tourists!",
+"width": 11,
+"x": 13,
+"y": 1
+}, {
+"height": 6,
+"sign": "The Genie's Den / / Purveyor of relics and dark arts.",
+"width": 10,
+"x": 14,
+"y": 12
+}, {
+"height": 7,
+"sign": "",
+"width": 5,
+"x": 14,
+"y": 17
+}])

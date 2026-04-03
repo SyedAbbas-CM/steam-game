@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Dingo"
 description = "A slathering beast on four paws"
-max_hp = 29
+max_hp = 23
 move_speed = 27.3
 contact_damage = 4
 level = 3

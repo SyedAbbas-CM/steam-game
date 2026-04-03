@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 7.0
+flat_bonus = 16.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 14
+flat_bonus = 5.0
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Lava Sword"
 loy_tile_index = 207
 description = "A scalding hot blade"
 slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 356
-sell_value = 89
-bullet_sprite_index = 104
-weapon_range = 2.5
+buy_price = 978
+sell_value = 244
+bullet_sprite_index = 208
+weapon_range = 1.65
+weapon_type = "sword"

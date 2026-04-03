@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Taffyne"
 description = "A sticky evil creature"
-max_hp = 50
+max_hp = 40
 move_speed = 24.9
 contact_damage = 5
 level = 17

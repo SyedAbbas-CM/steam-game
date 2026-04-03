@@ -6,6 +6,7 @@
 [resource]
 script = ExtResource("1")
 biome_name = "Bad"
+base_difficulty = 8
 theme = "brown"
 enemy_pool = [ExtResource("2")]
 min_floor = 1

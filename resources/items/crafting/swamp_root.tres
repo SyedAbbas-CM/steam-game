@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Swamp Root"
+loy_tile_index = 127
+description = "A gnarled root found in damp soil."
+slot_type = 11
+rarity = 0
+buy_price = 12
+sell_value = 4

@@ -7,8 +7,8 @@ script = ExtResource("1_2jbqx")
 id = "a3"
 title = "Snakes Alive"
 level = 34
-location = "aria"
-target_location = "vly1"
+location = "haven"
+target_location = "ashvale"
 start_script = [{
 "cmd": "showDialog",
 "name": "Elder",
@@ -69,7 +69,7 @@ events = [{
 }],
 "type": "kill"
 }, {
-"param": "aria",
+"param": "haven",
 "script": [{
 "attribute": "count-Medusa Hair",
 "cmd": "if",

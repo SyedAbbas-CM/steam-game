@@ -1,0 +1,70 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+commands = [{
+"cmd": "showDialog",
+"name": "Aldric",
+"portrait": 155,
+"text": "Halt. Before you proceed, are you aware of the village bylaws regarding dungeon expeditions? Section 4, paragraph 7 clearly states—",
+"options": [{
+"name": "I'll pass...",
+"script": [{
+"cmd": "showDialog",
+"name": "Aldric",
+"portrait": 155,
+"text": "You'll 'pass'? This is precisely the problem. Everyone does what feels right in the moment. But feelings change. Rules don't. That's what makes them valuable.",
+"options": [{
+"name": "Rules can be wrong",
+"script": [{
+"cmd": "showDialog",
+"name": "Aldric",
+"portrait": 155,
+"text": "Then change them properly! Through reason, not whim. Ask yourself: if EVERY adventurer did what I'm about to do, would the world still work? If not, you shouldn't do it either.",
+"options": [{
+"name": "Any quests?",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "haven"
+}]
+}, {
+"name": "Farewell",
+"script": []
+}]
+}]
+}, {
+"name": "Fair enough",
+"script": [{
+"cmd": "showDialog",
+"name": "Aldric",
+"portrait": 155,
+"text": "A reasonable response. I don't ask you to enjoy rules. I ask you to follow them because they're right, not because they're pleasant. Duty isn't supposed to feel good.",
+"options": [{
+"name": "Farewell",
+"script": []
+}]
+}]
+}]
+}]
+}, {
+"name": "Any quests?",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "haven"
+}]
+}, {
+"name": "Tell me more",
+"script": [{
+"cmd": "showDialog",
+"name": "Aldric",
+"portrait": 155,
+"text": "I keep the peace here because someone must. Not because I enjoy it, not for gold or glory. Because it is my duty. The moment you do the right thing only when it benefits you, it stops being right.",
+"options": [{
+"name": "Noted",
+"script": []
+}]
+}]
+}]
+}]

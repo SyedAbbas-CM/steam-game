@@ -30,6 +30,9 @@ var mutations_acquired: Array[String] = []
 var weapon_id: String = ""
 var companions_used: Array[String] = []
 
+# Events
+var blessing_used: bool = false
+
 func get_duration_seconds() -> float:
 	if end_time > 0:
 		return (end_time - start_time) / 1000.0

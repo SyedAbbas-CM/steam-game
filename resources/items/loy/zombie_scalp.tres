@@ -8,13 +8,18 @@ script = ExtResource("2")
 stat = 0
 flat_bonus = 17.0
 
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 14
+flat_bonus = 5.0
+
 [resource]
 script = ExtResource("1")
 item_name = "Zombie Scalp"
 loy_tile_index = 400
 description = "A top of a zombie head"
 slot_type = 4
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 436
-sell_value = 109
+buy_price = 996
+sell_value = 249

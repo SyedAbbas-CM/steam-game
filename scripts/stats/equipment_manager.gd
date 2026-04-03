@@ -7,7 +7,7 @@ extends Node
 var equipped: Dictionary = {}  # SlotType -> EquipmentItem
 # Inventory bag
 var inventory: Array[EquipmentItem] = []
-const MAX_INVENTORY = 56  # 8x7 grid
+const MAX_INVENTORY = 9999  # effectively unlimited
 
 signal stats_changed
 signal inventory_changed
@@ -43,10 +43,215 @@ func toggle_equip(inv_index: int) -> void:
 	if equipped.has(slot) and equipped[slot] == item:
 		equipped.erase(slot)
 	else:
-		# Equip — if slot already occupied by different item, unequip old one first
+		# Weapons are exclusive — equipping one unequips all other weapon types
+		if EquipmentItem.is_weapon_slot(slot):
+			for ws in [EquipmentItem.SlotType.WEAPON_MELEE, EquipmentItem.SlotType.WEAPON_RANGED, EquipmentItem.SlotType.WEAPON_MAGIC]:
+				equipped.erase(ws)
 		equipped[slot] = item
 	stats_changed.emit()
 	inventory_changed.emit()
+
+signal use_effect_triggered(effect: String)
+
+func use_consumable(inv_index: int) -> bool:
+	if inv_index < 0 or inv_index >= inventory.size():
+		return false
+	var item = inventory[inv_index]
+	if item.slot_type != EquipmentItem.SlotType.CONSUMABLE:
+		return false
+
+	var sfx = get_node_or_null("/root/SFXManager")
+	var vfx = get_node_or_null("/root/VFXManager")
+
+	# Special use effects
+	if item.use_effect != "":
+		inventory.remove_at(inv_index)
+		inventory_changed.emit()
+		var player = get_tree().get_first_node_in_group("player")
+		match item.use_effect:
+			"cure_poison":
+				if player and player.has_node("StatusEffectManager"):
+					player.get_node("StatusEffectManager").remove_all_of_type(StatusEffect.Type.POISONED)
+				if vfx and player:
+					vfx.status_puff(player.global_position, "CURE")
+				if sfx:
+					sfx.play("heal_a", -4.0)
+			"restore_stamina":
+				if player and "stamina" in player and "max_stamina" in player:
+					player.stamina = player.max_stamina
+					if player.has_signal("stamina_changed"):
+						player.stamina_changed.emit(player.stamina)
+				if sfx:
+					sfx.play("heal_a", -4.0)
+			"iron_skin":
+				if player and player.has_node("StatusEffectManager"):
+					player.get_node("StatusEffectManager").apply_buff("armor", 30.0, 5.0)
+				if vfx and player:
+					vfx.shockwave(player.global_position, 16.0, Color(0.8, 0.7, 0.3, 0.5))
+				if sfx:
+					sfx.play("mystical", -4.0)
+			"xp_boost":
+				if player and player.has_node("StatusEffectManager"):
+					player.get_node("StatusEffectManager").apply_buff("xp", 60.0, 0.5)
+				if vfx and player:
+					vfx.gold_sparkle(player.global_position)
+				if sfx:
+					sfx.play("mystical", -4.0)
+			"fire_aoe":
+				if player:
+					_do_flask_aoe(player, "BURNING", 15, 40.0, 3.0, Color(1.0, 0.4, 0.1, 0.7), false)
+			"ice_aoe":
+				if player:
+					_do_flask_aoe(player, "SLOWED", 10, 40.0, 4.0, Color(0.3, 0.5, 1.0, 0.7), true)
+			"poison_aoe":
+				if player:
+					_do_flask_aoe(player, "POISONED", 12, 40.0, 4.0, Color(0.3, 0.9, 0.2, 0.7), false)
+				if vfx and player:
+					vfx.status_puff(player.global_position, "POISON")
+			"heal_cure":
+				if player:
+					player.heal(item.heal_hp)
+					if vfx:
+						vfx.status_puff(player.global_position, "HEAL")
+					if player.has_node("StatusEffectManager"):
+						player.get_node("StatusEffectManager").remove_all_of_type(StatusEffect.Type.POISONED)
+				if sfx:
+					sfx.play("heal_a", -4.0)
+			"speed_boost":
+				if player and player.has_node("StatusEffectManager"):
+					player.get_node("StatusEffectManager").apply_buff("speed", 30.0, 0.25)
+				if vfx and player:
+					vfx.gold_sparkle(player.global_position)
+				if sfx:
+					sfx.play("mystical", -4.0)
+			"stun_aoe":
+				if player:
+					_do_stun_aoe(player, 48.0, 2.0)
+				if sfx:
+					sfx.play("area_effect_a", -3.0)
+			"pushback_aoe":
+				if player:
+					_do_pushback_aoe(player, 48.0, 200.0)
+				if sfx:
+					sfx.play("area_effect_a", -3.0)
+			"stealth_buff":
+				if player:
+					player._sneaking = true
+					if player.has_node("StatusEffectManager"):
+						player.get_node("StatusEffectManager").apply_buff("stealth", 15.0, 50.0)
+				if vfx and player:
+					vfx.status_puff(player.global_position, "STEALTH")
+				if sfx:
+					sfx.play("mystical", -4.0)
+			"berserk":
+				if player and player.has_node("StatusEffectManager"):
+					var sem = player.get_node("StatusEffectManager")
+					sem.apply_buff("damage", 10.0, 1.0)  # +100% dmg
+					sem.apply_buff("speed", 10.0, 0.5)  # +50% speed
+					sem.apply_buff("armor", 10.0, -0.5)  # -50% armor
+				if vfx and player:
+					vfx.shockwave(player.global_position, 20.0, Color(1.0, 0.2, 0.2, 0.6))
+				if sfx:
+					sfx.play("area_effect_a", -2.0)
+			"damage_buff":
+				if player and player.has_node("StatusEffectManager"):
+					player.get_node("StatusEffectManager").apply_buff("damage", 30.0, 0.3)
+				if vfx and player:
+					vfx.status_puff(player.global_position, "POWER")
+				if sfx:
+					sfx.play("mystical", -4.0)
+			"town_portal":
+				use_effect_triggered.emit("town_portal")
+				if sfx:
+					sfx.play("teleport", -2.0, 0.0)
+				return true
+			_:
+				if sfx:
+					sfx.play("heal_a", -4.0)
+		use_effect_triggered.emit(item.use_effect)
+		return true
+
+	# HP/MP healing consumables
+	if item.heal_hp <= 0 and item.heal_mp <= 0:
+		return false
+	var player = get_tree().get_first_node_in_group("player")
+	if not player:
+		return false
+	if item.heal_hp > 0:
+		player.heal(item.heal_hp)
+		if vfx:
+			vfx.status_puff(player.global_position, "HEAL")
+	if item.heal_mp > 0:
+		player.mp = minf(player.mp + item.heal_mp, player.max_mp)
+		player.mp_changed.emit(player.mp)
+		var scene_root = get_tree().current_scene
+		if scene_root:
+			FloatingText.spawn(scene_root, player.global_position + Vector2(0, -4), "+%d MP" % int(item.heal_mp), Color(0.3, 0.5, 1.0))
+	if sfx:
+		sfx.play("heal_a", -4.0)
+	inventory.remove_at(inv_index)
+	inventory_changed.emit()
+	return true
+
+func _do_flask_aoe(player: CharacterBody2D, status: String, damage: int, radius: float, duration: float, color: Color, is_ice: bool) -> void:
+	var ow_scale = 4.0 if get_tree().current_scene.name == "Overworld" else 1.0
+	var actual_radius = radius * ow_scale
+	var sfx = get_node_or_null("/root/SFXManager")
+	var vfx = get_node_or_null("/root/VFXManager")
+	# Damage and apply status to nearby enemies
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	for e in enemies:
+		if not is_instance_valid(e):
+			continue
+		if e.global_position.distance_to(player.global_position) < actual_radius:
+			if e.has_method("take_damage"):
+				e.take_damage(damage)
+			if e.has_method("apply_status"):
+				e.apply_status(status, duration)
+	# VFX
+	if vfx:
+		if is_ice:
+			vfx.frost_ring(player.global_position, actual_radius)
+		else:
+			vfx.shockwave(player.global_position, actual_radius, color)
+		vfx.shake(1.5, 0.12)
+	# SFX
+	if sfx:
+		if is_ice:
+			sfx.play("sorcery", -2.0)
+		else:
+			sfx.play("boom_a", -2.0)
+
+func _do_stun_aoe(player: CharacterBody2D, radius: float, duration: float) -> void:
+	var ow_scale = 4.0 if get_tree().current_scene.name == "Overworld" else 1.0
+	var actual_radius = radius * ow_scale
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	for e in enemies:
+		if not is_instance_valid(e):
+			continue
+		if e.global_position.distance_to(player.global_position) < actual_radius:
+			if e.has_method("apply_status"):
+				e.apply_status("STUNNED", duration)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(player.global_position, actual_radius, Color(1.0, 1.0, 0.3, 0.5))
+		vfx.shake(2.0, 0.15)
+
+func _do_pushback_aoe(player: CharacterBody2D, radius: float, force: float) -> void:
+	var ow_scale = 4.0 if get_tree().current_scene.name == "Overworld" else 1.0
+	var actual_radius = radius * ow_scale
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	for e in enemies:
+		if not is_instance_valid(e):
+			continue
+		var dist = e.global_position.distance_to(player.global_position)
+		if dist < actual_radius:
+			var kb_dir = (e.global_position - player.global_position).normalized()
+			e.velocity = kb_dir * force * ow_scale
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(player.global_position, actual_radius, Color(0.5, 0.7, 1.0, 0.5))
+		vfx.shake(1.5, 0.1)
 
 func is_equipped(item: EquipmentItem) -> bool:
 	for equipped_item in equipped.values():
@@ -115,6 +320,10 @@ func _get_base_value(stat_type: StatModifier.StatType) -> float:
 		StatModifier.StatType.PICKUP_RADIUS: return base_stats.pickup_radius
 		StatModifier.StatType.COOLDOWN_REDUCTION: return base_stats.cooldown_reduction
 		StatModifier.StatType.STEALTH: return base_stats.stealth
+		StatModifier.StatType.MAX_STAMINA: return base_stats.max_stamina
+		StatModifier.StatType.STAMINA_REGEN: return base_stats.stamina_regen
+		StatModifier.StatType.TENACITY: return base_stats.tenacity
+		StatModifier.StatType.THORNS: return base_stats.thorns
 	return 0.0
 
 # Convenience getters
@@ -141,6 +350,36 @@ func get_gold_mult() -> float: return get_stat(StatModifier.StatType.GOLD_MULT)
 func get_pickup_radius() -> float: return get_stat(StatModifier.StatType.PICKUP_RADIUS)
 func get_cooldown_reduction() -> float: return get_stat(StatModifier.StatType.COOLDOWN_REDUCTION)
 func get_stealth() -> float: return get_stat(StatModifier.StatType.STEALTH)
+func get_max_stamina() -> float: return get_stat(StatModifier.StatType.MAX_STAMINA)
+func get_stamina_regen() -> float: return get_stat(StatModifier.StatType.STAMINA_REGEN)
+func get_tenacity() -> float: return clampf(get_stat(StatModifier.StatType.TENACITY), 0.0, 80.0)
+func get_thorns() -> float: return get_stat(StatModifier.StatType.THORNS)
+
+# Total gear score from all equipped items (sum of flat + percent bonuses weighted)
+func get_gear_score() -> int:
+	var score: float = 0.0
+	for item in equipped.values():
+		if not item:
+			continue
+		for mod in item.modifiers:
+			# Flat bonuses: damage counts most, HP next, others less
+			match mod.stat:
+				StatModifier.StatType.ATTACK_DAMAGE:
+					score += mod.flat_bonus * 5.0 + mod.percent_bonus * 20.0
+				StatModifier.StatType.MAX_HP:
+					score += mod.flat_bonus * 0.3 + mod.percent_bonus * 15.0
+				StatModifier.StatType.ARMOR:
+					score += mod.flat_bonus * 2.0 + mod.percent_bonus * 10.0
+				_:
+					score += mod.flat_bonus * 1.0 + mod.percent_bonus * 8.0
+	return int(score)
+
+# Full power level: level + stat points + gear
+func get_power_level() -> int:
+	var base_power: int = 0
+	if level_system:
+		base_power = level_system.get_power_level()
+	return base_power + get_gear_score()
 
 # Returns the primary equipped weapon (melee > ranged > magic priority)
 func get_equipped_weapon() -> EquipmentItem:

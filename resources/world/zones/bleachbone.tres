@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "bleachbone"
+zone_name = "Bleachbone Beach"
+tileset = 224
+width = 42
+height = 17
+world_pos = Vector2i(67, 56)
+dungeon_base = "Bleach-Dungeons"
+description = "A shore littered with whale skeletons and shipwrecks. The sand is white as bone."
+baked_offset = Vector2i(1192, -64)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "tidegate",
+"tx": 22,
+"ty": 19,
+"x": 19,
+"y": 0
+}, {
+"target": "undercroft",
+"tx": 88,
+"ty": 2,
+"x": 30,
+"y": 10
+}])

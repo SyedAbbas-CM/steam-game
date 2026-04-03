@@ -8,13 +8,18 @@ script = ExtResource("2")
 stat = 0
 flat_bonus = 19.0
 
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 11
+flat_bonus = 0.15
+
 [resource]
 script = ExtResource("1")
 item_name = "Centurion Helm"
 loy_tile_index = 490
 description = "An ancient roman helmet"
 slot_type = 3
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 452
-sell_value = 113
+buy_price = 944
+sell_value = 236

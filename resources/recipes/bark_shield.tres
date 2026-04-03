@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CraftingRecipe" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/crafting_recipe.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "bark_shield"
+recipe_name = "Bark Shield"
+recipe_type = "blacksmith"
+ingredients = Array[Dictionary]([{{
+"item_name": "Ancient Bark",
+"count": 3
+}}, {{
+"item_name": "Iron Ore",
+"count": 2
+}}])
+gold_cost = 80
+result_item_path = "res://resources/items/crafted/bark_shield.tres"
+result_count = 1
+required_level = 10

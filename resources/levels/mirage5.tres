@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Mirage5"
+tileset = 0
+chests = 5
+width = 50
+height = 50
+rooms = 30
+min_monsters = 1
+max_monsters = 5
+aggro_chance = 0
+requires_key = true
+legend = "Beholder"
+recommended_level = 34
+monster_pool = [{ "type": "Liche", "chance": 1 }, { "type": "Ghoul", "chance": 1 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 10, "items": [{ "name": "Gold", "chance": 50, "min": 70, "max": 90 }] }]

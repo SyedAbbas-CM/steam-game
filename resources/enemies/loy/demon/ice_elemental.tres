@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Ice Elemental"
 description = "Frozen spirit that blankets the area with spiraling frost shards"
-max_hp = 143
+max_hp = 114
 move_speed = 24.7
 contact_damage = 3
 level = 9

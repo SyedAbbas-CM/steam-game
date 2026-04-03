@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Ogre"
 description = "Dim-witted brute that slams the ground sending shockwaves in all directions"
-max_hp = 202
+max_hp = 162
 move_speed = 20.0
 contact_damage = 5
 level = 8

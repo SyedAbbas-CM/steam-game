@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "gehinnom"
+zone_name = "The Pit of Gehinnom"
+tileset = 0
+width = 152
+height = 76
+world_pos = Vector2i(0, 0)
+dungeon_base = ""
+description = "A cursed sinkhole where demonic whispers rise from impossible depths. The air tastes of copper and ash."
+baked_offset = Vector2i(-99999, -99999)
+baked_scale = 1
+exits = Array[Dictionary]([{
+"target": "ashglade",
+"tx": 0,
+"ty": 0,
+"x": 0,
+"y": 0
+}])
+npcs = Array[Dictionary]([])
+signs = Array[Dictionary]([])
+spawns = Array[Dictionary]([])
+houses = Array[Dictionary]([])

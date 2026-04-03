@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "briarvale-weapon"
+shop_type = "weapon"
+shop_name = "Yan"
+portrait = 201
+title = "Yan's Furnace"
+welcome = "Welcome to weapons by the sea! / /  What can I do for you today?"
+nomoney = "First find money, then come back!"
+buy_text = "Much appreciated!"
+sell_text = "A fair price I think you'll agree"
+stock = [{ "item_name": "Dagger", "required_quest": "" }, { "item_name": "Sword", "required_quest": "" }, { "item_name": "Bow", "required_quest": "" }, { "item_name": "Boots", "required_quest": "" }, { "item_name": "Robes", "required_quest": "" }, { "item_name": "Staff", "required_quest": "" }, { "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Ridged Dagger", "required_quest": "" }, { "item_name": "Wooden Shield", "required_quest": "" }, { "item_name": "Leather Armor", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Shimmering Shield", "required_quest": "" }, { "item_name": "Fire Arrow", "required_quest": "" }, { "item_name": "Goif Gloves", "required_quest": "q7" }]

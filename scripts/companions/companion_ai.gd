@@ -22,7 +22,8 @@ func _ready() -> void:
 	collision_layer = 1
 	collision_mask = 0
 
-	player = get_tree().get_first_node_in_group("player")
+	if is_inside_tree():
+		player = get_tree().get_first_node_in_group("player")
 
 	shoot_timer.one_shot = true
 	shoot_timer.timeout.connect(func(): can_shoot = true)
@@ -36,7 +37,7 @@ func setup(def: CompanionDefinition, index: int) -> void:
 	shoot_timer.wait_time = def.attack_speed
 
 func _physics_process(_delta: float) -> void:
-	if not is_instance_valid(player):
+	if not is_inside_tree() or not is_instance_valid(player):
 		return
 
 	match current_state:
@@ -127,7 +128,7 @@ func _shoot_at(enemy: Node2D) -> void:
 	can_shoot = false
 	shoot_timer.start()
 
-	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var bullets_container = get_tree().get_first_node_in_group("bullets") if is_inside_tree() else null
 	if not bullets_container:
 		return
 
@@ -139,6 +140,9 @@ func _shoot_at(enemy: Node2D) -> void:
 	bullet.speed = 120.0
 	bullet.damage = definition.damage
 	bullets_container.add_child(bullet)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("shoot_a", -8.0, 0.15)
 
 func _find_nearest_enemy() -> Node2D:
 	var enemies = get_tree().get_nodes_in_group("enemy")
@@ -159,5 +163,10 @@ func take_damage(amount: int) -> void:
 	sprite.modulate = Color.RED
 	var tween = create_tween()
 	tween.tween_property(sprite, "modulate", Color.WHITE, 0.15)
+	var sfx = get_node_or_null("/root/SFXManager")
 	if hp <= 0:
+		if sfx:
+			sfx.play("fall", -4.0, 0.1)
 		queue_free()
+	elif sfx:
+		sfx.play("impact_b", -8.0, 0.15)

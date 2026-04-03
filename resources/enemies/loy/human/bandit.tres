@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Bandit"
 description = "Seasoned outlaw with a twin crossbow, keeps distance and fires spreads"
-max_hp = 22
+max_hp = 18
 move_speed = 25.4
 contact_damage = 2
 level = 4

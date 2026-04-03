@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Squib"
 description = "A small spiked demon ball"
-max_hp = 210
+max_hp = 168
 move_speed = 27.1
 contact_damage = 5
 level = 17

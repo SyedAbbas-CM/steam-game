@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CraftingRecipe" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/crafting_recipe.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "venom_bow"
+recipe_name = "Venom Bow"
+recipe_type = "blacksmith"
+ingredients = Array[Dictionary]([{{
+"item_name": "Venom Sac",
+"count": 2
+}}, {{
+"item_name": "Leather Scraps",
+"count": 3
+}}])
+gold_cost = 200
+result_item_path = "res://resources/items/crafted/venom_bow.tres"
+result_count = 1
+required_level = 5

@@ -1,0 +1,193 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq10"
+title = "The Merchant's Deal"
+summary = "Follow the crates to the pirate city. The guild master spreads Tide artifacts for power. Join or fight."
+level = 14
+location = "cliffs"
+target_location = "saltmere"
+prerequisite = "mq09"
+properties = [{
+"index": 0,
+"name": "Informants Found",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Head to Tor'Kaan.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 0,
+"text": "The crates lead east to the pirate city. Someone there is distributing Tide artifacts for profit."
+}]
+events = [{
+"param": "Dock Worker",
+"script": [{
+"attribute": "session-mq10-0",
+"cmd": "if",
+"compare": "3",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Dock Worker",
+"options": [{
+"name": "Thanks.",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}],
+"portrait": 0,
+"text": "The crates? Guild Master Renzo. He pays well for silence. His warehouse is by the east dock."
+}]
+}],
+"type": "activate"
+}, {
+"param": "Tavern Keeper",
+"script": [{
+"attribute": "session-mq10-0",
+"cmd": "if",
+"compare": "3",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Tavern Keeper",
+"options": [{
+"name": "Change how?",
+"script": [{
+"cmd": "showDialog",
+"name": "Tavern Keeper",
+"options": [{
+"name": "Got it.",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}],
+"portrait": 0,
+"text": "Quiet. Obedient. Like those villagers you hear about up north."
+}]
+}],
+"portrait": 0,
+"text": "Renzo's been buying strange artifacts from ships no one recognizes. Sells them to anyone with coin. People who buy them... change."
+}]
+}],
+"type": "activate"
+}, {
+"param": "Smuggler",
+"script": [{
+"attribute": "session-mq10-0",
+"cmd": "if",
+"compare": "3",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Smuggler",
+"options": [{
+"name": "The fragment.",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}]
+}],
+"portrait": 0,
+"text": "Renzo doesn't know what he's selling. Or maybe he does and doesn't care. Either way, he's got something in his vault — glows like your arm does."
+}]
+}],
+"type": "activate"
+}, {
+"param": "saltmere",
+"script": [{
+"attribute": "session-mq10-0",
+"cmd": "if",
+"compare": "2",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Guild Master Renzo",
+"options": [{
+"name": "Never.",
+"script": [{
+"cmd": "set",
+"id": "mq10",
+"index": "1",
+"value": "2"
+}, {
+"cmd": "showDialog",
+"name": "Guild Master Renzo",
+"options": [{
+"name": "So be it.",
+"script": [{
+"cmd": "getExp",
+"value": "1000"
+}, {
+"cmd": "getItem",
+"count": "1",
+"name": "Key Fragment"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "Then you'll take it from my cold hands."
+}]
+}, {
+"name": "What's your offer?",
+"script": [{
+"cmd": "set",
+"id": "mq10",
+"index": "1",
+"value": "1"
+}, {
+"cmd": "showDialog",
+"name": "Guild Master Renzo",
+"options": [{
+"name": "Deal.",
+"script": [{
+"cmd": "getExp",
+"value": "600"
+}, {
+"cmd": "getItem",
+"count": "2000",
+"name": "Gold"
+}, {
+"cmd": "getItem",
+"count": "1",
+"name": "Key Fragment"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "Smart. Take the fragment — and 2000 gold. All I ask is you forget what you saw here."
+}]
+}],
+"portrait": 0,
+"text": "So you've been asking questions. I know what you want. I'll give it to you — for a price. Join me. The Tide is coming regardless. Might as well profit."
+}]
+}, {
+"attribute": "session-mq10-0",
+"cmd": "if",
+"compare": "3",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Keep looking.",
+"script": []
+}],
+"portrait": 0,
+"text": "You need to find informants in the city. Ask around the docks, tavern, and back alleys."
+}]
+}],
+"type": "quest"
+}]

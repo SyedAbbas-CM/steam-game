@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "witchglade"
+zone_name = "The Witchglade"
+tileset = 112
+world_pos = Vector2i(112, 30)
+dungeon_base = "Witch-Dungeons"
+description = "A ritual clearing deep in the moors where a coven once gathered. Mushroom rings mark the old circles."
+baked_offset = Vector2i(-680, -688)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "bleakmoor",
+"tx": 24,
+"ty": 19,
+"x": 0,
+"y": 11
+}])
+npcs = Array[Dictionary]([{
+"file": "scripts/notch.xml",
+"name": "Notch",
+"portrait": 509,
+"tile": 509,
+"type": "scriptfile",
+"x": 18,
+"y": 10
+}])
+spawns = Array[Dictionary]([{
+"chance": 75,
+"type": "Nongan Ninja",
+"x": 2,
+"y": 2
+}, {
+"chance": 75,
+"type": "Nongan Ninja Elite",
+"x": 2,
+"y": 2
+}])

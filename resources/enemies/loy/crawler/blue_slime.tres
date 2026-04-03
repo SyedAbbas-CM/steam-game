@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Blue Slime"
 description = "A squishy blue blob"
-max_hp = 9
+max_hp = 5
 move_speed = 28.9
 contact_damage = 1
 level = 1

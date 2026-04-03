@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Frost Skull"
 description = "Frozen floating skull"
-max_hp = 37
+max_hp = 30
 move_speed = 23.4
 contact_damage = 5
 level = 12

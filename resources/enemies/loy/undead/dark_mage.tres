@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Dark Mage"
 description = "A powerful spell caster"
-max_hp = 33
+max_hp = 26
 move_speed = 23.8
 contact_damage = 5
 level = 6

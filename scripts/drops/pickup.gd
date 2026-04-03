@@ -33,7 +33,15 @@ func _ready() -> void:
 			sprite.texture = ImageTexture.create_from_image(img)
 
 	# Scale down — sprites are 32x32, we want them small on the ground
-	sprite.scale = Vector2(0.15, 0.15)
+	# Overworld uses 32px tiles (4x dungeon), so pickups need to be bigger
+	var in_overworld = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var s = 0.3 if in_overworld else 0.15
+	sprite.scale = Vector2(s, s)
+	# Scale collision shape for overworld too
+	if in_overworld:
+		var col = $CollisionShape2D
+		if col:
+			col.scale = Vector2(2, 2)
 
 	body_entered.connect(_on_body_entered)
 
@@ -45,6 +53,12 @@ func _on_body_entered(body: Node2D) -> void:
 		var gm = body.get_node_or_null("/root/GameManager")
 		if gm:
 			gm.add_gold(gold_amount)
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("coin", -4.0, 0.15)
+		var vfx = get_node_or_null("/root/VFXManager")
+		if vfx:
+			vfx.gold_sparkle(global_position)
 		queue_free()
 		return
 
@@ -52,4 +66,7 @@ func _on_body_entered(body: Node2D) -> void:
 		var equip_mgr = body.get_node_or_null("EquipmentManager") as EquipmentManager
 		if equip_mgr:
 			if equip_mgr.add_to_inventory(item):
+				var sfx = get_node_or_null("/root/SFXManager")
+				if sfx:
+					sfx.play("collect_a", -3.0, 0.1)
 				queue_free()

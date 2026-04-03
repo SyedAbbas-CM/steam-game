@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://b1kdb2ot841bc"
+
+[deps]
+
+files=["res://resources/items/loy/items.item.translation", "res://resources/items/loy/items.description.translation", "res://resources/items/loy/items.slot.translation", "res://resources/items/loy/items.rarity.translation", "res://resources/items/loy/items.buy.translation", "res://resources/items/loy/items.sell.translation", "res://resources/items/loy/items.loy.translation", "res://resources/items/loy/items.bullet.translation", "res://resources/items/loy/items.weapon.translation", "res://resources/items/loy/items.weapon.translation", "res://resources/items/loy/items.ability.translation", "res://resources/items/loy/items.heal.translation", "res://resources/items/loy/items.heal.translation", "res://resources/items/loy/items.use.translation", "res://resources/items/loy/items.MAX_HP.translation", "res://resources/items/loy/items.ATTACK.translation", "res://resources/items/loy/items.ARMOR.translation", "res://resources/items/loy/items.MOVE.translation", "res://resources/items/loy/items.ATTACK.translation", "res://resources/items/loy/items.BULLET.translation", "res://resources/items/loy/items.BULLET.translation", "res://resources/items/loy/items.PIERCE.translation", "res://resources/items/loy/items.en.translation", "res://resources/items/loy/items.MAX_MP.translation", "res://resources/items/loy/items.HP.translation", "res://resources/items/loy/items.MP.translation", "res://resources/items/loy/items.LUCK.translation", "res://resources/items/loy/items.CRIT.translation", "res://resources/items/loy/items.DODGE.translation", "res://resources/items/loy/items.XP.translation", "res://resources/items/loy/items.COOLDOWN.translation", "res://resources/items/loy/items.STEALTH.translation"]
+
+source_file="res://resources/items/loy/items.csv"
+dest_files=["res://resources/items/loy/items.item.translation", "res://resources/items/loy/items.description.translation", "res://resources/items/loy/items.slot.translation", "res://resources/items/loy/items.rarity.translation", "res://resources/items/loy/items.buy.translation", "res://resources/items/loy/items.sell.translation", "res://resources/items/loy/items.loy.translation", "res://resources/items/loy/items.bullet.translation", "res://resources/items/loy/items.weapon.translation", "res://resources/items/loy/items.weapon.translation", "res://resources/items/loy/items.ability.translation", "res://resources/items/loy/items.heal.translation", "res://resources/items/loy/items.heal.translation", "res://resources/items/loy/items.use.translation", "res://resources/items/loy/items.MAX_HP.translation", "res://resources/items/loy/items.ATTACK.translation", "res://resources/items/loy/items.ARMOR.translation", "res://resources/items/loy/items.MOVE.translation", "res://resources/items/loy/items.ATTACK.translation", "res://resources/items/loy/items.BULLET.translation", "res://resources/items/loy/items.BULLET.translation", "res://resources/items/loy/items.PIERCE.translation", "res://resources/items/loy/items.en.translation", "res://resources/items/loy/items.MAX_MP.translation", "res://resources/items/loy/items.HP.translation", "res://resources/items/loy/items.MP.translation", "res://resources/items/loy/items.LUCK.translation", "res://resources/items/loy/items.CRIT.translation", "res://resources/items/loy/items.DODGE.translation", "res://resources/items/loy/items.XP.translation", "res://resources/items/loy/items.COOLDOWN.translation", "res://resources/items/loy/items.STEALTH.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

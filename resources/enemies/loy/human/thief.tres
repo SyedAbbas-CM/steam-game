@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Thief"
 description = "Sneaky rogue that vanishes into shadows then backstabs from the dark"
-max_hp = 16
+max_hp = 13
 move_speed = 25.1
 contact_damage = 2
 level = 3

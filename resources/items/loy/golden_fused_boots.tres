@@ -1,17 +1,22 @@
-[gd_resource type="Resource" script_class="EquipmentItem" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
 
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
-stat = 2
-flat_bonus = 2.0
+stat = 0
+flat_bonus = 10.0
 
 [sub_resource type="Resource" id="mod_1"]
 script = ExtResource("2")
-stat = 0
-flat_bonus = 8.0
+stat = 2
+flat_bonus = 2.0
+
+[sub_resource type="Resource" id="mod_2"]
+script = ExtResource("2")
+stat = 1
+flat_bonus = 0.15
 
 [resource]
 script = ExtResource("1")
@@ -19,7 +24,7 @@ item_name = "Golden Fused Boots"
 loy_tile_index = 322
 description = "Magical golden boots"
 slot_type = 6
-modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])
 rarity = 2
-buy_price = 380
-sell_value = 95
+buy_price = 818
+sell_value = 204

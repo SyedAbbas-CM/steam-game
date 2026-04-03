@@ -1,0 +1,97 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "briarvale"
+zone_name = "Briarvale"
+tileset = 112
+width = 52
+height = 20
+world_pos = Vector2i(46, 46)
+dungeon_base = "Briar-Dungeons"
+dungeon_count = 3
+description = "A fortified town deep within the forest, protected by walls of living thorns. Its people are suspicious of outsiders."
+baked_offset = Vector2i(372, -172)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "rotgrove",
+"tx": 48,
+"ty": 18,
+"x": 0,
+"y": 11
+}])
+npcs = Array[Dictionary]([{
+"name": "Zeng",
+"portrait": 200,
+"tile": 184,
+"type": "elder",
+"x": 7,
+"y": 4
+}, {
+"name": "Yan",
+"portrait": 201,
+"tile": 185,
+"shop": "briarvale-weapon",
+"type": "shop",
+"x": 18,
+"y": 3
+}, {
+"name": "Wang",
+"portrait": 198,
+"tile": 182,
+"shop": "briarvale-inn",
+"type": "shop",
+"x": 8,
+"y": 16
+}, {
+"name": "Tyan",
+"portrait": 197,
+"tile": 181,
+"shop": "briarvale-magic",
+"type": "shop",
+"x": 25,
+"y": 16
+}, {
+"message": "Arrrrr!",
+"name": "Pirate",
+"portrait": 221,
+"tile": 220,
+"type": "message",
+"x": 43,
+"y": 10
+}, {
+"message": "What do you want peasant? Begone, I'm training to be a great wizard like the mighty Legomon",
+"name": "Chemerson",
+"portrait": 312,
+"tile": 312,
+"type": "message",
+"x": 14,
+"y": 12
+}, {
+"file": "scripts/gomb-captain.xml",
+"name": "Captain",
+"portrait": 223,
+"tile": 222,
+"type": "scriptfile",
+"x": 44,
+"y": 12
+}, {
+"file": "scripts/scott.xml",
+"name": "Skoticus",
+"portrait": 283,
+"tile": 282,
+"type": "scriptfile",
+"x": 14,
+"y": 15
+}])
+signs = Array[Dictionary]([{
+"message": "To Rotgrove",
+"x": 1,
+"y": 10
+}, {
+"message": "Wait for Passage",
+"x": 30,
+"y": 9
+}])

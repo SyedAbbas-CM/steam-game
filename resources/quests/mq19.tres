@@ -1,0 +1,62 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq19"
+title = "Echoes"
+summary = "Return to Aria. The Healer sees your brand has changed. The Elder finally speaks the truth."
+level = 22
+location = "hellgate"
+target_location = "haven"
+prerequisite = "mq18"
+start_script = [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "Home.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 163,
+"text": "It's done. The Tide recedes. Go home. The healer in Aria will want to see you."
+}]
+events = [{
+"param": "haven",
+"script": [{
+"cmd": "showDialog",
+"name": "Healer Maren",
+"options": [{
+"name": "What does that mean?",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "I'm from... the other side?",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Thank you.",
+"script": [{
+"cmd": "getExp",
+"value": "2000"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 147,
+"text": "You were. Now you're from here. And here is safe because of you."
+}]
+}],
+"portrait": 147,
+"text": "It means you survived what no one else could. Because you're not from here. Not originally. You came through the seal as a child — sent from the old kingdom before it fell. The brand was your passage."
+}]
+}],
+"portrait": 160,
+"text": "Your brand... it's changed. It doesn't burn anymore, does it? It's silver now."
+}],
+"type": "zone_enter"
+}]

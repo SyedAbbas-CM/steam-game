@@ -27,7 +27,7 @@ commands = [{
 "cmd": "showDialog",
 "name": "Guard",
 "portrait": 149,
-"text": "Wild beasts, orc raiders, and worse. The wilds of Yore are no place for the unprepared. Train in the dungeons below town first.",
+"text": "Wild beasts, orc raiders, and worse. The wilds of Ashenmoor are no place for the unprepared. Train in the dungeons below town first.",
 "options": [{
 "name": "I'll train harder",
 "script": []
@@ -59,7 +59,7 @@ commands = [{
 "cmd": "showDialog",
 "name": "Guard",
 "portrait": 149,
-"text": "Farmlands to the east, the Valley of Bones to the north. Beyond that, orc territory and the frozen wastes. Stick to the roads when you can.",
+"text": "Farmlands to the east, the Ashvale of Bones to the north. Beyond that, orc territory and the frozen wastes. Stick to the roads when you can.",
 "options": [{
 "name": "Thanks for the warning",
 "script": [{

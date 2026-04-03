@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Hydra"
 description = "Multi-headed monster that vomits walls of projectiles and summons spawn"
-max_hp = 244
+max_hp = 195
 move_speed = 34.8
 contact_damage = 7
 level = 50

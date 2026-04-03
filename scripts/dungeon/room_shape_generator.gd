@@ -25,6 +25,10 @@ static func generate_shape(shape: RoomData.RoomShape) -> Dictionary:
 			return _l_shape(false, false)
 		RoomData.RoomShape.IRREGULAR:
 			return _irregular()
+		RoomData.RoomShape.TINY:
+			return _rect(randi_range(7, 9), randi_range(7, 9))
+		RoomData.RoomShape.ARENA:
+			return _rect(randi_range(23, 25), randi_range(19, 23))
 		_:
 			return _rect(randi_range(13, 19), randi_range(11, 17))
 

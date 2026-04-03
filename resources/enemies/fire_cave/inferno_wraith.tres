@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Inferno Wraith"
+description = "A ghostly fire spirit that phases through walls and launches homing fireballs"
+max_hp = 56
+move_speed = 24.0
+contact_damage = 3
+level = 10
+kingdom = "demon"
+size_class = 0
+hostile = true
+attack_type = 34
+attack_damage = 6
+attack_speed = 2.5
+bullet_speed = 55
+bullet_count = 4
+preferred_distance = 50.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 100.0
+ignores_terrain = true
+use_loy_sprite = true
+loy_tile_index = 461
+sprite_color = Color(1.0, 0.5, 0.3, 0.8)
+xp_value = 50
+score_value = 100

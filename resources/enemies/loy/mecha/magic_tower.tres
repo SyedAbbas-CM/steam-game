@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Magic Tower"
 description = "Fireball firing installation"
-max_hp = 349
+max_hp = 279
 move_speed = 15.7
 contact_damage = 5
 level = 1

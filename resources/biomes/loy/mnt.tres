@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="DungeonBiome" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/demon/devil.tres" id="2"]
@@ -6,12 +6,20 @@
 [ext_resource type="Resource" path="res://resources/enemies/loy/demon/imp.tres" id="4"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/orc/kobold.tres" id="5"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/orc/rock_troll.tres" id="6"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/ettin.tres" id="7"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/ettin_guard.tres" id="8"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/orc/ettin_mage.tres" id="9"]
+[ext_resource type="Resource" path="res://resources/enemies/mountain/mountain_troll.tres" id="10"]
+[ext_resource type="Resource" path="res://resources/enemies/mountain/goblin_shaman.tres" id="11"]
+[ext_resource type="Resource" path="res://resources/enemies/mountain/crystal_golem.tres" id="12"]
+[ext_resource type="Resource" path="res://resources/enemies/mountain/mine_bat.tres" id="13"]
 
 [resource]
 script = ExtResource("1")
 biome_name = "Mnt Dungeons"
+base_difficulty = 10
 theme = "red"
-enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5")]
+enemy_pool = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12"), ExtResource("13")]
 liquid_type = "lava"
 hazard_damage = 1
 min_floor = 1

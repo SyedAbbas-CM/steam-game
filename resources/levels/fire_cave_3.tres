@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "FireCave-3"
+tileset = 56
+chests = 5
+width = 55
+height = 45
+rooms = 28
+min_monsters = 5
+max_monsters = 8
+aggro_chance = 45
+requires_key = true
+legend = "Fire Beast"
+recommended_level = 20
+monster_pool = [{ "type": "Fire Elemental", "chance": 4 }, { "type": "Devil", "chance": 4 }, { "type": "Fire Empling", "chance": 3 }, { "type": "Fire Ifrit", "chance": 3 }, { "type": "Flariangan", "chance": 3 }, { "type": "Inferno Wraith", "chance": 3 }, { "type": "Pyroclast", "chance": 2 }, { "type": "Magma Golem", "chance": 3 }, { "type": "Lava Serpent", "chance": 3 }, { "type": "Volcanic Worm", "chance": 2 }, { "type": "Ash Phantom", "chance": 3 }, { "type": "Blazing Charger", "chance": 3 }, { "type": "Magma Slinger", "chance": 3 }, { "type": "Fire Giant", "chance": 2 }, { "type": "Fire Ninja", "chance": 2 }, { "type": "Flame Ninja Elite", "chance": 2 }, { "type": "Imp Warrior", "chance": 2 }, { "type": "Imp Witch", "chance": 2 }, { "type": "Lava Lurker", "chance": 2 }, { "type": "Fire Spitter", "chance": 2 }, { "type": "Magma Mine Layer", "chance": 2 }]
+fixed_monsters = [{ "type": "Fire Beast", "count": 1 }, { "type": "Hellfire Sentinel", "count": 2 }, { "type": "Infernal Gatekeeper", "count": 1 }]
+chest_loot = [{ "min_items": 2, "max_items": 5, "trap_chance": 20, "items": [{ "name": "Big Red Potion", "chance": 3, "min": 1, "max": 2 }, { "name": "Gold", "chance": 5, "min": 200, "max": 500 }, { "name": "Elixir", "chance": 1, "min": 1, "max": 1 }] }]

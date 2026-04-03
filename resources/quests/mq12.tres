@@ -1,0 +1,56 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq12"
+title = "The The Shattered Shrine of Thorns"
+summary = "Clear the corrupted shrine in Paititi's jungle dungeon. Kill the Tide-corrupted treant."
+level = 15
+location = "cenneth"
+target_location = "feverjungle"
+prerequisite = "mq11"
+start_script = [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "I'll handle it.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 163,
+"text": "The shrine in the jungle has been consumed by corruption. A great tree guardian turned against its purpose. Destroy it and cleanse the shrine."
+}]
+events = [{
+"param": "feverjungle",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "It's done.",
+"script": [{
+"cmd": "showDialog",
+"name": "Guardian of Paititi",
+"options": [{
+"name": "Thank you.",
+"script": [{
+"cmd": "getExp",
+"value": "1000"
+}, {
+"cmd": "increment",
+"index": "0"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "The shrine breathes again. I will join the ritual. Tell Elowen the jungle stands with her."
+}]
+}],
+"portrait": 0,
+"text": "The corrupted treant falls, and the black vines recede. Light returns to the shrine. The Guardian of Paititi appears from the shadows."
+}],
+"type": "boss_killed"
+}]

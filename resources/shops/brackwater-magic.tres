@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "brackwater-magic"
+shop_type = "magic"
+shop_name = "Caresh"
+portrait = 205
+title = "Hallowed Light"
+welcome = "Welcome magician, what can I get you?"
+nomoney = "No gold? I can recommend you kill evil to earn it!"
+buy_text = "A powerful item you have there!"
+sell_text = "Hmm, not sure what that is, definitely worth the cash!"
+stock = [{ "item_name": "Town Portal", "required_quest": "" }, { "item_name": "Magic Missile", "required_quest": "" }, { "item_name": "Red Potion", "required_quest": "" }, { "item_name": "Blue Potion", "required_quest": "" }, { "item_name": "Purple Potion", "required_quest": "" }, { "item_name": "Turq Potion", "required_quest": "" }, { "item_name": "Orange Potion", "required_quest": "" }, { "item_name": "Green Potion", "required_quest": "" }, { "item_name": "Aqua Potion", "required_quest": "" }, { "item_name": "Gold Potion", "required_quest": "" }, { "item_name": "Pale Potion", "required_quest": "" }]

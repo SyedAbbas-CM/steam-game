@@ -1,0 +1,59 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "windhold"
+zone_name = "Windhold"
+tileset = 240
+world_pos = Vector2i(106, 20)
+dungeon_base = "Wind-Dungeons"
+dungeon_count = 5
+description = "An isolated clifftop settlement battered by constant gales. Its people are hardy and unwelcoming."
+baked_offset = Vector2i(-828, -840)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "bleakmoor",
+"tx": 6,
+"ty": 0,
+"x": 13,
+"y": 24
+}])
+npcs = Array[Dictionary]([{
+"name": "Ponzar",
+"portrait": 145,
+"tile": 428,
+"type": "elder",
+"x": 20,
+"y": 13
+}, {
+"name": "Chow",
+"portrait": 419,
+"tile": 419,
+"shop": "windhold-weapon",
+"type": "shop",
+"x": 4,
+"y": 11
+}, {
+"name": "Kun",
+"portrait": 421,
+"tile": 421,
+"shop": "windhold-inn",
+"type": "shop",
+"x": 4,
+"y": 21
+}, {
+"name": "Famni Chat",
+"portrait": 427,
+"tile": 427,
+"shop": "windhold-magic",
+"type": "shop",
+"x": 20,
+"y": 20
+}])
+signs = Array[Dictionary]([{
+"message": "The Hall of Kings",
+"x": 13,
+"y": 7
+}])

@@ -8,7 +8,7 @@ id = "sq2"
 title = "Arnie's Challenge"
 summary = "Arnie wants proof of your fighting skill. Kill 8 Ghouls to earn his respect and access to better gear."
 level = 6
-location = "aria"
+location = "haven"
 properties = [{
 "index": 0,
 "name": "Ghouls Killed",

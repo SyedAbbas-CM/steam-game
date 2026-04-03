@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Mazor"
 description = "Evil wizard"
-max_hp = 186
+max_hp = 149
 move_speed = 28.4
 contact_damage = 5
 level = 14

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "stone_toss"
+spell_name = "Stone Toss"
+description = "Throw a stone to distract enemies and trigger traps. 2 charges, 20s per charge."
+effect_type = 8
+delivery = 0
+magnitude = 0
+duration = 0.0
+mp_cost = 0.0
+cooldown = 20.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

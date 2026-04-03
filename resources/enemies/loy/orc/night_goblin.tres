@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Night Goblin"
 description = "A member of the goblin dark order"
-max_hp = 280
+max_hp = 224
 move_speed = 23.6
 contact_damage = 5
 level = 20

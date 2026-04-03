@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Roller"
 description = "An evil mechanical beast"
-max_hp = 349
+max_hp = 279
 move_speed = 20.5
 contact_damage = 5
 level = 17

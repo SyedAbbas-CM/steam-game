@@ -6,6 +6,13 @@ extends Node
 var bullet_scene: PackedScene
 var equipment_manager: EquipmentManager
 var can_shoot: bool = true
+var fire_rate_mult: float = 1.0  # set by player for dagger rapid mode
+var crit_bonus: float = 0.0  # extra crit chance from abilities
+var damage_mult: float = 1.0  # set by player for aimed mode (crossbow)
+
+# Pattern cache: weapon_type → WeaponPattern instance
+var _pattern_cache: Dictionary = {}
+var _default_pattern: WeaponPattern
 
 @onready var cooldown_timer: Timer = Timer.new()
 
@@ -16,10 +23,52 @@ func _ready() -> void:
 	add_child(cooldown_timer)
 
 	if not weapon_pattern:
-		weapon_pattern = WeaponPattern.new()
+		weapon_pattern = SpreadPattern.new()
+	_default_pattern = weapon_pattern
 
 func setup(equip_mgr: EquipmentManager) -> void:
 	equipment_manager = equip_mgr
+	update_pattern_for_weapon()
+
+## Switch weapon_pattern based on the currently equipped weapon's weapon_type.
+func update_pattern_for_weapon() -> void:
+	if not equipment_manager:
+		return
+	var weapon = equipment_manager.get_equipped_weapon()
+	if not weapon:
+		weapon_pattern = _default_pattern
+		return
+	var wtype = weapon.get_weapon_type()
+	if wtype == "":
+		weapon_pattern = _default_pattern
+		return
+	if _pattern_cache.has(wtype):
+		weapon_pattern = _pattern_cache[wtype]
+		return
+	var pattern: WeaponPattern
+	match wtype:
+		"sword", "club", "short_bow", "staff":
+			pattern = SpreadPattern.new()
+		"dagger":
+			pattern = BurstPattern.new()
+		"axe":
+			pattern = ShotgunPattern.new()
+		"hammer":
+			pattern = MeteorPattern.new()
+		"flail":
+			pattern = BoomerangPattern.new()
+		"spear":
+			pattern = TridentPattern.new()
+		"throwing":
+			pattern = ScatterPattern.new()
+		"bow":
+			pattern = ParallelPattern.new()
+		"crossbow":
+			pattern = RailgunPattern.new()
+		_:
+			pattern = SpreadPattern.new()
+	_pattern_cache[wtype] = pattern
+	weapon_pattern = pattern
 
 func try_shoot(origin: Vector2, aim_direction: Vector2) -> void:
 	if not can_shoot or weapon_pattern == null or equipment_manager == null:
@@ -29,14 +78,36 @@ func try_shoot(origin: Vector2, aim_direction: Vector2) -> void:
 	var cooldown = weapon_pattern.cooldown_override
 	if cooldown <= 0.0:
 		cooldown = equipment_manager.get_attack_speed()
-	cooldown_timer.wait_time = maxf(cooldown, 0.05)
+	# Apply fire_rate buff from status effects (e.g. Battle Cry)
+	var total_fire_mult = fire_rate_mult
+	var p = get_parent()
+	if p and p.get("status_effects") and p.status_effects.has_method("get_buff_multiplier"):
+		total_fire_mult *= p.status_effects.get_buff_multiplier("fire_rate")
+	cooldown_timer.wait_time = maxf(cooldown / total_fire_mult, 0.05)
 	cooldown_timer.start()
 
 	var fire_data = weapon_pattern.get_fire_data(aim_direction, equipment_manager)
 
+	if not is_inside_tree():
+		return
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	if not bullets_container:
 		return
+
+	# SFX: fire sound based on weapon type
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		var weapon = equipment_manager.get_equipped_weapon()
+		if weapon:
+			match weapon.slot_type:
+				EquipmentItem.SlotType.WEAPON_MELEE:
+					sfx.play("swing", -6.0, 0.1)
+				EquipmentItem.SlotType.WEAPON_RANGED:
+					sfx.play("shoot_a", -6.0, 0.1)
+				EquipmentItem.SlotType.WEAPON_MAGIC:
+					sfx.play("spell_a", -6.0, 0.1)
+				_:
+					sfx.play("shoot_a", -6.0, 0.1)
 
 	for data in fire_data:
 		if data["delay"] > 0.0:
@@ -57,10 +128,20 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	bullet.is_player_bullet = true
 	bullet.speed = equipment_manager.get_bullet_speed() * data["speed_mult"]
 	var base_damage = equipment_manager.get_damage()
+	# Apply damage_mult (e.g. crossbow aimed mode)
+	if damage_mult != 1.0:
+		base_damage = int(base_damage * damage_mult)
+	# Apply damage buff from status effects (e.g. Battle Cry)
+	var p = get_parent()
+	if p and p.get("status_effects") and p.status_effects.has_method("get_buff_multiplier"):
+		base_damage = int(base_damage * p.status_effects.get_buff_multiplier("damage"))
+	# Per-bullet damage split from pattern (e.g. shotgun pellets share total damage)
+	if data.has("damage_mult"):
+		base_damage = maxi(1, int(base_damage * data["damage_mult"]))
 
 	# Crit roll: chance = luck / 2 %
 	var luck = equipment_manager.get_luck()
-	var crit_chance = luck / 2.0
+	var crit_chance = luck / 2.0 + crit_bonus
 	if crit_chance > 0 and randf() * 100.0 < crit_chance:
 		bullet.is_crit = true
 		bullet.damage = int(base_damage * equipment_manager.get_crit_damage())
@@ -68,6 +149,9 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 		bullet.damage = base_damage
 
 	bullet.pierce_count = equipment_manager.get_pierce_count()
+	# Pattern-specified pierce bonus (e.g. spear trident center bullet)
+	if data.has("pierce"):
+		bullet.pierce_count += data["pierce"]
 	bullet.lifetime = equipment_manager.get_bullet_lifetime()
 
 	# Apply weapon-specific bullet sprite and range
@@ -75,7 +159,12 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	var wrange = equipment_manager.get_weapon_range()
 	if wrange > 0.0:
 		# Convert range to lifetime: lifetime = range / speed (in seconds)
-		bullet.lifetime = wrange / maxf(bullet.speed, 1.0) * 100.0
+		# In dungeon (8px tiles) scale is 4x smaller than overworld (32px tiles)
+		var range_scale = 1.0
+		var player = equipment_manager.get_parent()
+		if player and player.get("in_dungeon"):
+			range_scale = 0.25
+		bullet.lifetime = wrange * range_scale / maxf(bullet.speed, 1.0) * 100.0
 
 	# Apply bullet modifiers from equipment
 	for item in equipment_manager.get_equipped_items():
@@ -86,11 +175,48 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 				BulletModifier.ModType.PIERCE:
 					bullet.pierce_count += int(bmod.strength)
 
-	# Apply enchantment from equipped weapon
+	# Ranger distance scaling on ranged weapons
 	var weapon = equipment_manager.get_equipped_weapon()
+	if weapon and weapon.slot_type == EquipmentItem.SlotType.WEAPON_RANGED:
+		var gm = get_node_or_null("/root/GameManager")
+		if gm and gm.get("selected_class") == "ranger":
+			bullet.distance_scaling = true
+
+	# Apply enchantment from equipped weapon
 	if weapon and weapon.enchantment:
 		bullet.enchant_type = weapon.enchantment.type
 		bullet.enchant_proc_chance = weapon.enchantment.proc_chance
 		bullet.enchant_bonus_damage = weapon.enchantment.bonus_damage
+
+	# Apply ability buff on-hit effects (Fire Fists, Venom Coat)
+	if p:
+		if p.get_meta("fire_fists_active", false):
+			bullet.set_meta("apply_burning", 3.0)
+		if p.get_meta("venom_coat_active", false):
+			bullet.set_meta("apply_poison", 4.0)
+
+	# Spell staff unique on-hit effects (based on weapon name)
+	if weapon:
+		match weapon.item_name:
+			"Frost Bolt":
+				bullet.set_meta("apply_slowed", 2.0)
+			"Freeze":
+				bullet.set_meta("apply_frozen", 1.5)
+			"Flashbang":
+				bullet.set_meta("apply_stunned", 1.0)
+			"Weaken":
+				bullet.set_meta("apply_slowed", 3.0)
+			"Explosion":
+				bullet.set_meta("fireball_aoe", true)
+				bullet.set_meta("fireball_aoe_radius", 24.0)
+				bullet.set_meta("fireball_aoe_dmg_pct", 0.8)
+			"Magic Missile":
+				bullet.pierce_count += 2
+			"Smite":
+				bullet.set_meta("apply_stunned", 0.5)
+			"Corlion":
+				bullet.set_meta("apply_confused", 2.0)
+			"Malorian Crook":
+				bullet.set_meta("apply_feared", 2.0)
 
 	container.add_child(bullet)

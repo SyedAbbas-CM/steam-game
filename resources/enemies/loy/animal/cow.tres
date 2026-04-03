@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Cow"
 description = "Moooooooo!"
-max_hp = 49
+max_hp = 39
 move_speed = 26.7
 contact_damage = 1
 level = 1

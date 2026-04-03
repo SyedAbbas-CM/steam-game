@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Haven-2"
+tileset = 0
+chests = 2
+width = 40
+height = 30
+rooms = 12
+min_monsters = 4
+max_monsters = 7
+aggro_chance = 0
+requires_key = false
+legend = "Bone Giant"
+recommended_level = 2
+monster_pool = [{ "type": "Risen Corpse", "chance": 6 }, { "type": "Skeleton", "chance": 6 }, { "type": "Skeleton Archer", "chance": 5 }, { "type": "Bone Charger", "chance": 5 }, { "type": "Shield Skeleton", "chance": 4 }, { "type": "Death Rattle", "chance": 4 }, { "type": "Kamikaze Skull", "chance": 1 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 2, "trap_chance": 0, "items": [{ "name": "Apple", "chance": 5, "min": 1, "max": 1 }, { "name": "Red Potion", "chance": 3, "min": 1, "max": 1 }, { "name": "Gold", "chance": 3, "min": 1, "max": 5 }] }]

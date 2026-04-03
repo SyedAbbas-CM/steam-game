@@ -1,0 +1,59 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rotgrove"
+zone_name = "Rotgrove"
+tileset = 112
+width = 50
+height = 30
+world_pos = Vector2i(40, 50)
+dungeon_base = "Rot-Dungeons"
+baked_offset = Vector2i(152, -200)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "wastes",
+"tx": 49,
+"ty": 20,
+"x": 0,
+"y": 12
+}, {
+"target": "briarvale",
+"tx": 1,
+"ty": 11,
+"x": 49,
+"y": 18
+}, {
+"target": "thorndeep",
+"tx": 10,
+"ty": 1,
+"x": 10,
+"y": 29
+}, {
+"target": "shroudwood",
+"tx": 31,
+"ty": 1,
+"x": 0,
+"y": 23
+}])
+signs = Array[Dictionary]([{
+"message": "To Ravenhollow",
+"x": 1,
+"y": 11
+}, {
+"message": "To Briarvale",
+"x": 48,
+"y": 19
+}, {
+"message": "Lumberjacks needed! Watch for falling trees!",
+"x": 11,
+"y": 23
+}])
+spawns = Array[Dictionary]([{
+"chance": 200,
+"type": "Creeper",
+"x": 3,
+"y": 3
+}])

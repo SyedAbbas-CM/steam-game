@@ -1,0 +1,126 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "saltmere"
+zone_name = "Saltmere"
+tileset = 224
+width = 47
+height = 21
+world_pos = Vector2i(64, 36)
+dungeon_base = "Salt-Dungeons"
+description = "A decaying coastal city eaten by salt and sea. Grand buildings crumble while the tide creeps ever higher."
+baked_offset = Vector2i(1180, -272)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "wharves",
+"tx": 46,
+"ty": 2,
+"x": 0,
+"y": 17
+}, {
+"target": "scorchgate",
+"tx": 0,
+"ty": 15,
+"x": 46,
+"y": 8
+}, {
+"target": "driftport",
+"tx": 22,
+"ty": 19,
+"x": 22,
+"y": 0
+}, {
+"target": "tidegate",
+"tx": 22,
+"ty": 3,
+"x": 22,
+"y": 20
+}])
+npcs = Array[Dictionary]([{
+"message": "Jim lad?",
+"name": "Pirate",
+"portrait": 221,
+"tile": 220,
+"type": "message",
+"x": 32,
+"y": 7
+}, {
+"message": "Shiver me timbers!",
+"name": "Pirate",
+"portrait": 223,
+"tile": 222,
+"type": "message",
+"x": 28,
+"y": 5
+}, {
+"message": "Pay for games? Never - I can steal them!",
+"name": "Pirate",
+"portrait": 219,
+"tile": 218,
+"type": "message",
+"x": 30,
+"y": 8
+}, {
+"name": "Mac",
+"portrait": 217,
+"tile": 216,
+"shop": "saltmere-weapon",
+"type": "shop",
+"x": 35,
+"y": 10
+}, {
+"name": "Iver",
+"portrait": 215,
+"tile": 214,
+"shop": "saltmere-inn",
+"type": "shop",
+"x": 5,
+"y": 3
+}, {
+"name": "Zambar",
+"portrait": 213,
+"tile": 212,
+"shop": "saltmere-magic",
+"type": "shop",
+"x": 11,
+"y": 11
+}, {
+"name": "Meaty",
+"portrait": 219,
+"tile": 218,
+"type": "craft",
+"x": 14,
+"y": 2
+}, {
+"name": "Peggy",
+"portrait": 223,
+"shop": "maps",
+"tile": 222,
+"type": "maps",
+"x": 12,
+"y": 17
+}, {
+"name": "Zarrrrr",
+"portrait": 211,
+"tile": 210,
+"type": "pets",
+"x": 41,
+"y": 12
+}, {
+"file": "scripts/dumhed.xml",
+"name": "Dumhed",
+"portrait": 86,
+"tile": 86,
+"type": "scriptfile",
+"x": 22,
+"y": 14
+}])
+spawns = Array[Dictionary]([{
+"chance": 100,
+"type": "Chicken",
+"x": 2,
+"y": 4
+}])

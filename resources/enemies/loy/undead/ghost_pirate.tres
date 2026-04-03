@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Ghost Pirate"
 description = "A ghostly pirate"
-max_hp = 87
+max_hp = 70
 move_speed = 26.5
 contact_damage = 5
 level = 15

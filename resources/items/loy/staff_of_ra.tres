@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 6.0
+flat_bonus = 15.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 9
+flat_bonus = 20.0
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Staff of Ra"
 loy_tile_index = 232
 description = "A magical staff"
 slot_type = 2
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 348
-sell_value = 87
-bullet_sprite_index = 111
+buy_price = 1230
+sell_value = 307
+bullet_sprite_index = 224
 weapon_range = 4.0
+weapon_type = "staff"

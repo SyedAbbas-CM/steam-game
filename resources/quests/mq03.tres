@@ -1,0 +1,116 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq03"
+title = "The Elder's Silence"
+summary = "The Elder refuses to help. A scholar offers to translate the tablet — but needs her stolen journal from the wilds."
+level = 3
+location = "haven"
+target_location = "wastes"
+prerequisite = "mq02"
+start_script = [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "People are dying.",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Fine. Someone else will help.",
+"script": [{
+"cmd": "showDialog",
+"name": "Scholar Vela",
+"options": [{
+"name": "Deal.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 162,
+"text": "The Elder won't talk? Coward. I can translate it — but bandits stole my journal in the wilds to the north. Bring it back and I'll read your tablet."
+}]
+}],
+"portrait": 147,
+"text": "Then let them die quietly. You don't know what you're waking up."
+}]
+}],
+"portrait": 147,
+"text": "I know what that tablet says. And I wish I didn't. Leave it alone."
+}]
+events = [{
+"param": "Bandit",
+"script": [{
+"attribute": "session-mq03-0",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Take it",
+"script": [{
+"cmd": "set",
+"id": "mq03",
+"index": "0",
+"value": "1"
+}]
+}],
+"portrait": 0,
+"text": "A battered journal falls from the bandit's pack. This must be Vela's."
+}]
+}],
+"type": "kill"
+}, {
+"param": "haven",
+"script": [{
+"attribute": "session-mq03-0",
+"cmd": "if",
+"compare": "0",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Scholar Vela",
+"options": [{
+"name": "What seals?",
+"script": [{
+"cmd": "showDialog",
+"name": "Scholar Vela",
+"options": [{
+"name": "On my way.",
+"script": [{
+"cmd": "getExp",
+"value": "400"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 162,
+"text": "Ancient bindings that kept something locked beneath the earth. If they're breaking... you need to move fast. Head to the wilds — reports of something wrong there."
+}]
+}],
+"portrait": 162,
+"text": "My journal! Now let me see that tablet... The coordinates point to the old seal beneath Ultima Thule. But there are intermediate markers — in the valley, the mountains, the frozen north. Something is breaking the seals."
+}]
+}, {
+"attribute": "session-mq03-0",
+"cmd": "if",
+"compare": "1",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Scholar Vela",
+"options": [{
+"name": "I'm looking.",
+"script": []
+}],
+"portrait": 162,
+"text": "Find my journal in the wilds to the north. Bandits took it."
+}]
+}],
+"type": "quest"
+}]

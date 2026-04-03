@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CraftingRecipe" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/crafting_recipe.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "stamina_tonic"
+recipe_name = "Stamina Tonic"
+recipe_type = "alchemist"
+ingredients = Array[Dictionary]([{{
+"item_name": "Healing Herb",
+"count": 2
+}}])
+gold_cost = 30
+result_item_path = "res://resources/items/crafted/stamina_tonic.tres"
+result_count = 1
+required_level = 3

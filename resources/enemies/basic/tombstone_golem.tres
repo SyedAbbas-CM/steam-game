@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Tombstone Golem"
+description = "A hulking construct of grave markers and earth. Slow but extremely tough, slams the ground to stun."
+max_hp = 40
+move_speed = 12.0
+contact_damage = 3
+level = 3
+kingdom = "undead"
+size_class = 1
+hostile = true
+attack_type = 7
+attack_damage = 4
+attack_speed = 3.0
+bullet_speed = 35.0
+bullet_count = 4
+preferred_distance = 0.0
+aggro_range = 50.0
+slam_radius = 20.0
+use_loy_sprite = true
+loy_tile_index = 28
+sprite_color = Color(0.5, 0.55, 0.45, 1)
+xp_value = 15
+score_value = 30

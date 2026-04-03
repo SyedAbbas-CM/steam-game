@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Kobold"
 description = "Tiny but vicious, attacks in swarms with reckless abandon"
-max_hp = 18
+max_hp = 14
 move_speed = 17.9
 contact_damage = 1
 level = 1

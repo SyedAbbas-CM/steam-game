@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 2.0
+flat_bonus = 4.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 9
+flat_bonus = 5.0
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Bone Staff"
 loy_tile_index = 231
 description = "A staff made of bone"
 slot_type = 2
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 0
-buy_price = 31
-sell_value = 7
-bullet_sprite_index = 111
+buy_price = 192
+sell_value = 48
+bullet_sprite_index = 224
 weapon_range = 4.0
+weapon_type = "staff"

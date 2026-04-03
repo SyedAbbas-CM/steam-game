@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "deadshore"
+zone_name = "Deadshore"
+tileset = 112
+height = 20
+description = "The shore of a poisoned lake. Dead fish wash up on grey sand and the water glows faintly at night."
+baked_offset = Vector2i(-99999, -99999)
+exits = Array[Dictionary]([{
+"target": "ashvale",
+"tx": 59,
+"ty": 12,
+"x": 0,
+"y": 10
+}, {
+"target": "wastes",
+"tx": 1,
+"ty": 25,
+"x": 24,
+"y": 10
+}])
+npcs = Array[Dictionary]([{
+"file": "",
+"message": "Best fishing in all the realm right here. Silverscale love this lake.",
+"name": "Old Fisher",
+"portrait": 160,
+"shop": "",
+"tile": 134,
+"type": "message",
+"x": 20,
+"y": 12
+}])
+signs = Array[Dictionary]([{
+"message": "Deadshore
+Peaceful Waters",
+"x": 12,
+"y": 1
+}])

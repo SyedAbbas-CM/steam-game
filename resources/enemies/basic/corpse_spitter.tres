@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Corpse Spitter"
+description = "Bloated undead that spits poison from range. Explodes when killed."
+max_hp = 15
+move_speed = 11.0
+contact_damage = 1
+level = 3
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 15
+attack_damage = 2
+attack_speed = 2.0
+bullet_speed = 60.0
+bullet_count = 1
+preferred_distance = 45.0
+aggro_range = 65.0
+poison_chance = 0.4
+explodes_on_death = true
+explode_radius = 14.0
+use_loy_sprite = true
+loy_tile_index = 69
+sprite_color = Color(0.4, 0.6, 0.3, 1)
+xp_value = 8
+score_value = 10

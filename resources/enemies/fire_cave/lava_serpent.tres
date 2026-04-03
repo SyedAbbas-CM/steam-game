@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Lava Serpent"
+description = "A sinuous serpent of living magma that unleashes waves of sine-pattern fire bolts"
+max_hp = 76
+move_speed = 25.0
+contact_damage = 4
+level = 9
+kingdom = "demon"
+size_class = 0
+hostile = true
+attack_type = 33
+attack_damage = 5
+attack_speed = 2.1
+bullet_speed = 65
+bullet_count = 5
+preferred_distance = 45.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 90.0
+ignores_terrain = false
+leaves_trail = true
+trail_type = "fire"
+use_loy_sprite = true
+loy_tile_index = 415
+sprite_color = Color(1.0, 0.35, 0.15, 1)
+xp_value = 45
+score_value = 90

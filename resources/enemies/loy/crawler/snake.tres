@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Snake"
 description = "A large poisonous slithering beast"
-max_hp = 15
+max_hp = 12
 move_speed = 28.9
 contact_damage = 1
 level = 1

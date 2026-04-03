@@ -1,0 +1,112 @@
+[gd_resource type="Resource" script_class="QuestDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "pq_mean"
+title = "The Balance"
+summary = "Telos wants you to kill exactly 5 Skeletons in the dungeon. Not 4, not 6. Five. Discipline is the foundation."
+level = 4
+location = "haven"
+properties = [{
+"index": 0,
+"name": "Skeletons Killed",
+"type": "number"
+}]
+start_script = [{
+"cmd": "showDialog",
+"name": "Telos",
+"portrait": 161,
+"text": "I have a test for you. Not of strength — of restraint.",
+"options": [{
+"name": "What kind?",
+"script": [{
+"cmd": "showDialog",
+"name": "Telos",
+"portrait": 161,
+"text": "Go into the crypts. Kill exactly 5 Skeletons. Not 4, not 6. Five. Then return to me. The warrior who cannot stop is no better than the beast they fight.",
+"options": [{
+"name": "Exactly 5",
+"script": [{
+"cmd": "startQuest",
+"id": "pq_mean"
+}]
+}, {
+"name": "Not now",
+"script": []
+}]
+}]
+}]
+}]
+events = [{
+"param": "Skeleton",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "haven",
+"script": [{
+"attribute": "session-pq_mean-0",
+"cmd": "if",
+"compare": "5",
+"operation": "lt",
+"script": [{
+"cmd": "showDialog",
+"name": "Telos",
+"portrait": 161,
+"options": [{
+"name": "I'll continue",
+"script": []
+}],
+"text": "Not enough yet. I asked for exactly 5 Skeletons. Keep hunting — but remember, stop at five."
+}]
+}, {
+"attribute": "session-pq_mean-0",
+"cmd": "if",
+"compare": "5",
+"operation": "eq",
+"script": [{
+"cmd": "showDialog",
+"name": "Telos",
+"portrait": 161,
+"text": "Five. Exactly five. You showed discipline — the ability to act with precision and stop when the task is done. That is the foundation of all virtue.",
+"options": [{
+"name": "Thanks",
+"script": [{
+"cmd": "getExp",
+"value": "400"
+}, {
+"cmd": "getItem",
+"count": "250",
+"name": "Gold"
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}]
+}, {
+"attribute": "session-pq_mean-0",
+"cmd": "if",
+"compare": "5",
+"operation": "gt",
+"script": [{
+"cmd": "showDialog",
+"name": "Telos",
+"portrait": 161,
+"text": "More than five. You let momentum carry you past the mark. The warrior who cannot stop is no better than the beast. A lesson in itself, I suppose.",
+"options": [{
+"name": "I see",
+"script": [{
+"cmd": "getExp",
+"value": "200"
+}, {
+"cmd": "completeQuest"
+}]
+}]
+}]
+}],
+"type": "quest"
+}]

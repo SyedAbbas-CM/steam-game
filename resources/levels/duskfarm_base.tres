@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Duskfarm-Dungeons"
+tileset = 8
+chests = 2
+width = 35
+height = 25
+rooms = 10
+min_monsters = 2
+max_monsters = 4
+aggro_chance = 0
+requires_key = false
+legend = "Swarm Mother"
+recommended_level = 10
+monster_pool = [{ "type": "Rat", "chance": 8 }, { "type": "Giant Rat", "chance": 6 }, { "type": "Cave Beetle", "chance": 5 }, { "type": "Crop Blight", "chance": 5 }, { "type": "Mold Blob", "chance": 4 }, { "type": "Fungal Spore", "chance": 3 }, { "type": "Slime Hopper", "chance": 3 }, { "type": "Scarecrow", "chance": 2 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 2, "trap_chance": 0, "items": [{ "name": "Apple", "chance": 5, "min": 1, "max": 1 }, { "name": "Red Potion", "chance": 3, "min": 1, "max": 1 }, { "name": "Gold", "chance": 2, "min": 1, "max": 5 }] }]

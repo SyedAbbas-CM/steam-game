@@ -7,8 +7,8 @@ script = ExtResource("1_6m2np")
 id = "q6"
 title = "The Treaty"
 level = 28
-location = "gomb"
-target_location = "aria"
+location = "briarvale"
+target_location = "haven"
 properties = [{
 "index": 0,
 "name": "Signed at Aria",
@@ -156,7 +156,7 @@ events = [{
 }],
 "type": "activate"
 }, {
-"param": "gomb",
+"param": "briarvale",
 "script": [{
 "attribute": "count-Treaty",
 "cmd": "if",
@@ -293,7 +293,7 @@ events = [{
 }]
 }],
 "portrait": 200,
-"text": "Well done boy! You have changed Yore forever!"
+"text": "Well done boy! You have changed Ashenmoor forever!"
 }]
 }],
 "portrait": 200,

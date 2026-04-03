@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Spectre"
 description = "A massive demented spirit that floods the room with spiraling death"
-max_hp = 40
+max_hp = 32
 move_speed = 20.0
 contact_damage = 2
 level = 8

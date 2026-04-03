@@ -8,7 +8,7 @@ id = "q14"
 title = "Jimbob's Lost Pickaxe"
 summary = "Jimbob lost his pickaxe in the dungeons. Clear 10 enemies down there to search for it."
 level = 2
-location = "aria"
+location = "haven"
 properties = [{
 "index": 0,
 "name": "Enemies Cleared",
@@ -67,7 +67,7 @@ events = [{
 }]
 }, {
 "type": "quest",
-"param": "aria",
+"param": "haven",
 "script": [{
 "attribute": "session-q14-0",
 "cmd": "if",

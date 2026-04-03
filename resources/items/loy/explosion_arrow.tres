@@ -16,5 +16,5 @@ description = "An explosive arrow"
 slot_type = 11
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
-buy_price = 47
-sell_value = 11
+buy_price = 102
+sell_value = 25

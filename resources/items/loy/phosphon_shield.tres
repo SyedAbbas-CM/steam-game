@@ -8,13 +8,18 @@ script = ExtResource("2")
 stat = 0
 flat_bonus = 28.0
 
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 17
+flat_bonus = 0.15
+
 [resource]
 script = ExtResource("1")
 item_name = "Phosphon Shield"
 loy_tile_index = 455
 description = "A shield made from the hardened blue mineral"
 slot_type = 5
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 524
-sell_value = 131
+buy_price = 1106
+sell_value = 276

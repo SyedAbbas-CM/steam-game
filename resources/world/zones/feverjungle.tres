@@ -1,0 +1,64 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "feverjungle"
+zone_name = "The Feverwild"
+tileset = 192
+width = 30
+height = 30
+world_pos = Vector2i(77, 22)
+dungeon_base = "Fever-Dungeons"
+dungeon_count = 8
+description = "A poisonous jungle where every plant is lethal and plague beasts stalk the undergrowth."
+baked_offset = Vector2i(1624, -468)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "eldori",
+"tx": 10,
+"ty": 19,
+"x": 5,
+"y": 0
+}, {
+"target": "deepwild",
+"tx": 6,
+"ty": 29,
+"x": 24,
+"y": 0
+}, {
+"target": "permafrost",
+"tx": 19,
+"ty": 0,
+"x": 12,
+"y": 29
+}])
+npcs = Array[Dictionary]([{
+"name": "TikTak",
+"portrait": 306,
+"tile": 306,
+"shop": "feverjungle-weapon",
+"type": "shop",
+"x": 19,
+"y": 12
+}])
+signs = Array[Dictionary]([{
+"message": "Eldori. Stay Out!",
+"x": 3,
+"y": 1
+}, {
+"message": "Beware!",
+"x": 25,
+"y": 1
+}, {
+"message": "The Tundra",
+"x": 14,
+"y": 28
+}])
+spawns = Array[Dictionary]([{
+"chance": 100,
+"type": "Lion",
+"x": 1,
+"y": 1
+}])

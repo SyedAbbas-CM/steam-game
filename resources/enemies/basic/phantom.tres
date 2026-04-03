@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Phantom"
+description = "Translucent spirit that floats through walls. Fires bursts of spectral energy."
+max_hp = 11
+move_speed = 18.0
+contact_damage = 1
+level = 3
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 3
+attack_damage = 2
+attack_speed = 2.0
+bullet_speed = 50.0
+bullet_count = 1
+preferred_distance = 40.0
+aggro_range = 70.0
+ignores_terrain = true
+use_loy_sprite = true
+loy_tile_index = 24
+sprite_color = Color(0.7, 0.75, 0.9, 0.6)
+xp_value = 8
+score_value = 10

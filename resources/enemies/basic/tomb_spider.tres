@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Tomb Spider"
+description = "A small spider that dashes at prey and leaves sticky webs that slow movement."
+max_hp = 8
+move_speed = 27.0
+contact_damage = 1
+level = 1
+kingdom = "crawler"
+size_class = 0
+hostile = true
+attack_type = 5
+attack_damage = 1
+attack_speed = 2.0
+bullet_speed = 45
+bullet_count = 1
+preferred_distance = 12.0
+charge_speed = 70.0
+charge_duration = 0.3
+aggro_range = 55.0
+ignores_terrain = false
+leaves_trail = true
+trail_type = "web"
+use_loy_sprite = true
+loy_tile_index = 22
+sprite_color = Color(0.55, 0.5, 0.4, 1)
+xp_value = 3
+score_value = 5

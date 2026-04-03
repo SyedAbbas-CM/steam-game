@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="NpcScriptData" format=3]
+
+[ext_resource type="Script" path="res://scripts/npcs/npc_script_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+commands = [{
+"cmd": "showDialog",
+"name": "Heshem",
+"portrait": 167,
+"text": "Don't mind the ash on my hands. I used to be a scholar. Had a library full of answers. Burned them all.",
+"options": [{
+"name": "Why?",
+"script": [{
+"cmd": "showDialog",
+"name": "Heshem",
+"portrait": 167,
+"text": "Because I realized I was collecting certainty like gold — hoarding it. But certainty can be a prison. I knew everything and understood nothing.",
+"options": [{
+"name": "Do you regret it?",
+"script": [{
+"cmd": "showDialog",
+"name": "Heshem",
+"portrait": 167,
+"text": "Every day. And every day I know it was right. The doubt I gained was worth more than all those books. Doubt keeps you searching. Certainty makes you stop.",
+"options": [{
+"name": "Any quests?",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "haven"
+}]
+}, {
+"name": "Heavy words",
+"script": []
+}]
+}]
+}, {
+"name": "That seems wasteful",
+"script": [{
+"cmd": "showDialog",
+"name": "Heshem",
+"portrait": 167,
+"text": "Wasteful? Perhaps. But a full cup can't receive new water. I had to empty myself before I could learn anything real.",
+"options": [{
+"name": "Farewell",
+"script": []
+}]
+}]
+}]
+}]
+}, {
+"name": "Any quests?",
+"script": [{
+"cmd": "offerZoneQuests",
+"zone": "haven"
+}]
+}, {
+"name": "Farewell",
+"script": []
+}]
+}]

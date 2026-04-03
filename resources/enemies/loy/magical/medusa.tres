@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Medusa"
 description = "Snake-haired witch whose spiraling venom fills the arena with toxic death"
-max_hp = 107
+max_hp = 86
 move_speed = 34.8
 contact_damage = 5
 level = 50

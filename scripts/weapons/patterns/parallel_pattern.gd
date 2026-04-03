@@ -18,6 +18,7 @@ func get_fire_data(aim_direction: Vector2, _stats: EquipmentManager) -> Array[Di
 			"direction": aim_direction,
 			"delay": 0.0,
 			"offset": offset,
-			"speed_mult": 1.0
+			"speed_mult": 1.0,
+			"damage_mult": 1.0 / stream_count
 		})
 	return result

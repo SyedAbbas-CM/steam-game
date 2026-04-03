@@ -1,0 +1,52 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "cliffs"
+zone_name = "The Wailing Cliffs"
+tileset = 112
+width = 40
+height = 14
+world_pos = Vector2i(54, 61)
+dungeon_base = "Cliff-Dungeons"
+description = "Sea cliffs with howling wind caves that produce an eerie wail. Nests of flying creatures dot the cliff face."
+baked_offset = Vector2i(632, -64)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "undercroft",
+"tx": 1,
+"ty": 1,
+"x": 23,
+"y": 9
+}, {
+"target": "dreadbridge",
+"tx": 38,
+"ty": 7,
+"x": 0,
+"y": 7
+}])
+npcs = Array[Dictionary]([{
+"name": "lever",
+"portrait": 208,
+"tile": 208,
+"type": "script",
+"x": 30,
+"y": 7
+}, {
+"name": "lever",
+"portrait": 208,
+"tile": 208,
+"type": "script",
+"x": 25,
+"y": 8
+}, {
+"name": "Hermit",
+"portrait": 205,
+"tile": 189,
+"shop": "cliffs-weapon",
+"type": "shop",
+"x": 25,
+"y": 6
+}])

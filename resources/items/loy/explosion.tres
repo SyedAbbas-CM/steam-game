@@ -6,17 +6,23 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 18.0
+flat_bonus = 10.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 14
+flat_bonus = 2.0
 
 [resource]
 script = ExtResource("1")
 item_name = "Explosion"
 loy_tile_index = 109
 description = "Cast to damage the target and others"
-slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+slot_type = 2
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 1
-buy_price = 224
-sell_value = 56
-bullet_sprite_index = 110
-weapon_range = 3.0
+buy_price = 366
+sell_value = 91
+bullet_sprite_index = 224
+weapon_range = 4.0
+weapon_type = "staff"

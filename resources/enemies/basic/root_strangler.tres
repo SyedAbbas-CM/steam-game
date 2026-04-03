@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Root Strangler"
+description = "A mass of animated roots that fires tendrils to pull you in close, then constricts. Getting pulled into melee range is death."
+max_hp = 22
+move_speed = 10.0
+contact_damage = 3
+level = 4
+kingdom = "crawler"
+size_class = 0
+hostile = true
+attack_type = 48
+attack_damage = 3
+attack_speed = 3.0
+bullet_speed = 35.0
+bullet_count = 2
+preferred_distance = 40.0
+aggro_range = 55.0
+use_loy_sprite = true
+loy_tile_index = 38
+sprite_color = Color(0.35, 0.5, 0.25, 1)
+xp_value = 14
+score_value = 28

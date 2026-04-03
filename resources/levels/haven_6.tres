@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Haven-6"
+tileset = 40
+chests = 5
+width = 55
+height = 40
+rooms = 22
+min_monsters = 6
+max_monsters = 9
+aggro_chance = 0
+requires_key = true
+legend = "Liche"
+recommended_level = 10
+monster_pool = [{ "type": "Bone Charger", "chance": 3 }, { "type": "Corpse Spitter", "chance": 3 }, { "type": "Bone Hurler", "chance": 3 }, { "type": "Shield Skeleton", "chance": 3 }, { "type": "Cursed Skull", "chance": 1 }, { "type": "Bone Sentry", "chance": 3 }, { "type": "Shade", "chance": 3 }, { "type": "Bone Titan", "chance": 3 }, { "type": "Death Knight", "chance": 3 }, { "type": "Crypt Weaver", "chance": 3 }, { "type": "Soul Leech", "chance": 2 }, { "type": "Bone Colossus", "chance": 2 }, { "type": "Bone Guard", "chance": 2 }, { "type": "Mummy", "chance": 2 }, { "type": "Vampire", "chance": 2 }, { "type": "Ghost", "chance": 2 }, { "type": "Crypt Guardian", "chance": 1 }]
+fixed_monsters = []
+chest_loot = [{ "min_items": 1, "max_items": 3, "trap_chance": 10, "items": [{ "name": "Red Potion", "chance": 3, "min": 1, "max": 1 }, { "name": "Blue Potion", "chance": 2, "min": 1, "max": 1 }, { "name": "Gold", "chance": 5, "min": 20, "max": 50 }, { "name": "Green Potion", "chance": 1, "min": 1, "max": 1 }] }]

@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Minotaur"
 description = "Unstoppable bull-headed warrior, charges with lethal force then slams the earth"
-max_hp = 562
+max_hp = 450
 move_speed = 32.6
 contact_damage = 6
 level = 50

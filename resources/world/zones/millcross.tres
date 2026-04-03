@@ -1,0 +1,58 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "millcross"
+zone_name = "Millcross"
+tileset = 112
+width = 20
+height = 15
+description = "A ruined riverside crossing. The old mill wheel still turns, grinding nothing but dust."
+baked_offset = Vector2i(-99999, -99999)
+exits = Array[Dictionary]([{
+"target": "haven",
+"tx": 12,
+"ty": 24,
+"x": 10,
+"y": 0
+}, {
+"target": "wardens",
+"tx": 19,
+"ty": 10,
+"x": 0,
+"y": 7
+}])
+npcs = Array[Dictionary]([{
+"file": "",
+"message": "Herbs and remedies, fresh from the riverbank!",
+"name": "Brenna",
+"portrait": 160,
+"shop": "millcross-herbs",
+"tile": 160,
+"type": "shop",
+"x": 14,
+"y": 8
+}])
+signs = Array[Dictionary]([{
+"message": "Millcross
+Good fishing here",
+"x": 9,
+"y": 1
+}, {
+"message": "To Ravenhollow",
+"x": 10,
+"y": 1
+}])
+houses = Array[Dictionary]([{
+"dx": -1,
+"dy": 0,
+"height": 4,
+"sign": "Brenna's Cottage
+
+Herbs and Healing",
+"width": 5,
+"x": 12,
+"y": 6
+}])

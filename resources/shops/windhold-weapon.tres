@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/shop_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "windhold-weapon"
+shop_type = "weapon"
+shop_name = "Famni Chat"
+portrait = 427
+title = "The Armoury"
+welcome = "You're searching for a weapon, I can tell."
+nomoney = "Here in Airlon we pay for our goods"
+buy_text = "Take this and vanquish evil!"
+sell_text = "Time taken I will reforge this to a might weapon"
+stock = [{ "item_name": "Long Bow", "required_quest": "" }, { "item_name": "Hunter Knife", "required_quest": "" }, { "item_name": "Longsword", "required_quest": "" }, { "item_name": "Chainmail", "required_quest": "" }, { "item_name": "Scalemail", "required_quest": "" }, { "item_name": "Composite Bow", "required_quest": "" }, { "item_name": "Explosion Arrow", "required_quest": "" }, { "item_name": "Lion Blade", "required_quest": "" }]

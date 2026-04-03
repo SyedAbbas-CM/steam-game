@@ -8,13 +8,18 @@ script = ExtResource("2")
 stat = 0
 flat_bonus = 25.0
 
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 12
+flat_bonus = 4.0
+
 [resource]
 script = ExtResource("1")
 item_name = "Thorn Helm"
 loy_tile_index = 495
 description = "A mighty magical winged helmet"
 slot_type = 3
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 2
-buy_price = 500
-sell_value = 125
+buy_price = 1122
+sell_value = 280

@@ -7,43 +7,46 @@ import re
 ITEMS_DIR = os.path.join(os.path.dirname(__file__), '../../resources/items/loy')
 
 # Sprite indices matching ObjSpriteIndex constants
+## Sprite indices from lofi_obj.png (16 cols × 16 rows, 8×8 tiles)
+## Index = row * 16 + col
+## Named sprites from lofi_obj_tileset.tres custom_data_0
 SPRITE_MAP = {
-    # Bows → arrows
-    'bow': 96, 'crossbow': 96,
-    # Staves, wands, books → magic missiles
-    'staff': 111, 'wand': 111, 'book': 111, 'rod': 111,
-    # Fire weapons → fireballs
-    'fire': 104, 'flame': 104, 'lava': 104, 'inferno': 104,
-    # Ice → ice bolts
-    'ice': 105, 'frost': 105, 'frozen': 105, 'cold': 105,
-    # Poison
-    'poison': 106, 'venom': 106, 'toxic': 106,
-    # Lightning
-    'lightning': 107, 'thunder': 107, 'storm': 107, 'shock': 107,
-    # Holy
-    'holy': 108, 'divine': 108, 'sacred': 108, 'blessed': 108,
-    # Dark
-    'dark': 109, 'shadow': 109, 'death': 109, 'void': 109,
-    # Swords/blades → slash
-    'sword': 120, 'blade': 120, 'dagger': 120, 'shiv': 120, 'knife': 120,
-    # Axes/hammers → impact
-    'axe': 123, 'hammer': 123, 'mace': 123, 'club': 123,
-    # Spears → bolt
-    'spear': 102, 'lance': 102, 'javelin': 102, 'pike': 102,
-    # Claws → slash2
-    'claw': 121, 'fang': 121, 'talon': 121,
-    # Throwing → star
-    'throwing': 61, 'shuriken': 61, 'star': 117,
+    # Bows/crossbows → arrow_basic (8,15) = 248
+    'bow': 248, 'crossbow': 248,
+    # Staves, wands, books → blue_magic_basic (0,14) = 224
+    'staff': 224, 'wand': 224, 'book': 224, 'rod': 224,
+    # Fire weapons → red_magic_basic (0,13) = 208
+    'fire': 208, 'flame': 208, 'lava': 208, 'inferno': 208,
+    # Ice → blue_magic_sparkles (9,11) = 185
+    'ice': 185, 'frost': 185, 'frozen': 185, 'cold': 185,
+    # Poison → green_magic_basic (8,13) = 216
+    'poison': 216, 'venom': 216, 'toxic': 216,
+    # Lightning → white_charge (7,8) = 135
+    'lightning': 135, 'thunder': 135, 'storm': 135, 'shock': 135,
+    # Holy → white_magic_strong (10,8) = 138
+    'holy': 138, 'divine': 138, 'sacred': 138, 'blessed': 138,
+    # Dark → pink_magic_basic (8,14) = 232
+    'dark': 232, 'shadow': 232, 'death': 232, 'void': 232,
+    # Swords/blades → blade_basic (0,15) = 240
+    'sword': 240, 'blade': 240, 'dagger': 240, 'shiv': 240, 'knife': 240,
+    # Axes/hammers → red_star (0,9) = 144
+    'axe': 144, 'hammer': 144, 'mace': 144, 'club': 144,
+    # Spears → arrow_strong (6,5) = 86
+    'spear': 86, 'lance': 86, 'javelin': 86, 'pike': 86,
+    # Claws → white_shuriken (8,8) = 136
+    'claw': 136, 'fang': 136, 'talon': 136,
+    # Throwing → white_star (0,8) = 128
+    'throwing': 128, 'shuriken': 136, 'star': 128,
 }
 
 RANGE_MAP = {
     'bow': 5.0, 'crossbow': 5.0,
-    'staff': 4.0, 'wand': 4.0, 'book': 4.0, 'rod': 4.0,
-    'sword': 2.5, 'blade': 2.5,
-    'dagger': 1.5, 'shiv': 1.5, 'knife': 1.5,
-    'axe': 2.0, 'hammer': 2.0, 'mace': 2.0, 'club': 2.0,
-    'spear': 3.5, 'lance': 3.5, 'javelin': 3.5, 'pike': 3.5,
-    'claw': 1.2, 'fang': 1.2, 'talon': 1.2,
+    'staff': 4.0, 'wand': 4.0, 'book': 4.0, 'rod': 4.0,  # 100% (unchanged)
+    'sword': 1.65, 'blade': 1.65,       # 66% of 2.5
+    'dagger': 1.0, 'shiv': 1.0, 'knife': 1.0,  # 66% of 1.5
+    'axe': 1.3, 'hammer': 1.3, 'mace': 1.3, 'club': 1.3,  # 66% of 2.0
+    'spear': 2.3, 'lance': 2.3, 'javelin': 2.3, 'pike': 2.3,  # 66% of 3.5
+    'claw': 0.8, 'fang': 0.8, 'talon': 0.8,  # 66% of 1.2
     'fire': 3.5, 'flame': 3.5, 'lava': 3.0,
     'ice': 3.5, 'frost': 3.5,
     'poison': 3.0, 'venom': 3.0,
@@ -52,7 +55,7 @@ RANGE_MAP = {
     'dark': 3.5, 'shadow': 3.5,
 }
 
-DEFAULT_SPRITE = 110  # ENERGY_BALL
+DEFAULT_SPRITE = 224  # blue_magic_basic
 DEFAULT_RANGE = 3.0
 
 def get_item_name(content):
@@ -102,7 +105,7 @@ def process_file(filepath):
         content = f.read()
 
     slot = get_slot_type(content)
-    if slot != 0:  # Only weapons (slot_type=0)
+    if slot not in (0, 1, 2):  # WEAPON_MELEE=0, WEAPON_RANGED=1, WEAPON_MAGIC=2
         return False
 
     name = get_item_name(content)

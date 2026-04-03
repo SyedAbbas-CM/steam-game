@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CraftingRecipe" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/crafting_recipe.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "swamp_brew"
+recipe_name = "Swamp Brew"
+recipe_type = "alchemist"
+ingredients = Array[Dictionary]([{{
+"item_name": "Swamp Root",
+"count": 2
+}}, {{
+"item_name": "Wild Mushroom",
+"count": 1
+}}])
+gold_cost = 40
+result_item_path = "res://resources/items/crafted/swamp_brew.tres"
+result_count = 1
+required_level = 7

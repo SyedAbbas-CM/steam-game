@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/fire_cave/flame_sprite.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Hellfire Sentinel"
+description = "An elite guardian of the deep caves, projecting laser grids of fire and shielded by volcanic armor"
+max_hp = 160
+move_speed = 17.0
+contact_damage = 6
+level = 12
+kingdom = "demon"
+size_class = 1
+hostile = true
+attack_type = 38
+attack_damage = 7
+attack_speed = 2.8
+bullet_speed = 80
+bullet_count = 4
+preferred_distance = 35.0
+charge_speed = 80.0
+charge_duration = 0.3
+aggro_range = 100.0
+ignores_terrain = false
+summon_count = 3
+summon_definition = ExtResource("2")
+shield_hp = 15
+leaves_trail = true
+trail_type = "fire"
+explodes_on_death = true
+explode_radius = 28.0
+death_bullet_pattern = 21
+boss_phases = 2
+phase_2_attack = 21
+phase_2_bullet_count = 14
+summon_on_phase_change = true
+summon_phase_count = 3
+use_loy_sprite = true
+loy_tile_index = 467
+sprite_color = Color(1.0, 0.3, 0.1, 1)
+xp_value = 100
+score_value = 200

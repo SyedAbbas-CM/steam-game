@@ -1,112 +1,153 @@
 class_name DungeonNav
 extends RefCounted
 
-## A* navigation grid for dungeon enemies.
-## Built from floor tiles; enemies query get_next_position() for pathfinding.
+## Flow-field navigation for dungeon enemies.
+## One BFS from the player position, all enemies look up their move direction.
+## Recomputed when player moves significantly (every few seconds).
 
-var _astar: AStarGrid2D
 var _region: Rect2i
 var _ready: bool = false
+var _walkable: Dictionary = {}  # Vector2i -> true for walkable cells
+
+# Flow field: each cell stores the direction toward the player
+var _flow: Dictionary = {}  # Vector2i -> Vector2 (normalized direction)
+var _last_target_cell: Vector2i = Vector2i(-99999, -99999)
+
+const TILE_SIZE := 8.0
+const REBUILD_DIST := 3  # rebuild flow field when player moves 3+ cells
+
+# Neighbors: 8 directions (cardinal + diagonal)
+const DIRS = [
+	Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)
+]
 
 func build(floor_layer: TileMapLayer, deco_layer: TileMapLayer, solid_deco_rows: Array) -> void:
 	var floor_cells = floor_layer.get_used_cells()
 	if floor_cells.is_empty():
 		return
 
-	# Find bounding rect of all floor tiles
 	var min_x: int = 999999
 	var max_x: int = -999999
 	var min_y: int = 999999
 	var max_y: int = -999999
-	var floor_set: Dictionary = {}
+
 	for cell in floor_cells:
-		floor_set[cell] = true
+		_walkable[cell] = true
 		min_x = mini(min_x, cell.x)
 		max_x = maxi(max_x, cell.x)
 		min_y = mini(min_y, cell.y)
 		max_y = maxi(max_y, cell.y)
 
-	# Build solid deco set
-	var solid_set: Dictionary = {}
+	# Remove solid decorations from walkable set
 	for cell in deco_layer.get_used_cells():
 		var data = deco_layer.get_cell_atlas_coords(cell)
 		if data.y in solid_deco_rows:
-			solid_set[cell] = true
+			_walkable.erase(cell)
 
 	_region = Rect2i(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
-
-	_astar = AStarGrid2D.new()
-	_astar.region = _region
-	_astar.cell_size = Vector2(8, 8)  # TILE_SIZE
-	_astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
-	_astar.update()
-
-	# Mark all non-floor cells and solid deco cells as solid (unwalkable)
-	for y in range(_region.position.y, _region.end.y):
-		for x in range(_region.position.x, _region.end.x):
-			var cell = Vector2i(x, y)
-			if not floor_set.has(cell) or solid_set.has(cell):
-				_astar.set_point_solid(cell, true)
-
 	_ready = true
 
 func is_ready() -> bool:
 	return _ready
 
-## Convert world position to grid cell
 func world_to_cell(world_pos: Vector2) -> Vector2i:
-	return Vector2i(int(floor(world_pos.x / 8.0)), int(floor(world_pos.y / 8.0)))
+	return Vector2i(int(floor(world_pos.x / TILE_SIZE)), int(floor(world_pos.y / TILE_SIZE)))
 
-## Convert grid cell to world center
 func cell_to_world(cell: Vector2i) -> Vector2:
-	return Vector2(cell.x * 8.0 + 4.0, cell.y * 8.0 + 4.0)
+	return Vector2(cell.x * TILE_SIZE + TILE_SIZE * 0.5, cell.y * TILE_SIZE + TILE_SIZE * 0.5)
 
-## Get the next world position to move toward on the path from `from` to `to`.
-## Returns the position of the next cell on the A* path (not final target).
-## If no path found, returns `to` as fallback (direct chase).
-func get_next_position(from_world: Vector2, to_world: Vector2) -> Vector2:
+## Update flow field if player moved enough. Call this periodically (e.g. every 2-3s).
+func update_flow_field(player_world_pos: Vector2) -> void:
 	if not _ready:
-		return to_world
+		return
+	var target = world_to_cell(player_world_pos)
+	# Only rebuild if player moved significantly
+	if abs(target.x - _last_target_cell.x) < REBUILD_DIST and abs(target.y - _last_target_cell.y) < REBUILD_DIST:
+		return
+	_rebuild_flow(target)
 
-	var from_cell = world_to_cell(from_world)
-	var to_cell = world_to_cell(to_world)
+## Force rebuild (e.g. on floor enter)
+func force_update(player_world_pos: Vector2) -> void:
+	if not _ready:
+		return
+	_rebuild_flow(world_to_cell(player_world_pos))
 
-	# Clamp to grid bounds
-	from_cell = _clamp_cell(from_cell)
-	to_cell = _clamp_cell(to_cell)
+## BFS from target cell, fill _flow with directions pointing toward target
+func _rebuild_flow(target: Vector2i) -> void:
+	_last_target_cell = target
+	_flow.clear()
 
-	# If either cell is solid, find nearest walkable cell
-	if _astar.is_point_solid(from_cell):
-		from_cell = _find_nearest_walkable(from_cell)
-	if _astar.is_point_solid(to_cell):
-		to_cell = _find_nearest_walkable(to_cell)
+	# If target is not walkable, find nearest walkable
+	if not _walkable.has(target):
+		target = _find_nearest_walkable(target)
 
-	if from_cell == to_cell:
-		return to_world
+	# BFS
+	var dist: Dictionary = {}  # Vector2i -> int (distance from target)
+	var queue: Array = []
+	dist[target] = 0
+	queue.push_back(target)
+	_flow[target] = Vector2.ZERO  # at the target, no direction needed
 
-	var path = _astar.get_point_path(from_cell, to_cell)
-	if path.size() < 2:
-		return to_world  # no path or already there
+	var head := 0
+	while head < queue.size():
+		var cell: Vector2i = queue[head]
+		head += 1
+		var d: int = dist[cell]
 
-	# Return the world position of the next cell (index 1, since 0 is current)
-	# Skip ahead a bit if path is long to avoid jittery movement
-	var look_ahead = mini(2, path.size() - 1)
-	return path[look_ahead]
+		for dir in DIRS:
+			var nb: Vector2i = cell + dir
+			if dist.has(nb):
+				continue
+			if not _walkable.has(nb):
+				continue
+			# Diagonal check: both adjacent orthogonals must be walkable
+			if dir.x != 0 and dir.y != 0:
+				if not _walkable.has(Vector2i(cell.x + dir.x, cell.y)) or not _walkable.has(Vector2i(cell.x, cell.y + dir.y)):
+					continue
+			dist[nb] = d + 1
+			# Flow points from nb TOWARD target (i.e. toward cell)
+			_flow[nb] = Vector2(cell.x - nb.x, cell.y - nb.y).normalized()
+			queue.push_back(nb)
 
-func _clamp_cell(cell: Vector2i) -> Vector2i:
-	return Vector2i(
-		clampi(cell.x, _region.position.x, _region.end.x - 1),
-		clampi(cell.y, _region.position.y, _region.end.y - 1)
-	)
+## Mark a cell as walkable (e.g. after breaking a deco obstacle)
+func mark_walkable(cell: Vector2i) -> void:
+	_walkable[cell] = true
+
+## Force flow field rebuild at current target (after terrain changes)
+func invalidate() -> void:
+	_last_target_cell = Vector2i(-99999, -99999)
+
+## Get the flow direction at a world position. Returns normalized dir toward player.
+## Returns Vector2.ZERO if no flow data (enemy is at player or unreachable).
+func get_flow_direction(world_pos: Vector2) -> Vector2:
+	if not _ready or _flow.is_empty():
+		return Vector2.ZERO
+	var cell = world_to_cell(world_pos)
+	if _flow.has(cell):
+		return _flow[cell]
+	# Try nearby cells if slightly off-grid
+	for dir in DIRS:
+		var nb = cell + dir
+		if _flow.has(nb):
+			return _flow[nb]
+	return Vector2.ZERO
+
+## Legacy: per-enemy A* query (kept as fallback for rare cases)
+func get_next_position(from_world: Vector2, to_world: Vector2) -> Vector2:
+	var flow_dir = get_flow_direction(from_world)
+	if flow_dir != Vector2.ZERO:
+		# Return a point 2 tiles ahead in the flow direction
+		return from_world + flow_dir * TILE_SIZE * 2.0
+	return to_world  # fallback: direct chase
 
 func _find_nearest_walkable(cell: Vector2i) -> Vector2i:
-	# Spiral search outward for nearest non-solid cell
-	for radius in range(1, 10):
+	for radius in range(1, 15):
 		for dy in range(-radius, radius + 1):
 			for dx in range(-radius, radius + 1):
 				if abs(dx) != radius and abs(dy) != radius:
-					continue  # only check perimeter
+					continue
 				var test = cell + Vector2i(dx, dy)
-				if _region.has_point(test) and not _astar.is_point_solid(test):
+				if _walkable.has(test):
 					return test
-	return cell  # fallback
+	return cell

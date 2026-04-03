@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "tidegate"
+zone_name = "The Tidegate"
+tileset = 224
+width = 47
+height = 21
+world_pos = Vector2i(64, 40)
+dungeon_base = "Tide-Dungeons"
+description = "A flood-prone gate district where residents build on stilts. When the tide comes, the streets become canals."
+baked_offset = Vector2i(1180, -168)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "bleachbone",
+"tx": 19,
+"ty": 1,
+"x": 22,
+"y": 20
+}])
+npcs = Array[Dictionary]([{
+"name": "Guard",
+"portrait": 149,
+"tile": 133,
+"type": "script",
+"x": 22,
+"y": 1
+}])
+spawns = Array[Dictionary]([{
+"chance": 80,
+"type": "Cycarrior",
+"x": 3,
+"y": 3
+}])

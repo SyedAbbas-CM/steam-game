@@ -6,6 +6,11 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
+flat_bonus = 7.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 14
 flat_bonus = 2.0
 
 [resource]
@@ -14,7 +19,7 @@ item_name = "Tattered Robes"
 loy_tile_index = 373
 description = "Ancient magician robes"
 slot_type = 4
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 1
-buy_price = 96
-sell_value = 24
+buy_price = 312
+sell_value = 78

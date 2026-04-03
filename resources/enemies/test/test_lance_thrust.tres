@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Test Lance Thrust"
+description = "3-4 bullets fired in a line with staggered delay"
+max_hp = 5
+move_speed = 14.0
+contact_damage = 1
+level = 3
+kingdom = "undead"
+hostile = true
+attack_type = 56
+attack_damage = 1
+attack_speed = 2.5
+bullet_speed = 80.0
+bullet_count = 4
+preferred_distance = 45.0
+aggro_range = 70.0
+use_loy_sprite = true
+loy_tile_index = 31
+sprite_color = Color(0.8, 0.7, 0.6, 1)
+xp_value = 5
+score_value = 10

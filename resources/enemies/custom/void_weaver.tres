@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Void Weaver"
+description = "Creates swirling vortexes of homing projectiles. Teleports away when threatened."
+max_hp = 4
+move_speed = 14.0
+contact_damage = 1
+kingdom = "demon"
+attack_type = 50
+attack_damage = 1
+attack_speed = 3.0
+bullet_speed = 45.0
+bullet_count = 8
+preferred_distance = 60.0
+teleport_cooldown = 4.0
+use_loy_sprite = true
+loy_tile_index = 366
+sprite_color = Color(0.6, 0.2, 0.8, 1)
+xp_value = 5
+score_value = 40

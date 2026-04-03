@@ -1,14 +1,24 @@
-[gd_resource type="Resource" script_class="DungeonBiome" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="DungeonBiome" load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/dungeon/dungeon_biome.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/undead/skeleton.tres" id="2"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/magical/medusa.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/human/merc.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/zombie.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/dark_guard.tres" id="6"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/dark_archer.tres" id="7"]
+[ext_resource type="Resource" path="res://resources/enemies/loy/undead/dark_magician.tres" id="8"]
+[ext_resource type="Resource" path="res://resources/enemies/valley/shadow_hound.tres" id="9"]
+[ext_resource type="Resource" path="res://resources/enemies/valley/dark_cultist.tres" id="10"]
+[ext_resource type="Resource" path="res://resources/enemies/valley/shadow_stalker.tres" id="11"]
+[ext_resource type="Resource" path="res://resources/enemies/valley/void_wisp.tres" id="12"]
+[ext_resource type="Resource" path="res://resources/enemies/valley/shadow_brute.tres" id="13"]
 
 [resource]
 script = ExtResource("1")
 biome_name = "Vly Dungeons"
 theme = "brown"
-enemy_pool = [ExtResource("2")]
+enemy_pool = [ExtResource("2"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12"), ExtResource("13")]
 min_floor = 1
 max_floor = 5
 room_count = 30

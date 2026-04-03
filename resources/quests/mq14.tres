@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq14"
+title = "The Road to Ultima Thule"
+summary = "The corruption thickens. The vale village is hollowed. The frozen ground bleeds ichor."
+level = 18
+location = "cenneth"
+target_location = "frostgrave"
+prerequisite_list = Array[String](["mq12", "mq13"])
+start_script = [{
+"cmd": "showDialog",
+"name": "Sage Elowen",
+"options": [{
+"name": "I'll cut through.",
+"script": [{
+"cmd": "startQuest"
+}]
+}],
+"portrait": 163,
+"text": "The ritual is prepared. But the Seal Key must be brought to Ultima Thule itself — to the chamber beneath the city. The road north is dangerous. The Tide grows stronger the closer you get."
+}]
+events = [{
+"param": "frostgrave",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Press on.",
+"script": [{
+"cmd": "getExp",
+"value": "600"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "The ground bleeds black. Villages along the road stand empty — not destroyed, just... vacant. The people aren't dead. They're hollowed. Husks that breathe but don't live. Ultima Thule is close."
+}],
+"type": "zone_enter"
+}]

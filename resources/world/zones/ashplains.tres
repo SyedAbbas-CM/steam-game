@@ -1,0 +1,73 @@
+[gd_resource type="Resource" script_class="LoyZoneData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/loy_zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "ashplains"
+zone_name = "The Ashplains"
+tileset = 112
+width = 50
+world_pos = Vector2i(86, 43)
+dungeon_base = "Plains-Dungeons"
+dungeon_count = 5
+description = "Vast scorched flatlands where grass fires sweep across the horizon. Nomadic warbands roam between ruined settlements."
+baked_offset = Vector2i(1988, -72)
+baked_scale = 4
+exits = Array[Dictionary]([{
+"target": "cenneth",
+"tx": 49,
+"ty": 45,
+"x": 0,
+"y": 15
+}, {
+"target": "miredeep",
+"tx": 15,
+"ty": 39,
+"x": 38,
+"y": 0
+}, {
+"target": "stormcrag",
+"tx": 8,
+"ty": 0,
+"x": 27,
+"y": 24
+}, {
+"target": "brackwater",
+"tx": 0,
+"ty": 10,
+"x": 49,
+"y": 14
+}])
+npcs = Array[Dictionary]([{
+"message": "Welcome to Cenneth, you will behave in our city!",
+"name": "Guard",
+"portrait": 149,
+"tile": 133,
+"type": "message",
+"x": 2,
+"y": 20
+}])
+signs = Array[Dictionary]([{
+"message": "To Cenneth",
+"x": 8,
+"y": 13
+}, {
+"message": "To the Miredeep",
+"x": 36,
+"y": 1
+}, {
+"message": "To Stormcrag",
+"x": 25,
+"y": 22
+}, {
+"message": "To Brackwater",
+"x": 49,
+"y": 13
+}])
+spawns = Array[Dictionary]([{
+"chance": 100,
+"type": "Tiger",
+"x": 2,
+"y": 3
+}])

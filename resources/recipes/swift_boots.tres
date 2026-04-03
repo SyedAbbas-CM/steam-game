@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CraftingRecipe" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/crafting_recipe.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "swift_boots"
+recipe_name = "Swift Boots"
+recipe_type = "blacksmith"
+ingredients = Array[Dictionary]([{{
+"item_name": "Feather",
+"count": 2
+}}, {{
+"item_name": "Leather Scraps",
+"count": 2
+}}])
+gold_cost = 100
+result_item_path = "res://resources/items/crafted/swift_boots.tres"
+result_count = 1
+required_level = 10

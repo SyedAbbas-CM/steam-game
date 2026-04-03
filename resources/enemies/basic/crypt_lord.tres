@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Crypt Lord"
+description = "Ancient lord of the graveyard. Summons undead minions, creates gravity wells to pull you in, then unleashes chain lightning."
+max_hp = 72
+move_speed = 16.0
+contact_damage = 4
+level = 6
+kingdom = "undead"
+size_class = 1
+hostile = true
+attack_type = 6
+attack_damage = 5
+attack_speed = 2.5
+bullet_speed = 50.0
+bullet_count = 5
+preferred_distance = 40.0
+aggro_range = 80.0
+summon_count = 2
+boss_phases = 3
+phase_2_attack = 39
+phase_2_bullet_count = 3
+phase_3_attack = 40
+phase_3_bullet_count = 4
+summon_on_phase_change = true
+use_loy_sprite = true
+loy_tile_index = 22
+sprite_color = Color(0.3, 0.5, 0.3, 1)
+xp_value = 50
+score_value = 100

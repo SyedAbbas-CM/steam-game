@@ -6,17 +6,23 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 2.0
+flat_bonus = 7.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 13
+flat_bonus = 0.05
 
 [resource]
 script = ExtResource("1")
 item_name = "Axe"
-loy_tile_index = 281
+loy_tile_index = 282
 description = "Double headed axe"
 slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 0
-buy_price = 31
-sell_value = 7
-bullet_sprite_index = 123
-weapon_range = 2.0
+buy_price = 138
+sell_value = 34
+bullet_sprite_index = 144
+weapon_range = 1.3
+weapon_type = "axe"

@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Manticore"
 description = "A misshapen evil creature"
-max_hp = 37
+max_hp = 30
 move_speed = 23.2
 contact_damage = 3
 level = 4

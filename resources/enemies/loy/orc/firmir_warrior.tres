@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Firmir Warrior"
 description = "A combat ready firmir"
-max_hp = 280
+max_hp = 224
 move_speed = 22.4
 contact_damage = 5
 level = 16

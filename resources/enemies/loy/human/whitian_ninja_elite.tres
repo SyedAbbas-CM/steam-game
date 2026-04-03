@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Whitian Ninja Elite"
 description = "A ninja of the whitian class"
-max_hp = 95
+max_hp = 76
 move_speed = 27.8
 contact_damage = 5
 level = 12

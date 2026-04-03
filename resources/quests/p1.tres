@@ -7,7 +7,7 @@ script = ExtResource("1_ikrqc")
 id = "p1"
 title = "Harold's Happyness"
 level = 122
-location = "ynys"
+location = "duskport"
 properties = [{
 "index": 0,
 "name": "Delivered",
@@ -79,7 +79,7 @@ events = [{
 }],
 "type": "activate"
 }, {
-"param": "ynys",
+"param": "duskport",
 "script": [{
 "attribute": "session-p1-0",
 "cmd": "if",

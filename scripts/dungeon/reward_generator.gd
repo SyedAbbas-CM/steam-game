@@ -1,23 +1,11 @@
 class_name RewardGenerator
 extends RefCounted
 
-static var _mutations: Array[MutationDefinition] = []
-static var _loaded: bool = false
-
-static func _ensure_loaded() -> void:
-	if _loaded:
-		return
-	_mutations.append(preload("res://resources/mutations/pierce.tres"))
-	_mutations.append(preload("res://resources/mutations/life_steal.tres"))
-	_mutations.append(preload("res://resources/mutations/homing.tres"))
-	_mutations.append(preload("res://resources/mutations/exploding.tres"))
-	_loaded = true
-
 static func generate_treasure_rewards(floor_num: int) -> Array[Dictionary]:
 	var rewards: Array[Dictionary] = []
 
 	# Option 1: Gold
-	var gold_amount = 20 + floor_num * 10
+	var gold_amount = 10 + floor_num * 5
 	rewards.append({
 		"type": "gold",
 		"name": str(gold_amount) + " Gold",
@@ -26,41 +14,67 @@ static func generate_treasure_rewards(floor_num: int) -> Array[Dictionary]:
 		"rarity": 0
 	})
 
-	# Option 2: More gold
+	# Option 2: Big gold
 	var big_gold = gold_amount * 2
 	rewards.append({
 		"type": "gold",
 		"name": str(big_gold) + " Gold",
-		"description": "A big pile",
+		"description": "A big pile of gold",
 		"amount": big_gold,
 		"rarity": 1
 	})
 
-	# Option 3: Companion
+	# Option 3: HP Potions
+	var potion_count = 2 + floor_num / 3
 	rewards.append({
-		"type": "companion",
-		"name": "Archer Companion",
-		"description": "Shoots nearby enemies",
-		"companion_id": "archer",
-		"rarity": 1
+		"type": "hp_potion",
+		"name": str(potion_count) + " HP Potions",
+		"description": "Restores health",
+		"amount": potion_count,
+		"rarity": 0
+	})
+
+	# Option 4: Mana Potions
+	var mp_count = 2 + floor_num / 3
+	rewards.append({
+		"type": "mp_potion",
+		"name": str(mp_count) + " Mana Potions",
+		"description": "Restores magical energy",
+		"amount": mp_count,
+		"rarity": 0
 	})
 
 	return rewards
 
-static func generate_shrine_rewards(_floor_num: int) -> Array[Dictionary]:
-	_ensure_loaded()
+static func generate_shrine_rewards(floor_num: int) -> Array[Dictionary]:
 	var rewards: Array[Dictionary] = []
-	var available = _mutations.duplicate()
-	available.shuffle()
 
-	for i in range(mini(3, available.size())):
-		var mutation = available[i]
-		rewards.append({
-			"type": "mutation",
-			"name": mutation.mutation_name,
-			"description": mutation.description,
-			"mutation": mutation,
-			"rarity": mutation.tier
-		})
+	# Option 1: Full heal
+	rewards.append({
+		"type": "heal",
+		"name": "Full Heal",
+		"description": "Restore all HP",
+		"rarity": 1
+	})
+
+	# Option 2: Gold
+	var gold_amount = 20 + floor_num * 8
+	rewards.append({
+		"type": "gold",
+		"name": str(gold_amount) + " Gold",
+		"description": "Blessed offering",
+		"amount": gold_amount,
+		"rarity": 1
+	})
+
+	# Option 3: HP Potions
+	var potion_count = 3 + floor_num / 2
+	rewards.append({
+		"type": "hp_potion",
+		"name": str(potion_count) + " HP Potions",
+		"description": "Shrine blessing",
+		"amount": potion_count,
+		"rarity": 1
+	})
 
 	return rewards

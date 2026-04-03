@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Bogie Giant"
 description = "A walking giant of goo"
-max_hp = 49
+max_hp = 39
 move_speed = 24.9
 contact_damage = 5
 level = 17

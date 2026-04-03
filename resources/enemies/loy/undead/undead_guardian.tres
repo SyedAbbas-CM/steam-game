@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Undead Guardian"
 description = "A highly skilled warrior risen from the dead"
-max_hp = 15
+max_hp = 12
 move_speed = 22.0
 contact_damage = 3
 level = 13

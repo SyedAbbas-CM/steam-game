@@ -6,7 +6,12 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 1.0
+flat_bonus = 3.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 3
+flat_bonus = 0.05
 
 [resource]
 script = ExtResource("1")
@@ -14,9 +19,10 @@ item_name = "Flail"
 loy_tile_index = 279
 description = "A heavy ball attached to a chain"
 slot_type = 0
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
 rarity = 0
-buy_price = 23
-sell_value = 5
-bullet_sprite_index = 110
-weapon_range = 3.0
+buy_price = 84
+sell_value = 21
+bullet_sprite_index = 224
+weapon_range = 1.8
+weapon_type = "flail"

@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Shambling Corpse"
+description = "A slow, bloated zombie that suddenly lunges forward. Absorbs hits meant for others."
+max_hp = 22
+move_speed = 10.0
+contact_damage = 2
+level = 3
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 1
+attack_damage = 2
+attack_speed = 2.0
+bullet_speed = 50.0
+bullet_count = 1
+preferred_distance = 10.0
+charge_speed = 70.0
+charge_duration = 0.4
+aggro_range = 50.0
+use_loy_sprite = true
+loy_tile_index = 69
+sprite_color = Color(0.6, 0.7, 0.5, 1)
+xp_value = 6
+score_value = 8

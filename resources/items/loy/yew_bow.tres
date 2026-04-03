@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="mod_0"]
+script = ExtResource("2")
+stat = 2
+flat_bonus = 12.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 7
+flat_bonus = 1.0
+
+[resource]
+script = ExtResource("1")
+item_name = "Yew Bow"
+loy_tile_index = 293
+description = "A sturdy yew longbow with great range"
+slot_type = 1
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
+rarity = 1
+buy_price = 380
+sell_value = 95
+bullet_sprite_index = 144
+weapon_range = 5.0
+weapon_type = "bow"
