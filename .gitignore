@@ -2,6 +2,11 @@
 .godot/
 /android/
 
+# Large overworld text scenes (game uses .scn binary versions)
+scenes/overworld/overworld.tscn
+scenes/overworld/overworld2.tscn
+scenes/overworld/overworld_loy_original.tscn
+
 # Node/Electron tool artifacts
 node_modules/
 dist/
