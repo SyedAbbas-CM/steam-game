@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Executioner's Blade"
+loy_tile_index = 8
+description = "A massive blade designed for delivering killing blows"
+slot_type = 2
+rarity = 2
+buy_price = 650
+sell_value = 162
+damage_bonus = 19
+weapon_type = "greatsword"

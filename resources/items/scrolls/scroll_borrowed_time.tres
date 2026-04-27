@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Scroll of Borrowed Time"
+loy_tile_index = 94
+description = "Teaches the Borrowed Time spell permanently"
+slot_type = 10
+rarity = 2
+buy_price = 200
+sell_value = 50
+use_effect = "learn_spell"
+grants_spell = "borrowed_time"

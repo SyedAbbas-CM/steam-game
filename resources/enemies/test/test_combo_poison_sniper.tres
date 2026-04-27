@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/movements/kite_ranged.tres" id="2"]
+[ext_resource type="Script" path="res://scripts/enemies/attack_slot.gd" id="3"]
+[ext_resource type="Resource" path="res://resources/attack_mods/poison_enchant.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/attack_mods/sine_enchant.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/attack_mods/homing_strong.tres" id="6"]
+
+[sub_resource type="Resource" id="slot1"]
+script = ExtResource("3")
+attack_type = 2
+modifier = ExtResource("4")
+
+[sub_resource type="Resource" id="slot2"]
+script = ExtResource("3")
+attack_type = 16
+modifier = ExtResource("5")
+
+[sub_resource type="Resource" id="slot3"]
+script = ExtResource("3")
+attack_type = 2
+modifier = ExtResource("6")
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Combo: Poison Sniper"
+description = "Retreating sniper: poison shots, wavy volleys, homing shots"
+max_hp = 50
+move_speed = 25.0
+contact_damage = 1
+level = 1
+kingdom = "human"
+hostile = true
+attack_type = 2
+attack_damage = 1
+attack_speed = 1.5
+bullet_speed = 90
+bullet_count = 3
+preferred_distance = 70.0
+aggro_range = 120.0
+movement_pattern = ExtResource("2")
+attack_slots = [SubResource("slot1"), SubResource("slot2"), SubResource("slot3")]
+use_loy_sprite = true
+loy_tile_index = 80
+sprite_color = Color(0.3, 0.9, 0.3, 1)
+xp_value = 5
+score_value = 10

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Void Claws"
+loy_tile_index = 291
+description = "Claws that tear through reality itself"
+slot_type = 2
+rarity = 3
+buy_price = 1100
+sell_value = 275
+damage_bonus = 19
+attack_speed_bonus = 0.2
+weapon_type = "claws"

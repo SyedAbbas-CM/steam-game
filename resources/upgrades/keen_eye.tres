@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/upgrade_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "keen_eye"
+upgrade_name = "Keen Eye"
+description = "+5 Pickup Radius per level"
+category = 2
+max_level = 5
+base_cost = 8
+cost_per_level = 5
+required_class = ""
+required_upgrade = ""
+stat_bonuses = [{stat = 20, flat = 5.0, percent = 0.0}]

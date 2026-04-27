@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Iron Lancer"
+description = "An armored lancer. Telegraphs a devastating thrust before lunging forward along a line."
+max_hp = 22
+move_speed = 22.0
+contact_damage = 1
+level = 3
+kingdom = "human"
+size_class = 0
+hostile = true
+attack_type = 63
+attack_damage = 4
+attack_speed = 3.0
+bullet_count = 0
+preferred_distance = 60.0
+charge_speed = 60.0
+charge_duration = 0.2
+aggro_range = 140.0
+armor = 1
+use_loy_sprite = true
+loy_tile_index = 80
+sprite_color = Color(0.75, 0.82, 0.95, 1)
+xp_value = 12
+score_value = 20

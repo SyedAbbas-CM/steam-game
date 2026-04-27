@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/upgrade_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sharper_blades"
+upgrade_name = "Sharper Blades"
+description = "+1 Attack Damage per level"
+category = 0
+max_level = 10
+base_cost = 5
+cost_per_level = 5
+required_class = ""
+required_upgrade = ""
+stat_bonuses = [{stat = 2, flat = 1.0, percent = 0.0}]

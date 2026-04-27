@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "borrowed_time"
+spell_name = "Borrowed Time"
+description = "Become immune for 3s. Take 50% of absorbed damage after."
+effect_type = 7
+delivery = 2
+magnitude = 0
+duration = 3.0
+mp_cost = 25.0
+cooldown = 30.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

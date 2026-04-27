@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/movements/hold_ranged.tres" id="2"]
+[ext_resource type="Script" path="res://scripts/enemies/attack_slot.gd" id="3"]
+[ext_resource type="Resource" path="res://resources/attack_mods/homing_gentle.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/attack_mods/fire_enchant.tres" id="5"]
+
+[sub_resource type="Resource" id="slot1"]
+script = ExtResource("3")
+attack_type = 42
+
+[sub_resource type="Resource" id="slot2"]
+script = ExtResource("3")
+attack_type = 42
+modifier = ExtResource("4")
+
+[sub_resource type="Resource" id="slot3"]
+script = ExtResource("3")
+attack_type = 43
+modifier = ExtResource("5")
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Combo: Bomb Variety"
+description = "Three bomb attacks: plain toss, homing toss, burning carpet bomb"
+max_hp = 50
+move_speed = 15.0
+contact_damage = 1
+level = 1
+kingdom = "orc"
+hostile = true
+attack_type = 42
+attack_damage = 1
+attack_speed = 2.0
+bullet_speed = 50
+bullet_count = 3
+preferred_distance = 55.0
+aggro_range = 120.0
+bomb_aoe_radius = 16.0
+bomb_flight_time = 0.7
+movement_pattern = ExtResource("2")
+attack_slots = [SubResource("slot1"), SubResource("slot2"), SubResource("slot3")]
+use_loy_sprite = true
+loy_tile_index = 48
+sprite_color = Color(0.8, 0.5, 0.2, 1)
+xp_value = 5
+score_value = 10

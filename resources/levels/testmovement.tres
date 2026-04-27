@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "TestMovement"
+tileset = 56
+chests = 0
+width = 200
+height = 80
+rooms = 11
+min_monsters = 1
+max_monsters = 1
+aggro_chance = 0
+requires_key = false
+legend = ""
+recommended_level = 0
+monster_pool = []
+fixed_monsters = [{ "type": "Move: Chase Direct" }, { "type": "Move: Chase Weave" }, { "type": "Move: Chase Aggressive" }, { "type": "Move: Lunge Circle" }, { "type": "Move: Strafe Run" }, { "type": "Move: Kite Ranged" }, { "type": "Move: Hold Ranged" }, { "type": "Move: Anchor Turret" }, { "type": "Move: Anchor Summoner" }, { "type": "Move: Defensive Wall" }, { "type": "Move: Bodyguard" }]
+branch_monsters = []
+west_branch = []
+south_branch = []
+chest_loot = []
+has_rail_traps = false

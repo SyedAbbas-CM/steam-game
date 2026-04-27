@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/upgrade_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "arcane_mastery"
+upgrade_name = "Arcane Mastery"
+description = "+10 Max MP and +1 MP Regen per level"
+category = 3
+max_level = 3
+base_cost = 20
+cost_per_level = 15
+required_class = "wizard"
+required_upgrade = ""
+stat_bonuses = [{stat = 9, flat = 10.0, percent = 0.0}, {stat = 11, flat = 1.0, percent = 0.0}]

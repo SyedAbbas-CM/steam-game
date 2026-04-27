@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/attack_mods/poison_enchant.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Mod: Poison Gatling"
+description = "Rapid poison bullets"
+max_hp = 4
+move_speed = 18.0
+contact_damage = 1
+level = 1
+kingdom = "crawler"
+size_class = 0
+hostile = true
+attack_type = 19
+attack_damage = 1
+attack_speed = 1.5
+bullet_speed = 65
+bullet_count = 3
+preferred_distance = 45.0
+aggro_range = 70.0
+attack_modifier = ExtResource("2")
+use_loy_sprite = true
+loy_tile_index = 144
+sprite_color = Color(0.4, 0.6, 1.0, 1)
+xp_value = 5
+score_value = 10

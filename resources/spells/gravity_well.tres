@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "gravity_well"
+spell_name = "Gravity Well"
+description = "Place a vortex that pulls enemies for 3s, slowing them."
+effect_type = 5
+delivery = 1
+magnitude = 0
+duration = 3.0
+mp_cost = 20.0
+cooldown = 18.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

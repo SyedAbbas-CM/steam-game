@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/upgrade_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "quick_hands"
+upgrade_name = "Quick Hands"
+description = "+2% Attack Speed per level"
+category = 0
+max_level = 5
+base_cost = 10
+cost_per_level = 5
+required_class = ""
+required_upgrade = ""
+stat_bonuses = [{stat = 3, flat = 0.0, percent = 0.02}]

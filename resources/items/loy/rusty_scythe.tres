@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Rusty Scythe"
+loy_tile_index = 15
+description = "A rusted farming scythe repurposed for combat"
+slot_type = 2
+rarity = 0
+buy_price = 55
+sell_value = 13
+damage_bonus = 3
+weapon_type = "scythe"

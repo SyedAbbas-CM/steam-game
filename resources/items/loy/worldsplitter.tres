@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Worldsplitter"
+loy_tile_index = 15
+description = "A legendary axe said to have split mountains"
+slot_type = 2
+rarity = 3
+buy_price = 1300
+sell_value = 325
+damage_bonus = 27
+weapon_type = "great_axe"

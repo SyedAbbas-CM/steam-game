@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Skeleton Knight"
+description = "An undead swordsman who strikes with a three-hit cleave chain. The final overhead smash knocks back."
+max_hp = 20
+move_speed = 26.0
+contact_damage = 1
+level = 3
+kingdom = "undead"
+size_class = 0
+hostile = true
+attack_type = 65
+attack_damage = 3
+attack_speed = 2.8
+bullet_count = 0
+preferred_distance = 20.0
+charge_speed = 60.0
+charge_duration = 0.2
+aggro_range = 130.0
+armor = 1
+use_loy_sprite = true
+loy_tile_index = 16
+sprite_color = Color(0.92, 0.92, 1.0, 1)
+xp_value = 14
+score_value = 22

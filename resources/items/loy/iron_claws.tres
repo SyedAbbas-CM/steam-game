@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Iron Claws"
+loy_tile_index = 291
+description = "Sharp iron claws"
+slot_type = 2
+rarity = 0
+buy_price = 90
+sell_value = 22
+damage_bonus = 3
+attack_speed_bonus = 0.1
+weapon_type = "claws"

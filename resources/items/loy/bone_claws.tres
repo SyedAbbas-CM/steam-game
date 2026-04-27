@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Bone Claws"
+loy_tile_index = 291
+description = "Crude claws fashioned from bone"
+slot_type = 2
+rarity = 0
+buy_price = 45
+sell_value = 11
+damage_bonus = 1
+attack_speed_bonus = 0.08
+weapon_type = "claws"

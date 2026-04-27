@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="MovementPattern" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/movement_pattern.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+move_type = 12
+teleport_interval = 2.0
+teleport_range = 60.0
+speed_mult = 1.0
+dodge_enabled = false

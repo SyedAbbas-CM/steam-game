@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/attack_mods/explosive.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Mod: Explosive Mortar"
+description = "Mortars with bigger AoE explosions"
+max_hp = 4
+move_speed = 15.0
+contact_damage = 1
+level = 1
+kingdom = "orc"
+size_class = 0
+hostile = true
+attack_type = 20
+attack_damage = 1
+attack_speed = 2.5
+bullet_speed = 50
+bullet_count = 3
+preferred_distance = 50.0
+aggro_range = 70.0
+attack_modifier = ExtResource("2")
+use_loy_sprite = true
+loy_tile_index = 128
+sprite_color = Color(0.4, 0.6, 1.0, 1)
+xp_value = 5
+score_value = 10

@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/warlock.png" id="1"]
+[ext_resource type="Script" path="res://scripts/test/test_warlock_anim.gd" id="2"]
+
+[node name="TestWarlockAnim" type="Node2D"]
+script = ExtResource("2")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(12, 12)
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("1")
+texture_filter = 0
+hframes = 24
+frame = 0

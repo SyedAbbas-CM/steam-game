@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Void Scythe"
+loy_tile_index = 15
+description = "A scythe from beyond the void"
+slot_type = 2
+rarity = 3
+buy_price = 1350
+sell_value = 337
+damage_bonus = 26
+weapon_type = "scythe"

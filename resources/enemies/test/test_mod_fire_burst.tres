@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/attack_mods/fire_enchant.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Mod: Fire Burst"
+description = "Ring of burning bullets"
+max_hp = 4
+move_speed = 18.0
+contact_damage = 1
+level = 1
+kingdom = "demon"
+size_class = 0
+hostile = true
+attack_type = 3
+attack_damage = 1
+attack_speed = 2.0
+bullet_speed = 55
+bullet_count = 8
+preferred_distance = 35.0
+aggro_range = 70.0
+attack_modifier = ExtResource("2")
+use_loy_sprite = true
+loy_tile_index = 80
+sprite_color = Color(0.4, 0.6, 1.0, 1)
+xp_value = 5
+score_value = 10

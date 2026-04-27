@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "soul_drain"
+spell_name = "Soul Drain"
+description = "Channel for 3s, draining HP from nearby enemies. Heal 50% dealt."
+effect_type = 5
+delivery = 2
+magnitude = 2
+duration = 3.0
+mp_cost = 20.0
+cooldown = 15.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

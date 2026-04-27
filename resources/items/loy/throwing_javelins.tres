@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Throwing Javelins"
+loy_tile_index = 17
+description = "A bundle of throwing javelins (10 shots)"
+slot_type = 12
+rarity = 0
+buy_price = 80
+sell_value = 20
+quantity = 10
+max_quantity = 10
+arrow_effect = "javelin"

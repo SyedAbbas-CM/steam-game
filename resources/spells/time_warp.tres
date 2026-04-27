@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "time_warp"
+spell_name = "Time Warp"
+description = "Slow all enemy movement and bullets by 60% for 4s."
+effect_type = 1
+delivery = 1
+magnitude = 0
+duration = 4.0
+mp_cost = 30.0
+cooldown = 25.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "mirror_image"
+spell_name = "Mirror Image"
+description = "Create 2 decoy copies for 5s. Enemies target decoys."
+effect_type = 7
+delivery = 2
+magnitude = 0
+duration = 5.0
+mp_cost = 20.0
+cooldown = 20.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

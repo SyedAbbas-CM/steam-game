@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="AttackModifier" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/attack_modifier.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+requires_stationary = true
+aim_at_player = false
+min_fire_distance = 30.0

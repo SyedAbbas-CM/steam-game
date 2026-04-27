@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/upgrade_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "merc_versatility"
+upgrade_name = "Mercenary's Edge"
+description = "+5% Damage and +5% Move Speed per level"
+category = 3
+max_level = 3
+base_cost = 20
+cost_per_level = 15
+required_class = "mercenary"
+required_upgrade = ""
+stat_bonuses = [{stat = 2, flat = 0.0, percent = 0.05}, {stat = 1, flat = 0.0, percent = 0.05}]

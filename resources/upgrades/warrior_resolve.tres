@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/upgrade_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "warrior_resolve"
+upgrade_name = "Warrior's Resolve"
+description = "+15 HP and +5 Tenacity per level"
+category = 3
+max_level = 3
+base_cost = 20
+cost_per_level = 15
+required_class = "warrior"
+required_upgrade = ""
+stat_bonuses = [{stat = 0, flat = 15.0, percent = 0.0}, {stat = 25, flat = 5.0, percent = 0.0}]

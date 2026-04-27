@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Runic Greatsword"
+loy_tile_index = 8
+description = "Ancient runes pulse with power along the blade"
+slot_type = 2
+rarity = 2
+buy_price = 900
+sell_value = 225
+damage_bonus = 24
+weapon_type = "greatsword"

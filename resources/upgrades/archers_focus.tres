@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/upgrade_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "archers_focus"
+upgrade_name = "Archer's Focus"
+description = "+5 Dodge and +10% Bullet Speed per level"
+category = 3
+max_level = 3
+base_cost = 20
+cost_per_level = 15
+required_class = "archer"
+required_upgrade = ""
+stat_bonuses = [{stat = 17, flat = 5.0, percent = 0.0}, {stat = 4, flat = 0.0, percent = 0.1}]

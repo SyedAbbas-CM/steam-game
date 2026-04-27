@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="MovementPattern" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/movement_pattern.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+approach_weight = 0.1
+retreat_weight = 0.0
+strafe_weight = 0.0
+hold_weight = 0.9
+speed_mult = 0.3
+preferred_distance = 0.0
+close_threshold = 10.0
+dodge_enabled = false
+weave_amplitude = 0.0

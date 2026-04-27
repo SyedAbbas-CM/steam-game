@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Berserker Axe"
+loy_tile_index = 15
+description = "An axe infused with berserker fury"
+slot_type = 2
+rarity = 2
+buy_price = 500
+sell_value = 125
+damage_bonus = 16
+weapon_type = "great_axe"

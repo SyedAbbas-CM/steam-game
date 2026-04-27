@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_name = "Lightning Arrow"
+loy_tile_index = 11
+description = "Charged arrows that chain lightning to nearby enemies (25 shots)"
+slot_type = 12
+rarity = 1
+buy_price = 120
+sell_value = 30
+quantity = 25
+max_quantity = 25
+arrow_effect = "lightning"

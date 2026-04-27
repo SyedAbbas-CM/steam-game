@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "TestCombo"
+tileset = 0
+chests = 0
+width = 400
+height = 200
+rooms = 34
+min_monsters = 1
+max_monsters = 1
+aggro_chance = 0
+requires_key = false
+legend = ""
+recommended_level = 0
+monster_pool = []
+fixed_monsters = [{ "type": "Combo: Fire Turret" }, { "type": "Combo: Poison Sniper" }, { "type": "Combo: Charging Bouncer" }, { "type": "Combo: Weaving Homer" }, { "type": "Combo: Strafing Splitter" }, { "type": "Combo: Defensive Mortar" }, { "type": "Combo: Lunge Spiral" }, { "type": "Combo: Anchored Miner" }, { "type": "Combo: Homing Fire Chaser" }, { "type": "Combo: Chase Shotgunner" }, { "type": "Combo: Triple Shotgun" }, { "type": "Combo: Bomb Variety" }, { "type": "Combo: Wavy Pusher" }, { "type": "Combo: Split Homer" }, { "type": "Combo: Fortress" }]
+west_branch = [{ "type": "Move: Orbit Player" }, { "type": "Move: Orbit Point" }, { "type": "Move: Orbit Ally" }, { "type": "Move: Patrol Horizontal" }, { "type": "Move: Patrol Vertical" }, { "type": "Move: Flee" }, { "type": "Move: Zigzag" }, { "type": "Move: Wall Bounce" }, { "type": "Move: Dash In Out" }, { "type": "Move: Kite" }, { "type": "Move: Swoop" }, { "type": "Move: Teleport" }, { "type": "Move: Mirror" }, { "type": "Move: Intercept" }, { "type": "Move: Elastic" }, { "type": "Move: Edge Skater" }, { "type": "Move: Bait Punish" }, { "type": "Move: Ambush" }]
+branch_monsters = []
+south_branch = []
+chest_loot = []
+has_rail_traps = false
