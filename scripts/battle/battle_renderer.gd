@@ -26,7 +26,6 @@ var cam: Camera2D  # For viewport culling
 var _unit_sprites: Array[Sprite2D] = []
 var _atlas_textures: Array[AtlasTexture] = []  # prebuilt per (faction, type) combo
 
-
 func _ready() -> void:
 	atlas_texture = preload("res://assets/sprites/Mixed_Units.png")
 	_prebuild_atlas_textures()
@@ -188,8 +187,8 @@ func _draw() -> void:
 		# Draw selection rings
 		for idx in selected_units:
 			if idx < units.count and units.alive[idx] == 1:
-				var pos := Vector2(units.x[idx], units.y[idx])
 				var r := units.radius[idx] * 1.5
+				var pos := Vector2(units.x[idx], units.y[idx])
 				draw_arc(pos, r, 0, TAU, 24, Color(0.3, 1.0, 0.3, 0.9), 2.0)
 
 	# Draw projectiles

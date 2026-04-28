@@ -10,6 +10,8 @@ var game_hud: GameHUD
 var companion_scene: PackedScene
 
 func _ready() -> void:
+	var fpv = null
+	var player = get_tree().get_first_node_in_group("player")
 	var t_start = Time.get_ticks_msec()
 	print("TIMING: dungeon_scene _ready START")
 	companion_scene = preload("res://scenes/companions/companion.tscn")
@@ -20,7 +22,6 @@ func _ready() -> void:
 	dungeon_manager.reward_requested.connect(_on_reward_requested)
 	dungeon_manager.run_ended.connect(_on_dungeon_complete)
 
-	var player = dungeon_manager.get_node("Player")
 	player.in_dungeon = true
 	player.player_died.connect(_on_player_died)
 	reward_screen.reward_chosen.connect(_on_reward_chosen)
@@ -43,8 +44,12 @@ func _ready() -> void:
 	add_child(loot_ui)
 	loot_ui.setup(player.equipment_manager)
 
+	# Quest log (Q key)
+	var quest_log = QuestLog.new()
+	add_child(quest_log)
+
 	# 3D first-person view
-	var fpv = FirstPersonView.new()
+	fpv = FirstPersonView.new()
 	fpv.name = "FirstPersonView"
 	fpv.visible = false
 	add_child(fpv)
@@ -71,13 +76,17 @@ func _ready() -> void:
 	dungeon_manager.start_run()
 
 	# Test Arena: add chest UI + spawn test chests in start room
-	if GameManager and GameManager.pending_biome_name == "Test-Arena":
+	if GameManager and (GameManager.pending_biome_name.begins_with("Test-Arena") or GameManager.pending_biome_name == "TestCombo" or GameManager.pending_biome_name == "TestMovement"):
 		var chest_ui = ChestUI.new()
 		add_child(chest_ui)
 		chest_ui.setup(player.equipment_manager)
 		# Spawn test chests near player start position after a short delay
 		# (player position is set by dungeon_manager.start_run)
 		_spawn_test_arena_chests.call_deferred()
+
+	# Add DialogueUI so quest boss_killed dialogues work in dungeon
+	var _dui = DialogueUI.new()
+	add_child(_dui)
 
 	# Wire dungeon events signals
 	var ev = dungeon_manager.get("events")
@@ -115,6 +124,7 @@ func _on_room_changed(room_index: int, room_data: RoomData) -> void:
 		RoomData.RoomType.TREASURE: type_name = "Treasure"
 		RoomData.RoomType.SHRINE: type_name = "Shrine"
 		RoomData.RoomType.ELITE: type_name = "ELITE"
+		RoomData.RoomType.SUPER_ELITE: type_name = "SUPER ELITE"
 		RoomData.RoomType.BOSS: type_name = "BOSS"
 		RoomData.RoomType.SHOP: type_name = "Shop"
 	var suffix = " [Stairs]" if room_data.has_stairs_down else ""
@@ -140,7 +150,7 @@ func _on_reward_requested(room_data: RoomData) -> void:
 	reward_screen.show_rewards(rewards, title)
 
 func _on_reward_chosen(reward: Dictionary) -> void:
-	var player = dungeon_manager.get_node("Player")
+	var player = get_tree().get_first_node_in_group("player")
 
 	var sfx_rw = get_node_or_null("/root/SFXManager")
 	match reward["type"]:
@@ -195,7 +205,7 @@ func _on_reward_chosen(reward: Dictionary) -> void:
 			room_data.cleared = true
 
 func _spawn_companion(companion_id: String) -> void:
-	var player = dungeon_manager.get_node("Player")
+	var player = get_tree().get_first_node_in_group("player")
 	var existing = get_tree().get_nodes_in_group("companion")
 	if existing.size() >= 3:
 		return

@@ -35,7 +35,7 @@ func _process(delta: float) -> void:
 func _migrate_legacy_save() -> void:
 	# If old save_data.tres exists and no slot 1 exists, migrate it
 	if not SaveData.slot_exists(1) and ResourceLoader.exists(SaveData.LEGACY_SAVE_PATH):
-		var legacy = ResourceLoader.load(SaveData.LEGACY_SAVE_PATH)
+		var legacy = load(SaveData.LEGACY_SAVE_PATH)
 		if legacy is SaveData:
 			legacy.slot_index = 1
 			legacy.character_alive = true
@@ -54,6 +54,14 @@ func load_slot(slot: int) -> bool:
 	active_slot = slot
 	selected_class = save_data.selected_class
 	_auto_save_timer = 0.0
+	# Migrate legacy meta-based territories to proper field
+	if save_data.has_meta("owned_territories"):
+		var legacy: Array = save_data.get_meta("owned_territories")
+		for t in legacy:
+			if t is String and t not in save_data.owned_territories:
+				save_data.owned_territories.append(t)
+		save_data.remove_meta("owned_territories")
+		save_data.save_to_slot()
 	# Reload quest state from this slot
 	var qm = get_node_or_null("/root/QuestManager")
 	if qm and qm.has_method("reload_from_save"):
@@ -85,6 +93,9 @@ func delete_slot(slot: int) -> void:
 		save_data = null
 		active_slot = -1
 	print("GameManager: Deleted slot %d" % slot)
+
+func load_slot_preview(slot: int) -> SaveData:
+	return SaveData.load_slot(slot)
 
 func has_living_character() -> bool:
 	return save_data != null and save_data.character_alive
@@ -208,12 +219,8 @@ func on_battle_ended(result: Dictionary) -> void:
 	var army_id: String = result.get("army_id", zone_name)  # army marker key for removal
 	var fm = get_node_or_null("/root/FactionManager")
 	if victory and zone_name != "" and save_data:
-		if not save_data.has_meta("owned_territories"):
-			save_data.set_meta("owned_territories", [])
-		var owned: Array = save_data.get_meta("owned_territories")
-		if zone_name not in owned:
-			owned.append(zone_name)
-			save_data.set_meta("owned_territories", owned)
+		if zone_name not in save_data.owned_territories:
+			save_data.owned_territories.append(zone_name)
 		# Remove the army marker (may differ from zone_name)
 		remove_enemy_army(army_id)
 		if fm:
@@ -226,12 +233,9 @@ func on_battle_ended(result: Dictionary) -> void:
 		print("GameManager: Victory in %s (army=%s)" % [zone_name, army_id])
 	elif not victory and save_data:
 		# Defeat: lose territory to the enemy and kill the player
-		if zone_name != "" and save_data.has_meta("owned_territories"):
-			var owned: Array = save_data.get_meta("owned_territories")
-			if zone_name in owned:
-				owned.erase(zone_name)
-				save_data.set_meta("owned_territories", owned)
-				print("GameManager: Lost territory '%s' after battle defeat" % zone_name)
+		if zone_name != "" and zone_name in save_data.owned_territories:
+			save_data.owned_territories.erase(zone_name)
+			print("GameManager: Lost territory '%s' after battle defeat" % zone_name)
 		if fm:
 			var red_surv: float = result.get("red_survival", 1.0)
 			fm.on_battle_lost(zone_name, red_surv)
@@ -311,7 +315,11 @@ func _load_enemy_armies() -> void:
 
 # --- Currency ---
 
-func add_gold(amount: int) -> void:
+func add_gold(amount: int, apply_mult: bool = false) -> void:
+	if apply_mult:
+		var player = get_tree().get_first_node_in_group("player")
+		if player and player.get("equipment_manager"):
+			amount = int(amount * player.equipment_manager.get_gold_mult())
 	save_data.gold += amount
 	save_data.total_gold_earned += amount
 	gold_changed.emit(save_data.gold)
@@ -339,7 +347,7 @@ func on_run_ended(run_state: RunState) -> void:
 		save_data.best_floor = run_state.floors_cleared
 
 	# Transfer run earnings to persistent
-	add_gold(run_state.run_gold)
+	add_gold(run_state.run_gold, true)
 	add_relics(run_state.run_relics)
 	add_troop_tokens(run_state.run_troop_tokens)
 
@@ -405,6 +413,8 @@ func save_equipment(equip_mgr: EquipmentManager) -> void:
 		return
 	# Save all inventory items (equipped ones live in inventory too)
 	save_data.inventory_items.clear()
+	save_data.inventory_quantities.clear()
+	var inv_idx := 0
 	for item in equip_mgr.inventory:
 		if not item:
 			continue
@@ -412,6 +422,10 @@ func save_equipment(equip_mgr: EquipmentManager) -> void:
 		var path = item.resource_path if item.resource_path != "" else item.source_path
 		if path != "":
 			save_data.inventory_items.append(path)
+			# Persist ammo quantity so arrow stacks survive scene transitions
+			if item.slot_type == EquipmentItem.SlotType.AMMO and item.quantity > 0:
+				save_data.inventory_quantities[inv_idx] = item.quantity
+			inv_idx += 1
 	# Save which inventory indices are equipped (inv_index -> slot_type)
 	save_data.equipped_items.clear()
 	for slot_type in equip_mgr.equipped:
@@ -440,10 +454,16 @@ func load_equipment(equip_mgr: EquipmentManager) -> bool:
 	if save_data.inventory_items.is_empty():
 		return false
 	# Restore inventory first
+	var load_idx = 0
 	for path in save_data.inventory_items:
 		var res = load(path) as EquipmentItem
 		if res:
-			equip_mgr.inventory.append(res.make_copy())
+			var copy = res.make_copy()
+			# Restore saved ammo quantity (arrows survive scene transitions)
+			if save_data.inventory_quantities.has(load_idx):
+				copy.quantity = save_data.inventory_quantities[load_idx]
+			equip_mgr.inventory.append(copy)
+		load_idx += 1
 	# Mark equipped items by index
 	for idx_key in save_data.equipped_items:
 		var inv_idx = int(idx_key)

@@ -45,7 +45,6 @@ func _run() -> void:
 			break
 
 		var block = xml.substr(level_start, level_end - level_start)
-		var level = _parse_level(block)
 		if level and level.id != "":
 			var safe_name = level.id.to_lower().replace(" ", "_").replace("-", "_")
 			ResourceSaver.save(level, out_dir + safe_name + ".tres")

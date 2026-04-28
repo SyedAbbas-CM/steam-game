@@ -15,7 +15,6 @@ func get_zone(zone_id: String) -> LoyZoneData:
 
 ## Get all zones that have dungeons
 func get_dungeon_zones() -> Array[LoyZoneData]:
-	var result: Array[LoyZoneData] = []
 	for z in zones:
 		if z.dungeon_count > 0:
 			result.append(z)

@@ -108,6 +108,8 @@ func _physics_process(delta: float) -> void:
 		for nid in expired:
 			_hit_cooldowns.erase(nid)
 
+		var dmg = get_damage()
+		var vfx = get_node_or_null("/root/VFXManager")
 		for body in get_overlapping_bodies():
 			if not body.is_in_group("player"):
 				continue
@@ -115,10 +117,8 @@ func _physics_process(delta: float) -> void:
 			if _hit_cooldowns.has(nid):
 				continue
 			_hit_cooldowns[nid] = HIT_COOLDOWN_SAW
-			var dmg = get_damage()
 			if body.has_method("take_damage"):
 				body.take_damage(dmg, Vector2.INF, false, false, CombatTypes.DamageType.TRUE)
-			var vfx = get_node_or_null("/root/VFXManager")
 			if vfx:
 				vfx.hit_spark(position, Color(0.9, 0.5, 0.2))
 			_play_sfx("impact_a", -6.0, 0.15)

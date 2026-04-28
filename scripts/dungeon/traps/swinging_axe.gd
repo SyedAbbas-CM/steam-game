@@ -106,9 +106,9 @@ func _deal_damage(target: Node2D) -> void:
 	if target.has_method("take_damage"):
 		var from_player = not target.is_in_group("enemy")
 		if target.is_in_group("enemy"):
-			target.take_damage(dmg, false)  # trap damage — don't reveal player
+			target.take_damage(dmg, false, CombatTypes.DamageType.TRUE)
 		else:
-			target.take_damage(dmg)
+			target.take_damage(dmg, Vector2.INF, false, false, CombatTypes.DamageType.TRUE)
 
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:

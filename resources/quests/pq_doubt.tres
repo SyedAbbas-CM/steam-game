@@ -8,7 +8,7 @@ id = "pq_doubt"
 title = "The Burning"
 summary = "Heshem wants a Red Potion and a Blue Potion. He says he needs them for something important."
 level = 5
-location = "haven"
+location = "aria"
 prerequisite = "pq_cave"
 properties = [{
 "index": 0,
@@ -41,7 +41,7 @@ start_script = [{
 }]
 }]
 events = [{
-"param": "haven",
+"param": "aria",
 "script": [{
 "attribute": "count-Red Potion",
 "cmd": "if",

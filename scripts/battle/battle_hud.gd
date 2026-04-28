@@ -18,6 +18,18 @@ var _return_button: Button
 var _current_speed: float = 1.0
 var _command_mode_label: Label
 var _command_mode: bool = false
+
+# Player vital bars
+var _player_ref: CharacterBody2D
+var _vitals_panel: Panel
+var _hp_bar: ColorRect
+var _hp_bg: ColorRect
+var _mp_bar: ColorRect
+var _mp_bg: ColorRect
+var _stamina_bar: ColorRect
+var _stamina_bg: ColorRect
+const VITAL_BAR_WIDTH := 200.0
+const VITAL_BAR_HEIGHT := 8.0
 var _fog_button: Button
 var _fog_enabled: bool = true
 
@@ -130,6 +142,47 @@ func _build_ui() -> void:
 	_return_button.pressed.connect(func(): return_pressed.emit())
 	overlay_vbox.add_child(_return_button)
 
+	# Player vital bars (bottom-left)
+	_vitals_panel = Panel.new()
+	_vitals_panel.position = Vector2(20, 0)
+	_vitals_panel.size = Vector2(VITAL_BAR_WIDTH + 20, 50)
+	_vitals_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_vitals_panel.offset_left = 20
+	_vitals_panel.offset_top = -60
+	_vitals_panel.offset_bottom = -10
+	_vitals_panel.offset_right = VITAL_BAR_WIDTH + 40
+	var vitals_style := StyleBoxFlat.new()
+	vitals_style.bg_color = Color(0.05, 0.05, 0.1, 0.8)
+	vitals_style.corner_radius_top_left = 4
+	vitals_style.corner_radius_top_right = 4
+	vitals_style.corner_radius_bottom_left = 4
+	vitals_style.corner_radius_bottom_right = 4
+	_vitals_panel.add_theme_stylebox_override("panel", vitals_style)
+	_vitals_panel.visible = false
+	add_child(_vitals_panel)
+
+	var bar_x := 10.0
+	var bar_y := 6.0
+	var bar_gap := 14.0
+
+	# HP
+	_hp_bg = _create_bar_bg(Vector2(bar_x, bar_y))
+	_vitals_panel.add_child(_hp_bg)
+	_hp_bar = _create_bar_fill(Vector2(bar_x, bar_y), Color(0.2, 0.9, 0.2))
+	_vitals_panel.add_child(_hp_bar)
+
+	# MP
+	_mp_bg = _create_bar_bg(Vector2(bar_x, bar_y + bar_gap))
+	_vitals_panel.add_child(_mp_bg)
+	_mp_bar = _create_bar_fill(Vector2(bar_x, bar_y + bar_gap), Color(0.3, 0.5, 1.0))
+	_vitals_panel.add_child(_mp_bar)
+
+	# Stamina
+	_stamina_bg = _create_bar_bg(Vector2(bar_x, bar_y + bar_gap * 2))
+	_vitals_panel.add_child(_stamina_bg)
+	_stamina_bar = _create_bar_fill(Vector2(bar_x, bar_y + bar_gap * 2), Color(0.9, 0.8, 0.2))
+	_vitals_panel.add_child(_stamina_bar)
+
 func update_counts(player_alive: int, enemy_alive: int) -> void:
 	_player_count_label.text = "YOUR ARMY: %d" % player_alive
 	_enemy_count_label.text = "ENEMY: %d" % enemy_alive
@@ -156,6 +209,39 @@ func show_result(victory: bool) -> void:
 	else:
 		_overlay_label.text = "DEFEAT"
 		_overlay_label.add_theme_color_override("font_color", Color.RED)
+
+func _create_bar_bg(pos: Vector2) -> ColorRect:
+	var bg := ColorRect.new()
+	bg.color = Color(0.2, 0.2, 0.2)
+	bg.position = pos
+	bg.size = Vector2(VITAL_BAR_WIDTH, VITAL_BAR_HEIGHT)
+	return bg
+
+func _create_bar_fill(pos: Vector2, color: Color) -> ColorRect:
+	var bar := ColorRect.new()
+	bar.color = color
+	bar.position = pos
+	bar.size = Vector2(VITAL_BAR_WIDTH, VITAL_BAR_HEIGHT)
+	return bar
+
+func set_player(player_ref: CharacterBody2D) -> void:
+	_player_ref = player_ref
+	_vitals_panel.visible = player_ref != null
+
+func update_vitals() -> void:
+	if not _player_ref or not is_instance_valid(_player_ref):
+		_vitals_panel.visible = false
+		return
+	var hp: float = _player_ref.get("hp") if _player_ref.get("hp") != null else 0.0
+	var max_hp: float = _player_ref.get("max_hp") if _player_ref.get("max_hp") != null else 1.0
+	var mp: float = _player_ref.get("mp") if _player_ref.get("mp") != null else 0.0
+	var max_mp: float = _player_ref.get("max_mp") if _player_ref.get("max_mp") != null else 1.0
+	var stamina: float = _player_ref.get("stamina") if _player_ref.get("stamina") != null else 0.0
+	var max_stamina: float = _player_ref.get("max_stamina") if _player_ref.get("max_stamina") != null else 1.0
+
+	_hp_bar.size.x = VITAL_BAR_WIDTH * clampf(hp / maxf(max_hp, 1.0), 0.0, 1.0)
+	_mp_bar.size.x = VITAL_BAR_WIDTH * clampf(mp / maxf(max_mp, 1.0), 0.0, 1.0)
+	_stamina_bar.size.x = VITAL_BAR_WIDTH * clampf(stamina / maxf(max_stamina, 1.0), 0.0, 1.0)
 
 func _on_speed_pressed(spd: float) -> void:
 	_current_speed = spd

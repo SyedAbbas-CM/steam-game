@@ -1,7 +1,20 @@
 class_name BattleCommander
 extends RefCounted
 
-enum CommandType { MOVE, ATTACK, HOLD, CHARGE, RETREAT, FOLLOW, SCATTER, DEFENSIVE }
+enum CommandType { MOVE, ATTACK, HOLD, CHARGE, RETREAT, FOLLOW, SCATTER, DEFENSIVE, FIGHTING_WITHDRAWAL }
+
+## Tactical roles assigned by AI doctrine plays
+enum TacticalRole {
+	NONE,
+	VANGUARD,     ## Front-line attacker
+	ANVIL,        ## Holds enemy in place
+	HAMMER,       ## Flanks while anvil engages
+	BAIT,         ## Engages briefly then retreats to lure enemy out of position
+	FLANKER,      ## Attacks enemy side/rear while bait holds front
+	SCREEN,       ## Protects ranged units from melee
+	SKIRMISHER,   ## Harasses from range, avoids melee
+	RESERVE,      ## Held back for opportunity strikes
+}
 
 var _groups: Dictionary = {}  # id -> BattleGroup
 var _next_id: int = 0
@@ -27,6 +40,12 @@ class BattleGroup:
 	var initial_size: int = 0
 	# Withdraw position (where cavalry retreats to after charge)
 	var withdraw_pos: Vector2 = Vector2.ZERO
+	## Playbook system
+	var tactical_role: int = TacticalRole.NONE
+	var parent_group_id: int = -1  # For detachments: parent group ID
+	var rally_point: Vector2 = Vector2.ZERO  ## Fallback position for withdraw cycles
+	var engage_timer: float = 0.0  ## For FIGHTING_WITHDRAWAL cycle tracking
+	var engage_phase: int = 0  ## 0 = advancing/engaging, 1 = backing off
 
 func create_group(group_name: String, fac: int, u_type: int = -1, formation: int = BattleUnitSystem.FormationType.LINE, is_permanent: bool = false) -> BattleGroup:
 	var g := BattleGroup.new()
@@ -71,3 +90,44 @@ func get_permanent_group_for_type(fac: int, u_type: int) -> BattleGroup:
 
 func is_group_alive(group_id: int, units: BattleUnitSystem) -> bool:
 	return units.get_group_alive_count(group_id) > 0
+
+func split_group(original_id: int, fraction: float, new_name: String, units: BattleUnitSystem) -> BattleGroup:
+	## Split a fraction (0.0-1.0) of a group's units into a new detachment.
+	## Returns the new detachment group, or null if split failed.
+	## The new group inherits faction/unit_type/formation from the parent.
+	var parent := get_group(original_id)
+	if not parent:
+		return null
+	# Collect alive units in parent group
+	var parent_units: Array[int] = []
+	for i in range(units.count):
+		if units.alive[i] == 1 and units.group_id[i] == original_id:
+			parent_units.append(i)
+	var total := parent_units.size()
+	if total < 4:  # Need at least 4 to split meaningfully
+		return null
+	var to_move: int = int(float(total) * clampf(fraction, 0.1, 0.9))
+	if to_move < 2:
+		return null
+	# Create detachment group
+	var detach := create_group(new_name, parent.faction, parent.unit_type, parent.formation_type)
+	detach.parent_group_id = original_id
+	detach.target_group_id = parent.target_group_id
+	detach.command = parent.command
+	# Reassign the first 'to_move' units to the new group
+	for k in range(to_move):
+		units.group_id[parent_units[k]] = detach.id
+	detach.initial_size = to_move
+	parent.initial_size = maxi(1, parent.initial_size - to_move)
+	return detach
+
+func merge_detachment(detach_id: int, units: BattleUnitSystem) -> void:
+	## Merge a detachment back into its parent group. Used when the play is over.
+	var detach := get_group(detach_id)
+	if not detach or detach.parent_group_id < 0:
+		return
+	var parent_id := detach.parent_group_id
+	for i in range(units.count):
+		if units.alive[i] == 1 and units.group_id[i] == detach_id:
+			units.group_id[i] = parent_id
+	remove_group(detach_id)

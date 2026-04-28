@@ -34,3 +34,4 @@ extends Resource
 @export_group("Visuals")
 @export var loy_tile_index: int = 160  # LoY char sprite index
 @export var sprite_color: Color = Color.WHITE
+@export var anim_row: int = -1  # Row in lofi_char_animated_main.png (-1 = use static sprite)

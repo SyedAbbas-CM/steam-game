@@ -25,7 +25,7 @@ func setup(data: RoomData) -> void:
 
 	# Non-combat rooms are auto-cleared (no enemies to fight)
 	match data.type:
-		RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.BOSS:
+		RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS:
 			_spawn_enemies()
 		RoomData.RoomType.TREASURE:
 			is_cleared = false
@@ -59,7 +59,12 @@ func _spawn_enemies() -> void:
 		def.max_hp = int(def.max_hp * room_data.enemy_hp_mult)
 		def.attack_damage = maxi(1, int(def.attack_damage * room_data.enemy_damage_mult))
 
-		if room_data.type == RoomData.RoomType.ELITE:
+		if room_data.type == RoomData.RoomType.SUPER_ELITE:
+			def.max_hp = int(def.max_hp * 6)
+			def.move_speed *= 1.1
+			def.attack_damage = int(def.attack_damage * 1.5)
+			def.sprite_color = def.sprite_color.lightened(0.4)
+		elif room_data.type == RoomData.RoomType.ELITE:
 			def.max_hp = int(def.max_hp * 3)
 			def.move_speed *= 1.2
 			def.sprite_color = def.sprite_color.lightened(0.3)

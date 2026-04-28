@@ -336,6 +336,7 @@ func _update_preview() -> void:
 	var dur = _duration_slider.value
 	var bullets = int(_bullet_slider.value) if _selected_delivery == SpellDefinition.DeliveryType.PROJECTILE else 1
 	var delivery_mult = DELIVERY_MULTS.get(_selected_delivery, 1.0)
+	var behavior_name = ["Straight", "Homing", "Spread"][_behavior_option.selected]
 
 	# Gold cost
 	var gold = 50.0 * (1.0 + (mag - 1) * 0.15) * (1.0 + dur * 0.3) * delivery_mult * (1.0 + (bullets - 1) * 0.3)
@@ -354,9 +355,16 @@ func _update_preview() -> void:
 	var delivery_name = SpellDefinition.delivery_name(_selected_delivery)
 	var desc = "%s %s — Magnitude %d" % [effect_name, delivery_name, mag]
 	if dur > 0:
-		desc += ", Duration %.1fs" % dur
+		var status_name = _get_status_name(_selected_effect)
+		if status_name != "":
+			desc += ", %s %.1fs" % [status_name, dur]
+		else:
+			desc += ", Duration %.1fs" % dur
 	if bullets > 1:
-		desc += ", %d projectiles" % bullets
+		desc += ", %d %s projectiles" % [bullets, behavior_name]
+	elif _selected_delivery == SpellDefinition.DeliveryType.PROJECTILE:
+		if behavior_name != "Straight":
+			desc += ", %s" % behavior_name
 	_desc_label.text = desc
 
 func _on_create_pressed() -> void:
@@ -414,6 +422,16 @@ func _on_create_pressed() -> void:
 		_cost_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 		_update_preview()
 	).set_delay(1.0)
+
+func _get_status_name(effect: SpellDefinition.EffectType) -> String:
+	match effect:
+		SpellDefinition.EffectType.FIRE_DAMAGE: return "Burns"
+		SpellDefinition.EffectType.ICE_DAMAGE: return "Slows"
+		SpellDefinition.EffectType.POISON_DAMAGE: return "Poisons"
+		SpellDefinition.EffectType.LIGHTNING_DAMAGE: return "Stuns"
+		SpellDefinition.EffectType.HOLY_DAMAGE: return "Weakens"
+		SpellDefinition.EffectType.DARK_DAMAGE: return "Fears"
+	return ""
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _is_open and event.is_action_pressed("ui_cancel"):

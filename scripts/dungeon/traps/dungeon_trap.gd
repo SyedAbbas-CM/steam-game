@@ -65,6 +65,7 @@ func _spawn_bullet(pos: Vector2, dir: Vector2, speed: float, damage: int, lifeti
 	bullet.is_player_bullet = false
 	bullet.hits_all = true
 	bullet.trap_enemy_mult = 2
+	bullet.combat_damage_type = CombatTypes.DamageType.TRUE
 	get_tree().current_scene.add_child(bullet)
 
 ## Trigger this trap remotely (stone toss, bullet impact). Override in subclass.

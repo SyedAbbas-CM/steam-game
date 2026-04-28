@@ -46,8 +46,8 @@ static func generate_bridges(floor_mask: Array, liquid_mask: Array, bridge_densi
 	var attempts = 0
 	while extra_count > 0 and attempts < extra_count * 3:
 		attempts += 1
-		var x = randi_range(1, w - 2)
-		var y = randi_range(1, h - 2)
+		var x = randi_range(0, w - 1)
+		var y = randi_range(0, h - 1)
 		if not liquid_mask[y][x]:
 			continue
 		var v = Vector2i(x, y)

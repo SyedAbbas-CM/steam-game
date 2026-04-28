@@ -6,56 +6,62 @@
 script = ExtResource("1_gen")
 id = "mq02"
 title = "What the Dead Left Behind"
-summary = "Follow the ichor into the dungeon beneath the farm. Kill blighted creatures and find the carved tablet on the boss floor."
+summary = "The ichor trail leads from the farm to the crypts beneath Ravenhollow's graveyard. Slay 5 blighted undead, defeat the Bone Golem guarding the depths, and recover the carved tablet."
 level = 2
 location = "haven"
-target_location = "haven"
+target_location = "barrows"
 prerequisite = "mq01"
+boss_dungeon = "Barrows"
+boss_enemy_path = "res://resources/enemies/basic/bone_golem.tres"
+boss_dungeon = "Barrows"
+boss_enemy_path = "res://resources/enemies/basic/bone_golem.tres"
 properties = [{
 "index": 0,
-"name": "Blighted Killed",
+"name": "Undead Slain",
+"type": "number"
+}, {
+"index": 1,
+"name": "Tablet Recovered",
 "type": "number"
 }]
 start_script = [{
 "cmd": "showDialog",
-"name": "Healer Maren",
+"name": "Elder",
+"portrait": 147,
+"text": "You cleansed the Scarecrows, but the root of this blight runs deeper. The ichor trail leads from the farm into the old crypts beneath the graveyard. Descend there, kill what you find, and slay the Bone Golem at the heart of it. Bring back anything you discover.",
 "options": [{
-"name": "I'll clear it out.",
+"name": "I'll clear it out",
 "script": [{
 "cmd": "showDialog",
-"name": "Healer Maren",
+"name": "Elder",
+"portrait": 147,
+"text": "Slay five of the blighted undead, then find and defeat the Bone Golem. A tablet should be hidden near it — bring it back to me.",
 "options": [{
-"name": "Understood.",
+"name": "Understood",
 "script": [{
 "cmd": "startQuest"
 }]
-}],
-"portrait": 160,
-"text": "Kill whatever blighted creatures you find. And look for anything that explains what's causing this. A tablet, markings — anything."
 }]
-}],
-"portrait": 160,
-"text": "You found the source? The ichor leads underground. Whatever's down there, it's spreading."
+}]
+}, {
+"name": "Not yet",
+"script": []
+}]
 }]
 events = [{
-"param": "Skeleton",
+"param": "*",
 "script": [{
 "cmd": "increment",
 "index": "0"
 }],
 "type": "kill"
 }, {
-"param": "Zombie",
-"script": [{
-"cmd": "increment",
-"index": "0"
-}],
-"type": "kill"
-}, {
-"param": "haven",
+"param": "Bone Golem",
 "script": [{
 "cmd": "showDialog",
 "name": "",
+"portrait": 0,
+"text": "Among the shattered bones of the Bone Golem you find a stone tablet covered in the same symbols as your brand. The carvings show coordinates — directions to something deeper, westward.",
 "options": [{
 "name": "Take the tablet",
 "script": [{
@@ -64,9 +70,7 @@ events = [{
 "index": "1",
 "value": "1"
 }]
-}],
-"portrait": 0,
-"text": "Among the remains you find a stone tablet covered in the same symbols as your brand. The carvings show coordinates — directions to something deeper."
+}]
 }],
 "type": "boss_killed"
 }, {
@@ -77,23 +81,29 @@ events = [{
 "compare": "0",
 "operation": "gt",
 "script": [{
+"attribute": "session-mq02-0",
+"cmd": "if",
+"compare": "4",
+"operation": "gt",
+"script": [{
 "cmd": "showDialog",
-"name": "Healer Maren",
+"name": "Elder",
+"portrait": 147,
+"text": "The tablet... yes, I can read these symbols. They point westward, to the Ashen Wastes. Whatever marked you is waiting there. Rest — and when you return, I'll tell you what I've pieced together.",
 "options": [{
-"name": "Thanks.",
+"name": "Thank you, Elder",
 "script": [{
 "cmd": "getExp",
-"value": "300"
+"value": "400"
 }, {
 "cmd": "getItem",
-"count": "200",
+"count": "500",
 "name": "Gold"
 }, {
 "cmd": "completeQuest"
 }]
-}],
-"portrait": 160,
-"text": "Let me see... these coordinates point somewhere west. Take this to the Elder — he reads the old language."
+}]
+}]
 }]
 }, {
 "attribute": "session-mq02-1",
@@ -102,13 +112,13 @@ events = [{
 "operation": "lt",
 "script": [{
 "cmd": "showDialog",
-"name": "Healer Maren",
+"name": "Elder",
+"portrait": 147,
+"text": "Still descending into the crypts? Good. Slay the blighted undead, defeat the Bone Golem, and recover the tablet.",
 "options": [{
-"name": "I will.",
+"name": "I will",
 "script": []
-}],
-"portrait": 160,
-"text": "Still hunting down there? Be careful. And find that tablet."
+}]
 }]
 }],
 "type": "quest"

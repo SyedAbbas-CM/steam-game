@@ -1,7 +1,6 @@
 class_name DeathScreen
 extends CanvasLayer
 
-
 var _overlay: ColorRect
 var _center: VBoxContainer
 var _stats_label: Label

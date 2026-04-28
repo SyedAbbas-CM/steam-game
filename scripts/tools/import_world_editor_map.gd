@@ -62,7 +62,6 @@ func _init() -> void:
 	var layers: Dictionary = {}
 	var layer_order = ["Ground", "Paths", "Buildings", "Objects", "Decorations"]
 	for layer_name in layer_order:
-		var layer = TileMapLayer.new()
 		layer.name = layer_name
 		layer.tile_set = tileset
 		root.add_child(layer)
@@ -88,15 +87,11 @@ func _init() -> void:
 		var placed = 0
 		var skipped = 0
 		for tile_entry in tiles:
-			var tx = int(tile_entry[0])
-			var ty = int(tile_entry[1])
-			var tile_id = int(tile_entry[2])
 
 			if tile_id < 0:
 				layer.erase_cell(Vector2i(tx, ty))
 				continue
 
-			var result = _resolve_tile_id(tile_id)
 			if result.x < 0:
 				skipped += 1
 				continue
@@ -155,10 +150,8 @@ func _init() -> void:
 # Convert global tile ID → Vector3i(source_id, atlas_x, atlas_y)
 func _resolve_tile_id(tile_id: int) -> Vector3i:
 	for i in range(SHEETS.size()):
-		var sheet = SHEETS[i]
 		var offset = sheet[0] as int
 		var count = sheet[1] as int
-		var cols = sheet[2] as int
 		if tile_id >= offset and tile_id < offset + count:
 			var local = tile_id - offset
 			var atlas_x = local % cols

@@ -20,10 +20,10 @@ const RETARGET_INTERVAL := 0.5
 const MORALE_ROUT_THRESHOLD := 20.0
 const MORALE_RECOVERY_TIMER := 0.1
 var _morale_timer: float = 0.0
-var _strategy_timer: float = 0.0
 const STRATEGY_INTERVAL := 3.0
 
 # Smart AI tactic cooldowns
+var _strategy_timer: float = 0.0
 var _pincer_cooldown: float = 0.0
 var _focus_fire_target_group: int = -1
 
@@ -45,27 +45,88 @@ var _blocked_tiles: Dictionary = {}
 var _flow_recompute_timer: float = 0.0
 const FLOW_RECOMPUTE_INTERVAL := 5.0  # Recompute flow fields every 5s (objectives may shift)
 
+func _is_wide_unit(i: int) -> bool:
+	var t := _units.unit_type[i]
+	return t == BattleUnitSystem.UnitType.CAVALRY or t == BattleUnitSystem.UnitType.HEAVY_CAVALRY or t == BattleUnitSystem.UnitType.HORSE_ARCHER or t == BattleUnitSystem.UnitType.HORSE_ARCHER
+
 # Player tracking — enemy units can target the player character
 var player_position: Vector2 = Vector2.ZERO
 var player_alive: bool = true
 const PLAYER_TARGET_ID := -2  # special target_unit value meaning "target the player"
 const PLAYER_ENGAGE_RANGE := 500.0  # RED units within this range engage player
 
-# Army-level battle coordination — phase state machine for RED
-enum ArmyPhase { STAGING, ADVANCE, APPROACH, ENGAGED, CLEANUP }
-var _army_phase: int = ArmyPhase.STAGING
-var _phase_timer: float = 0.0
-var _battle_line_x: float = 0.0
-var _battle_line_y_center: float = 0.0
-var _staging_line_x: float = 0.0
-var _infantry_speed: float = 1.8
-var _melee_engaged_count: int = 0
-var _cavalry_charge_triggered: bool = false
+enum Doctrine {
+	FRONTAL_ASSAULT,  ## All-in attack, winning position
+	HAMMER_ANVIL,     ## Infantry pins (anvil), cavalry/flankers hit rear (hammer)
+	BAIT_AND_FLANK,   ## Light inf engages+withdraws to lure, flankers hit side
+	KITING_HARASS,    ## Ranged stay back, screen uses fighting withdrawal
+	DEFENSIVE_LINE,   ## Hold ground, let enemy come, counter-attack
+}
+var _doctrine: int = Doctrine.FRONTAL_ASSAULT
+const _DOCTRINE_NAMES := ["FRONTAL_ASSAULT", "HAMMER_ANVIL", "BAIT_AND_FLANK", "KITING_HARASS", "DEFENSIVE_LINE"]
+var _detachment_ids: Array[int] = []  ## Track splits so we can merge them back if doctrine changes
+var _has_fighting_withdrawal: bool = false  ## Skip FW tick loop entirely when no BAIT groups exist
 
+## Fighting withdrawal + role positioning constants
+const FW_ENGAGE_DURATION: float = 2.0
+const FW_BACKOFF_DURATION: float = 1.5
+const FW_RALLY_DISTANCE: float = 180.0
+const FLANK_OFFSET_DISTANCE: float = 220.0
+const SCREEN_OFFSET_DISTANCE: float = 140.0
+const BAIT_MIN_SPLIT_SIZE: int = 8
+const BAIT_SPLIT_FRACTION: float = 0.4
+## Frontline block spacing — each melee group gets its own perpendicular slot
+const FRONTLINE_SLOT_SPACING: float = 350.0
+## Stop advancing just before the enemy line so groups collide as blocks
+const FRONTLINE_STANDOFF: float = 80.0
+## For DEFENSIVE_LINE: hold at this fraction of the red→blue axis (0.0=red spawn, 1.0=blue)
+const DEFENSIVE_HOLD_FRACTION: float = 0.35
+## Ranged groups hang back this far behind the frontline
+const RANGED_BACKLINE_OFFSET: float = 280.0
+## Distance at which HAMMER/FLANKER groups commit once the frontline reaches an enemy
+const FRONTLINE_ENGAGE_RADIUS: float = 400.0
+## Seconds before HAMMER/FLANKER auto-commit even without frontline engagement
+const FLANKER_COMMIT_TIMEOUT: float = 15.0
+## Extra perpendicular offset for HAMMER cavalry staging beyond the flanker line
+const CAVALRY_STAGING_EXTRA_OFFSET: float = 100.0
+## How far behind the red centroid HAMMER cavalry waits during staging
+const CAVALRY_STAGING_REAR_OFFSET: float = 50.0
+## ATTACK handler: units within this radius of their slot consider themselves arrived
+const ATTACK_ARRIVAL_RADIUS: float = 50.0
+## ATTACK handler: slot distance below which units freely chase nearby enemies
+const ATTACK_SLOT_BREAKOUT_DIST: float = 100.0
+## ATTACK handler: pad applied to weapon range when deciding to engage
+const ATTACK_ENGAGE_RANGE_PAD: float = 20.0
+## ATTACK handler: minimum engage range (so very short-ranged units still charge in)
+const ATTACK_ENGAGE_RANGE_MIN: float = 60.0
+## Precomputed squared distances to avoid per-unit sqrt in the hot ATTACK loop
+const ATTACK_ARRIVAL_RADIUS_SQ: float = ATTACK_ARRIVAL_RADIUS * ATTACK_ARRIVAL_RADIUS
+const ATTACK_SLOT_BREAKOUT_DIST_SQ: float = ATTACK_SLOT_BREAKOUT_DIST * ATTACK_SLOT_BREAKOUT_DIST
+var _flankers_committed: bool = false  ## HAMMER/FLANKER groups released once frontline engages
 
-func _is_wide_unit(i: int) -> bool:
-	var t := _units.unit_type[i]
-	return t == BattleUnitSystem.UnitType.CAVALRY or t == BattleUnitSystem.UnitType.HEAVY_CAVALRY or t == BattleUnitSystem.UnitType.HORSE_ARCHER
+## Debug logging toggle — set to true to print detailed AI traces during battle.
+const DEBUG_AI_LOG: bool = true
+var _debug_unit_branch: Array[String] = []
+## Role names for log output (parallel to BattleCommander.TacticalRole enum)
+const _ROLE_NAMES := ["NONE", "VANGUARD", "ANVIL", "HAMMER", "BAIT", "FLANKER", "SCREEN", "SKIRMISHER", "RESERVE"]
+
+## Ranged unit types — used to decide "fire in place vs chase" at ATTACK slot arrival.
+const _RANGED_UNIT_TYPES := {
+	BattleUnitSystem.UnitType.ARCHER: true,
+	BattleUnitSystem.UnitType.MAGE: true,
+	BattleUnitSystem.UnitType.RANGED_INFANTRY: true,
+	BattleUnitSystem.UnitType.HORSE_ARCHER: true,
+}
+
+func _is_ranged_type(t: int) -> bool:
+	return _RANGED_UNIT_TYPES.has(t)
+
+func _ensure_debug_branch_array() -> void:
+	if _debug_unit_branch.size() != _units.count:
+		_debug_unit_branch.resize(_units.count)
+		for i in range(_debug_unit_branch.size()):
+			if _debug_unit_branch[i] == "":
+				_debug_unit_branch[i] = "INIT"
 
 func initialize(units: BattleUnitSystem, projectiles: BattleProjectileSystem, commander: BattleCommander) -> void:
 	_units = units
@@ -96,10 +157,9 @@ func _plan_battle_strategy() -> void:
 		return
 	_strategy_planned = true
 
+	# Analyze BLUE composition
 	var blue_groups := _commander.get_faction_groups(BattleUnitSystem.Faction.BLUE)
 	var red_groups := _commander.get_faction_groups(BattleUnitSystem.Faction.RED)
-
-	# Analyze BLUE composition
 	var blue_total := 0
 	var blue_cav := 0
 	var blue_ranged := 0
@@ -153,57 +213,33 @@ func _plan_battle_strategy() -> void:
 
 	# (Army phase system handles ranged hold + cavalry timing, replacing old ELITE hold logic)
 
-	# Initialize army coordination phase
-	_army_phase = ArmyPhase.STAGING
-	_phase_timer = 0.0
-	_cavalry_charge_triggered = false
+	# Frontline advances first, cavalry/flankers hold back until engagement
+	_flankers_committed = false
 
-	# Compute infantry speed from slowest melee type in RED army
-	var has_melee := false
-	var slowest_melee_speed := 999.0
-	for rg in red_groups:
-		if _units.get_group_alive_count(rg.id) == 0:
-			continue
-		match rg.unit_type:
-			BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.UnitType.HEAVY_INFANTRY, BattleUnitSystem.UnitType.SPEAR:
-				has_melee = true
-				# Sample first alive unit in group to get max_speed
-				for i in _units.count:
-					if _units.group_id[i] == rg.id and _units.alive[i] == 1:
-						if _units.max_speed[i] < slowest_melee_speed:
-							slowest_melee_speed = _units.max_speed[i]
-						break
-	if has_melee:
-		_infantry_speed = slowest_melee_speed
-	else:
-		# No melee — skip straight to ENGAGED
-		_army_phase = ArmyPhase.ENGAGED
+	# Select tactical doctrine from the playbook based on force composition
+	_doctrine = _select_doctrine(red_groups, blue_groups)
+	_execute_doctrine(red_groups)
+	# Refresh red_groups after possible splits
+	red_groups = _commander.get_faction_groups(BattleUnitSystem.Faction.RED)
+	# FRONTAL_ASSAULT and DEFENSIVE_LINE have no flanking phase — commit immediately
+	if _doctrine in [Doctrine.FRONTAL_ASSAULT, Doctrine.DEFENSIVE_LINE]:
+		_flankers_committed = true
+	_apply_role_commands(red_groups, blue_groups)
 
-	# Compute initial battle line from RED spawn positions
-	var red_sum_x := 0.0
-	var red_sum_y := 0.0
-	var red_count := 0
-	var red_min_x := 99999.0
-	for rg in red_groups:
-		var gc := _units.get_group_center(rg.id)
-		if gc != Vector2.ZERO:
-			red_sum_x += gc.x
-			red_sum_y += gc.y
-			red_count += 1
-			if gc.x < red_min_x:
-				red_min_x = gc.x
-	if red_count > 0:
-		_staging_line_x = red_min_x
-		_battle_line_x = _staging_line_x
-		_battle_line_y_center = red_sum_y / float(red_count)
-
-	# Assign formation positions immediately so units form up from frame 1
-	# Use ATTACK (not MOVE) so units fight back while forming up
-	if _army_phase == ArmyPhase.STAGING and ai_tier >= AITier.TRAINED:
-		_compute_battle_line_positions(_staging_line_x, red_groups, true)
-
-	print("AI Strategy planned (tier=%d): BLUE has cav=%d%% heavy=%d%% ranged=%s, army_phase=%d" % [
-		ai_tier, int(_blue_cavalry_ratio * 100), int(_blue_heavy_ratio * 100), _blue_has_ranged, _army_phase])
+	# Debug: dump all RED group assignments
+	var red_groups2 := _commander.get_faction_groups(BattleUnitSystem.Faction.RED)
+	var blue_groups2 := _commander.get_faction_groups(BattleUnitSystem.Faction.BLUE)
+	print("AI Strategy planned (tier=%d): BLUE has cav=%d%% heavy=%d%% ranged=%s, doctrine=%s" % [
+		ai_tier, int(_blue_cavalry_ratio * 100), int(_blue_heavy_ratio * 100), _blue_has_ranged, _DOCTRINE_NAMES[_doctrine]])
+	print("  RED groups: %d, BLUE groups: %d" % [red_groups2.size(), blue_groups2.size()])
+	for g in red_groups2:
+		var ac := _units.get_group_alive_count(g.id)
+		print("  RED grp %d: type=%d alive=%d cmd=%d target=(%.0f,%.0f) formation=%d" % [
+			g.id, g.unit_type, ac, g.command, g.target_x, g.target_y, g.formation_type])
+	for g in blue_groups2:
+		var ac := _units.get_group_alive_count(g.id)
+		print("  BLUE grp %d: type=%d alive=%d cmd=%d target=(%.0f,%.0f) formation=%d" % [
+			g.id, g.unit_type, ac, g.command, g.target_x, g.target_y, g.formation_type])
 
 func _assign_initial_targets() -> void:
 	for fac in [BattleUnitSystem.Faction.BLUE, BattleUnitSystem.Faction.RED]:
@@ -264,10 +300,85 @@ func _find_priority_target(my_type: int, enemy_groups: Array) -> BattleCommander
 		return enemy_groups[0]
 	return null
 
+var _debug_timer: float = 0.0
+
 func update(dt: float) -> void:
 	_battle_time += dt
 	_retarget_timer += dt
 	_morale_timer += dt
+	_ensure_debug_branch_array()
+
+	# Periodic battle state debug dump
+	_debug_timer += dt
+	if _debug_timer >= 5.0:
+		_debug_timer = 0.0
+		var red_alive := 0
+		var blue_alive := 0
+		var red_attacking := 0
+		var red_has_target := 0
+		var red_ranged_alive := 0
+		var red_ranged_at_slot := 0
+		var red_groups := _commander.get_faction_groups(BattleUnitSystem.Faction.RED) if _commander else []
+		for i in _units.count:
+			if _units.alive[i] == 0:
+				continue
+			if _units.faction[i] == BattleUnitSystem.Faction.RED:
+				red_alive += 1
+				if _units.target_unit[i] >= 0 or _units.target_unit[i] == PLAYER_TARGET_ID:
+					red_has_target += 1
+					if _is_ranged_type(_units.unit_type[i]):
+						red_ranged_alive += 1
+						var gid_r := _units.group_id[i]
+						if gid_r >= 0 and _commander:
+							var grp_r = _commander.get_group(gid_r)
+							if grp_r and (grp_r.target_x != 0.0 or grp_r.target_y != 0.0):
+								var rdx: float = grp_r.target_x - _units.x[i]
+								var rdy: float = grp_r.target_y - _units.y[i]
+								if rdx * rdx + rdy * rdy < ATTACK_ARRIVAL_RADIUS_SQ:
+									red_ranged_at_slot += 1
+			else:
+				blue_alive += 1
+		for g in red_groups:
+			if g.command == BattleCommander.CommandType.ATTACK:
+				red_attacking += _units.get_group_alive_count(g.id)
+		print("=== BATTLE t=%.1f doctrine=%s committed=%s RED=%d(target=%d,atk_cmd=%d,ranged=%d at_slot=%d) BLUE=%d ===" % [
+			_battle_time, _DOCTRINE_NAMES[_doctrine], _flankers_committed,
+			red_alive, red_has_target, red_attacking, red_ranged_alive, red_ranged_at_slot, blue_alive])
+		if DEBUG_AI_LOG:
+			var sampled := 0
+			for si in _units.count:
+				if sampled >= 3:
+					break
+				if _units.alive[si] == 0 or _units.faction[si] != BattleUnitSystem.Faction.RED:
+					continue
+				if not _is_ranged_type(_units.unit_type[si]):
+					continue
+				var spd_s := sqrt(_units.vx[si] * _units.vx[si] + _units.vy[si] * _units.vy[si])
+				var sgid := _units.group_id[si]
+				var sgrp = _commander.get_group(sgid) if sgid >= 0 and _commander else null
+				var slot_dx := 0.0
+				var slot_dy := 0.0
+				var slot_dist := -1.0
+				var grp_cmd := -1
+				var grp_role := 0
+				if sgrp:
+					grp_cmd = sgrp.command
+					grp_role = sgrp.tactical_role
+					slot_dx = sgrp.target_x - _units.x[si]
+					slot_dy = sgrp.target_y - _units.y[si]
+					slot_dist = sqrt(slot_dx * slot_dx + slot_dy * slot_dy)
+				var tgt := _units.target_unit[si]
+				var tgt_dist := -1.0
+				if tgt >= 0 and tgt < _units.count and _units.alive[tgt] == 1:
+					var tdx2 := _units.x[tgt] - _units.x[si]
+					var tdy2 := _units.y[tgt] - _units.y[si]
+					tgt_dist = sqrt(tdx2 * tdx2 + tdy2 * tdy2)
+				var role_str: String = _ROLE_NAMES[grp_role] if grp_role < _ROLE_NAMES.size() else str(grp_role)
+				var branch_str: String = _debug_unit_branch[si] if si < _debug_unit_branch.size() else "?"
+				print("  [UNIT] i=%d type=%d grp=%d role=%s cmd=%d pos=(%.0f,%.0f) slot_dist=%.0f speed=%.1f target_unit=%d target_dist=%.0f BRANCH=%s" % [
+					si, _units.unit_type[si], sgid, role_str, grp_cmd,
+					_units.x[si], _units.y[si], slot_dist, spd_s, tgt, tgt_dist, branch_str])
+				sampled += 1
 
 	# Periodically recompute flow fields (objectives may shift)
 	_flow_recompute_timer += dt
@@ -275,30 +386,26 @@ func update(dt: float) -> void:
 		_flow_recompute_timer = 0.0
 		_recompute_flow_fields()
 
-	# Check for dead commanders and apply debuffs
 	_check_commander_deaths()
 
-	# Retarget dead groups periodically
 	if _retarget_timer >= RETARGET_INTERVAL:
 		_retarget_timer = 0.0
 		_retarget_dead_groups()
-
-	# Update formation bonuses every retarget cycle
-	if _retarget_timer == 0.0:  # Just fired retarget
 		_update_formation_bonuses()
 
-	# Strategic reassessment for RED faction
 	_strategy_timer += dt
 	if _strategy_timer >= STRATEGY_INTERVAL:
 		_strategy_timer = 0.0
 		_reassess_strategy()
+
+	if _has_fighting_withdrawal:
+		_tick_fighting_withdrawal(dt)
 
 	# Per-unit AI
 	for i in _units.count:
 		if _units.alive[i] == 0:
 			continue
 
-		# Burn tick
 		if _units.burn_time[i] > 0.0:
 			_units.hp[i] -= _units.burn_dps[i] * dt
 			_units.burn_time[i] -= dt
@@ -306,37 +413,30 @@ func update(dt: float) -> void:
 				_units.alive[i] = 0
 				continue
 
-		# Commander debuff timer tick
 		if _units.commander_debuff_timer[i] > 0.0:
 			_units.commander_debuff_timer[i] -= dt
 
-		# Stagger check
 		if _units.stagger_time[i] > 0.0:
 			_units.stagger_time[i] -= dt
 			continue
 
-		# Scatter check (cavalry fear/panic)
 		if _units.scatter_time[i] > 0.0:
 			_units.scatter_time[i] -= dt
 			var flee_speed: float = _units.max_speed[i] * 1.2
 			_units.vx[i] = _units.scatter_dir_x[i] * flee_speed
 			_units.vy[i] = _units.scatter_dir_y[i] * flee_speed
 			if _units.scatter_time[i] <= 0.0:
-				# Recover: restore group
 				_units.group_id[i] = _units.saved_group_id[i]
 				_units.saved_group_id[i] = -1
-			continue  # Can't attack while scattered
+			continue
 
-		# Morale tier: hesitation (Wavering 15%, Shaken 30%)
-		var _morale := _units.morale[i]
-		if _morale < 30.0 and _morale >= 15.0:
-			# Shaken: 30% chance to hesitate each AI tick
-			if randf() < 0.005:  # ~30% per second at 60fps
+		var morale := _units.morale[i]
+		if morale < 30.0 and morale >= 15.0:
+			if randf() < 0.005:
 				_units.stagger_time[i] = 0.3
 				continue
-		elif _morale < 50.0 and _morale >= 30.0:
-			# Wavering: 15% chance to hesitate
-			if randf() < 0.0025:  # ~15% per second at 60fps
+		elif morale < 50.0 and morale >= 30.0:
+			if randf() < 0.0025:
 				_units.stagger_time[i] = 0.3
 				continue
 
@@ -345,20 +445,16 @@ func update(dt: float) -> void:
 		if _units.post_charge_bogged_time[i] > 0.0:
 			_units.post_charge_bogged_time[i] -= dt
 
-		# Track cavalry charge time for momentum bonus
 		var ut := _units.unit_type[i]
+		var spd := sqrt(_units.vx[i] * _units.vx[i] + _units.vy[i] * _units.vy[i])
 		if ut == BattleUnitSystem.UnitType.CAVALRY or ut == BattleUnitSystem.UnitType.HEAVY_CAVALRY or ut == BattleUnitSystem.UnitType.HORSE_ARCHER:
-			var spd := sqrt(_units.vx[i] * _units.vx[i] + _units.vy[i] * _units.vy[i])
 			if spd > _units.max_speed[i] * 0.5:
 				_units.charge_time[i] += dt
 			else:
 				_units.charge_time[i] = 0.0
 
-		# Ability system
 		_update_ability(i, dt)
 
-		# Routing — flee when low HP + low morale + outnumbered
-		# High morale units never rout regardless of HP
 		var hp_ratio: float = _units.hp[i] / maxf(1.0, BattleUnitSystem.UNIT_STATS["hp"][_units.unit_type[i]])
 		if hp_ratio < 0.3 and _units.morale[i] < 40.0:
 			var nearby_all := _units.get_nearby(_units.x[i], _units.y[i], 120.0)
@@ -376,29 +472,22 @@ func update(dt: float) -> void:
 				continue
 
 		var gid := _units.group_id[i]
+		var grp = _commander.get_group(gid) if gid >= 0 and _commander else null
 		var cmd := BattleCommander.CommandType.ATTACK
-		if gid >= 0 and _commander:
-			var grp = _commander.get_group(gid)
-			if grp:
-				cmd = grp.command
+		if grp:
+			cmd = grp.command
 
-		# Group cohesion — all units gently drift toward group center to stay together
-		# Skip during MOVE — cohesion pulls toward combat blob, fighting the move order
 		if gid >= 0 and cmd != BattleCommander.CommandType.SCATTER and cmd != BattleCommander.CommandType.RETREAT and cmd != BattleCommander.CommandType.MOVE:
 			_apply_group_cohesion(i, gid, dt)
 
 		match cmd:
 			BattleCommander.CommandType.MOVE:
-				# Pure MOVE — go to location, do NOT attack
-				# Clear combat target so unit disengages
 				_units.target_unit[i] = -1
-				var grp = _commander.get_group(gid)
 				if grp and (grp.target_x != 0.0 or grp.target_y != 0.0):
 					var mdx: float = grp.target_x - _units.x[i]
 					var mdy: float = grp.target_y - _units.y[i]
 					var mdist := sqrt(mdx * mdx + mdy * mdy)
 					if mdist > 30.0:
-						# Brake perpendicular velocity to help disengage from melee
 						var nx := mdx / mdist
 						var ny := mdy / mdist
 						var dot_v := _units.vx[i] * nx + _units.vy[i] * ny
@@ -408,53 +497,78 @@ func update(dt: float) -> void:
 						_units.vy[i] -= perp_vy * 0.3 * dt * 60.0
 						_do_movement_toward_pos(i, Vector2(grp.target_x, grp.target_y), dt, true)
 					else:
-						# This unit arrived — just brake, don't change group command
 						_units.vx[i] *= 0.8
 						_units.vy[i] *= 0.8
 				else:
-					# No destination — just hold position
 					_units.vx[i] *= 0.85
 					_units.vy[i] *= 0.85
 			BattleCommander.CommandType.ATTACK:
-				# ATTACK MOVE — go to location AND fight enemies on the way
-				var grp = _commander.get_group(gid)
+				_update_target(i)
+				var atk_rng: float = _units.attack_range[i]
+				var target_idx := _units.target_unit[i]
+				var tdx := 0.0
+				var tdy := 0.0
+				if target_idx >= 0 and target_idx < _units.count and _units.alive[target_idx] == 1:
+					tdx = _units.x[target_idx] - _units.x[i]
+					tdy = _units.y[target_idx] - _units.y[i]
+				var engage_range: float = maxf(atk_rng + ATTACK_ENGAGE_RANGE_PAD, ATTACK_ENGAGE_RANGE_MIN)
+				var engage_sq := engage_range * engage_range
+				var pdx := player_position.x - _units.x[i]
+				var pdy := player_position.y - _units.y[i]
 				if grp and (grp.target_x != 0.0 or grp.target_y != 0.0):
-					# Has a destination — move there but engage enemies
 					var mdx: float = grp.target_x - _units.x[i]
 					var mdy: float = grp.target_y - _units.y[i]
-					var mdist := sqrt(mdx * mdx + mdy * mdy)
-					if mdist < 50.0:
-						# This unit arrived — just fight here, don't clear group target
-						_do_combat(i, dt)
+					var mdist_sq := mdx * mdx + mdy * mdy
+					if mdist_sq < ATTACK_ARRIVAL_RADIUS_SQ:
+						if _is_ranged_type(_units.unit_type[i]):
+							_units.vx[i] *= 0.85
+							_units.vy[i] *= 0.85
+							_update_target(i)
+							_do_attack_any(i)
+							_debug_unit_branch[i] = "ARRIVED_HOLD"
+						else:
+							_do_combat(i, dt)
+							_debug_unit_branch[i] = "ARRIVED_COMBAT"
 					else:
-						_update_target(i)
-						var target_idx := _units.target_unit[i]
+						var slot_pos := Vector2(grp.target_x, grp.target_y)
 						if target_idx >= 0 and target_idx < _units.count and _units.alive[target_idx] == 1:
-							var tdx := _units.x[target_idx] - _units.x[i]
-							var tdy := _units.y[target_idx] - _units.y[i]
-							var tdist := sqrt(tdx * tdx + tdy * tdy)
-							if tdist < 300.0:
-								_do_movement(i, dt)
-								_do_attack(i)
+							var tdist_sq := tdx * tdx + tdy * tdy
+							if _is_ranged_type(_units.unit_type[i]):
+								_do_movement_toward_pos(i, slot_pos, dt, true)
+								_debug_unit_branch[i] = "RANGED_MARCH"
 							else:
-								_do_movement_toward_pos(i, Vector2(grp.target_x, grp.target_y), dt, true)
-								_do_attack(i)
+								if mdist_sq < ATTACK_SLOT_BREAKOUT_DIST_SQ or tdist_sq < engage_sq:
+									_do_movement(i, dt)
+									_debug_unit_branch[i] = "ENGAGE_NEARBY"
+								else:
+									_do_movement_toward_pos(i, slot_pos, dt, true)
+									_debug_unit_branch[i] = "MARCH_SLOT"
+							_do_attack(i)
 						elif target_idx == PLAYER_TARGET_ID:
-							_do_movement_toward_pos(i, player_position, dt, false, false)
+							if _is_ranged_type(_units.unit_type[i]):
+								_do_movement_toward_pos(i, slot_pos, dt, true)
+								_debug_unit_branch[i] = "RANGED_MARCH"
+							else:
+								var pdist_sq := pdx * pdx + pdy * pdy
+								if mdist_sq < ATTACK_SLOT_BREAKOUT_DIST_SQ or pdist_sq < engage_sq:
+									_do_movement_toward_pos(i, player_position, dt, false, false)
+									_debug_unit_branch[i] = "ENGAGE_PLAYER"
+								else:
+									_do_movement_toward_pos(i, slot_pos, dt, true)
+									_debug_unit_branch[i] = "MARCH_SLOT"
 							_do_attack_player(i)
 						else:
-							_do_movement_toward_pos(i, Vector2(grp.target_x, grp.target_y), dt, true)
+							_do_movement_toward_pos(i, slot_pos, dt, true)
+							_debug_unit_branch[i] = "MARCH_NO_TARGET"
 				else:
-					# No destination — normal free combat
 					_do_combat(i, dt)
+					_debug_unit_branch[i] = "FREE_COMBAT"
 			BattleCommander.CommandType.HOLD:
-				# HOLD — stop moving, attack enemies in range only
 				_units.vx[i] *= 0.85
 				_units.vy[i] *= 0.85
 				_update_target(i)
 				_do_attack_any(i)
 			BattleCommander.CommandType.DEFENSIVE:
-				# DEFEND — cluster together, fight nearby enemies
 				_do_cluster(i, dt)
 				_update_target(i)
 				var def_target := _units.target_unit[i]
@@ -465,19 +579,14 @@ func update(dt: float) -> void:
 						_do_movement(i, dt)
 				_do_attack_any(i)
 			BattleCommander.CommandType.SCATTER:
-				# SCATTER — spread out, fight individually
 				_do_scatter(i, dt)
 				_update_target(i)
 				_do_combat(i, dt)
 			BattleCommander.CommandType.FOLLOW:
-				# FOLLOW — follow player, attack nearby threats
 				_do_follow_player(i, dt)
 			BattleCommander.CommandType.CHARGE:
-				# CHARGE — rush toward target at max speed, attack on contact
-				var grp = _commander.get_group(gid)
 				if grp and (grp.target_x != 0.0 or grp.target_y != 0.0):
 					_do_movement_toward_pos(i, Vector2(grp.target_x, grp.target_y), dt, true, true)
-					# Boost speed for charge
 					var charge_spd: float = _units.max_speed[i] * 1.5
 					var cur := sqrt(_units.vx[i] * _units.vx[i] + _units.vy[i] * _units.vy[i])
 					if cur > 0.01 and cur < charge_spd:
@@ -489,25 +598,35 @@ func update(dt: float) -> void:
 				else:
 					_do_combat(i, dt)
 			BattleCommander.CommandType.RETREAT:
-				# RETREAT — move away from nearest enemy, reduced combat
-				var grp = _commander.get_group(gid)
+				_update_target(i)
+				var retreat_target := _units.target_unit[i]
 				if grp and (grp.target_x != 0.0 or grp.target_y != 0.0):
 					_do_movement_toward_pos(i, Vector2(grp.target_x, grp.target_y), dt, true, true)
 				else:
 					_do_rout_retreat(i, dt)
-				# Only fight if enemy is very close
-				_update_target(i)
-				var target_idx := _units.target_unit[i]
-				if target_idx >= 0 and target_idx < _units.count and _units.alive[target_idx] == 1:
-					var rdx := _units.x[target_idx] - _units.x[i]
-					var rdy := _units.y[target_idx] - _units.y[i]
+				if retreat_target >= 0 and retreat_target < _units.count and _units.alive[retreat_target] == 1:
+					var rdx := _units.x[retreat_target] - _units.x[i]
+					var rdy := _units.y[retreat_target] - _units.y[i]
 					if sqrt(rdx * rdx + rdy * rdy) < 60.0:
 						_do_attack(i)
+			BattleCommander.CommandType.FIGHTING_WITHDRAWAL:
+				var grp_fw = _commander.get_group(gid)
+				_update_target(i)
+				var t_idx := _units.target_unit[i]
+				if grp_fw and grp_fw.engage_phase == 1 and (grp_fw.rally_point.x != 0.0 or grp_fw.rally_point.y != 0.0):
+					_do_movement_toward_pos(i, grp_fw.rally_point, dt, true, false)
+					if t_idx >= 0 and t_idx < _units.count and _units.alive[t_idx] == 1:
+						var bdx := _units.x[t_idx] - _units.x[i]
+						var bdy := _units.y[t_idx] - _units.y[i]
+						var bd := sqrt(bdx * bdx + bdy * bdy)
+						var fw_atk_rng: float = BattleUnitSystem.UNIT_STATS["attack_range"][_units.unit_type[i]]
+						if bd < fw_atk_rng * 1.2:
+							_do_attack(i)
+				else:
+					_do_combat(i, dt)
 			_:
 				_do_combat(i, dt)
 
-	# Morale recovery — units recover morale when not in immediate danger
-	# Bonus recovery near the player character and commanders
 	if _morale_timer >= MORALE_RECOVERY_TIMER:
 		_morale_timer = 0.0
 		for mi in _units.count:
@@ -519,7 +638,6 @@ func update(dt: float) -> void:
 				recovery = 2.0
 			elif _units.neighbor_count[mi] > 3:
 				recovery = 1.0
-			# Player proximity buff — BLUE units near the player get extra morale
 			if player_alive and _units.faction[mi] == BattleUnitSystem.Faction.BLUE:
 				var pdx := player_position.x - _units.x[mi]
 				var pdy := player_position.y - _units.y[mi]
@@ -528,14 +646,12 @@ func update(dt: float) -> void:
 					recovery += 3.0
 				elif pdist < 300.0:
 					recovery += 1.5
-			# Commander aura: +2 morale/sec to allies within 150px
 			if _units.is_commander[mi] == 0:
 				var nearby_cmdr := _units.get_nearby(_units.x[mi], _units.y[mi], 150.0)
 				for ci in nearby_cmdr:
 					if ci != mi and _units.alive[ci] == 1 and _units.faction[ci] == _units.faction[mi] and _units.is_commander[ci] == 1:
 						recovery += 2.0
 						break
-			# Elite veteran aura: +1 morale/sec
 			if _units.veteran_rank[mi] < 3:
 				var nearby_elite := _units.get_nearby(_units.x[mi], _units.y[mi], 100.0)
 				for ei in nearby_elite:
@@ -564,11 +680,15 @@ func _update_ability(i: int, dt: float) -> void:
 
 	var t := _units.unit_type[i]
 	var target := _units.target_unit[i]
+	var dx := 0.0
+	var dy := 0.0
 	var target_dist := 99999.0
 	if target >= 0 and target < _units.count and _units.alive[target] == 1:
-		var dx := _units.x[target] - _units.x[i]
-		var dy := _units.y[target] - _units.y[i]
+		dx = _units.x[target] - _units.x[i]
+		dy = _units.y[target] - _units.y[i]
 		target_dist = sqrt(dx * dx + dy * dy)
+	var spd := sqrt(_units.vx[i] * _units.vx[i] + _units.vy[i] * _units.vy[i])
+	var enemy_count := 0
 
 	match t:
 		BattleUnitSystem.UnitType.INFANTRY:
@@ -585,7 +705,6 @@ func _update_ability(i: int, dt: float) -> void:
 				_activate_ability(i, t)
 		BattleUnitSystem.UnitType.HEAVY_CAVALRY:
 			# Trample: close to enemy and moving fast
-			var spd := sqrt(_units.vx[i] * _units.vx[i] + _units.vy[i] * _units.vy[i])
 			if target_dist < 60.0 and spd > _units.max_speed[i] * 0.6:
 				_activate_ability(i, t)
 		BattleUnitSystem.UnitType.ARCHER:
@@ -598,25 +717,12 @@ func _update_ability(i: int, dt: float) -> void:
 			# Fireball: 2+ enemies clustered within 50px of each other
 			if target >= 0 and target < _units.count and _units.alive[target] == 1:
 				var cluster := _units.get_nearby(_units.x[target], _units.y[target], 50.0)
-				var enemy_count := 0
 				for j in cluster:
 					if _units.alive[j] == 1 and _units.faction[j] != _units.faction[i]:
 						enemy_count += 1
 				if enemy_count >= 2:
 					_activate_ability(i, t)
 					_fire_fireball(i, target)
-		BattleUnitSystem.UnitType.SPEAR:
-			# Spear Brace: cavalry charging nearby (or enemy cavalry within 180px)
-			if _is_cavalry_charging_nearby(i, 180.0) or (target_dist < 120.0 and _is_target_cavalry(i)):
-				_activate_ability(i, t)
-		BattleUnitSystem.UnitType.HORSE_ARCHER:
-			# Parthian Shot: enemy too close, retreat + shoot
-			if target_dist < 200.0 and target_dist > 40.0:
-				_activate_ability(i, t)
-		BattleUnitSystem.UnitType.RANGED_INFANTRY:
-			# Pavise: deploy shield when under ranged pressure or enemies approaching
-			if _units.neighbor_count[i] >= 2 and target_dist < 350.0:
-				_activate_ability(i, t)
 
 func _activate_ability(i: int, t: int) -> void:
 	_units.ability_cooldown[i] = ABILITY_COOLDOWNS[t]
@@ -644,18 +750,6 @@ func _activate_ability(i: int, t: int) -> void:
 		BattleUnitSystem.UnitType.HEAVY_CAVALRY:
 			# Trample: charge bonus applied in collision
 			pass
-		BattleUnitSystem.UnitType.SPEAR:
-			# Spear Brace: plant pike, immobile, massive anti-cav defense
-			_units.current_defense[i] *= 1.5
-			_units.max_speed[i] = 0.0
-			_units.knockback_resist[i] = minf(1.0, _units.knockback_resist[i] + 0.4)
-		BattleUnitSystem.UnitType.HORSE_ARCHER:
-			# Parthian Shot: speed boost while kiting
-			_units.max_speed[i] *= 1.15
-		BattleUnitSystem.UnitType.RANGED_INFANTRY:
-			# Pavise: deploy shield, immobile, massive defense
-			_units.current_defense[i] *= 2.0
-			_units.max_speed[i] = 0.0
 
 func _deactivate_ability(i: int) -> void:
 	# Restore base stats from type
@@ -776,7 +870,6 @@ func _apply_group_cohesion(i: int, gid: int, dt: float) -> void:
 
 	# Calculate formation target position
 	var target := _get_formation_pos(center, grp.formation_type, unit_index, group_size, grp)
-
 	var dx := target.x - _units.x[i]
 	var dy := target.y - _units.y[i]
 	var dist := sqrt(dx * dx + dy * dy)
@@ -918,16 +1011,19 @@ func _do_follow_player(i: int, dt: float) -> void:
 	if not player_alive:
 		_do_combat(i, dt)
 		return
-	var dx := player_position.x - _units.x[i]
-	var dy := player_position.y - _units.y[i]
-	var dist := sqrt(dx * dx + dy * dy)
+	var dx: float = player_position.x - _units.x[i]
+	var dy: float = player_position.y - _units.y[i]
+	var dist: float = sqrt(dx * dx + dy * dy)
+	var nx: float = 0.0
+	var ny: float = 0.0
+	if dist > 0.001:
+		nx = -dx / dist
+		ny = -dy / dist
 	# Stay within 80-200px of player
 	if dist > 100.0:
 		_do_movement_toward_pos(i, player_position, dt, true, false)
 	elif dist < 50.0:
 		# Too close, back off slightly
-		var nx := -dx / maxf(dist, 0.1)
-		var ny := -dy / maxf(dist, 0.1)
 		_units.vx[i] += nx * _units.acceleration[i] * 0.3 * dt * 60.0
 		_units.vy[i] += ny * _units.acceleration[i] * 0.3 * dt * 60.0
 	# Attack nearby enemies
@@ -948,25 +1044,24 @@ func _update_formation_bonuses() -> void:
 		var gid := _units.group_id[i]
 		if gid < 0 or not _commander:
 			continue
-		var grp = _commander.get_group(gid)
+		var grp := _commander.get_group(gid)
 		if not grp:
 			continue
+		var nearby := _units.get_nearby(_units.x[i], _units.y[i], 60.0)
 		match grp.formation_type:
 			BattleUnitSystem.FormationType.SHIELD_WALL:
 				# Active if adjacent ally within 40px
-				var nearby := _units.get_nearby(_units.x[i], _units.y[i], 40.0)
 				for j in nearby:
 					if j != i and _units.alive[j] == 1 and _units.faction[j] == _units.faction[i]:
 						_units.formation_bonus_active[i] = 1
 						break
 			BattleUnitSystem.FormationType.LINE:
 				# Active if nearest ally is 25-55px away (proper line spacing)
-				var nearby := _units.get_nearby(_units.x[i], _units.y[i], 55.0)
 				for j in nearby:
 					if j != i and _units.alive[j] == 1 and _units.faction[j] == _units.faction[i]:
-						var dx := _units.x[j] - _units.x[i]
-						var dy := _units.y[j] - _units.y[i]
-						var d := sqrt(dx * dx + dy * dy)
+						var dx: float = _units.x[j] - _units.x[i]
+						var dy: float = _units.y[j] - _units.y[i]
+						var d: float = sqrt(dx * dx + dy * dy)
 						if d >= 25.0:
 							_units.formation_bonus_active[i] = 1
 							break
@@ -975,7 +1070,6 @@ func _update_formation_bonuses() -> void:
 				_units.formation_bonus_active[i] = 1
 			BattleUnitSystem.FormationType.BLOCK:
 				# Active if 2+ allies within 50px (tight block)
-				var nearby := _units.get_nearby(_units.x[i], _units.y[i], 50.0)
 				var ally_count := 0
 				for j in nearby:
 					if j != i and _units.alive[j] == 1 and _units.faction[j] == _units.faction[i]:
@@ -1034,6 +1128,71 @@ func _retarget_dead_groups() -> void:
 					if new_target:
 						g.target_group_id = new_target.id
 
+func _compute_faction_center(groups: Array) -> Vector2:
+	## Weighted centroid of a faction's groups, weighted by alive count.
+	var sum := Vector2.ZERO
+	var total := 0
+	for g in groups:
+		var n := _units.get_group_alive_count(g.id)
+		if n == 0:
+			continue
+		var c := _units.get_group_center(g.id)
+		if c == Vector2.ZERO:
+			continue
+		sum += c * float(n)
+		total += n
+	if total == 0:
+		return Vector2.ZERO
+	return sum / float(total)
+
+func _find_weakest_enemy_group(from: Vector2, enemy_groups: Array, max_range: float) -> BattleCommander.BattleGroup:
+	## Find the enemy group with the worst strength ratio within range.
+	var best: BattleCommander.BattleGroup = null
+	var worst_ratio := 1.0
+	for eg in enemy_groups:
+		var eg_alive := _units.get_group_alive_count(eg.id)
+		if eg_alive == 0:
+			continue
+		var ec := _units.get_group_center(eg.id)
+		if ec == Vector2.ZERO or from.distance_to(ec) > max_range:
+			continue
+		var ratio := 1.0
+		if eg.initial_size > 0:
+			ratio = float(eg_alive) / float(eg.initial_size)
+		if ratio < worst_ratio:
+			worst_ratio = ratio
+			best = eg
+	return best
+
+func _find_flank_target(cav_group: BattleCommander.BattleGroup, cav_center: Vector2, enemy_groups: Array) -> BattleCommander.BattleGroup:
+	## Find an enemy group currently engaged with friendly infantry (good flank target).
+	var friendly_groups := _commander.get_faction_groups(cav_group.faction)
+	var best: BattleCommander.BattleGroup = null
+	var best_dist := INF
+	for eg in enemy_groups:
+		if _units.get_group_alive_count(eg.id) == 0:
+			continue
+		var ec := _units.get_group_center(eg.id)
+		if ec == Vector2.ZERO:
+			continue
+		# Check if any friendly infantry is fighting this group (within 150px)
+		var engaged := false
+		for fg in friendly_groups:
+			if fg.unit_type != BattleUnitSystem.UnitType.INFANTRY and fg.unit_type != BattleUnitSystem.UnitType.HEAVY_INFANTRY and fg.unit_type != BattleUnitSystem.UnitType.SPEAR:
+				continue
+			if _units.get_group_alive_count(fg.id) == 0:
+				continue
+			var fc := _units.get_group_center(fg.id)
+			if fc.distance_to(ec) < 200.0:
+				engaged = true
+				break
+		if engaged:
+			var d := cav_center.distance_to(ec)
+			if d < best_dist and d < 600.0:
+				best_dist = d
+				best = eg
+	return best
+
 func _get_best_counter_formation(enemy_formation: int) -> int:
 	## Return the formation that best counters the given enemy formation.
 	## Uses FORMATION_COUNTER matrix: find which attacker row has highest mult vs defender col.
@@ -1066,8 +1225,6 @@ func _find_best_target_by_counter(g: BattleCommander.BattleGroup, enemy_groups: 
 func _reassess_strategy() -> void:
 	## Every 3s, reassess group commands for RED faction using tactical AI.
 	## Reads enemy formations and adapts. Coordinates multi-group attacks.
-	var red_groups := _commander.get_faction_groups(BattleUnitSystem.Faction.RED)
-	var blue_groups := _commander.get_faction_groups(BattleUnitSystem.Faction.BLUE)
 
 	# Tick tactic cooldowns
 	_pincer_cooldown = maxf(0.0, _pincer_cooldown - STRATEGY_INTERVAL)
@@ -1076,12 +1233,27 @@ func _reassess_strategy() -> void:
 	if not _strategy_planned:
 		_plan_battle_strategy()
 
-	# Army-level coordination for non-MILITIA RED AI
-	if ai_tier >= AITier.TRAINED:
-		_update_army_phase(red_groups, blue_groups)
-		# During STAGING and ADVANCE, army controls all groups — skip per-group tactics
-		if _army_phase == ArmyPhase.STAGING or _army_phase == ArmyPhase.ADVANCE:
-			return
+	# Clean up destroyed detachments
+	if not _detachment_ids.is_empty():
+		_cleanup_dead_detachments()
+
+	var red_groups := _commander.get_faction_groups(BattleUnitSystem.Faction.RED)
+	var blue_groups := _commander.get_faction_groups(BattleUnitSystem.Faction.BLUE)
+
+	# Re-evaluate doctrine if the situation has shifted significantly
+	var new_doctrine := _select_doctrine(red_groups, blue_groups)
+	if new_doctrine != _doctrine:
+		print("AI Doctrine shift: %s -> %s" % [_DOCTRINE_NAMES[_doctrine], _DOCTRINE_NAMES[new_doctrine]])
+		# Merge any active detachments back — next doctrine may reorganize differently
+		for did in _detachment_ids:
+			_commander.merge_detachment(did, _units)
+		_detachment_ids.clear()
+		_doctrine = new_doctrine
+		_execute_doctrine(red_groups)
+		red_groups = _commander.get_faction_groups(BattleUnitSystem.Faction.RED)
+
+	# Apply role-based commands every reassessment
+	_apply_role_commands(red_groups, blue_groups)
 
 	# === GLOBAL TACTICS (gated by AI tier) ===
 
@@ -1132,15 +1304,9 @@ func _reassess_strategy() -> void:
 			g.command = BattleCommander.CommandType.ATTACK
 			continue
 
-		# APPROACH phase: melee attacks, ranged/cavalry hold position
-		if _army_phase == ArmyPhase.APPROACH:
-			match g.unit_type:
-				BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.UnitType.HEAVY_INFANTRY, BattleUnitSystem.UnitType.SPEAR:
-					g.command = BattleCommander.CommandType.ATTACK
-				BattleUnitSystem.UnitType.ARCHER, BattleUnitSystem.UnitType.MAGE, BattleUnitSystem.UnitType.RANGED_INFANTRY:
-					_assess_ranged(g, center, blue_groups)
-				BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY, BattleUnitSystem.UnitType.HORSE_ARCHER:
-					g.command = BattleCommander.CommandType.HOLD
+		# Playbook groups (with a tactical role assigned) use role-based commands
+		# set by _apply_role_commands(). Skip the per-type assess functions.
+		if g.tactical_role != BattleCommander.TacticalRole.NONE:
 			continue
 
 		# Focus fire override — TRAINED+ AI piles on weakened target
@@ -1169,7 +1335,6 @@ func _reassess_strategy() -> void:
 				if ct_center != Vector2.ZERO and center.distance_to(ct_center) < 600.0:
 					g.target_group_id = counter_target.id
 
-
 		match g.unit_type:
 			BattleUnitSystem.UnitType.INFANTRY:
 				_assess_infantry(g, center, strength_ratio, casualty_ratio, blue_groups)
@@ -1196,7 +1361,6 @@ func _adapt_formations_to_counter(red_groups: Array, blue_groups: Array) -> void
 		if g.unit_type != BattleUnitSystem.UnitType.INFANTRY and g.unit_type != BattleUnitSystem.UnitType.HEAVY_INFANTRY and g.unit_type != BattleUnitSystem.UnitType.SPEAR:
 			continue
 		# Find the nearest enemy group and counter its formation
-		var center := _units.get_group_center(g.id)
 		var nearest_enemy: BattleCommander.BattleGroup = null
 		var nearest_dist := 99999.0
 		for bg in blue_groups:
@@ -1205,7 +1369,7 @@ func _adapt_formations_to_counter(red_groups: Array, blue_groups: Array) -> void
 			var bc := _units.get_group_center(bg.id)
 			if bc == Vector2.ZERO:
 				continue
-			var d := center.distance_to(bc)
+			var d := _units.get_group_center(g.id).distance_to(bc)
 			if d < nearest_dist:
 				nearest_dist = d
 				nearest_enemy = bg
@@ -1220,45 +1384,20 @@ func _adapt_formations_to_counter(red_groups: Array, blue_groups: Array) -> void
 					g.formation_type = counter
 
 func _assess_infantry(g: BattleCommander.BattleGroup, center: Vector2, strength: float, casualties: float, enemy_groups: Array) -> void:
-	var cav_nearby := _count_nearby_type(center, 300.0, BattleUnitSystem.Faction.BLUE,
+	# Infantry always fights. Tactics change, but never stop attacking.
+	var cav_nearby := _count_nearby_type(center, 350.0, BattleUnitSystem.Faction.BLUE,
 		[BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY, BattleUnitSystem.UnitType.HORSE_ARCHER])
 
-	# Cavalry incoming — shield wall (best counter to cavalry charge)
+	# Cavalry incoming — brace in shield wall BUT keep attacking (not DEFENSIVE)
 	if cav_nearby >= 3:
-		g.command = BattleCommander.CommandType.DEFENSIVE
+		g.command = BattleCommander.CommandType.ATTACK
 		g.formation_type = BattleUnitSystem.FormationType.SHIELD_WALL
 		return
-
-	# Heavy casualties and outnumbered — retreat but in formation
-	if casualties > 0.5 and strength < 0.5:
-		g.command = BattleCommander.CommandType.RETREAT
-		g.formation_type = BattleUnitSystem.FormationType.BLOCK  # Retreat in block to reduce casualties
-		return
-
-	# Outnumbered locally but not yet taking heavy casualties — defensive formation
-	if strength < 0.7 and casualties < 0.3:
-		g.command = BattleCommander.CommandType.DEFENSIVE
-		g.formation_type = BattleUnitSystem.FormationType.SHIELD_WALL
-		return
-
-	# Bait & Retreat: after friendly cavalry withdraws, pull back 100px to create gap
-	var red_cav_groups := _commander.get_faction_groups(BattleUnitSystem.Faction.RED)
-	for cg in red_cav_groups:
-		if (cg.unit_type == BattleUnitSystem.UnitType.CAVALRY or cg.unit_type == BattleUnitSystem.UnitType.HEAVY_CAVALRY):
-			if cg.charge_state == BattleCommander.ChargeState.WITHDRAWING:
-				var nearest_enemy := _find_nearest_enemy_group_center(center, enemy_groups)
-				if nearest_enemy != Vector2.ZERO:
-					var away := (center - nearest_enemy).normalized()
-					g.target_x = center.x + away.x * 100.0
-					g.target_y = center.y + away.y * 100.0
-					g.command = BattleCommander.CommandType.MOVE
-					return
 
 	# Winning — press attack aggressively with wedge
 	if strength > 1.5:
 		g.command = BattleCommander.CommandType.CHARGE
 		g.formation_type = BattleUnitSystem.FormationType.WEDGE
-		# Target weakest nearby enemy
 		var weakest := _find_weakest_enemy_group(center, enemy_groups, 500.0)
 		if weakest:
 			var wc := _units.get_group_center(weakest.id)
@@ -1267,20 +1406,37 @@ func _assess_infantry(g: BattleCommander.BattleGroup, center: Vector2, strength:
 			g.target_y = wc.y
 		return
 
-	# Default — advance and attack (formation set by _adapt_formations_to_counter)
+	# Outnumbered — screen for friendly archers (interpose between enemy and ranged allies)
+	if strength < 0.8:
+		var archer_center := _find_friendly_ranged_center(g.faction)
+		if archer_center != Vector2.ZERO:
+			var nearest_enemy := _find_nearest_enemy_group_center(center, enemy_groups)
+			if nearest_enemy != Vector2.ZERO:
+				# Position between archers and enemy as a screen
+				var to_enemy := (nearest_enemy - archer_center).normalized()
+				var screen_pos := archer_center + to_enemy * 120.0
+				g.target_x = screen_pos.x
+				g.target_y = screen_pos.y
+		g.command = BattleCommander.CommandType.ATTACK
+		g.formation_type = BattleUnitSystem.FormationType.SHIELD_WALL
+		return
+
+	# Default — advance and attack
 	g.command = BattleCommander.CommandType.ATTACK
 
 func _assess_heavy_infantry(g: BattleCommander.BattleGroup, center: Vector2, strength: float, enemy_groups: Array) -> void:
-	var cav_nearby := _count_nearby_type(center, 300.0, BattleUnitSystem.Faction.BLUE,
+	# Heavy infantry always attacks — they're tough enough to take hits.
+	# Formation adapts but command stays ATTACK.
+	var cav_nearby := _count_nearby_type(center, 350.0, BattleUnitSystem.Faction.BLUE,
 		[BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY, BattleUnitSystem.UnitType.HORSE_ARCHER])
 
-	# Cavalry threat — defensive stance but keep fighting
+	# Cavalry threat — shield wall but keep attacking
 	if cav_nearby >= 2:
-		g.command = BattleCommander.CommandType.DEFENSIVE
-		g.formation_type = BattleUnitSystem.FormationType.BLOCK
+		g.command = BattleCommander.CommandType.ATTACK
+		g.formation_type = BattleUnitSystem.FormationType.SHIELD_WALL
 		return
 
-	# Default — attack
+	# Default — attack in block
 	g.command = BattleCommander.CommandType.ATTACK
 	g.formation_type = BattleUnitSystem.FormationType.BLOCK
 
@@ -1313,7 +1469,7 @@ func _assess_cavalry(g: BattleCommander.BattleGroup, center: Vector2, enemy_grou
 				g.withdraw_pos = center + retreat_dir * 300.0
 				return
 			# Priority 2: weakened group (below 50% strength) — finish them off (avoid spear!)
-			var weak_target := _find_weakest_enemy_group(center, enemy_groups, 500.0)
+			var weak_target := _find_weakest_enemy_group(center, enemy_groups, 700.0)
 			if weak_target and weak_target.unit_type != BattleUnitSystem.UnitType.SPEAR:
 				var wc := _units.get_group_center(weak_target.id)
 				if wc != Vector2.ZERO:
@@ -1336,9 +1492,7 @@ func _assess_cavalry(g: BattleCommander.BattleGroup, center: Vector2, enemy_grou
 				var ftc := _units.get_group_center(flank_target.id)
 				if ftc != Vector2.ZERO:
 					# Attack from the side, not head-on
-					var to_target := (ftc - center).normalized()
-					var perp := Vector2(-to_target.y, to_target.x)
-					var flank_pos := ftc + perp * 200.0
+					var flank_pos := ftc + Vector2(-(ftc - center).y, (ftc - center).x).normalized() * 120.0
 					g.target_x = flank_pos.x
 					g.target_y = flank_pos.y
 					g.target_group_id = flank_target.id
@@ -1414,9 +1568,9 @@ func _assess_spear(g: BattleCommander.BattleGroup, center: Vector2, strength: fl
 	## Spear infantry: anti-cavalry specialist. Holds position vs cavalry, attacks infantry otherwise.
 	var cav_nearby := _count_nearby_type(center, 350.0, BattleUnitSystem.Faction.BLUE,
 		[BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY, BattleUnitSystem.UnitType.HORSE_ARCHER])
-	# Cavalry incoming — hold ground in line, activate brace
+	# Cavalry incoming — fight in line formation (spears counter cavalry in combat)
 	if cav_nearby >= 2:
-		g.command = BattleCommander.CommandType.DEFENSIVE
+		g.command = BattleCommander.CommandType.ATTACK
 		g.formation_type = BattleUnitSystem.FormationType.LINE
 		return
 	# Seek out enemy cavalry groups to intercept
@@ -1447,14 +1601,14 @@ func _assess_spear(g: BattleCommander.BattleGroup, center: Vector2, strength: fl
 	g.formation_type = BattleUnitSystem.FormationType.LINE
 
 func _assess_horse_archer(g: BattleCommander.BattleGroup, center: Vector2, enemy_groups: Array) -> void:
-	## Horse archer: fast kiting ranged cavalry. Harass and retreat, never stay in melee.
+	## Horse archer: fast kiting ranged cavalry. Harass, shoot, reposition. Always ATTACK.
 	g.formation_type = BattleUnitSystem.FormationType.LOOSE_LINE
-	var melee_threats := _count_nearby_type(center, 200.0, BattleUnitSystem.Faction.BLUE,
+	var melee_threats := _count_nearby_type(center, 350.0, BattleUnitSystem.Faction.BLUE,
 		[BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.UnitType.HEAVY_INFANTRY,
 		 BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.SPEAR])
-	# Melee too close — kite away
-	if melee_threats >= 3:
-		var away := Vector2.ZERO
+	# Melee too close — kite away while still shooting (ATTACK, not MOVE)
+	var away := Vector2.ZERO
+	if melee_threats >= 2:
 		for eg in enemy_groups:
 			var ec := _units.get_group_center(eg.id)
 			if ec != Vector2.ZERO and center.distance_to(ec) < 250.0:
@@ -1463,7 +1617,7 @@ func _assess_horse_archer(g: BattleCommander.BattleGroup, center: Vector2, enemy
 			away = away.normalized()
 			g.target_x = center.x + away.x * 300.0
 			g.target_y = center.y + away.y * 300.0
-			g.command = BattleCommander.CommandType.MOVE
+			g.command = BattleCommander.CommandType.ATTACK
 			return
 	# Priority: harass exposed ranged or weak groups
 	var ranged_target := _find_exposed_ranged_group(center, enemy_groups)
@@ -1475,40 +1629,50 @@ func _assess_horse_archer(g: BattleCommander.BattleGroup, center: Vector2, enemy
 			g.target_group_id = ranged_target.id
 			g.command = BattleCommander.CommandType.ATTACK
 			return
-	# Default: attack move
+	# Default: attack
 	g.command = BattleCommander.CommandType.ATTACK
 
 func _assess_ranged(g: BattleCommander.BattleGroup, center: Vector2, enemy_groups: Array) -> void:
-	## Archers/mages: smart positioning, focus fire, and self-preservation.
+	## Archers/mages: kite from range, stay behind infantry, always fire.
+	## NEVER use MOVE/RETREAT/SCATTER — always ATTACK so they keep shooting.
 	g.formation_type = BattleUnitSystem.FormationType.LOOSE_LINE
 
-	var melee_threats := _count_nearby_type(center, 150.0, BattleUnitSystem.Faction.BLUE,
+	var melee_threats := _count_nearby_type(center, 180.0, BattleUnitSystem.Faction.BLUE,
 		[BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.UnitType.HEAVY_INFANTRY,
 		 BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY,
 		 BattleUnitSystem.UnitType.SPEAR])
-	var cav_threats := _count_nearby_type(center, 250.0, BattleUnitSystem.Faction.BLUE,
-		[BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY,
-		 BattleUnitSystem.UnitType.HORSE_ARCHER])
 
-	# Cavalry charging us — emergency scatter! (cavalry counters ranged hard)
-	if cav_threats >= 2:
-		g.command = BattleCommander.CommandType.SCATTER
-		return
+	# Enemies too close — kite backward while still attacking
+	if melee_threats >= 2:
+		var nearest_enemy := _find_nearest_enemy_group_center(center, enemy_groups)
+		if nearest_enemy != Vector2.ZERO:
+			# Strafe slightly to avoid running straight back
+			var away := (center - nearest_enemy).normalized()
+			var perp := Vector2(-away.y, away.x)
+			var side := 1.0 if randf() > 0.5 else -1.0
+			var kite_dir := (away + perp * side * 0.3).normalized()
+			g.target_x = center.x + kite_dir.x * 250.0
+			g.target_y = center.y + kite_dir.y * 250.0
+			g.command = BattleCommander.CommandType.ATTACK
+			return
 
-	# Melee enemies too close — retreat laterally (not straight back)
-	if melee_threats >= 3:
-		g.command = BattleCommander.CommandType.RETREAT
-		var retreat_dir := (red_objective - center).normalized() * -1.0
-		if retreat_dir == Vector2.ZERO:
-			retreat_dir = Vector2(1, 0)
-		var perp := Vector2(-retreat_dir.y, retreat_dir.x)
-		var side := 1.0 if randf() > 0.5 else -1.0
-		var strafe_dir := (retreat_dir + perp * side * 0.8).normalized()
-		g.target_x = center.x + strafe_dir.x * 200.0
-		g.target_y = center.y + strafe_dir.y * 200.0
-		return
+	# Stay behind friendly infantry screen
+	var friendly_inf_center := _find_friendly_infantry_center(g.faction)
+	if friendly_inf_center != Vector2.ZERO:
+		var nearest_enemy := _find_nearest_enemy_group_center(center, enemy_groups)
+		if nearest_enemy != Vector2.ZERO:
+			var to_enemy := (nearest_enemy - friendly_inf_center).normalized()
+			var safe_pos := friendly_inf_center - to_enemy * 180.0
+			g.target_x = safe_pos.x
+			g.target_y = safe_pos.y
+			# Focus fire on weakest enemy
+			var weak := _find_weakest_enemy_group(center, enemy_groups, 600.0)
+			if weak:
+				g.target_group_id = weak.id
+			g.command = BattleCommander.CommandType.ATTACK
+			return
 
-	# Priority: focus fire on weakest enemy group (finish them off)
+	# No infantry screen — focus fire on weakest
 	var weak := _find_weakest_enemy_group(center, enemy_groups, 600.0)
 	if weak:
 		var wc := _units.get_group_center(weak.id)
@@ -1517,20 +1681,6 @@ func _assess_ranged(g: BattleCommander.BattleGroup, center: Vector2, enemy_group
 			g.target_x = wc.x
 			g.target_y = wc.y
 
-	# Always try to stay behind friendly infantry screen
-	if not _is_group_screened_by_infantry(g, center, enemy_groups):
-		var friendly_inf_center := _find_friendly_infantry_center(g.faction)
-		if friendly_inf_center != Vector2.ZERO:
-			var nearest_enemy := _find_nearest_enemy_group_center(center, enemy_groups)
-			if nearest_enemy != Vector2.ZERO:
-				var to_enemy := (nearest_enemy - friendly_inf_center).normalized()
-				var safe_pos := friendly_inf_center - to_enemy * 180.0
-				g.target_x = safe_pos.x
-				g.target_y = safe_pos.y
-				g.command = BattleCommander.CommandType.ATTACK
-				return
-
-	# Default — attack from range
 	g.command = BattleCommander.CommandType.ATTACK
 
 # --- Smart AI Tactics ---
@@ -1567,9 +1717,7 @@ func _try_pincer_attack(red_groups: Array, blue_groups: Array) -> void:
 	# Second group flanks wide
 	var flank_group: BattleCommander.BattleGroup = melee_groups[1]
 	var our_center := _units.get_group_center(pin_group.id)
-	var to_enemy := (enemy_center - our_center).normalized()
-	var perp := Vector2(-to_enemy.y, to_enemy.x)
-	var flank_target := enemy_center + perp * 300.0  # Wide arc
+	var flank_target := enemy_center + Vector2(0.0, 220.0 if flank_group.id % 2 == 0 else -220.0)
 	flank_group.command = BattleCommander.CommandType.ATTACK
 	flank_group.target_x = flank_target.x
 	flank_group.target_y = flank_target.y
@@ -1592,11 +1740,11 @@ func _try_commander_hunting(red_groups: Array, blue_groups: Array) -> void:
 			continue
 		if _units.get_group_alive_count(g.id) == 0:
 			continue
-		var gc := _units.get_group_center(g.id)
-		var best_dist := 99999.0
 		var best_pos := Vector2.ZERO
+		var best_dist := 99999.0
+		var g_center := _units.get_group_center(g.id)
 		for cp in commander_positions:
-			var d := gc.distance_to(cp)
+			var d := g_center.distance_to(cp)
 			if d < best_dist:
 				best_dist = d
 				best_pos = cp
@@ -1624,6 +1772,17 @@ const _MELEE_TYPES := [BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.Unit
 const _RANGED_TYPES := [BattleUnitSystem.UnitType.ARCHER, BattleUnitSystem.UnitType.MAGE, BattleUnitSystem.UnitType.RANGED_INFANTRY]
 const _CAV_TYPES := [BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY]
 const _PHASE_NAMES := ["STAGING", "ADVANCE", "APPROACH", "ENGAGED", "CLEANUP"]
+
+enum ArmyPhase { STAGING, ADVANCE, APPROACH, ENGAGED, CLEANUP }
+var _army_phase: int = ArmyPhase.STAGING
+var _phase_timer: float = 0.0
+var _line_progress: float = 0.0
+var _staging_center: Vector2 = Vector2.ZERO
+var _advance_dir: Vector2 = Vector2.LEFT
+var _perp_dir: Vector2 = Vector2.UP
+var _melee_engaged_count: int = 0
+var _infantry_speed: float = 1.8
+var _cavalry_charge_triggered: bool = false
 
 func _update_army_phase(red_groups: Array, blue_groups: Array) -> void:
 	## Phase state machine dispatcher. Called from _reassess_strategy() every 3s.
@@ -1662,10 +1821,9 @@ func _update_army_phase(red_groups: Array, blue_groups: Array) -> void:
 
 func _do_staging_phase(red_groups: Array) -> void:
 	## Form up: infantry front, archers behind, cavalry on flanks.
-	## Use ATTACK so units fight back while forming up.
-	_compute_battle_line_positions(_staging_line_x, red_groups, true)
+	_compute_battle_line_positions(0.0, red_groups, true)
 
-	# Check if groups are in position (within 80px) or timeout at 5s
+	# Check if groups are in position (within 80px) or timeout at 3s
 	var total_groups := 0
 	var in_position := 0
 	for g in red_groups:
@@ -1683,24 +1841,21 @@ func _do_staging_phase(red_groups: Array) -> void:
 		_phase_timer = 0.0
 
 func _do_advance_phase(red_groups: Array, blue_groups: Array) -> void:
-	## March toward enemy at infantry speed. Transition at 600px from nearest BLUE.
-	# Advance the battle line
-	_battle_line_x -= _infantry_speed * _advance_speed_mult * STRATEGY_INTERVAL * 60.0  # ~130px per 3s tick
+	## March toward enemy along approach direction. Transition at 600px from nearest BLUE.
+	_line_progress += _infantry_speed * _advance_speed_mult * STRATEGY_INTERVAL * 60.0
 
-	_compute_battle_line_positions(_battle_line_x, red_groups, true)
+	_compute_battle_line_positions(_line_progress, red_groups, true)
 
-	# Check distance to nearest BLUE group
-	var front_x := _battle_line_x
+	# Check distance from front to nearest BLUE group or player
+	var front := _staging_center + _advance_dir * _line_progress
 	var min_dist := 99999.0
 	for bg in blue_groups:
 		var bc := _units.get_group_center(bg.id)
 		if bc == Vector2.ZERO:
 			continue
-		var dx := front_x - bc.x
-		if dx < 0:
-			dx = -dx
-		if dx < min_dist:
-			min_dist = dx
+		min_dist = minf(min_dist, front.distance_to(bc))
+	if player_alive and player_position != Vector2.ZERO:
+		min_dist = minf(min_dist, front.distance_to(player_position))
 
 	if min_dist < 600.0:
 		print("AI Army: ADVANCE -> APPROACH (dist=%.0f)" % min_dist)
@@ -1724,15 +1879,16 @@ func _do_engaged_phase(red_groups: Array, blue_groups: Array) -> void:
 		_trigger_cavalry_charge(red_groups, blue_groups)
 	# Per-group tactical AI runs normally (no early return from _reassess_strategy)
 
-func _compute_battle_line_positions(line_x: float, red_groups: Array, attack_move: bool = false) -> void:
-	## Assign target positions for each group based on role.
-	## Melee at line_x, ranged 120px behind (higher X for RED facing left), cavalry ±200px on Y flanks.
-	## When attack_move=true (ADVANCE phase), groups use ATTACK so they fight while marching.
+func _compute_battle_line_positions(progress: float, red_groups: Array, attack_move: bool = false) -> void:
+	## Assign target positions for each group along the directional battle line.
+	## Works along any axis (horizontal, vertical, diagonal).
+	## progress = how far along _advance_dir from _staging_center.
+	## Groups spread perpendicular to the advance direction.
 	var move_cmd: int = BattleCommander.CommandType.ATTACK if attack_move else BattleCommander.CommandType.MOVE
 	var melee_groups: Array = []
 	var ranged_groups: Array = []
 	var cav_groups: Array = []
-	var harass_groups: Array = []  # horse archers
+	var harass_groups: Array = []
 
 	for g in red_groups:
 		if _units.get_group_alive_count(g.id) == 0:
@@ -1746,46 +1902,52 @@ func _compute_battle_line_positions(line_x: float, red_groups: Array, attack_mov
 		elif g.unit_type == BattleUnitSystem.UnitType.HORSE_ARCHER:
 			harass_groups.append(g)
 
-	# Spread melee groups along Y axis at line_x
-	var melee_count := melee_groups.size()
+	# Front line center = staging center + progress along advance direction
+	var front := _staging_center + _advance_dir * progress
 	var spacing := 80.0
-	var melee_start_y := _battle_line_y_center - (melee_count - 1) * spacing * 0.5
+
+	# Spread melee groups along perpendicular axis at the front line
+	var melee_count := melee_groups.size()
 	for idx in melee_count:
 		var g: BattleCommander.BattleGroup = melee_groups[idx]
-		g.target_x = line_x
-		g.target_y = melee_start_y + idx * spacing
+		var offset := (float(idx) - float(melee_count - 1) * 0.5) * spacing
+		var pos := front + _perp_dir * offset
+		g.target_x = pos.x
+		g.target_y = pos.y
 		g.command = move_cmd
 
-	# Ranged groups 120px behind melee line
-	var ranged_x := line_x + 120.0  # higher X = further from BLUE (RED faces left)
+	# Ranged groups 120px behind front line (opposite to advance direction)
+	var ranged_front := front - _advance_dir * 120.0
 	var ranged_count := ranged_groups.size()
-	var ranged_start_y := _battle_line_y_center - (ranged_count - 1) * spacing * 0.5
 	for idx in ranged_count:
 		var g: BattleCommander.BattleGroup = ranged_groups[idx]
-		g.target_x = ranged_x
-		g.target_y = ranged_start_y + idx * spacing
+		var offset := (float(idx) - float(ranged_count - 1) * 0.5) * spacing
+		var pos := ranged_front + _perp_dir * offset
+		g.target_x = pos.x
+		g.target_y = pos.y
 		g.command = move_cmd
 
-	# Cavalry on Y flanks, 200px outside melee spread
-	var melee_top_y := melee_start_y - 200.0
-	var melee_bot_y := melee_start_y + (melee_count - 1) * spacing + 200.0
+	# Cavalry on flanks, 200px outside melee spread
+	var flank_offset := float(maxi(melee_count - 1, 0)) * spacing * 0.5 + 200.0
 	for idx in cav_groups.size():
 		var g: BattleCommander.BattleGroup = cav_groups[idx]
-		g.target_x = line_x
-		if idx % 2 == 0:
-			g.target_y = melee_top_y - idx / 2 * spacing
-		else:
-			g.target_y = melee_bot_y + idx / 2 * spacing
+		var side := 1.0 if idx % 2 == 0 else -1.0
+		var extra := float(idx / 2) * spacing
+		var pos := front + _perp_dir * side * (flank_offset + extra)
+		g.target_x = pos.x
+		g.target_y = pos.y
 		g.command = move_cmd
 
-	# Horse archers on wide flanks for skirmishing
+	# Horse archers on wide flanks, slightly ahead
+	var harass_front := front + _advance_dir * 50.0
+	var harass_flank := flank_offset + 100.0
 	for idx in harass_groups.size():
 		var g: BattleCommander.BattleGroup = harass_groups[idx]
-		g.target_x = line_x - 50.0  # slightly ahead
-		if idx % 2 == 0:
-			g.target_y = melee_top_y - 100.0 - idx / 2 * spacing
-		else:
-			g.target_y = melee_bot_y + 100.0 + idx / 2 * spacing
+		var extra := float(idx / 2) * spacing
+		var side := 1.0 if idx % 2 == 0 else -1.0
+		var pos := harass_front + _perp_dir * (side * (harass_flank + extra))
+		g.target_x = pos.x
+		g.target_y = pos.y
 		g.command = move_cmd
 
 func _count_melee_in_contact() -> int:
@@ -1833,9 +1995,7 @@ func _trigger_cavalry_charge(red_groups: Array, blue_groups: Array) -> void:
 		if flank_target:
 			var ftc := _units.get_group_center(flank_target.id)
 			if ftc != Vector2.ZERO:
-				var to_target := (ftc - center).normalized()
-				var perp := Vector2(-to_target.y, to_target.x)
-				var flank_pos := ftc + perp * 200.0
+				var flank_pos := ftc
 				g.target_x = flank_pos.x
 				g.target_y = flank_pos.y
 				g.target_group_id = flank_target.id
@@ -1866,43 +2026,30 @@ func _trigger_cavalry_charge(red_groups: Array, blue_groups: Array) -> void:
 		# Fallback: just attack
 		g.command = BattleCommander.CommandType.ATTACK
 
-func _find_friendly_infantry_center(faction: int) -> Vector2:
-	## Find the center of friendly infantry groups.
-	var groups := _commander.get_faction_groups(faction)
+func _find_friendly_type_center(faction: int, unit_types: Array) -> Vector2:
+	## Average center of friendly groups whose unit_type is in unit_types.
 	var center := Vector2.ZERO
 	var count := 0
-	for g in groups:
-		if g.unit_type == BattleUnitSystem.UnitType.INFANTRY or g.unit_type == BattleUnitSystem.UnitType.HEAVY_INFANTRY:
-			var gc := _units.get_group_center(g.id)
-			if gc != Vector2.ZERO:
-				center += gc
-				count += 1
+	for g in _commander.get_faction_groups(faction):
+		if not unit_types.has(g.unit_type):
+			continue
+		var gc := _units.get_group_center(g.id)
+		if gc != Vector2.ZERO:
+			center += gc
+			count += 1
 	if count == 0:
 		return Vector2.ZERO
 	return center / float(count)
 
-func _find_weakest_enemy_group(from: Vector2, enemy_groups: Array, max_range: float) -> BattleCommander.BattleGroup:
-	## Find the enemy group with the worst strength ratio within range.
-	var best: BattleCommander.BattleGroup = null
-	var worst_ratio := 1.0
-	for eg in enemy_groups:
-		var eg_alive := _units.get_group_alive_count(eg.id)
-		if eg_alive == 0:
-			continue
-		var ec := _units.get_group_center(eg.id)
-		if ec == Vector2.ZERO or from.distance_to(ec) > max_range:
-			continue
-		var ratio := 1.0
-		if eg.initial_size > 0:
-			ratio = float(eg_alive) / float(eg.initial_size)
-		if ratio < worst_ratio:
-			worst_ratio = ratio
-			best = eg
-	return best
+func _find_friendly_infantry_center(faction: int) -> Vector2:
+	return _find_friendly_type_center(faction, [BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.UnitType.HEAVY_INFANTRY, BattleUnitSystem.UnitType.SPEAR])
+
+func _find_friendly_ranged_center(faction: int) -> Vector2:
+	return _find_friendly_type_center(faction, [BattleUnitSystem.UnitType.ARCHER, BattleUnitSystem.UnitType.MAGE, BattleUnitSystem.UnitType.RANGED_INFANTRY, BattleUnitSystem.UnitType.HORSE_ARCHER])
 
 func _find_nearest_enemy_group_center(from: Vector2, enemy_groups: Array) -> Vector2:
-	var best_dist := 99999.0
 	var best_center := Vector2.ZERO
+	var best_dist := 99999.0
 	for eg in enemy_groups:
 		var ec := _units.get_group_center(eg.id)
 		if ec == Vector2.ZERO:
@@ -1949,35 +2096,6 @@ func _count_nearby_type(center: Vector2, search_range: float, faction: int, type
 			count += 1
 	return count
 
-func _find_flank_target(cav_group: BattleCommander.BattleGroup, cav_center: Vector2, enemy_groups: Array) -> BattleCommander.BattleGroup:
-	## Find an enemy group currently engaged with friendly infantry (good flank target).
-	var friendly_groups := _commander.get_faction_groups(cav_group.faction)
-	var best: BattleCommander.BattleGroup = null
-	var best_dist := 99999.0
-	for eg in enemy_groups:
-		if _units.get_group_alive_count(eg.id) == 0:
-			continue
-		var ec := _units.get_group_center(eg.id)
-		if ec == Vector2.ZERO:
-			continue
-		# Check if any friendly infantry is fighting this group (within 150px)
-		var engaged := false
-		for fg in friendly_groups:
-			if fg.unit_type != BattleUnitSystem.UnitType.INFANTRY and fg.unit_type != BattleUnitSystem.UnitType.HEAVY_INFANTRY and fg.unit_type != BattleUnitSystem.UnitType.SPEAR:
-				continue
-			if _units.get_group_alive_count(fg.id) == 0:
-				continue
-			var fc := _units.get_group_center(fg.id)
-			if fc.distance_to(ec) < 200.0:
-				engaged = true
-				break
-		if engaged:
-			var d := cav_center.distance_to(ec)
-			if d < best_dist and d < 600.0:
-				best_dist = d
-				best = eg
-	return best
-
 func _find_exposed_ranged_group(from: Vector2, enemy_groups: Array) -> BattleCommander.BattleGroup:
 	## Find an enemy archer/mage/ranged_inf group that isn't screened by infantry/spear
 	var best: BattleCommander.BattleGroup = null
@@ -1995,6 +2113,8 @@ func _find_exposed_ranged_group(from: Vector2, enemy_groups: Array) -> BattleCom
 				if _units.get_group_alive_count(fg.id) == 0:
 					continue
 				var fc := _units.get_group_center(fg.id)
+				if fc == Vector2.ZERO:
+					continue
 				var to_ranged := ec - from
 				var to_infantry := fc - from
 				var dot := to_ranged.normalized().dot(to_infantry.normalized())
@@ -2079,11 +2199,11 @@ func _update_target(i: int) -> void:
 func _get_unit_destination(i: int) -> Vector2:
 	## Get where this unit should be heading based on command + target.
 	var gid := _units.group_id[i]
+	var grp = _commander.get_group(gid) if gid >= 0 and _commander else null
+	var target_idx := _units.target_unit[i]
 	if gid >= 0 and _commander:
-		var grp = _commander.get_group(gid)
 		if grp and grp.command == BattleCommander.CommandType.MOVE:
 			return Vector2(grp.target_x, grp.target_y)
-	var target_idx := _units.target_unit[i]
 	if target_idx == PLAYER_TARGET_ID:
 		return player_position
 	elif target_idx >= 0 and target_idx < _units.count and _units.alive[target_idx] == 1:
@@ -2137,7 +2257,6 @@ func _do_movement_toward_pos(i: int, target_pos: Vector2, dt: float, force_move:
 	var dist := sqrt(dx * dx + dy * dy)
 	if dist < 4.0:
 		return
-
 	var nx := dx / dist
 	var ny := dy / dist
 
@@ -2175,7 +2294,6 @@ func _do_movement_toward_pos(i: int, target_pos: Vector2, dt: float, force_move:
 	var t := _units.unit_type[i]
 	var acc: float = _units.acceleration[i]
 	var spd: float = _units.max_speed[i]
-
 	if grp_id >= 0:
 		var group := _commander.get_group(grp_id)
 		if group:
@@ -2239,7 +2357,6 @@ func _do_attack(i: int) -> void:
 	var target := _units.target_unit[i]
 	if target < 0 or target >= _units.count:
 		return
-
 	var dx := _units.x[target] - _units.x[i]
 	var dy := _units.y[target] - _units.y[i]
 	var dist := sqrt(dx * dx + dy * dy)
@@ -2253,8 +2370,8 @@ func _do_attack(i: int) -> void:
 	if _flow and not _flow.has_line_of_sight(_units.x[i], _units.y[i], _units.x[target], _units.y[target]):
 		return  # Can't shoot but keep pursuing — A* will go around
 
-	# Morale tier attack cooldown modifier
 	var cooldown: float = BattleUnitSystem.UNIT_STATS["attack_cooldown"][t]
+	# Morale tier attack cooldown modifier
 	var atk_morale := _units.morale[i]
 	if atk_morale < 15.0:
 		return  # Broken: won't fight
@@ -2276,7 +2393,6 @@ func _do_attack(i: int) -> void:
 		return
 
 	_units.last_attack_time[i] = _battle_time
-
 	var nx := dx / maxf(dist, 0.01)
 	var ny := dy / maxf(dist, 0.01)
 	var bullet_spd: float = BattleUnitSystem.UNIT_STATS["bullet_speed"][t]
@@ -2322,10 +2438,10 @@ func _do_attack_player(i: int) -> void:
 	## RED unit fires at the player character
 	if not player_alive:
 		return
+	var t := _units.unit_type[i]
 	var dx := player_position.x - _units.x[i]
 	var dy := player_position.y - _units.y[i]
 	var dist := sqrt(dx * dx + dy * dy)
-	var t := _units.unit_type[i]
 	var atk_range: float = BattleUnitSystem.UNIT_STATS["attack_range"][t]
 
 	if dist > atk_range:
@@ -2365,35 +2481,33 @@ func _do_flow_move(i: int, dest: Vector2, dt: float) -> void:
 		_do_attack(i)
 
 func _do_advance(i: int, dt: float) -> void:
-	# No target found — advance toward faction objective using A* path
+	# No target found — advance toward the faction's objective
 	var objective: Vector2
 	if _units.faction[i] == BattleUnitSystem.Faction.RED:
 		objective = red_objective
 	else:
 		objective = blue_objective
 	if objective == Vector2.ZERO:
-		return
-
+		return  # No objective set
 	var dx := objective.x - _units.x[i]
 	var dy := objective.y - _units.y[i]
 	var dist := sqrt(dx * dx + dy * dy)
 	if dist < 100.0:
-		return
-
-	# Use A* path — _do_movement_toward_pos handles waypoint following
-	_do_movement_toward_pos(i, objective, dt)
-	# Override speed to advance speed
+		return  # Close enough to objective, hold position
+	var nx := dx / maxf(dist, 0.01)
+	var ny := dy / maxf(dist, 0.01)
 	var spd: float = _units.max_speed[i] * _advance_speed_mult
+	var acc: float = _units.acceleration[i] * _advance_speed_mult
+	_units.vx[i] += nx * acc * dt * 60.0
+	_units.vy[i] += ny * acc * dt * 60.0
 	var cur_speed := sqrt(_units.vx[i] * _units.vx[i] + _units.vy[i] * _units.vy[i])
 	if cur_speed > spd:
-		var s := spd / cur_speed
-		_units.vx[i] *= s
-		_units.vy[i] *= s
-	# Attack any enemy in range while advancing
-	if _units.target_unit[i] == PLAYER_TARGET_ID:
-		_do_attack_player(i)
-	else:
-		_do_attack(i)
+		var scale := spd / cur_speed
+		_units.vx[i] *= scale
+		_units.vy[i] *= scale
+	_units.facing[i] = atan2(ny, nx)
+	# Still attack any enemy that comes into range while advancing
+	_do_attack(i)
 
 func _do_rout_retreat(i: int, dt: float) -> void:
 	## Controlled retreat — move away from nearest enemy
@@ -2533,3 +2647,437 @@ func _find_nearest_enemy_with_los(i: int, search_range: float) -> int:
 				best_dist = dist_sq
 				best_idx = j
 	return best_idx
+
+# ============================================================
+# PLAYBOOK SYSTEM — Doctrine-based tactical plays
+# ============================================================
+
+func _select_doctrine(red_groups: Array, blue_groups: Array) -> int:
+	## Analyze force composition to select the best tactical doctrine.
+	var red_inf := 0
+	var red_heavy_inf := 0
+	var red_cav := 0
+	var red_ranged := 0
+	var red_horse_archer := 0
+	var red_total := 0
+	for g in red_groups:
+		var c := _units.get_group_alive_count(g.id)
+		red_total += c
+		match g.unit_type:
+			BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.UnitType.SPEAR:
+				red_inf += c
+			BattleUnitSystem.UnitType.HEAVY_INFANTRY:
+				red_heavy_inf += c
+			BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY:
+				red_cav += c
+			BattleUnitSystem.UnitType.HORSE_ARCHER:
+				red_horse_archer += c
+			BattleUnitSystem.UnitType.ARCHER, BattleUnitSystem.UnitType.MAGE, BattleUnitSystem.UnitType.RANGED_INFANTRY:
+				red_ranged += c
+
+	var blue_heavy_inf := 0
+	var blue_total := 0
+	var blue_cav := 0
+	for g in blue_groups:
+		var c := _units.get_group_alive_count(g.id)
+		blue_total += c
+		match g.unit_type:
+			BattleUnitSystem.UnitType.HEAVY_INFANTRY:
+				blue_heavy_inf += c
+			BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY:
+				blue_cav += c
+
+	if blue_total == 0:
+		return Doctrine.FRONTAL_ASSAULT
+
+	var strength := float(red_total) / float(blue_total)
+	var has_hammer := (red_cav + red_horse_archer) >= 4
+	var has_ranged := red_ranged >= 3
+	var mostly_ranged := red_ranged > red_total * 0.5  # Majority must be ranged to kite
+	var has_light_inf := red_inf >= 5
+	var has_infantry_core := (red_inf + red_heavy_inf) >= 8
+
+	# Composition decides doctrine — strength only picks between aggressive variants.
+	# ALWAYS differentiate roles when we have cavalry — otherwise cav just blobs with infantry.
+
+	if DEBUG_AI_LOG:
+		print("[AI] _select_doctrine red_total=%d (inf=%d hinf=%d cav=%d ranged=%d ha=%d) blue_total=%d strength=%.2f has_hammer=%s has_ranged=%s mostly_ranged=%s has_light_inf=%s has_infantry_core=%s" % [
+			red_total, red_inf, red_heavy_inf, red_cav, red_ranged, red_horse_archer,
+			blue_total, strength, has_hammer, has_ranged, mostly_ranged, has_light_inf, has_infantry_core])
+
+	# Overwhelming advantage (2x+) — just rush them, don't overthink it
+	if strength >= 2.0:
+		if has_hammer and has_infantry_core:
+			return Doctrine.HAMMER_ANVIL  # Use cavalry properly even when stomping
+		return Doctrine.FRONTAL_ASSAULT
+
+	# Outnumbered with light infantry + flankers — bait & flank
+	if strength < 1.0 and has_light_inf and red_total >= 15 and has_hammer:
+		return Doctrine.BAIT_AND_FLANK
+
+	# Have cavalry + infantry core — hammer/anvil (works at any strength ratio)
+	if has_hammer and has_infantry_core:
+		return Doctrine.HAMMER_ANVIL
+
+	# Ranged-majority (50%+) with no cavalry — kite and screen
+	if mostly_ranged:
+		return Doctrine.KITING_HARASS
+
+	# Outnumbered ranged — kite even with low ranged count
+	if strength < 0.7 and has_ranged:
+		return Doctrine.KITING_HARASS
+
+	# Outnumbered, no hammer, no ranged — hold ground
+	if strength < 0.7:
+		return Doctrine.DEFENSIVE_LINE
+
+	return Doctrine.FRONTAL_ASSAULT
+
+func _execute_doctrine(red_groups: Array) -> void:
+	## Assign tactical roles to groups based on the selected doctrine.
+	## Handles group splitting for bait/flanker plays.
+	match _doctrine:
+		Doctrine.FRONTAL_ASSAULT:
+			for g in red_groups:
+				match g.unit_type:
+					BattleUnitSystem.UnitType.ARCHER, BattleUnitSystem.UnitType.MAGE, BattleUnitSystem.UnitType.RANGED_INFANTRY, BattleUnitSystem.UnitType.HORSE_ARCHER:
+						g.tactical_role = BattleCommander.TacticalRole.SKIRMISHER
+					_:
+						g.tactical_role = BattleCommander.TacticalRole.VANGUARD
+		Doctrine.HAMMER_ANVIL:
+			_execute_hammer_anvil(red_groups)
+		Doctrine.BAIT_AND_FLANK:
+			_execute_bait_and_flank(red_groups)
+		Doctrine.KITING_HARASS:
+			_execute_kiting_harass(red_groups)
+		Doctrine.DEFENSIVE_LINE:
+			for g in red_groups:
+				match g.unit_type:
+					BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.UnitType.HEAVY_INFANTRY, BattleUnitSystem.UnitType.SPEAR:
+						g.tactical_role = BattleCommander.TacticalRole.ANVIL
+					BattleUnitSystem.UnitType.ARCHER, BattleUnitSystem.UnitType.MAGE, BattleUnitSystem.UnitType.RANGED_INFANTRY:
+						g.tactical_role = BattleCommander.TacticalRole.SKIRMISHER
+					BattleUnitSystem.UnitType.HORSE_ARCHER:
+						g.tactical_role = BattleCommander.TacticalRole.SKIRMISHER
+					BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY:
+						g.tactical_role = BattleCommander.TacticalRole.RESERVE
+
+func _execute_hammer_anvil(red_groups: Array) -> void:
+	## Infantry = anvil (pins enemy), cavalry/horse archer = hammer (flanks rear)
+	for g in red_groups:
+		match g.unit_type:
+			BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.UnitType.HEAVY_INFANTRY, BattleUnitSystem.UnitType.SPEAR:
+				g.tactical_role = BattleCommander.TacticalRole.ANVIL
+			BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY:
+				g.tactical_role = BattleCommander.TacticalRole.HAMMER
+			BattleUnitSystem.UnitType.HORSE_ARCHER:
+				g.tactical_role = BattleCommander.TacticalRole.HAMMER
+			BattleUnitSystem.UnitType.ARCHER, BattleUnitSystem.UnitType.MAGE, BattleUnitSystem.UnitType.RANGED_INFANTRY:
+				g.tactical_role = BattleCommander.TacticalRole.SKIRMISHER
+
+func _execute_bait_and_flank(red_groups: Array) -> void:
+	## Split light infantry: ~60% stays as bait (fighting withdrawal), 40% becomes flankers.
+	## Archers skirmish from behind. Cavalry = hammer.
+	# First pass: assign base roles
+	for g in red_groups:
+		if g.parent_group_id >= 0:
+			continue  # Skip existing detachments
+		match g.unit_type:
+			BattleUnitSystem.UnitType.INFANTRY:
+				g.tactical_role = BattleCommander.TacticalRole.BAIT
+			BattleUnitSystem.UnitType.HEAVY_INFANTRY, BattleUnitSystem.UnitType.SPEAR:
+				g.tactical_role = BattleCommander.TacticalRole.ANVIL
+			BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY:
+				g.tactical_role = BattleCommander.TacticalRole.HAMMER
+			BattleUnitSystem.UnitType.HORSE_ARCHER:
+				g.tactical_role = BattleCommander.TacticalRole.FLANKER
+			BattleUnitSystem.UnitType.ARCHER, BattleUnitSystem.UnitType.MAGE, BattleUnitSystem.UnitType.RANGED_INFANTRY:
+				g.tactical_role = BattleCommander.TacticalRole.SKIRMISHER
+
+	# Second pass: split BAIT groups — 40% becomes FLANKER detachments
+	var to_split: Array[int] = []
+	for g in red_groups:
+		if g.tactical_role == BattleCommander.TacticalRole.BAIT and g.parent_group_id < 0:
+			if _units.get_group_alive_count(g.id) >= BAIT_MIN_SPLIT_SIZE:
+				to_split.append(g.id)
+	for orig_id in to_split:
+		var detach := _commander.split_group(orig_id, BAIT_SPLIT_FRACTION, "Flankers", _units)
+		if detach:
+			detach.tactical_role = BattleCommander.TacticalRole.FLANKER
+			_detachment_ids.append(detach.id)
+
+func _execute_kiting_harass(red_groups: Array) -> void:
+	## Melee screens for ranged; ranged kites; horse archers harass flanks.
+	for g in red_groups:
+		match g.unit_type:
+			BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.UnitType.SPEAR:
+				g.tactical_role = BattleCommander.TacticalRole.SCREEN
+			BattleUnitSystem.UnitType.HEAVY_INFANTRY:
+				g.tactical_role = BattleCommander.TacticalRole.ANVIL
+			BattleUnitSystem.UnitType.ARCHER, BattleUnitSystem.UnitType.MAGE, BattleUnitSystem.UnitType.RANGED_INFANTRY:
+				g.tactical_role = BattleCommander.TacticalRole.SKIRMISHER
+			BattleUnitSystem.UnitType.HORSE_ARCHER:
+				g.tactical_role = BattleCommander.TacticalRole.FLANKER
+			BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY:
+				g.tactical_role = BattleCommander.TacticalRole.HAMMER
+
+func _apply_role_commands(red_groups: Array, blue_groups: Array) -> void:
+	## Map tactical_role → command/target for each group.
+	## Called after _execute_doctrine() assigns roles.
+	_has_fighting_withdrawal = false
+
+	# Compute the battle axis from live RED/BLUE centroids so groups can be spread
+	# along a perpendicular line instead of all converging on a single point.
+	var red_ctr := _compute_faction_center(red_groups)
+	var blue_ctr := _compute_faction_center(blue_groups)
+	if DEBUG_AI_LOG:
+		print("[AI] _apply_role_commands t=%.1f doctrine=%s committed=%s red_ctr=(%.0f,%.0f) blue_ctr=(%.0f,%.0f) red_groups=%d blue_groups=%d" % [
+			_battle_time, _DOCTRINE_NAMES[_doctrine], _flankers_committed,
+			red_ctr.x, red_ctr.y, blue_ctr.x, blue_ctr.y, red_groups.size(), blue_groups.size()])
+	# Fallback: if player has no army (solo), use player position as blue center.
+	if blue_ctr == Vector2.ZERO and player_alive and player_position != Vector2.ZERO:
+		blue_ctr = player_position
+	var axis := blue_ctr - red_ctr
+	var advance_dir := Vector2(-1, 0)
+	if axis.length() > 1.0:
+		advance_dir = axis.normalized()
+	var perp := Vector2(-advance_dir.y, advance_dir.x)
+
+	# Collect frontline melee groups in stable id order and assign each a perp slot.
+	var frontline: Array = []
+	for fg in red_groups:
+		if _units.get_group_alive_count(fg.id) == 0:
+			continue
+		if fg.tactical_role == BattleCommander.TacticalRole.VANGUARD \
+				or fg.tactical_role == BattleCommander.TacticalRole.ANVIL \
+				or fg.tactical_role == BattleCommander.TacticalRole.SCREEN:
+			frontline.append(fg)
+	frontline.sort_custom(func(a, b): return a.id < b.id)
+	var frontline_slot := {}
+	var fcount := frontline.size()
+	for i in fcount:
+		var slot_offset := (float(i) - float(fcount - 1) * 0.5) * FRONTLINE_SLOT_SPACING
+		var block_target: Vector2 = blue_ctr + perp * slot_offset - advance_dir * FRONTLINE_STANDOFF
+		frontline_slot[frontline[i].id] = block_target
+	if DEBUG_AI_LOG:
+		print("[AI]   frontline_count=%d advance_dir=(%.2f,%.2f)" % [fcount, advance_dir.x, advance_dir.y])
+
+	# Check if frontline has engaged — any frontline group within FRONTLINE_ENGAGE_RADIUS of a BLUE group or the player
+	if not _flankers_committed:
+		var engage_sq := FRONTLINE_ENGAGE_RADIUS * FRONTLINE_ENGAGE_RADIUS
+		for fg in frontline:
+			var fc := _units.get_group_center(fg.id)
+			if fc == Vector2.ZERO:
+				continue
+			# Player counts as a frontline target for solo fights
+			if player_alive and fc.distance_squared_to(player_position) < engage_sq:
+				_flankers_committed = true
+				print("AI: Frontline near player — releasing HAMMER/FLANKER groups")
+				break
+			for bg in blue_groups:
+				var bc := _units.get_group_center(bg.id)
+				if bc == Vector2.ZERO:
+					continue
+				if fc.distance_squared_to(bc) < engage_sq:
+					_flankers_committed = true
+					print("AI: Frontline engaged — releasing HAMMER/FLANKER groups")
+					break
+			if _flankers_committed:
+				break
+		# Timeout: commit regardless so army doesn't stall
+		if not _flankers_committed and _battle_time > FLANKER_COMMIT_TIMEOUT:
+			_flankers_committed = true
+			print("AI: Flanker commit timeout — releasing HAMMER/FLANKER groups")
+
+	for g in red_groups:
+		var alive := _units.get_group_alive_count(g.id)
+		if alive == 0:
+			continue
+		var center := _units.get_group_center(g.id)
+		var enemy_ctr := _find_nearest_enemy_group_center(center, blue_groups)
+		var away := Vector2.ZERO
+		if center != Vector2.ZERO and enemy_ctr != Vector2.ZERO:
+			away = (center - enemy_ctr).normalized()
+		match g.tactical_role:
+			BattleCommander.TacticalRole.VANGUARD:
+				var slot: Vector2 = frontline_slot.get(g.id, blue_ctr - advance_dir * FRONTLINE_STANDOFF)
+				g.command = BattleCommander.CommandType.ATTACK
+				g.target_x = slot.x
+				g.target_y = slot.y
+			BattleCommander.TacticalRole.ANVIL:
+				var slot: Vector2 = frontline_slot.get(g.id, blue_ctr - advance_dir * FRONTLINE_STANDOFF)
+				g.command = BattleCommander.CommandType.ATTACK
+				if _doctrine == Doctrine.DEFENSIVE_LINE:
+					# Defensive anvil: ATTACK toward a position 35% of the way to the enemy
+					# Units will march there, then fight in place (ATTACK handler stops at target)
+					var hold_pos: Vector2 = red_ctr + (blue_ctr - red_ctr) * DEFENSIVE_HOLD_FRACTION
+					var slot_offset_only: Vector2 = slot - (blue_ctr - advance_dir * FRONTLINE_STANDOFF)
+					hold_pos += slot_offset_only  # Apply perpendicular spread at defensive depth
+					g.target_x = hold_pos.x
+					g.target_y = hold_pos.y
+					g.formation_type = BattleUnitSystem.FormationType.SHIELD_WALL
+				else:
+					g.target_x = slot.x
+					g.target_y = slot.y
+			BattleCommander.TacticalRole.BAIT:
+				# Fighting withdrawal — engage briefly then step back
+				g.command = BattleCommander.CommandType.FIGHTING_WITHDRAWAL
+				_has_fighting_withdrawal = true
+				# Rally point = behind the BAIT group (away from enemy)
+				if enemy_ctr != Vector2.ZERO:
+					g.rally_point = center + away * FW_RALLY_DISTANCE
+			BattleCommander.TacticalRole.FLANKER:
+				if not _flankers_committed:
+					# Hold at a wide staging position on the flank until frontline engages
+					var flank_side := 1.0 if g.id % 2 == 0 else -1.0
+					var staging_pos: Vector2 = red_ctr + perp * flank_side * FLANK_OFFSET_DISTANCE
+					g.target_x = staging_pos.x
+					g.target_y = staging_pos.y
+					g.command = BattleCommander.CommandType.HOLD
+				else:
+					# Attack enemy from the side/rear
+					var flank_target := _find_flank_target(g, center, blue_groups)
+					if flank_target:
+						var ftc := _units.get_group_center(flank_target.id)
+						var to_target := (ftc - center).normalized()
+						var fperp := Vector2(-to_target.y, to_target.x)
+						var friendly_ctr := _find_friendly_infantry_center(g.faction)
+						var side := 1.0
+						if friendly_ctr != Vector2.ZERO:
+							var from_friendly := (center - friendly_ctr)
+							if from_friendly.dot(fperp) < 0:
+								side = -1.0
+						var flank_pos := ftc + fperp * side * FLANK_OFFSET_DISTANCE
+						g.target_x = flank_pos.x
+						g.target_y = flank_pos.y
+						g.target_group_id = flank_target.id
+						g.command = BattleCommander.CommandType.ATTACK
+					else:
+						g.command = BattleCommander.CommandType.ATTACK
+						var fb: Vector2 = blue_ctr - advance_dir * FRONTLINE_STANDOFF
+						g.target_x = fb.x
+						g.target_y = fb.y
+			BattleCommander.TacticalRole.HAMMER:
+				if not _flankers_committed:
+					# Hold cavalry behind the frontline until infantry engages
+					var cav_side := 1.0 if g.id % 2 == 0 else -1.0
+					var cav_staging: Vector2 = red_ctr + perp * cav_side * (FLANK_OFFSET_DISTANCE + CAVALRY_STAGING_EXTRA_OFFSET) - advance_dir * CAVALRY_STAGING_REAR_OFFSET
+					g.target_x = cav_staging.x
+					g.target_y = cav_staging.y
+					g.command = BattleCommander.CommandType.HOLD
+				else:
+					# Cavalry charge priorities: exposed ranged > flank target > weakest
+					var charge_target: BattleCommander.BattleGroup = _find_exposed_ranged_group(center, blue_groups)
+					if charge_target == null:
+						charge_target = _find_flank_target(g, center, blue_groups)
+					if charge_target == null:
+						charge_target = _find_weakest_enemy_group(center, blue_groups, 800.0)
+					if charge_target:
+						var tc := _units.get_group_center(charge_target.id)
+						g.target_x = tc.x
+						g.target_y = tc.y
+						g.target_group_id = charge_target.id
+						g.command = BattleCommander.CommandType.CHARGE
+						g.formation_type = BattleUnitSystem.FormationType.WEDGE
+					else:
+						g.command = BattleCommander.CommandType.ATTACK
+						var hb: Vector2 = blue_ctr - advance_dir * FRONTLINE_STANDOFF
+						g.target_x = hb.x
+						g.target_y = hb.y
+			BattleCommander.TacticalRole.SCREEN:
+				# Screen groups use their frontline slot but in shield wall formation
+				g.command = BattleCommander.CommandType.ATTACK
+				g.formation_type = BattleUnitSystem.FormationType.SHIELD_WALL
+				var sslot: Vector2 = frontline_slot.get(g.id, blue_ctr - advance_dir * FRONTLINE_STANDOFF)
+				g.target_x = sslot.x
+				g.target_y = sslot.y
+			BattleCommander.TacticalRole.SKIRMISHER:
+				# Ranged units trail behind the actual melee frontline, not behind the enemy.
+				# This keeps archers visibly separated during the march.
+				g.command = BattleCommander.CommandType.ATTACK
+				g.formation_type = BattleUnitSystem.FormationType.LOOSE_LINE
+				var weak := _find_weakest_enemy_group(center, blue_groups, 800.0)
+				if weak:
+					g.target_group_id = weak.id
+				# Compute actual frontline center from live melee group positions
+				var fl_center := Vector2.ZERO
+				var fl_count := 0
+				for fl_g in frontline:
+					var fl_pos := _units.get_group_center(fl_g.id)
+					if fl_pos != Vector2.ZERO:
+						fl_center += fl_pos
+						fl_count += 1
+				if fl_count > 0:
+					fl_center /= float(fl_count)
+				else:
+					fl_center = red_ctr
+				# Skirmisher target = behind the melee frontline, offset away from enemy
+				var skirm_back: Vector2 = fl_center - advance_dir * RANGED_BACKLINE_OFFSET
+				if DEBUG_AI_LOG:
+					print("[AI]   SKIRM grp %d fl_center=(%.0f,%.0f) skirm_back=(%.0f,%.0f) gap=%.0f" % [g.id, fl_center.x, fl_center.y, skirm_back.x, skirm_back.y, center.distance_to(fl_center)])
+				# If enemies are too close, actively retreat farther behind
+				var melee_near := _count_nearby_type(center, 200.0, BattleUnitSystem.Faction.BLUE,
+					[BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.UnitType.HEAVY_INFANTRY,
+					 BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY,
+					 BattleUnitSystem.UnitType.SPEAR])
+				if melee_near >= 2:
+					# Retreat 300px directly away from the enemy centroid
+					skirm_back = center + away * 300.0
+					if DEBUG_AI_LOG:
+						print("[AI]   SKIRMISHER grp %d PANIC-RETREAT melee_near=%d away=(%.0f,%.0f)" % [g.id, melee_near, skirm_back.x, skirm_back.y])
+				g.target_x = skirm_back.x
+				g.target_y = skirm_back.y
+			BattleCommander.TacticalRole.RESERVE:
+				# Hold position near center, intervene if fighting reaches them
+				g.command = BattleCommander.CommandType.HOLD
+			_:
+				g.command = BattleCommander.CommandType.ATTACK
+				var db: Vector2 = blue_ctr - advance_dir * FRONTLINE_STANDOFF
+				g.target_x = db.x
+				g.target_y = db.y
+
+	if DEBUG_AI_LOG:
+		for g in red_groups:
+			var alive2 := _units.get_group_alive_count(g.id)
+			if alive2 == 0:
+				continue
+			var role_name: String = _ROLE_NAMES[g.tactical_role] if g.tactical_role < _ROLE_NAMES.size() else str(g.tactical_role)
+			print("[AI]   grp %d role=%s type=%d alive=%d cmd=%d target=(%.0f,%.0f) form=%d" % [
+				g.id, role_name, g.unit_type, alive2, g.command, g.target_x, g.target_y, g.formation_type])
+
+func _tick_fighting_withdrawal(dt: float) -> void:
+	## Cycle BAIT groups between engage and backoff phases.
+	## Gated by _has_fighting_withdrawal — only called when at least one BAIT group exists.
+	var blue_groups: Array = []  # Lazily fetched only when we actually enter backoff
+	for g in _commander.get_faction_groups(BattleUnitSystem.Faction.RED):
+		if g.command != BattleCommander.CommandType.FIGHTING_WITHDRAWAL:
+			continue
+		g.engage_timer += dt
+		if g.engage_phase == 0:
+			if g.engage_timer >= FW_ENGAGE_DURATION:
+				g.engage_phase = 1
+				g.engage_timer = 0.0
+				# Refresh rally point based on current position
+				if blue_groups.is_empty():
+					blue_groups = _commander.get_faction_groups(BattleUnitSystem.Faction.BLUE)
+				var center := _units.get_group_center(g.id)
+				var enemy_ctr := _find_nearest_enemy_group_center(center, blue_groups)
+				if enemy_ctr != Vector2.ZERO:
+					var away := (center - enemy_ctr).normalized()
+					g.rally_point = center + away * FW_RALLY_DISTANCE
+		elif g.engage_timer >= FW_BACKOFF_DURATION:
+			g.engage_phase = 0
+			g.engage_timer = 0.0
+
+func _cleanup_dead_detachments() -> void:
+	## Remove detachments whose units are depleted (single-pass filter).
+	var kept: Array[int] = []
+	for did in _detachment_ids:
+		var d := _commander.get_group(did)
+		if not d:
+			continue
+		if _units.get_group_alive_count(did) == 0:
+			_commander.remove_group(did)
+			continue
+		kept.append(did)
+	_detachment_ids = kept

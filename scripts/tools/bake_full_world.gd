@@ -146,7 +146,6 @@ func sa(idx: int) -> Vector2i:
 	return Vector2i(idx % 16, idx / 16)
 
 func _get_sprite(tile_id: int, tileset: int) -> Vector2i:
-	var sprite_idx: int
 	# Graves 52-61
 	if tile_id >= 52 and tile_id <= 61:
 		sprite_idx = 48 + (tile_id - 52)
@@ -191,7 +190,6 @@ func _bake():
 		layer.tile_set = loy_tileset
 
 	# Load all zone data from our .tres files
-	var zones = _load_all_zones()
 	print("Loaded " + str(zones.size()) + " zones")
 
 	# Build zone lookup
@@ -215,10 +213,6 @@ func _bake():
 		if not zone_offsets.has(zone.id):
 			print("  SKIP (unconnected): " + zone.id)
 			continue
-		var offset = zone_offsets[zone.id]
-		var tileset = zone.tileset
-		var w = zone.width
-		var h = zone.height
 		var floor_tile = _get_sprite(1, tileset)
 
 		for x in range(w):
@@ -285,9 +279,7 @@ func _layout_zones(zone_map: Dictionary) -> void:
 	# Build reverse connection map: for each zone, who connects TO it
 	var reverse_connections: Dictionary = {}  # target_id -> [{source_id, exit_data}]
 	for zone_id in zone_map:
-		var zone = zone_map[zone_id]
 		for exit_data in zone.exits:
-			var target_id = str(exit_data["target"])
 			if not reverse_connections.has(target_id):
 				reverse_connections[target_id] = []
 			reverse_connections[target_id].append({
@@ -331,7 +323,6 @@ func _layout_zones(zone_map: Dictionary) -> void:
 
 		# Forward exits from current zone (scale exit positions)
 		for exit_data in current.exits:
-			var target_id = str(exit_data["target"])
 			connections.append({
 				"target_id": target_id,
 				"ex": int(exit_data["x"]) * SCALE,
@@ -354,7 +345,6 @@ func _layout_zones(zone_map: Dictionary) -> void:
 				})
 
 		for conn in connections:
-			var target_id = conn["target_id"]
 			if not zone_map.has(target_id):
 				continue
 
@@ -362,17 +352,11 @@ func _layout_zones(zone_map: Dictionary) -> void:
 				continue
 
 			var target = zone_map[target_id]
-			var ex = conn["ex"]
-			var ey = conn["ey"]
-			var tx = conn["tx"]
-			var ty = conn["ty"]
 
 			# Determine placement direction based on exit position on current zone edge
 			var target_offset = Vector2i.ZERO
 			var cur_w = current.width * SCALE
 			var cur_h = current.height * SCALE
-			var tgt_w = target.width * SCALE
-			var tgt_h = target.height * SCALE
 
 			# Exit on top edge (y=0) → target goes above
 			if ey == 0:
@@ -416,8 +400,6 @@ func _layout_zones(zone_map: Dictionary) -> void:
 			# Check for overlap with already placed zones
 			var overlaps = false
 			for pid in placed:
-				var pzone = zone_map[pid]
-				var poff = zone_offsets[pid]
 				if _rects_overlap(target_offset, tgt_w, tgt_h,
 						poff, pzone.width * SCALE, pzone.height * SCALE, GAP - 1):
 					overlaps = true
@@ -488,12 +470,10 @@ func _load_all_zones() -> Array:
 func _apply_map_file(zone) -> void:
 	var map_name = ZONE_MAP_FILES[zone.id]
 	var path = MAPS_DIR + map_name + ".txt"
-	var file = FileAccess.open(path, FileAccess.READ)
 	if not file:
 		print("  No map file: " + path)
 		return
 
-	var content = file.get_as_text()
 	file.close()
 
 	var lines = content.split(";")
@@ -509,14 +489,8 @@ func _apply_map_file(zone) -> void:
 			data_start = i + 1
 			break
 
-	var offset = zone_offsets[zone.id]
-	var ox = offset.x
-	var oy = offset.y
-	var tileset = zone.tileset
-
 	var tiles_placed = 0
 	for row_idx in range(data_start, clean_lines.size()):
-		var y = row_idx - data_start
 		if y >= zone.height:
 			break
 		var line = clean_lines[row_idx]
@@ -524,16 +498,12 @@ func _apply_map_file(zone) -> void:
 			var c = line[x]
 			if not CHAR_TO_TILE.has(c):
 				continue
-			var tile_id = CHAR_TO_TILE[c]
 			if tile_id == 0:  # NOTHING
 				continue
-
-			var sprite = _get_sprite(tile_id, tileset)
 
 			# Place SCALE x SCALE block for each source tile
 			for sx in range(SCALE):
 				for sy in range(SCALE):
-					var pos = Vector2i(ox + x * SCALE + sx, oy + y * SCALE + sy)
 					_place_tile(pos, tile_id, sprite, tileset)
 			tiles_placed += 1
 
@@ -590,11 +560,6 @@ func _apply_zone_xml(zone) -> void:
 	var content = file.get_as_text()
 	file.close()
 
-	var offset = zone_offsets[zone.id]
-	var ox = offset.x
-	var oy = offset.y
-	var tileset = zone.tileset
-
 	# closeEdge: add fence border
 	if content.find('closeEdge="true"') >= 0:
 		_apply_close_edge(zone)
@@ -615,20 +580,11 @@ func _apply_zone_xml(zone) -> void:
 	_parse_centers(content, ox, oy, tileset)
 
 func _apply_close_edge(zone) -> void:
-	var offset = zone_offsets[zone.id]
-	var ox = offset.x
-	var oy = offset.y
-	var w = zone.width * SCALE
-	var h = zone.height * SCALE
 	var tileset = zone.tileset
-	var fence_sprite = _get_sprite(7, tileset)
-	var wall_sprite = _get_sprite(5, tileset)
 
 	# Get exit positions (scaled) to leave wider gaps for transition corridors
 	var exit_rects: Array = []
 	for exit_data in zone.exits:
-		var ex = int(exit_data["x"]) * SCALE
-		var ey = int(exit_data["y"]) * SCALE
 		# Leave a gap wider than 1 tile so the corridor connects smoothly
 		exit_rects.append(Rect2i(ex - 2, ey - 2, SCALE + 4, SCALE + 4))
 
@@ -636,8 +592,6 @@ func _apply_close_edge(zone) -> void:
 		for y in range(h):
 			if x > 0 and x < w-1 and y > 0 and y < h-1:
 				continue  # Not edge
-
-			var pos = Vector2i(ox + x, oy + y)
 
 			# Check if this is within an exit gap
 			var is_exit = false
@@ -656,52 +610,39 @@ func _apply_close_edge(zone) -> void:
 
 func _parse_set_tiles(content: String, ox: int, oy: int, tileset: int) -> void:
 	# Parse <setTile tile="NAME" x="N" y="N" /> and area versions with width/height
-	var idx = 0
 	while true:
-		var start = content.find("<setTile", idx)
 		if start < 0:
 			break
-		var end = content.find(">", start) + 1
 		if end <= 0:
 			break
-		var tag = content.substr(start, end - start)
 		idx = end
 
 		var tile_name = _get_attr(tag, "tile")
 		var x = _get_attr_int(tag, "x")
 		var y = _get_attr_int(tag, "y")
-		var w = _get_attr_int(tag, "width", 1)
-		var h = _get_attr_int(tag, "height", 1)
 
 		if not TILE_NAMES.has(tile_name):
 			continue
 
 		var tile_id = TILE_NAMES[tile_name]
-		var sprite = _get_sprite(tile_id, tileset)
 
 		for dx in range(w):
 			for dy in range(h):
 				# Structural tiles (walls, fences, doors, stairs) stay 1x
 				if tile_id in [3, 4, 5, 6, 7, 8, 13, 22, 23, 24]:
-					var pos = Vector2i(ox + (x + dx) * SCALE, oy + (y + dy) * SCALE)
 					_place_tile(pos, tile_id, sprite, tileset)
 				else:
 					# Terrain tiles get scaled
 					for sx in range(SCALE):
 						for sy in range(SCALE):
-							var pos = Vector2i(ox + (x + dx) * SCALE + sx, oy + (y + dy) * SCALE + sy)
 							_place_tile(pos, tile_id, sprite, tileset)
 
 func _parse_houses(content: String, ox: int, oy: int, tileset: int) -> void:
-	var idx = 0
 	while true:
-		var start = content.find("<house", idx)
 		if start < 0:
 			break
-		var end = content.find(">", start) + 1
 		if end <= 0:
 			break
-		var tag = content.substr(start, end - start)
 		idx = end
 
 		var hx = _get_attr_int(tag, "x")
@@ -711,9 +652,7 @@ func _parse_houses(content: String, ox: int, oy: int, tileset: int) -> void:
 		var dx_dir = _get_attr_int(tag, "dx", 0)
 		var dy_dir = _get_attr_int(tag, "dy", 0)
 
-		var wall_sprite = _get_sprite(5, tileset)
 		var side_wall_sprite = _get_sprite(8, tileset)
-		var tiled_sprite = _get_sprite(9, tileset)
 		var door_sprite = _get_sprite(3, tileset)
 
 		# Paint house at 1x size but at scaled position
@@ -756,15 +695,11 @@ func _parse_trees(content: String, ox: int, oy: int, tileset: int, zone_id: Stri
 	if ZONE_TREE_OVERRIDES.has(zone_id):
 		override_density = ZONE_TREE_OVERRIDES[zone_id]
 
-	var idx = 0
 	while true:
-		var start = content.find("<trees", idx)
 		if start < 0:
 			break
-		var end = content.find(">", start) + 1
 		if end <= 0:
 			break
-		var tag = content.substr(start, end - start)
 		idx = end
 
 		if tag.find("</") >= 0 or tag.find("setTile") >= 0:
@@ -780,28 +715,21 @@ func _parse_trees(content: String, ox: int, oy: int, tileset: int, zone_id: Stri
 		if tile_attr != "" and TILE_NAMES.has(tile_attr):
 			tree_tile_id = TILE_NAMES[tile_attr]
 
-		var tree_sprite = _get_sprite(tree_tile_id, tileset)
-
 		# Use override density if available, otherwise reduced base density
 		var tree_density = override_density if override_density >= 0 else 0.15 / SCALE
 		for x in range(tx * SCALE, (tx + tw) * SCALE):
 			for y in range(ty * SCALE, (ty + th) * SCALE):
 				if randf() > tree_density:
 					continue
-				var pos = Vector2i(ox + x, oy + y)
 				if buildings.get_cell_source_id(pos) == -1 and decorations.get_cell_source_id(pos) == -1:
 					decorations.set_cell(pos, 0, tree_sprite)
 
 func _parse_graves(content: String, ox: int, oy: int, _tileset: int) -> void:
-	var idx = 0
 	while true:
-		var start = content.find("<graves", idx)
 		if start < 0:
 			break
-		var end = content.find(">", start) + 1
 		if end <= 0:
 			break
-		var tag = content.substr(start, end - start)
 		idx = end
 
 		var gx = _get_attr_int(tag, "x")
@@ -821,10 +749,8 @@ func _parse_graves(content: String, ox: int, oy: int, _tileset: int) -> void:
 func _parse_centers(content: String, ox: int, oy: int, tileset: int) -> void:
 	var idx = 0
 	while true:
-		var start = content.find("<center", idx)
 		if start < 0:
 			break
-		var end = content.find(">", start) + 1
 		if end <= 0:
 			break
 		var tag = content.substr(start, end - start)
@@ -833,9 +759,6 @@ func _parse_centers(content: String, ox: int, oy: int, tileset: int) -> void:
 		if tag.find("/center") >= 0 or tag.find("center>") < 0:
 			# Might be just opening tag, that's ok
 			pass
-
-		var cx = _get_attr_int(tag, "x")
-		var cy = _get_attr_int(tag, "y")
 
 		# Center = dungeon entrance. Build a small structure around the stairs.
 		var tiled_sprite = _get_sprite(9, tileset)
@@ -847,10 +770,8 @@ func _parse_centers(content: String, ox: int, oy: int, tileset: int) -> void:
 		var scy = oy + cy * SCALE
 
 		# Tiled floor platform around the stairs
-		var pad = SCALE + 1
 		for dx in range(-pad, pad + 1):
 			for dy in range(-pad, pad + 1):
-				var pos = Vector2i(scx + dx, scy + dy)
 				ground.set_cell(pos, 0, tiled_sprite)
 				decorations.erase_cell(pos)
 
@@ -862,7 +783,6 @@ func _parse_centers(content: String, ox: int, oy: int, tileset: int) -> void:
 				# Leave south entry gap
 				if dy == pad + 1 and abs(dx) <= 1:
 					continue
-				var pos = Vector2i(scx + dx, scy + dy)
 				if buildings.get_cell_source_id(pos) == -1:
 					fences_layer.set_cell(pos, 0, fence_sprite)
 
@@ -888,13 +808,11 @@ func _fill_void_regions() -> void:
 	# Build zone bounding boxes for "inside world" check
 	var zone_rects: Array = []
 	for zone_id in zone_offsets:
-		var off = zone_offsets[zone_id]
 		# We need zone dimensions — estimate from offset spread
 		zone_rects.append(Rect2i(off.x, off.y, 200 * SCALE, 200 * SCALE))
 
 	# Default grass/tree sprites (tileset 112 = town theme)
 	var grass_sprite = _get_sprite(1, 112)  # floor/grass
-	var tree_sprite = _get_sprite(62, 112)  # tree
 
 	# Expand bounds for outer void border
 	var pad = 10
@@ -912,7 +830,6 @@ func _fill_void_regions() -> void:
 	var void_filled = 0
 	for x in range(min_x, max_x + 1):
 		for y in range(min_y, max_y + 1):
-			var pos = Vector2i(x, y)
 			if ground.get_cell_source_id(pos) != -1:
 				continue  # Already has ground
 
@@ -932,7 +849,6 @@ func _fill_void_regions() -> void:
 				# Fill with grass + scattered trees using proper pseudo-random
 				ground.set_cell(pos, 0, grass_sprite)
 				# Use bit-mixing hash to avoid diagonal patterns
-				var h = ((x * 374761393) ^ (y * 668265263)) & 0x7FFFFFFF
 				if (h % 100) < 3:
 					decorations.set_cell(pos, 0, tree_sprite)
 				grass_filled += 1
@@ -960,10 +876,8 @@ func _apply_tile_overrides(zone) -> void:
 		var lx = int(parts[0])
 		var ly = int(parts[1])
 		# Each LoY tile maps to SCALE x SCALE output tiles
-		var atlas = sa(sprite_idx)
 		for dx in range(SCALE):
 			for dy in range(SCALE):
-				var pos = Vector2i(offset.x + lx * SCALE + dx, offset.y + ly * SCALE + dy)
 				# Place on ground layer (overrides whatever was there)
 				ground.set_cell(pos, 0, atlas)
 				# Clear upper layers so override is visible
@@ -1008,10 +922,6 @@ func _draw_zone_connections(zone, zone_map: Dictionary) -> void:
 
 		# Build L-shaped center path
 		var path_points: Array[Vector2i] = []
-		var cx = src_x
-		var cy = src_y
-		var step_x = 0 if cx == dst_x else (1 if dst_x > cx else -1)
-		var step_y = 0 if cy == dst_y else (1 if dst_y > cy else -1)
 
 		path_points.append(Vector2i(cx, cy))
 		while cx != dst_x:
@@ -1058,7 +968,6 @@ func _draw_zone_connections(zone, zone_map: Dictionary) -> void:
 
 					if ground.get_cell_source_id(border_pos) == -1:
 						ground.set_cell(border_pos, 0, floor_sprite)
-						var h = ((border_pos.x * 374761393) ^ (border_pos.y * 668265263)) & 0x7FFFFFFF
 						var tree_chance = 8 + 8 * b
 						if (h % 100) < tree_chance:
 							decorations.set_cell(border_pos, 0, tree_sprite)
@@ -1083,7 +992,6 @@ func _get_attr_int(tag: String, attr_name: String, default_val: int = 0) -> int:
 	return int(val)
 
 func _create_loy_tileset() -> TileSet:
-	var ts = TileSet.new()
 	ts.tile_shape = TileSet.TILE_SHAPE_SQUARE
 	ts.tile_size = Vector2i(32, 32)
 
@@ -1129,12 +1037,7 @@ func _post_process_zones(zone_map: Dictionary) -> void:
 func _clear_interior_trees(zone, edge_keep: int = 3) -> int:
 	# Remove gap-fill trees from zone INTERIOR only, preserving edge border trees
 	# edge_keep: how many SCALE-units from edge to preserve (map file border trees)
-	var off = zone_offsets[zone.id]
-	var w = zone.width * SCALE
-	var h = zone.height * SCALE
 	var border = edge_keep * SCALE
-	var cleared = 0
-	var tree_sprites = [
 		_get_sprite(62, zone.tileset),   # TREE
 		_get_sprite(66, zone.tileset),   # JUNGLE_TREE
 		_get_sprite(68, zone.tileset),   # SNOW_TREE
@@ -1143,9 +1046,7 @@ func _clear_interior_trees(zone, edge_keep: int = 3) -> int:
 	]
 	for x in range(border, w - border):
 		for y in range(border, h - border):
-			var pos = Vector2i(off.x + x, off.y + y)
 			if decorations.get_cell_source_id(pos) == 0:
-				var atlas = decorations.get_cell_atlas_coords(pos)
 				if atlas in tree_sprites:
 					decorations.erase_cell(pos)
 					cleared += 1
@@ -1153,10 +1054,6 @@ func _clear_interior_trees(zone, edge_keep: int = 3) -> int:
 
 func _clear_all_trees(zone, margin: int = 0) -> int:
 	# Remove ALL trees including border (for zones that draw their own walls)
-	var off = zone_offsets[zone.id]
-	var w = zone.width * SCALE
-	var h = zone.height * SCALE
-	var cleared = 0
 	var tree_sprites = [
 		_get_sprite(62, zone.tileset), _get_sprite(66, zone.tileset),
 		_get_sprite(68, zone.tileset), _get_sprite(70, zone.tileset),
@@ -1164,7 +1061,6 @@ func _clear_all_trees(zone, margin: int = 0) -> int:
 	]
 	for x in range(-margin, w + margin):
 		for y in range(-margin, h + margin):
-			var pos = Vector2i(off.x + x, off.y + y)
 			if decorations.get_cell_source_id(pos) == 0:
 				var atlas = decorations.get_cell_atlas_coords(pos)
 				if atlas in tree_sprites:
@@ -1173,22 +1069,17 @@ func _clear_all_trees(zone, margin: int = 0) -> int:
 	return cleared
 
 func _draw_path(x1: int, y1: int, x2: int, y2: int, tileset: int, width: int = 3) -> void:
-	var tiled = _get_sprite(9, tileset)
 	var half = width / 2
-	var cx = x1
-	var cy = y1
 	var step_x = 0 if cx == x2 else (1 if x2 > cx else -1)
 	var step_y = 0 if cy == y2 else (1 if y2 > cy else -1)
 	while cx != x2:
 		for w in range(-half, half + 1):
-			var pos = Vector2i(cx, cy + w)
 			if buildings.get_cell_source_id(pos) == -1:
 				ground.set_cell(pos, 0, tiled)
 				decorations.erase_cell(pos)
 		cx += step_x
 	while cy != y2:
 		for w in range(-half, half + 1):
-			var pos = Vector2i(cx + w, cy)
 			if buildings.get_cell_source_id(pos) == -1:
 				ground.set_cell(pos, 0, tiled)
 				decorations.erase_cell(pos)
@@ -1196,15 +1087,12 @@ func _draw_path(x1: int, y1: int, x2: int, y2: int, tileset: int, width: int = 3
 
 func _build_house(bx: int, by: int, bw: int, bh: int, door_side: String, tileset: int) -> void:
 	# Build a proper wall-and-door house at absolute tile coords
-	var wall = _get_sprite(5, tileset)
 	var side_wall = _get_sprite(8, tileset)
 	var door = _get_sprite(3, tileset)
-	var tiled = _get_sprite(9, tileset)
 
 	# Tiled floor under and around the house
 	for x in range(-1, bw + 1):
 		for y in range(-1, bh + 1):
-			var pos = Vector2i(bx + x, by + y)
 			ground.set_cell(pos, 0, tiled)
 			decorations.erase_cell(pos)
 
@@ -1230,23 +1118,13 @@ func _build_house(bx: int, by: int, bw: int, bh: int, door_side: String, tileset
 func _enhance_aria(zone) -> void:
 	if not zone:
 		return
-	var off = zone_offsets["haven"]
-	var ox = off.x
-	var oy = off.y
-	var w = zone.width * SCALE   # 100 at 4x
-	var h = zone.height * SCALE  # 100 at 4x
-	var ts = zone.tileset  # 112
 
 	# Aria has closeEdge=true so it gets fence border already. Clear interior trees only.
-	var cleared = _clear_all_trees(zone, 3)
 	print("  Aria: cleared " + str(cleared) + " trees")
 
-	var tiled = _get_sprite(9, ts)
 	var wall = _get_sprite(5, ts)
-	var fence = _get_sprite(7, ts)
 	var floor_s = _get_sprite(1, ts)
 	var well_s = _get_sprite(67, ts)
-	var tree_s = _get_sprite(62, ts)
 
 	# --- Town walls (thick, with exit gaps) ---
 	var exit_gaps: Array = []
@@ -1259,7 +1137,6 @@ func _enhance_aria(zone) -> void:
 		for y in range(h):
 			if x > 2 and x < w - 3 and y > 2 and y < h - 3:
 				continue
-			var pos = Vector2i(ox + x, oy + y)
 			var in_gap = false
 			for er in exit_gaps:
 				if er.has_point(Vector2i(x, y)):
@@ -1278,7 +1155,6 @@ func _enhance_aria(zone) -> void:
 	var plaza_r = 14
 	for x in range(cx - plaza_r, cx + plaza_r):
 		for y in range(cy - plaza_r, cy + plaza_r):
-			var pos = Vector2i(ox + x, oy + y)
 			if buildings.get_cell_source_id(pos) == -1:
 				ground.set_cell(pos, 0, tiled)
 
@@ -1344,19 +1220,10 @@ func _enhance_aria(zone) -> void:
 func _enhance_graveyard(zone) -> void:
 	if not zone:
 		return
-	var off = zone_offsets["barrows"]
-	var ox = off.x
-	var oy = off.y
-	var w = zone.width * SCALE   # 80 at 4x
-	var h = zone.height * SCALE  # 120 at 4x
-	var ts = zone.tileset  # 112
 
 	# Graveyard has closeEdge=true. Clear all trees — we rebuild atmosphere.
-	var cleared = _clear_all_trees(zone, 3)
 	print("  Graveyard: cleared " + str(cleared) + " trees")
 
-	var tiled = _get_sprite(9, ts)
-	var fence = _get_sprite(7, ts)
 	var tree_s = _get_sprite(62, ts)
 
 	# --- Dense grave field in the south half (LoY y=16..29 was all trees, now empty) ---
@@ -1375,7 +1242,6 @@ func _enhance_graveyard(zone) -> void:
 					for sy in range(SCALE):
 						var px = gx * SCALE + sx
 						var py = gy * SCALE + sy
-						var pos = Vector2i(ox + px, oy + py)
 						if sx == SCALE / 2 and sy == SCALE / 2:
 							if buildings.get_cell_source_id(pos) == -1:
 								decorations.set_cell(pos, 0, grave_sprite)
@@ -1393,7 +1259,6 @@ func _enhance_graveyard(zone) -> void:
 			if fx >= 9 and fx <= 11:
 				continue  # Gap for path
 			for sx in range(SCALE):
-				var pos = Vector2i(ox + fx * SCALE + sx, oy + fy * SCALE)
 				if buildings.get_cell_source_id(pos) == -1:
 					fences_layer.set_cell(pos, 0, fence)
 
@@ -1427,19 +1292,11 @@ func _enhance_graveyard(zone) -> void:
 func _enhance_farm(zone) -> void:
 	if not zone:
 		return
-	var off = zone_offsets["duskfarm"]
-	var ox = off.x
-	var oy = off.y
-	var w = zone.width * SCALE
-	var h = zone.height * SCALE
-	var ts = zone.tileset
 
 	# Farm has closeEdge=false, relies on map file 'T' chars for tree border.
 	# Only clear INTERIOR trees, keeping the border intact.
-	var cleared = _clear_interior_trees(zone, 2)
 	print("  Farm: cleared " + str(cleared) + " interior trees")
 
-	var fence = _get_sprite(7, ts)
 	var plowed = _get_sprite(30, ts)
 
 	# --- Fenced animal pen near Mabion (pet handler at x=22, y=12) ---
@@ -1447,7 +1304,6 @@ func _enhance_farm(zone) -> void:
 	var pen_y = ox + 10 * SCALE
 	for x in range(5 * SCALE):
 		for y in range(4 * SCALE):
-			var pos = Vector2i(pen_x + x, off.y + 10 * SCALE + y)
 			if buildings.get_cell_source_id(pos) != -1:
 				continue
 			if x == 0 or x == 5 * SCALE - 1 or y == 0 or y == 4 * SCALE - 1:
@@ -1458,7 +1314,6 @@ func _enhance_farm(zone) -> void:
 		for fx in range(3, 12):
 			for sx in range(SCALE):
 				for sy in range(SCALE):
-					var pos = Vector2i(ox + fx * SCALE + sx, off.y + fy * SCALE + sy)
 					if buildings.get_cell_source_id(pos) == -1 and decorations.get_cell_source_id(pos) == -1:
 						ground.set_cell(pos, 0, plowed)
 
@@ -1490,7 +1345,6 @@ func _enhance_camp(zone) -> void:
 	# Tiled floor
 	for x in range(ty_w):
 		for y in range(ty_h):
-			var pos = Vector2i(ox + ty_x + x, oy + ty_y + y)
 			if buildings.get_cell_source_id(pos) == -1:
 				ground.set_cell(pos, 0, tiled)
 				decorations.erase_cell(pos)

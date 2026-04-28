@@ -33,7 +33,7 @@ func _process(delta: float) -> void:
 			if not is_instance_valid(body):
 				continue
 			if damage > 0 and body.has_method("take_damage"):
-				body.take_damage(damage, global_position)
+				body.take_damage(damage, global_position, false, false, CombatTypes.DamageType.TRUE)
 			if status_effect_type >= 0:
 				var sem = body.get_node_or_null("StatusEffectManager")
 				if sem:

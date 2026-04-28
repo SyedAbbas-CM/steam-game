@@ -4,6 +4,7 @@ extends RefCounted
 # Generate a floor as a dictionary of grid_pos -> RoomData
 # Returns: { "rooms": Dictionary (Vector2i -> RoomData), "start": Vector2i, "stairs": Vector2i }
 static func generate_floor_map(floor_number: int, room_override: int = -1, biome: DungeonBiome = null, total_floors: int = 5) -> Dictionary:
+	_super_elite_spawned_this_floor = 0
 	var room_count: int
 	if room_override > 0:
 		room_count = mini(room_override, 40)
@@ -14,19 +15,19 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 	var directions = [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]
 
 	# Generate layout using branching random walk
+	var start_pos = Vector2i.ZERO
+	var current = start_pos
 	var positions: Array[Vector2i] = []
 	var position_set: Dictionary = {}  # fast lookup
-	var start_pos = Vector2i.ZERO
 	positions.append(start_pos)
 	position_set[start_pos] = true
 
 	# Phase 1: Main path (60% of rooms) — creates the critical path
 	var main_path_count = int(room_count * 0.6)
-	var current = start_pos
 	for _i in range(main_path_count - 1):
 		var placed = false
 		for _attempt in range(10):
-			var dir = directions[randi() % 4]
+			var dir = directions[randi() % directions.size()]
 			var next = current + dir
 			if not position_set.has(next):
 				positions.append(next)
@@ -56,7 +57,7 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 				break
 			var placed = false
 			for _attempt in range(10):
-				var dir = directions[randi() % 4]
+				var dir = directions[randi() % directions.size()]
 				var next = current + dir
 				if not position_set.has(next):
 					positions.append(next)
@@ -86,11 +87,11 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 	# This creates alternate routes so the player isn't stuck on one path
 
 	# Find stairs — farthest room from start using BFS distance
-	var stairs_pos = start_pos
 	var bfs_dist: Dictionary = {}
 	bfs_dist[start_pos] = 0
 	var bfs_queue: Array[Vector2i] = [start_pos]
 	var bfs_idx = 0
+	var stairs_pos = start_pos
 	while bfs_idx < bfs_queue.size():
 		var pos = bfs_queue[bfs_idx]
 		bfs_idx += 1
@@ -104,6 +105,7 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 
 	# Build rooms
 	var rooms: Dictionary = {}
+	var base_elite = clampi(3 + floor_number / 3, 3, 6)
 	for i in range(positions.size()):
 		var pos = positions[i]
 		var room = RoomData.new()
@@ -121,7 +123,6 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 				room.enemy_count = 1
 			else:
 				room.type = RoomData.RoomType.ELITE
-				var base_elite = clampi(3 + floor_number / 3, 3, 5)
 				room.enemy_count = base_elite + randi_range(0, 1)
 		else:
 			room.type = _roll_room_type(floor_number)
@@ -131,9 +132,14 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 					# 10% chance to include an elite in normal combat rooms
 					if randf() < 0.10:
 						room.set_meta("has_rare_elite", true)
+					# 15% of combat rooms become decorated with themed furniture
+					if randf() < 0.15:
+						room.set_meta("is_decorated", true)
 				RoomData.RoomType.ELITE:
-					var base_elite = clampi(3 + floor_number / 3, 3, 6)
 					room.enemy_count = base_elite + randi_range(0, 1)
+				RoomData.RoomType.SUPER_ELITE:
+					# Fewer but much stronger enemies in a large decorated room
+					room.enemy_count = clampi(2 + floor_number / 3, 2, 4)
 				RoomData.RoomType.TREASURE, RoomData.RoomType.SHRINE:
 					room.enemy_count = 3 + floor_number  # guarded reward rooms
 				_:
@@ -146,6 +152,9 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 		if room.type == RoomData.RoomType.BOSS:
 			hp_mult = 5.0
 			dmg_mult = 1.5
+		elif room.type == RoomData.RoomType.SUPER_ELITE:
+			hp_mult = 6.0
+			dmg_mult = 1.8
 		elif room.type == RoomData.RoomType.ELITE:
 			hp_mult = 4.0
 			dmg_mult = 1.3
@@ -170,18 +179,28 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 					room.enemy_count = int(room.enemy_count * 2)
 					room.enemy_hp_mult *= 1.5
 
+		# Super elite always gets GRAND_HALL shape (2x larger than normal large rooms)
+		if room.type == RoomData.RoomType.SUPER_ELITE:
+			room.shape = RoomData.RoomShape.GRAND_HALL
+
 		# Assign room shape (encounter type may override)
-		room.shape = _roll_room_shape(room.type, pos == start_pos)
-		match room.encounter_type:
-			RoomData.EncounterType.AMBUSH, RoomData.EncounterType.REST:
-				room.shape = RoomData.RoomShape.TINY
-			RoomData.EncounterType.GAUNTLET:
-				room.shape = RoomData.RoomShape.WIDE_RECT
-			RoomData.EncounterType.ARENA:
+		if room.type != RoomData.RoomType.SUPER_ELITE:
+			room.shape = _roll_room_shape(room.type, pos == start_pos)
+			match room.encounter_type:
+				RoomData.EncounterType.AMBUSH, RoomData.EncounterType.REST:
+					room.shape = RoomData.RoomShape.TINY
+				RoomData.EncounterType.GAUNTLET:
+					room.shape = RoomData.RoomShape.WIDE_RECT
+				RoomData.EncounterType.ARENA:
+					room.shape = RoomData.RoomShape.ARENA
+				RoomData.EncounterType.HORDE:
+					var horde_shapes = [RoomData.RoomShape.RECTANGLE, RoomData.RoomShape.CIRCLE]
+					room.shape = horde_shapes[randi() % horde_shapes.size()]
+			# Decorated combat rooms get ARENA shape for more space
+			if room.get_meta("is_decorated", false) and room.type == RoomData.RoomType.COMBAT:
 				room.shape = RoomData.RoomShape.ARENA
-			RoomData.EncounterType.HORDE:
-				var horde_shapes = [RoomData.RoomShape.RECTANGLE, RoomData.RoomShape.CIRCLE]
-				room.shape = horde_shapes[randi() % horde_shapes.size()]
+				room.enemy_count = int(room.enemy_count * 1.5)
+
 		var shape_data = RoomShapeGenerator.generate_shape(room.shape)
 		room.shape_width = shape_data["width"]
 		room.shape_height = shape_data["height"]
@@ -209,6 +228,9 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 	if floor_number <= 3:
 		_guarantee_room_types(rooms, start_pos, stairs_pos, floor_number)
 
+	# Move SUPER_ELITE rooms to dead-end positions (1 connection = solid walls on 3 sides)
+	_place_super_elites_at_dead_ends(rooms, start_pos, stairs_pos, directions)
+
 	# Ensure start→stairs path is fully reachable (all OPEN transitions)
 	_ensure_reachable_path(rooms, start_pos, stairs_pos, directions)
 
@@ -217,7 +239,7 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 # Generate a linear test arena: one room per fixed_monsters entry in a straight line
 # room_scale: 1 = normal size, 2 = double-sized rooms (needs larger grid cells)
 # branch_monsters: optional second hall going north from the start room
-static func generate_linear_arena(fixed_monsters: Array, biome: DungeonBiome = null, room_scale: int = 1, branch_monsters: Array = []) -> Dictionary:
+static func generate_linear_arena(fixed_monsters: Array, biome: DungeonBiome = null, room_scale: int = 1, branch_monsters: Array = [], west_branch: Array = [], all_fixed_monsters: Array = [], south_branch: Array = []) -> Dictionary:
 	var room_count = fixed_monsters.size() + 1  # +1 for start room
 	var rooms: Dictionary = {}
 	var start_pos = Vector2i.ZERO
@@ -227,12 +249,13 @@ static func generate_linear_arena(fixed_monsters: Array, biome: DungeonBiome = n
 	var base_h = 15
 	var scaled_w = base_w * room_scale
 	var scaled_h = base_h * room_scale
+	var rect_shape_data = RoomShapeGenerator._rect(scaled_w, scaled_h) if room_scale > 1 else RoomShapeGenerator._rect(base_w, base_h)
 	# Grid cell must fit scaled room + corridor gap
 	var cell_w = scaled_w + 6
 	var cell_h = scaled_h + 6
 
 	for i in range(room_count):
-		var pos = Vector2i(i, 0)  # straight horizontal line
+		var pos = Vector2i(i, 0)
 		var room = RoomData.new()
 		room.grid_pos = pos
 
@@ -253,16 +276,14 @@ static func generate_linear_arena(fixed_monsters: Array, biome: DungeonBiome = n
 
 		if room_scale > 1:
 			room.shape = RoomData.RoomShape.RECTANGLE
-			var shape_data = RoomShapeGenerator._rect(scaled_w, scaled_h)
-			room.shape_width = shape_data["width"]
-			room.shape_height = shape_data["height"]
-			room.floor_mask = shape_data["mask"]
+			room.shape_width = rect_shape_data["width"]
+			room.shape_height = rect_shape_data["height"]
+			room.floor_mask = rect_shape_data["mask"]
 		else:
 			room.shape = RoomData.RoomShape.RECTANGLE
-			var shape_data = RoomShapeGenerator.generate_shape(room.shape)
-			room.shape_width = shape_data["width"]
-			room.shape_height = shape_data["height"]
-			room.floor_mask = shape_data["mask"]
+			room.shape_width = rect_shape_data["width"]
+			room.shape_height = rect_shape_data["height"]
+			room.floor_mask = rect_shape_data["mask"]
 
 		# Connect to neighbors
 		if i > 0:
@@ -293,16 +314,14 @@ static func generate_linear_arena(fixed_monsters: Array, biome: DungeonBiome = n
 
 			if room_scale > 1:
 				broom.shape = RoomData.RoomShape.RECTANGLE
-				var shape_data = RoomShapeGenerator._rect(scaled_w, scaled_h)
-				broom.shape_width = shape_data["width"]
-				broom.shape_height = shape_data["height"]
-				broom.floor_mask = shape_data["mask"]
+				broom.shape_width = rect_shape_data["width"]
+				broom.shape_height = rect_shape_data["height"]
+				broom.floor_mask = rect_shape_data["mask"]
 			else:
 				broom.shape = RoomData.RoomShape.RECTANGLE
-				var shape_data = RoomShapeGenerator.generate_shape(broom.shape)
-				broom.shape_width = shape_data["width"]
-				broom.shape_height = shape_data["height"]
-				broom.floor_mask = shape_data["mask"]
+				broom.shape_width = rect_shape_data["width"]
+				broom.shape_height = rect_shape_data["height"]
+				broom.floor_mask = rect_shape_data["mask"]
 
 			# Connect south to previous room
 			broom.connections["south"] = Vector2i(0, -(j)) if j > 0 else start_pos
@@ -315,7 +334,116 @@ static func generate_linear_arena(fixed_monsters: Array, biome: DungeonBiome = n
 
 			rooms[bpos] = broom
 
+	# West branch: rooms going left from start room (negative x)
+	if west_branch.size() > 0:
+		rooms[start_pos].connections["west"] = Vector2i(-1, 0)
+		rooms[start_pos].transition_types["west"] = RoomData.TransitionType.OPEN
+
+		for j in range(west_branch.size()):
+			var wpos = Vector2i(-(j + 1), 0)  # go west (negative x)
+			var wroom = RoomData.new()
+			var entry = west_branch[j]
+			wroom.grid_pos = wpos
+			wroom.difficulty_tier = 5  # high tier for scaling
+
+			# Support room_type override from definition
+			wroom.fixed_enemy_name = str(entry.get("type", ""))
+			var room_type_str = str(entry.get("room_type", "combat"))
+			if room_type_str == "super_elite":
+				wroom.type = RoomData.RoomType.SUPER_ELITE
+				wroom.enemy_count = clampi(int(entry.get("count", 3)), 2, 4)
+				wroom.enemy_hp_mult = 6.0
+				wroom.enemy_damage_mult = 1.8
+				wroom.shape = RoomData.RoomShape.GRAND_HALL
+			elif room_type_str == "decorated":
+				wroom.type = RoomData.RoomType.COMBAT
+				wroom.enemy_count = int(entry.get("count", 12))
+				wroom.enemy_hp_mult = 1.0
+				wroom.enemy_damage_mult = 1.0
+				wroom.set_meta("is_decorated", true)
+				wroom.shape = RoomData.RoomShape.GRAND_HALL
+			else:
+				wroom.type = RoomData.RoomType.COMBAT
+				wroom.enemy_count = int(entry.get("count", 1))
+				wroom.enemy_hp_mult = 1.0
+				wroom.enemy_damage_mult = 1.0
+				wroom.shape = RoomData.RoomShape.RECTANGLE
+
+			# Generate shape — use room_scale for test arenas
+			if room_scale > 1 and wroom.shape == RoomData.RoomShape.RECTANGLE:
+				wroom.shape_width = rect_shape_data["width"]
+				wroom.shape_height = rect_shape_data["height"]
+				wroom.floor_mask = rect_shape_data["mask"]
+			else:
+				var wshape = RoomShapeGenerator.generate_shape(wroom.shape)
+				wroom.shape_width = wshape["width"]
+				wroom.shape_height = wshape["height"]
+				wroom.floor_mask = wshape["mask"]
+
+			# Connect east to previous room
+			wroom.connections["east"] = Vector2i(-(j), 0) if j > 0 else start_pos
+			# Connect west to next room
+			if j < west_branch.size() - 1:
+				wroom.connections["west"] = Vector2i(-(j + 2), 0)
+			wroom.transition_types["east"] = RoomData.TransitionType.OPEN
+			if wroom.connections.has("west"):
+				wroom.transition_types["west"] = RoomData.TransitionType.OPEN
+
+				# Assign random enemies from the full fixed_monsters list if no specific type
+			if wroom.fixed_enemy_name == "" and all_fixed_monsters.size() > 0:
+				var shuffled = all_fixed_monsters.duplicate()
+				shuffled.shuffle()
+				var pick_count = mini(wroom.enemy_count, shuffled.size())
+				var names: Array[String] = []
+				for k in range(pick_count):
+					names.append(str(shuffled[k].get("type", "")))
+				wroom.set_meta("random_enemy_names", names)
+
+			rooms[wpos] = wroom
+
+		# South branch: trap showcase rooms, one per trap type (positive y)
+		if south_branch.size() > 0:
+			rooms[start_pos].connections["south"] = Vector2i(0, 1)
+			rooms[start_pos].transition_types["south"] = RoomData.TransitionType.OPEN
+
+			for j in range(south_branch.size()):
+				var spos = Vector2i(0, j + 1)
+				var sroom = RoomData.new()
+				sroom.grid_pos = spos
+				sroom.type = RoomData.RoomType.COMBAT
+				sroom.enemy_count = 0
+				sroom.difficulty_tier = 1
+				sroom.enemy_hp_mult = 1.0
+				sroom.enemy_damage_mult = 1.0
+				sroom.shape = RoomData.RoomShape.RECTANGLE
+
+				var sshape = rect_shape_data
+				sroom.shape_width = sshape["width"]
+				sroom.shape_height = sshape["height"]
+				sroom.floor_mask = sshape["mask"]
+
+				var entry = south_branch[j]
+				var trap_name = str(entry.get("trap", ""))
+				sroom.set_meta("trap_showcase", trap_name)
+
+				# Connect north to previous room
+				sroom.connections["north"] = Vector2i(0, j) if j > 0 else start_pos
+				# Connect south to next room
+				if j < south_branch.size() - 1:
+					sroom.connections["south"] = Vector2i(0, j + 2)
+				sroom.transition_types["north"] = RoomData.TransitionType.OPEN
+				if sroom.connections.has("south"):
+					sroom.transition_types["south"] = RoomData.TransitionType.OPEN
+
+				rooms[spos] = sroom
+
 	var stairs_pos = Vector2i(room_count - 1, 0)
+	# Use larger grid cells if any room has GRAND_HALL shape
+	for rpos in rooms:
+		if rooms[rpos].shape == RoomData.RoomShape.GRAND_HALL:
+			cell_w = maxi(cell_w, 45)
+			cell_h = maxi(cell_h, 39)
+			break
 	return { "rooms": rooms, "start": start_pos, "stairs": stairs_pos, "grid_cell_w": cell_w, "grid_cell_h": cell_h }
 
 # Legacy function for backwards compatibility
@@ -334,13 +462,15 @@ static func _dir_to_name(dir: Vector2i) -> String:
 	if dir == Vector2i(1, 0): return "east"
 	return ""
 
+static var _super_elite_spawned_this_floor: int = 0  # track per floor to limit count
+
 static func _roll_room_type(floor_number: int) -> RoomData.RoomType:
-	var roll = randf()
 	# Higher floors = more combat, less free loot
 	var combat_chance = 0.60 + floor_number * 0.02  # 60% base, grows per floor
 	combat_chance = minf(combat_chance, 0.80)
 	var elite_chance = 0.05 + floor_number * 0.01  # elites more common deeper
 	elite_chance = minf(elite_chance, 0.12)
+	var roll = randf()
 	if roll < combat_chance:
 		return RoomData.RoomType.COMBAT
 	elif roll < combat_chance + 0.10:
@@ -350,6 +480,12 @@ static func _roll_room_type(floor_number: int) -> RoomData.RoomType:
 	elif roll < combat_chance + 0.22:
 		return RoomData.RoomType.SHOP
 	else:
+		# Elite roll — small chance to upgrade to SUPER_ELITE
+		# 50% chance to even consider, then max 1 on early floors, max 2 on deep floors
+		var max_super = 1 if floor_number < 5 else 2
+		if _super_elite_spawned_this_floor < max_super and randf() < 0.5:
+			_super_elite_spawned_this_floor += 1
+			return RoomData.RoomType.SUPER_ELITE
 		return RoomData.RoomType.ELITE
 
 static func _roll_room_shape(room_type: RoomData.RoomType, is_start: bool) -> RoomData.RoomShape:
@@ -449,14 +585,102 @@ static func _ensure_reachable_path(rooms: Dictionary, start: Vector2i, stairs: V
 				room_curr.transition_types[dir_name] = RoomData.TransitionType.OPEN
 		current = prev
 
+static func _place_super_elites_at_dead_ends(rooms: Dictionary, start_pos: Vector2i, stairs_pos: Vector2i, directions: Array) -> void:
+	# Find all SUPER_ELITE rooms and all dead-end positions
+	var super_elite_positions: Array[Vector2i] = []
+	var dead_ends: Array[Vector2i] = []
+	for pos in rooms:
+		var room = rooms[pos] as RoomData
+		if room.type == RoomData.RoomType.SUPER_ELITE:
+			super_elite_positions.append(pos)
+		# Dead end = exactly 1 connection, not start or stairs
+		if room.connections.size() == 1 and pos != start_pos and pos != stairs_pos:
+			if room.type != RoomData.RoomType.SUPER_ELITE:
+				dead_ends.append(pos)
+
+	if super_elite_positions.size() == 0:
+		return
+
+	dead_ends.shuffle()
+
+	for se_pos in super_elite_positions:
+		var se_room = rooms[se_pos] as RoomData
+		if dead_ends.size() == 0:
+			# No dead ends available — force one by trimming connections
+			# Find a non-critical room we can isolate (not on start→stairs path)
+			# Just strip extra connections down to 1 (keep the first one)
+			if se_room.connections.size() > 1:
+				var keep_dir = se_room.connections.keys()[0]
+				var dirs_to_remove: Array = []
+				for dir_name in se_room.connections:
+					if dir_name != keep_dir:
+						dirs_to_remove.append(dir_name)
+				for dir_name in dirs_to_remove:
+					var neighbor_pos = se_room.connections[dir_name]
+					se_room.connections.erase(dir_name)
+					se_room.transition_types.erase(dir_name)
+					# Also remove reverse connection from neighbor
+					if rooms.has(neighbor_pos):
+						var neighbor = rooms[neighbor_pos] as RoomData
+						var reverse = _reverse_dir(dir_name)
+						if neighbor.connections.has(reverse):
+							neighbor.connections.erase(reverse)
+							neighbor.transition_types.erase(reverse)
+			continue
+
+		# Swap the SUPER_ELITE to a dead-end position
+		var de_pos = dead_ends.pop_back()
+		var de_room = rooms[de_pos] as RoomData
+
+		# Swap room types and properties (keep grid_pos and connections intact)
+		var se_type = se_room.type
+		var se_enemy_count = se_room.enemy_count
+		var se_hp_mult = se_room.enemy_hp_mult
+		var se_dmg_mult = se_room.enemy_damage_mult
+		var se_shape = se_room.shape
+		var se_sw = se_room.shape_width
+		var se_sh = se_room.shape_height
+		var se_mask = se_room.floor_mask
+		var se_encounter = se_room.encounter_type
+
+		# Copy dead-end room's type into the old super-elite position
+		se_room.type = de_room.type
+		se_room.enemy_count = de_room.enemy_count
+		se_room.enemy_hp_mult = de_room.enemy_hp_mult
+		se_room.enemy_damage_mult = de_room.enemy_damage_mult
+		se_room.shape = de_room.shape
+		se_room.shape_width = de_room.shape_width
+		se_room.shape_height = de_room.shape_height
+		se_room.floor_mask = de_room.floor_mask
+		se_room.encounter_type = de_room.encounter_type
+
+		# Put super-elite into the dead-end position
+		de_room.type = se_type
+		de_room.enemy_count = se_enemy_count
+		de_room.enemy_hp_mult = se_hp_mult
+		de_room.enemy_damage_mult = se_dmg_mult
+		de_room.shape = se_shape
+		de_room.shape_width = se_sw
+		de_room.shape_height = se_sh
+		de_room.floor_mask = se_mask
+		de_room.encounter_type = se_encounter
+
+static func _reverse_dir(dir_name: String) -> String:
+	match dir_name:
+		"north": return "south"
+		"south": return "north"
+		"east": return "west"
+		"west": return "east"
+	return ""
+
 static func _guarantee_room_types(rooms: Dictionary, start_pos: Vector2i, stairs_pos: Vector2i, floor_number: int) -> void:
 	var has_treasure = false
 	var has_shrine = false
 	var combat_rooms: Array[Vector2i] = []
 	for pos in rooms:
-		var room = rooms[pos] as RoomData
 		if pos == start_pos or pos == stairs_pos:
 			continue
+		var room = rooms[pos] as RoomData
 		if room.type == RoomData.RoomType.TREASURE:
 			has_treasure = true
 		elif room.type == RoomData.RoomType.SHRINE:

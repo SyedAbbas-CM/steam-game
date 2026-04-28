@@ -118,7 +118,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _is_dialogue_open() -> bool:
 	var qm = get_node_or_null("/root/QuestManager")
-	return qm and qm._waiting_for_dialogue
+	if not qm or not qm._waiting_for_dialogue:
+		return false
+	# Safety: if _waiting_for_dialogue is true but dialogue UI is actually closed, reset it
+	var dui = get_tree().get_first_node_in_group("dialogue_ui")
+	if dui and dui.has_method("is_open") and not dui.is_open():
+		qm._waiting_for_dialogue = false
+		return false
+	return true
 
 func interact() -> void:
 	var qm = get_node_or_null("/root/QuestManager")
@@ -280,56 +287,29 @@ func _open_hire_ui() -> void:
 	get_tree().current_scene.add_child(hire_ui)
 
 func _open_shop() -> void:
-	var shop_ui: ShopUI = null
-	for child in get_tree().root.get_children():
-		for sub in child.get_children():
-			if sub is ShopUI:
-				shop_ui = sub
-				break
+	var shop_ui = get_tree().get_first_node_in_group("shop_ui") as ShopUI
 	if shop_ui:
 		shop_ui.open_shop(shop_id)
 	else:
 		_show_simple_dialogue()
 
 func _open_enchant_station() -> void:
-	var enchant_ui: EnchantUI = null
-	for child in get_tree().root.get_children():
-		for sub in child.get_children():
-			if sub is EnchantUI:
-				enchant_ui = sub
-				break
-	if enchant_ui:
-		enchant_ui.open()
-	else:
-		# Create one dynamically if not in scene
+	var enchant_ui = get_tree().get_first_node_in_group("enchant_ui") as EnchantUI
+	if not enchant_ui:
 		enchant_ui = EnchantUI.new()
 		get_tree().current_scene.add_child(enchant_ui)
-		enchant_ui.open()
+	enchant_ui.open()
 
 func _open_crafting_station(craft_type: String) -> void:
-	var crafting_ui: CraftingUI = null
-	for child in get_tree().root.get_children():
-		for sub in child.get_children():
-			if sub is CraftingUI:
-				crafting_ui = sub
-				break
-	if crafting_ui:
-		crafting_ui.open(craft_type)
-	else:
+	var crafting_ui = get_tree().get_first_node_in_group("crafting_ui") as CraftingUI
+	if not crafting_ui:
 		crafting_ui = CraftingUI.new()
 		get_tree().current_scene.add_child(crafting_ui)
-		crafting_ui.open(craft_type)
+	crafting_ui.open(craft_type)
 
 func _open_spell_craft() -> void:
-	var spell_ui: SpellCraftUI = null
-	for child in get_tree().root.get_children():
-		for sub in child.get_children():
-			if sub is SpellCraftUI:
-				spell_ui = sub
-				break
-	if spell_ui:
-		spell_ui.open()
-	else:
+	var spell_ui = get_tree().get_first_node_in_group("spell_craft_ui") as SpellCraftUI
+	if not spell_ui:
 		spell_ui = SpellCraftUI.new()
 		get_tree().current_scene.add_child(spell_ui)
-		spell_ui.open()
+	spell_ui.open()

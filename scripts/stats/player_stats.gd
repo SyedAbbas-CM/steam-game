@@ -38,5 +38,9 @@ extends Resource
 @export var stamina_regen: float = 15.0
 
 @export_group("Defense")
+
+@export_group("Defense")
+
+@export_group("Defense")
 @export var tenacity: float = 0.0  # reduces negative status effect duration (0-80%)
 @export var thorns: float = 0.0  # flat damage reflected to enemies on contact

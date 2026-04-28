@@ -80,6 +80,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("world_map"):
 		_open_world_map()
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("world_map"):
+		_open_world_map()
+		get_viewport().set_input_as_handled()
 
 func _open_army_management() -> void:
 	# Check if already open

@@ -439,8 +439,8 @@ func build_spatial_hash() -> void:
 	for i in count:
 		if alive[i] == 0:
 			continue
-		var cx := int(x[i] / SPATIAL_CELL_SIZE)
-		var cy := int(y[i] / SPATIAL_CELL_SIZE)
+		var cx := int(floor(x[i] / SPATIAL_CELL_SIZE))
+		var cy := int(floor(y[i] / SPATIAL_CELL_SIZE))
 		var key := (cy + 1000) * 10000 + (cx + 1000)
 		if not _spatial_hash.has(key):
 			_spatial_hash[key] = PackedInt32Array()
@@ -448,9 +448,9 @@ func build_spatial_hash() -> void:
 
 func get_nearby(px: float, py: float, search_radius: float) -> PackedInt32Array:
 	var result := PackedInt32Array()
+	var cx := int(floor(px / SPATIAL_CELL_SIZE))
+	var cy := int(floor(py / SPATIAL_CELL_SIZE))
 	var cells := int(search_radius / SPATIAL_CELL_SIZE) + 1
-	var cx := int(px / SPATIAL_CELL_SIZE)
-	var cy := int(py / SPATIAL_CELL_SIZE)
 	var r_sq := search_radius * search_radius
 	for dy in range(-cells, cells + 1):
 		for dx in range(-cells, cells + 1):

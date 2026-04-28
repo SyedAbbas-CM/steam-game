@@ -8,7 +8,7 @@ extends WeaponPattern
 
 func _init() -> void:
 	pattern_name = "Meteor"
-	cooldown_override = 0.6
+	cooldown_override = 0.35
 
 func get_fire_data(aim_direction: Vector2, _stats: EquipmentManager) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []

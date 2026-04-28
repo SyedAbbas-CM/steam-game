@@ -3,10 +3,27 @@ extends Area2D
 
 var item: EquipmentItem
 var gold_amount: int = 0
+var _age: float = 0.0
+var _collected: bool = false
+
+func _process(delta: float) -> void:
+	_age += delta
+	if _age < 0.5 or _collected:
+		return
+	# After 0.5s, auto-collect if player is nearby (magnet pulled it close)
+	var player = get_tree().get_first_node_in_group("player")
+	if player:
+		var dist = global_position.distance_to(player.global_position)
+		var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+		var threshold = 40.0 if in_ow else 10.0
+		if dist < threshold:
+			_collected = true
+			_on_body_entered(player)
 
 func _ready() -> void:
 	collision_layer = 0
 	collision_mask = 1  # detect player
+	add_to_group("pickup")
 
 	var sprite = $Sprite2D as Sprite2D
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -49,11 +66,11 @@ func _on_body_entered(body: Node2D) -> void:
 	if not body.is_in_group("player"):
 		return
 
+	var sfx = get_node_or_null("/root/SFXManager")
 	if gold_amount > 0:
 		var gm = body.get_node_or_null("/root/GameManager")
 		if gm:
-			gm.add_gold(gold_amount)
-		var sfx = get_node_or_null("/root/SFXManager")
+			gm.add_gold(gold_amount, true)
 		if sfx:
 			sfx.play("coin", -4.0, 0.15)
 		var vfx = get_node_or_null("/root/VFXManager")
@@ -66,7 +83,6 @@ func _on_body_entered(body: Node2D) -> void:
 		var equip_mgr = body.get_node_or_null("EquipmentManager") as EquipmentManager
 		if equip_mgr:
 			if equip_mgr.add_to_inventory(item):
-				var sfx = get_node_or_null("/root/SFXManager")
 				if sfx:
 					sfx.play("collect_a", -3.0, 0.1)
 				queue_free()

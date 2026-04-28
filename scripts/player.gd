@@ -1,5 +1,5 @@
 extends CharacterBody2D
-
+#variables
 var hp: int = 30
 var max_hp: int = 30
 var mp: float = 20.0
@@ -38,7 +38,7 @@ var _shield_break_stun: float = 0.0
 var _shield_raise_cooldown: float = 0.0  # delay after lowering before can raise again
 const SHIELD_RAISE_DELAY = 2.0
 const SHIELD_REGEN_RATE = 1.5  # charges per second (~20s for full recharge)
-const SHIELD_SPEED_MULT = 0.4
+const SHIELD_SPEED_MULT = 0.3
 const SHIELD_BREAK_STUN_TIME = 0.5
 const SHIELD_BROKEN_COOLDOWN = 6.0  # 6s lockout after shield breaks
 signal shield_changed(shield_hp: int)
@@ -56,6 +56,7 @@ var _regen_accumulator: float = 0.0
 var _dbg_frame: int = 0
 var _dbg_file: FileAccess = null
 var _animator: SpriteAnimator  # disabled until spritesheets support animation
+var _player_anim: PlayerAnimator
 
 # Dash system
 var _is_dashing: bool = false
@@ -70,7 +71,7 @@ var _last_move_dir: Vector2 = Vector2.RIGHT
 var fps_mode: bool = false
 var fps_angle: float = 0.0
 var _first_person_view = null  # FirstPersonView reference
-const FPS_TURN_SPEED: float = 3.0
+const FPS_TURN_SPEED: float = 5.0
 const FPS_MOUSE_SENSITIVITY: float = 0.003
 const DASH_DURATION = 0.3
 const DASH_SPEED_MULT = 3.0
@@ -84,6 +85,8 @@ const SPRINT_STAMINA_DRAIN = 20.0  # stamina per second while sprinting
 var _is_sprinting: bool = false
 var _sneaking: bool = false
 
+# i do not like these variables and implementations to be in the player.gd file
+#TODO: seperate files for all of this
 # Axe dash cleave
 var _dash_cleave_pending: bool = false
 
@@ -100,6 +103,52 @@ var _teleport_cooldown: float = 0.0
 
 # Barrage (throwing Shift)
 var _barrage_cooldown: float = 0.0
+
+# Sword: Blade Dance (Shift)
+var _blade_dance_active: bool = false
+
+# Hammer: Earthquake (Shift)
+var _earthquake_active: bool = false
+var _earthquake_timer: float = 0.0
+
+# Club: Berserk Swing (Shift)
+var _berserk_swing_active: bool = false
+
+# Spear: Phalanx (Shift)
+var _phalanx_active: bool = false
+
+# Wand: Magic Barrage (Shift)
+var _magic_barrage_active: bool = false
+
+# Tome: Arcane Shield (Shift)
+var _arcane_shield_active: bool = false
+
+# Javelin: Rain of Javelins (Shift)
+var _javelin_rain_active: bool = false
+
+# Sling: Rapid Sling (Shift)
+var _rapid_sling_active: bool = false
+
+# Halberd: Guard Stance (Shift)
+var _guard_stance_active: bool = false
+
+# Short Bow: Rapid Fire (Shift)
+var _rapid_fire_active: bool = false
+
+# Greatsword: Berserker Rage (Shift)
+var _berserker_rage_active: bool = false
+
+# Great Axe: Executioner (Shift)
+var _executioner_active: bool = false
+
+# Whip: Crack Whip (Shift)
+var _crack_whip_active: bool = false
+
+# Scythe: Soul Harvest (Shift)
+var _soul_harvest_active: bool = false
+
+# Claws: Frenzy (Shift)
+var _frenzy_active: bool = false
 
 # Bow multishot (Shift while shooting)
 var _multishot_active: bool = false
@@ -360,6 +409,8 @@ func _physics_process(delta: float) -> void:
 			_is_dashing = false
 			_lunge_active = false
 			_dash_hit_enemies.clear()
+			if _player_anim and _player_anim._state == PlayerAnimator.AnimState.DASH:
+				_player_anim.set_state(PlayerAnimator.AnimState.IDLE)
 			# Axe: cleave AoE on dash landing
 			if _dash_cleave_pending:
 				_dash_cleave_pending = false
@@ -373,10 +424,11 @@ func _physics_process(delta: float) -> void:
 			velocity = _dash_direction * equipment_manager.get_move_speed() * DASH_SPEED_MULT * dash_speed_mod
 			move_and_slide()
 			_dash_strike_check()
-			# Spawn afterimages during dash
+			# Spawn afterimages + trail lines during dash
 			var vfx2 = get_node_or_null("/root/VFXManager")
 			if vfx2 and Engine.get_physics_frames() % 2 == 0:
 				vfx2.dash_afterimage(sprite, global_position)
+				vfx2.dash_trail_lines(global_position, _dash_direction, sprite.scale)
 			# Keep FPS camera synced during dash
 			if fps_mode and _first_person_view:
 				_first_person_view.update_camera(global_position, fps_angle)
@@ -436,10 +488,19 @@ func _physics_process(delta: float) -> void:
 			_: touch_controls.set_power_label("Dash")
 
 	# SPACE abilities based on weapon_type
-	if _wtype in ["sword", "dagger", "flail", "throwing", "short_bow"]:
+	if _wtype in ["sword", "dagger"]:
 		# Dash
 		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= DASH_STAMINA_COST:
 			_start_dash()
+	elif _wtype == "flail":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 20.0:
+			_flail_chain_lash()
+	elif _wtype == "throwing":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 15.0:
+			_throwing_fan_of_knives()
+	elif _wtype == "short_bow":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 15.0:
+			_short_bow_evasive_shot()
 	elif _wtype == "axe":
 		# Dash + Cleave AoE on landing
 		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= DASH_STAMINA_COST:
@@ -461,6 +522,36 @@ func _physics_process(delta: float) -> void:
 		# Power Shot — quick charge, 4x dmg, pierce all
 		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 20.0:
 			_power_shot()
+	elif _wtype == "wand":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 15.0:
+			_wand_blink()
+	elif _wtype == "tome":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 30.0:
+			_tome_nova_burst()
+	elif _wtype == "javelin":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 20.0:
+			_javelin_throw()
+	elif _wtype == "sling":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 20.0:
+			_sling_scatter_volley()
+	elif _wtype == "halberd":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 25.0:
+			_halberd_sweep()
+	elif _wtype == "greatsword":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 30.0:
+			_greatsword_overhead_slam()
+	elif _wtype == "great_axe":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 25.0:
+			_great_axe_whirlwind_cleave()
+	elif _wtype == "whip":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 15.0:
+			_whip_lasso_pull()
+	elif _wtype == "scythe":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 25.0:
+			_scythe_reap()
+	elif _wtype == "claws":
+		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 20.0:
+			_claws_pounce()
 
 	# Shield block — R key, requires shield item + melee weapon equipped
 	var was_shielding = _shield_active
@@ -519,6 +610,21 @@ func _physics_process(delta: float) -> void:
 	_whirlwind_active = false
 	_aimed_mode_active = false
 	_staff_teleport_active = false
+	_blade_dance_active = false
+	_earthquake_active = false
+	_berserk_swing_active = false
+	_phalanx_active = false
+	_magic_barrage_active = false
+	_arcane_shield_active = false
+	_javelin_rain_active = false
+	_rapid_sling_active = false
+	_guard_stance_active = false
+	_rapid_fire_active = false
+	_berserker_rage_active = false
+	_executioner_active = false
+	_crack_whip_active = false
+	_soul_harvest_active = false
+	_frenzy_active = false
 
 	if _wtype == "bow" and Input.is_action_pressed("sprint") and stamina > 0 and mp > 0:
 		# Bow: Multishot
@@ -551,6 +657,8 @@ func _physics_process(delta: float) -> void:
 	elif _wtype == "flail" and Input.is_action_pressed("sprint") and stamina > 0:
 		# Flail: Whip Spin — extended range boomerang multishot
 		_handle_whip_spin(delta)
+		if _player_anim:
+			_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK, 0, true)
 	elif _wtype == "throwing" and Input.is_action_just_pressed("sprint") and stamina >= 20.0 and _barrage_cooldown <= 0:
 		# Throwing: Barrage — scatter burst
 		_handle_barrage()
@@ -568,6 +676,112 @@ func _physics_process(delta: float) -> void:
 		use_mp(8.0)
 		_ability_teleport()
 		_teleport_cooldown = 0.5
+	elif _wtype == "sword" and Input.is_action_pressed("sprint") and stamina > 0:
+		_blade_dance_active = true
+		stamina = maxf(stamina - 30.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_blade_dance_active = false
+	elif _wtype == "hammer" and Input.is_action_pressed("sprint") and stamina > 0:
+		_earthquake_active = true
+		stamina = maxf(stamina - 35.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_earthquake_active = false
+	elif _wtype == "club" and Input.is_action_pressed("sprint") and stamina > 0:
+		_berserk_swing_active = true
+		stamina = maxf(stamina - 25.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_berserk_swing_active = false
+	elif _wtype == "spear" and Input.is_action_pressed("sprint") and stamina > 0:
+		_phalanx_active = true
+		stamina = maxf(stamina - 20.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_phalanx_active = false
+	elif _wtype == "wand" and Input.is_action_pressed("sprint") and stamina > 0 and mp > 0:
+		_magic_barrage_active = true
+		stamina = maxf(stamina - 20.0 * delta, 0.0)
+		mp = maxf(mp - 5.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		mp_changed.emit(mp)
+		if stamina <= 0 or mp <= 0:
+			_magic_barrage_active = false
+	elif _wtype == "tome" and Input.is_action_pressed("sprint") and mp > 0:
+		_arcane_shield_active = true
+		mp = maxf(mp - 8.0 * delta, 0.0)
+		mp_changed.emit(mp)
+		if mp <= 0:
+			_arcane_shield_active = false
+	elif _wtype == "javelin" and Input.is_action_pressed("sprint") and stamina > 0:
+		_javelin_rain_active = true
+		stamina = maxf(stamina - 30.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_javelin_rain_active = false
+	elif _wtype == "sling" and Input.is_action_pressed("sprint") and stamina > 0:
+		_rapid_sling_active = true
+		stamina = maxf(stamina - 25.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_rapid_sling_active = false
+	elif _wtype == "halberd" and Input.is_action_pressed("sprint") and stamina > 0:
+		_guard_stance_active = true
+		stamina = maxf(stamina - 15.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_guard_stance_active = false
+	elif _wtype == "short_bow" and Input.is_action_pressed("sprint") and stamina > 0:
+		_rapid_fire_active = true
+		stamina = maxf(stamina - 20.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_rapid_fire_active = false
+	elif _wtype == "greatsword" and Input.is_action_pressed("sprint") and stamina > 0:
+		_berserker_rage_active = true
+		stamina = maxf(stamina - 40.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_berserker_rage_active = false
+	elif _wtype == "great_axe" and Input.is_action_pressed("sprint") and stamina > 0:
+		_executioner_active = true
+		stamina = maxf(stamina - 35.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_executioner_active = false
+	elif _wtype == "whip" and Input.is_action_pressed("sprint") and stamina > 0:
+		_crack_whip_active = true
+		stamina = maxf(stamina - 20.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_crack_whip_active = false
+	elif _wtype == "scythe" and Input.is_action_pressed("sprint") and stamina > 0:
+		_soul_harvest_active = true
+		stamina = maxf(stamina - 30.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_soul_harvest_active = false
+	elif _wtype == "claws" and Input.is_action_pressed("sprint") and stamina > 0:
+		_frenzy_active = true
+		stamina = maxf(stamina - 25.0 * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_frenzy_active = false
 
 	# STAFF: Powershot (hold SPACE to charge, release to fire)
 	# Stamina drains while charging. Need >= 21 stamina to START, but continues until 0.
@@ -581,6 +795,8 @@ func _physics_process(delta: float) -> void:
 				_charge_active = true
 				_charge_time = 0.0
 				_show_charge_indicator()
+				if _player_anim:
+					_player_anim.set_state(PlayerAnimator.AnimState.CHARGE)
 				var sfx_ch = get_node_or_null("/root/SFXManager")
 				if sfx_ch:
 					sfx_ch.play("spell_a", -6.0, 0.0)
@@ -601,6 +817,8 @@ func _physics_process(delta: float) -> void:
 				_charge_active = false
 				_charge_time = 0.0
 				_hide_charge_indicator()
+				if _player_anim:
+					_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK, 1)
 		elif _charge_active:
 			# Released — always fire, use whatever MP is available
 			_stamina_regen_delay = 1.0
@@ -611,6 +829,8 @@ func _physics_process(delta: float) -> void:
 			_charge_active = false
 			_charge_time = 0.0
 			_hide_charge_indicator()
+			if _player_anim:
+				_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK, 1)
 
 	# BOW: Ranger gets Longshot (Space), non-ranger bow gets Dash
 	if _wtype == "bow":
@@ -686,7 +906,27 @@ func _physics_process(delta: float) -> void:
 	var sneak_mult = SNEAK_SPEED_MULT if _sneaking else 1.0
 	var aimed_mult = 0.5 if _aimed_mode_active else 1.0
 	var charge_mult = 0.0 if _charge_active else 1.0  # Staff powershot: stationary while channeling
-	var speed_mult = status_effects.get_speed_multiplier() * (SPRINT_SPEED_MULT if _is_sprinting else 1.0) * shield_mult * buff_speed * sneak_mult * aimed_mult * charge_mult
+	var stance_mult = 1.0
+	if _phalanx_active or _guard_stance_active:
+		stance_mult = 0.0
+	elif _berserk_swing_active:
+		stance_mult = 0.5
+	elif _earthquake_active:
+		stance_mult = 0.3
+	elif _arcane_shield_active:
+		stance_mult = 0.6
+	elif _berserker_rage_active:
+		stance_mult = 0.5
+	elif _executioner_active:
+		stance_mult = 0.7
+
+	if _earthquake_active:
+		_earthquake_timer += delta
+		if _earthquake_timer >= 0.5:
+			_earthquake_timer -= 0.5
+			_earthquake_slam()
+
+	var speed_mult = status_effects.get_speed_multiplier() * (SPRINT_SPEED_MULT if _is_sprinting else 1.0) * shield_mult * buff_speed * sneak_mult * aimed_mult * charge_mult * stance_mult
 	var target_velocity = direction * equipment_manager.get_move_speed() * speed_mult
 	var accel = equipment_manager.get_acceleration()
 	velocity = velocity.lerp(target_velocity, accel * delta * 10.0)
@@ -734,10 +974,14 @@ func _physics_process(delta: float) -> void:
 		_dbg_file.store_line(line)
 		_dbg_file.flush()
 
-	if direction.x < 0:
-		sprite.flip_h = true
-	elif direction.x > 0:
-		sprite.flip_h = false
+	# Update facing direction (locked during dash to prevent frame flicker)
+	if _player_anim and not _is_dashing:
+		_player_anim.set_direction(direction)
+	elif not _player_anim:
+		if direction.x < 0:
+			sprite.flip_h = true
+		elif direction.x > 0:
+			sprite.flip_h = false
 
 	# Update animation state
 	var is_shooting = false
@@ -745,7 +989,9 @@ func _physics_process(delta: float) -> void:
 	# Shooting: twin-stick or mouse/keyboard
 	# No weapon equipped = no shooting
 	if not equipment_manager.get_equipped_weapon():
-		if _animator:
+		if _player_anim and not _player_anim.is_locked():
+			_player_anim.set_state(PlayerAnimator.AnimState.WALK if direction.length() > 0 else PlayerAnimator.AnimState.IDLE)
+		elif _animator:
 			_animator.set_state(SpriteAnimator.State.WALK if direction.length() > 0 else SpriteAnimator.State.IDLE)
 		return
 
@@ -758,6 +1004,58 @@ func _physics_process(delta: float) -> void:
 		weapon_system.fire_rate_mult = 0.7  # slightly slower fire for heavy shots
 		weapon_system.crit_bonus = 20.0  # +20% crit in aimed mode
 		weapon_system.damage_mult = 2.0  # 2x damage
+	elif _blade_dance_active:
+		weapon_system.fire_rate_mult = 2.0
+		weapon_system.crit_bonus = 15.0
+		weapon_system.damage_mult = 0.7
+	elif _berserk_swing_active:
+		weapon_system.fire_rate_mult = 0.8
+		weapon_system.crit_bonus = 0.0
+		weapon_system.damage_mult = 1.5
+	elif _phalanx_active:
+		weapon_system.fire_rate_mult = 1.5
+		weapon_system.crit_bonus = 0.0
+		weapon_system.damage_mult = 0.8
+	elif _magic_barrage_active:
+		weapon_system.fire_rate_mult = 2.5
+		weapon_system.crit_bonus = 0.0
+		weapon_system.damage_mult = 0.5
+	elif _javelin_rain_active:
+		weapon_system.fire_rate_mult = 2.0
+		weapon_system.crit_bonus = 0.0
+		weapon_system.damage_mult = 0.6
+	elif _rapid_sling_active:
+		weapon_system.fire_rate_mult = 2.5
+		weapon_system.crit_bonus = 10.0
+		weapon_system.damage_mult = 0.6
+	elif _guard_stance_active:
+		weapon_system.fire_rate_mult = 1.2
+		weapon_system.crit_bonus = 0.0
+		weapon_system.damage_mult = 1.2
+	elif _rapid_fire_active:
+		weapon_system.fire_rate_mult = 2.0
+		weapon_system.crit_bonus = 0.0
+		weapon_system.damage_mult = 0.6
+	elif _berserker_rage_active:
+		weapon_system.fire_rate_mult = 0.8
+		weapon_system.crit_bonus = 20.0
+		weapon_system.damage_mult = 2.0
+	elif _executioner_active:
+		weapon_system.fire_rate_mult = 0.9
+		weapon_system.crit_bonus = 10.0
+		weapon_system.damage_mult = 1.75
+	elif _crack_whip_active:
+		weapon_system.fire_rate_mult = 2.0
+		weapon_system.crit_bonus = 0.0
+		weapon_system.damage_mult = 0.7
+	elif _soul_harvest_active:
+		weapon_system.fire_rate_mult = 1.0
+		weapon_system.crit_bonus = 15.0
+		weapon_system.damage_mult = 1.5
+	elif _frenzy_active:
+		weapon_system.fire_rate_mult = 3.0
+		weapon_system.crit_bonus = 5.0
+		weapon_system.damage_mult = 1.25
 	else:
 		weapon_system.fire_rate_mult = 1.0
 		weapon_system.crit_bonus = 0.0
@@ -786,6 +1084,8 @@ func _physics_process(delta: float) -> void:
 			_fire_multishot(aim_dir)
 			_multishot_cooldown = MULTISHOT_FIRE_RATE
 		is_shooting = true
+		if _player_anim:
+			_player_anim.set_aim_direction(aim_dir)
 	elif not _is_touch:
 		# Desktop: mouse/keyboard shooting (skip entirely on mobile to avoid emulated mouse)
 		var _mouse_shooting = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
@@ -804,8 +1104,21 @@ func _physics_process(delta: float) -> void:
 				_fire_multishot(aim_dir)
 				_multishot_cooldown = MULTISHOT_FIRE_RATE
 			is_shooting = true
+			if _player_anim:
+				_player_anim.set_aim_direction(aim_dir)
 
-	if _animator:
+	if _player_anim:
+		if not _player_anim.is_locked():
+			# Shift abilities (whirlwind, multishot, whip spin) use looping special attack anim
+			if is_shooting and (_whirlwind_active or _multishot_active):
+				_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK, 0, true)
+			elif is_shooting:
+				_player_anim.set_state(PlayerAnimator.AnimState.ATTACK)
+			elif direction.length() > 0:
+				_player_anim.set_state(PlayerAnimator.AnimState.WALK)
+			else:
+				_player_anim.set_state(PlayerAnimator.AnimState.IDLE)
+	elif _animator:
 		if is_shooting:
 			_animator.set_state(SpriteAnimator.State.ATTACK)
 		elif direction.length() > 0:
@@ -995,20 +1308,38 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 			if scene_root:
 				FloatingText.spawn_damage(scene_root, global_position + Vector2(0, -12), amount, Color(1.0, 0.0, 0.5))
 
-	# Armor reduction (equipment + buff)
+	# Armor reduction — weak attacks fully blockable, strong attacks always deal 20% min
 	var armor = int(equipment_manager.get_armor()) + int(status_effects.get_buff_value("armor"))
 	if armor > 0 and not is_backstab:
-		amount = maxi(1, amount - armor)
+		var raw = amount
+		amount = maxi(0, amount - armor)
+		# Strong attacks (raw > armor) always deal at least 20% of original damage
+		if raw > armor:
+			amount = maxi(amount, maxi(1, int(raw * 0.2)))
 
 	# Contact damage resistance for melee classes (only when holding melee weapon)
-	if is_contact:
-		var pc = _get_player_class()
-		var cur_wep = equipment_manager.get_equipped_weapon()
-		var holding_melee = cur_wep and cur_wep.slot_type == EquipmentItem.SlotType.WEAPON_MELEE
-		if pc == "warrior":
-			amount = maxi(1, int(amount * 0.4))  # 60% contact resistance (always, warrior is tanky)
-		elif pc == "mercenary" and holding_melee:
-			amount = maxi(1, int(amount * 0.6))  # 40% contact resistance only with sword
+		if is_contact:
+			var pc = _get_player_class()
+			var cur_wep = equipment_manager.get_equipped_weapon()
+			var holding_melee = cur_wep and cur_wep.slot_type == EquipmentItem.SlotType.WEAPON_MELEE
+			if pc == "warrior":
+				amount = maxi(0, int(amount * 0.4))  # 60% contact resistance (always, warrior is tanky)
+			elif pc == "mercenary" and holding_melee:
+				amount = maxi(0, int(amount * 0.6))  # 40% contact resistance only with sword
+
+		if _arcane_shield_active and mp > 0:
+			var mp_drain = amount * 1.5
+			if mp >= mp_drain:
+				mp -= mp_drain
+				mp_changed.emit(mp)
+				amount = maxi(1, int(amount * 0.4))
+			else:
+				mp = 0.0
+				mp_changed.emit(mp)
+				_arcane_shield_active = false
+
+		if _guard_stance_active:
+			amount = maxi(1, int(amount * 0.5))
 
 	# Shield absorption (equipment-based shield, separate from warrior block)
 	if shield > 0:
@@ -1038,10 +1369,10 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 	# Iframes — disabled by default, can be enabled by armor perks later
 	if iframes_enabled:
 		invincible = true
-		var tween = create_tween()
-		tween.tween_property(sprite, "modulate:a", 0.3, 0.04)
-		tween.tween_property(sprite, "modulate:a", 1.0, 0.04)
-		tween.tween_callback(func(): invincible = false)
+		var iframe_tween = create_tween()
+		iframe_tween.tween_property(sprite, "modulate:a", 0.3, 0.04)
+		iframe_tween.tween_property(sprite, "modulate:a", 1.0, 0.04)
+		iframe_tween.tween_callback(func(): invincible = false)
 
 	if hp <= 0:
 		player_died.emit()
@@ -1156,6 +1487,20 @@ func _setup_class_sprite() -> void:
 	var player_class = load(class_path)
 	if not player_class:
 		return
+
+	# Use animated spritesheet if anim_row is set
+	var anim_row: int = player_class.get("anim_row") if player_class.get("anim_row") != null else -1
+	if anim_row >= 0:
+		_player_anim = PlayerAnimator.new()
+		add_child(_player_anim)
+		_player_anim.setup(sprite, anim_row)
+		# 8x8 sprite, scale to match dungeon tiles (8px = 1 tile)
+		sprite.scale = Vector2(1.0, 1.0)
+		if player_class.get("sprite_color"):
+			sprite.modulate = player_class.sprite_color
+		return
+
+	# Fallback: static LoY atlas sprite
 	var tile_index: int = player_class.loy_tile_index
 	var tex_path = LoySpriteIndex.get_char_texture_path(tile_index)
 	var region = LoySpriteIndex.get_char_region(tile_index)
@@ -1255,9 +1600,9 @@ func _update_shield_visual(active: bool) -> void:
 			var a = _shield_angle - SHIELD_ARC_ANGLE / 2.0 + SHIELD_ARC_ANGLE * t
 			points.append(Vector2(cos(a), sin(a)) * outer)
 		for seg_i in range(SHIELD_ARC_SEGMENTS, -1, -1):
-			var t = float(seg_i) / SHIELD_ARC_SEGMENTS
-			var a = _shield_angle - SHIELD_ARC_ANGLE / 2.0 + SHIELD_ARC_ANGLE * t
-			points.append(Vector2(cos(a), sin(a)) * inner)
+			var t2 = float(seg_i) / SHIELD_ARC_SEGMENTS
+			var a2 = _shield_angle - SHIELD_ARC_ANGLE / 2.0 + SHIELD_ARC_ANGLE * t2
+			points.append(Vector2(cos(a2), sin(a2)) * inner)
 		_shield_visual.polygon = points
 		# Shield HP ratio affects opacity + color (blue→red as HP drops)
 		var ratio = float(_shield_charges) / float(_shield_max_charges)
@@ -1310,12 +1655,12 @@ func _give_starting_items() -> void:
 				equipment_manager.toggle_equip(equipment_manager.inventory.size() - 1)
 				_quickbar_preload[shield_item.item_name] = 1
 		"mercenary":
-			var sword = load("res://resources/items/loy/sword.tres") as EquipmentItem
+			var merc_sword = load("res://resources/items/loy/sword.tres") as EquipmentItem
 			var short_bow = load("res://resources/items/loy/short_bow.tres") as EquipmentItem
-			if sword:
-				equipment_manager.add_to_inventory(sword.make_copy())
+			if merc_sword:
+				equipment_manager.add_to_inventory(merc_sword.make_copy())
 				equipment_manager.toggle_equip(equipment_manager.inventory.size() - 1)
-				_quickbar_preload[sword.item_name] = 0
+				_quickbar_preload[merc_sword.item_name] = 0
 			if short_bow:
 				var sb_copy = short_bow.make_copy()
 				equipment_manager.add_to_inventory(sb_copy)
@@ -1399,6 +1744,9 @@ func _start_dash() -> void:
 	_dash_direction = _last_move_dir
 	_dash_hit_enemies.clear()
 	sprite.modulate.a = 0.4  # ghost effect
+	if _player_anim:
+		_player_anim.set_direction(_dash_direction)  # lock direction to dash direction
+		_player_anim.set_state(PlayerAnimator.AnimState.DASH)
 	# SFX + VFX
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
@@ -1498,7 +1846,7 @@ func _fire_multishot(aim_dir: Vector2) -> void:
 	# SFX for multishot burst
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
-		sfx.play("shoot_b", -5.0, 0.1)
+		sfx.play("shoot_b", -8.0, 0.1)
 
 # --- Staff Charged Blast ---
 
@@ -1543,7 +1891,7 @@ func _fire_charged_blast() -> void:
 		bullet.collision_mask = bullet.collision_mask & ~16  # passes through walls
 		var sfx = get_node_or_null("/root/SFXManager")
 		if sfx:
-			sfx.play("bazooka", -2.0, 0.05)
+			sfx.play("bazooka", -5.0, 0.05)
 		var vfx = get_node_or_null("/root/VFXManager")
 		if vfx:
 			vfx.charged_impact(global_position, ratio)
@@ -1554,11 +1902,13 @@ func _fire_charged_blast() -> void:
 		bullet.damage = base_damage + 1
 		bullet.scale = Vector2(1.2, 1.2)
 		bullets_container.add_child(bullet)
-		var sfx = get_node_or_null("/root/SFXManager")
-		if sfx:
-			sfx.play("spell_b", -5.0, 0.1)
+		var sfx2 = get_node_or_null("/root/SFXManager")
+		if sfx2:
+			sfx2.play("spell_b", -8.0, 0.1)
 
 func _fire_longshot() -> void:
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
 	if not is_inside_tree():
 		return
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
@@ -1742,6 +2092,9 @@ func _use_spell_slot(index: int) -> void:
 	use_mp(spell.mp_cost)
 	var cdr = clampf(equipment_manager.get_cooldown_reduction(), 0.0, 50.0)
 	spell_book.slot_cooldowns[index] = spell.cooldown * (1.0 - cdr / 100.0)
+
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
 
 	# Starter spells use legacy scaling; crafted spells use fixed magnitude
 	if spell.is_starter:
@@ -2631,6 +2984,357 @@ func _ability_shadow_strike() -> void:
 		if was_sneaking:
 			FloatingText.spawn(scene_root, target.global_position + Vector2(0, -12), "BACKSTAB!", Color(0.8, 0.2, 1.0))
 
+func _ability_blood_pact() -> void:
+	# Sacrifice 30% current HP for +100% damage and +50% attack speed for 8s
+	var sacrifice = int(hp * 0.3)
+	hp -= sacrifice
+	hp = maxi(hp, 1)
+	hp_changed.emit(hp)
+	status_effects.apply_buff("damage", 8.0, 1.0)
+	status_effects.apply_buff("attack_speed", 8.0, -0.15)  # negative = faster
+	# Red blood visual
+	sprite.modulate = Color(2.0, 0.3, 0.3)
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate", Color(1.5, 0.5, 0.5), 0.5)
+	tween.tween_property(sprite, "modulate", Color(2.0, 0.3, 0.3), 0.5)
+	tween.set_loops(8)
+	tween.finished.connect(func(): sprite.modulate = Color.WHITE)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("impact_a", 0.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.blood_splatter(global_position, Vector2.UP, Color(0.8, 0.0, 0.0))
+		vfx.status_puff(global_position, Color(1.0, 0.2, 0.2))
+	var scene_root = get_tree().current_scene
+	if scene_root:
+		FloatingText.spawn(scene_root, global_position + Vector2(0, -12), "-%d HP" % sacrifice, Color(1.0, 0.3, 0.3))
+
+func _ability_borrowed_time() -> void:
+	# Become immune for 3s, then take 50% of absorbed damage
+	set_meta("borrowed_time_active", true)
+	set_meta("borrowed_time_stored", 0.0)
+	invincible = true
+	# Golden shimmer
+	sprite.modulate = Color(2.0, 1.8, 0.8)
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate", Color(1.5, 1.3, 0.6), 0.5)
+	tween.tween_property(sprite, "modulate", Color(2.0, 1.8, 0.8), 0.5)
+	tween.set_loops(3)
+	tween.finished.connect(func():
+		sprite.modulate = Color.WHITE
+		invincible = false
+		set_meta("borrowed_time_active", false)
+		var stored = get_meta("borrowed_time_stored", 0.0) as float
+		if stored > 0:
+			var payback = int(stored * 0.5)
+			if payback > 0:
+				hp -= payback
+				hp = maxi(hp, 1)
+				hp_changed.emit(hp)
+				var scene_root2 = get_tree().current_scene
+				if scene_root2:
+					FloatingText.spawn_damage(scene_root2, global_position, payback, Color(1.0, 0.8, 0.2))
+				var vfx2 = get_node_or_null("/root/VFXManager")
+				if vfx2:
+					vfx2.shake(2.0, 0.15)
+		remove_meta("borrowed_time_stored")
+	)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("mystical", 0.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position, 16.0, Color(1.0, 0.9, 0.4, 0.6))
+
+func _ability_bulwark() -> void:
+	# 70% damage reduction for 5s, -40% speed
+	set_meta("bulwark_active", true)
+	status_effects.apply_buff("speed", 5.0, -0.4)
+	sprite.modulate = Color(0.7, 0.7, 0.8)
+	get_tree().create_timer(5.0).timeout.connect(func():
+		if is_instance_valid(self):
+			set_meta("bulwark_active", false)
+			sprite.modulate = Color.WHITE
+	)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("clack", -2.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position, 10.0, Color(0.5, 0.5, 0.6, 0.6))
+
+func _ability_consecration() -> void:
+	# Holy zone: 6s, damages enemies inside, heals player inside
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_mult = 4.0 if in_ow else 1.0
+	var zone_radius = 24.0 * scale_mult
+	var zone_pos = global_position
+	var zone_dmg = 3 + level_system.level
+	var zone_heal = 3.0
+	var zone_node = Node2D.new()
+	zone_node.global_position = zone_pos
+	zone_node.set_meta("consecration_radius", zone_radius)
+	get_tree().current_scene.add_child(zone_node)
+	var tick_count = 0
+	var tick_timer = Timer.new()
+	tick_timer.wait_time = 0.5
+	tick_timer.one_shot = false
+	zone_node.add_child(tick_timer)
+	tick_timer.timeout.connect(func():
+		tick_count += 1
+		if tick_count >= 12 or not is_instance_valid(zone_node):
+			zone_node.queue_free()
+			return
+		var enemies = get_tree().get_nodes_in_group("enemy")
+		for e in enemies:
+			if is_instance_valid(e) and e.global_position.distance_to(zone_pos) < zone_radius:
+				if e.has_method("take_damage"):
+					e.take_damage(zone_dmg)
+		if is_instance_valid(self) and global_position.distance_to(zone_pos) < zone_radius:
+			heal(int(zone_heal))
+		var vfx2 = get_node_or_null("/root/VFXManager")
+		if vfx2:
+			vfx2.shockwave(zone_pos, zone_radius * 0.5, Color(1.0, 0.9, 0.4, 0.3))
+	)
+	tick_timer.start()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("sorcery", -2.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(zone_pos, zone_radius, Color(1.0, 0.9, 0.4, 0.5))
+
+func _ability_evasion_surge() -> void:
+	# 80% dodge + 50% speed for 5s
+	status_effects.apply_buff("dodge", 5.0, 80.0)
+	status_effects.apply_buff("speed", 5.0, 0.5)
+	var _trail_count = 0
+	var trail_timer = Timer.new()
+	trail_timer.wait_time = 0.15
+	trail_timer.one_shot = false
+	add_child(trail_timer)
+	trail_timer.timeout.connect(func():
+		_trail_count += 1
+		if _trail_count >= 33 or not is_instance_valid(self):
+			trail_timer.stop()
+			trail_timer.queue_free()
+			return
+		var vfx2 = get_node_or_null("/root/VFXManager")
+		if vfx2:
+			vfx2.dash_afterimage(global_position, Color(1.0, 1.0, 1.0, 0.3))
+	)
+	trail_timer.start()
+	sprite.modulate = Color(2.0, 2.0, 2.0)
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate", Color.WHITE, 0.3)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("woosh_b", 0.0)
+
+func _ability_gravity_well() -> void:
+	# Place a vortex that pulls enemies for 3s
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_mult = 4.0 if in_ow else 1.0
+	var aim_dir = _get_shoot_direction()
+	var well_pos = global_position + aim_dir * 24.0 * scale_mult
+	var well_radius = 32.0 * scale_mult
+	var well_node = Node2D.new()
+	well_node.global_position = well_pos
+	get_tree().current_scene.add_child(well_node)
+	var tick_count = 0
+	var pull_timer = Timer.new()
+	pull_timer.wait_time = 0.1
+	pull_timer.one_shot = false
+	well_node.add_child(pull_timer)
+	pull_timer.timeout.connect(func():
+		tick_count += 1
+		if tick_count >= 30 or not is_instance_valid(well_node):
+			well_node.queue_free()
+			return
+		var enemies = get_tree().get_nodes_in_group("enemy")
+		for e in enemies:
+			if not is_instance_valid(e):
+				continue
+			var d = e.global_position.distance_to(well_pos)
+			if d < well_radius and d > 4.0:
+				var pull_dir = (well_pos - e.global_position).normalized()
+				var strength = (1.0 - d / well_radius) * 80.0 * scale_mult
+				e.velocity += pull_dir * strength
+				if e.has_method("apply_status"):
+					e.apply_status("SLOWED", 0.3)
+		if tick_count % 5 == 0:
+			var vfx2 = get_node_or_null("/root/VFXManager")
+			if vfx2:
+				vfx2.shockwave(well_pos, well_radius * 0.3, Color(0.4, 0.2, 0.8, 0.4))
+	)
+	pull_timer.start()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("sorcery", -2.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(well_pos, well_radius, Color(0.4, 0.2, 0.8, 0.5))
+
+func _ability_mana_shield() -> void:
+	# Damage absorbed by MP (2 MP per 1 HP) for 8s
+	set_meta("mana_shield_active", true)
+	sprite.modulate = Color(0.6, 0.8, 2.0)
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate", Color(0.7, 0.9, 1.5), 0.5)
+	tween.tween_property(sprite, "modulate", Color(0.6, 0.8, 2.0), 0.5)
+	tween.set_loops(8)
+	tween.finished.connect(func():
+		sprite.modulate = Color.WHITE
+		set_meta("mana_shield_active", false)
+	)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("mystical", -2.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.status_puff(global_position, Color(0.3, 0.5, 1.0))
+
+func _ability_mirror_image() -> void:
+	# Spawn 2 decoy copies for 5s
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_mult = 4.0 if in_ow else 1.0
+	for i in range(2):
+		var decoy = Area2D.new()
+		decoy.name = "MirrorDecoy_%d" % i
+		decoy.add_to_group("player")
+		decoy.global_position = global_position + Vector2(randf_range(-12, 12), randf_range(-12, 12)) * scale_mult
+		var decoy_spr = Sprite2D.new()
+		decoy_spr.texture = sprite.texture
+		decoy_spr.hframes = sprite.hframes
+		decoy_spr.vframes = sprite.vframes
+		decoy_spr.frame = sprite.frame
+		decoy_spr.modulate = Color(1.0, 1.0, 1.0, 0.4)
+		decoy.add_child(decoy_spr)
+		var col = CollisionShape2D.new()
+		var shape = CircleShape2D.new()
+		shape.radius = 4.0 * scale_mult
+		col.shape = shape
+		decoy.add_child(col)
+		decoy.collision_layer = 1
+		decoy.collision_mask = 0
+		decoy.set_meta("decoy_hp", 1)
+		get_tree().current_scene.add_child(decoy)
+		var wander_timer = Timer.new()
+		wander_timer.wait_time = 0.3
+		wander_timer.one_shot = false
+		decoy.add_child(wander_timer)
+		var wander_dir = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
+		wander_timer.timeout.connect(func():
+			if is_instance_valid(decoy):
+				wander_dir = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
+				decoy.position += wander_dir * 4.0 * scale_mult
+		)
+		wander_timer.start()
+		get_tree().create_timer(5.0).timeout.connect(func():
+			if is_instance_valid(decoy):
+				decoy.queue_free()
+		)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("teleport", -4.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.status_puff(global_position, Color(1.0, 1.0, 1.0, 0.5))
+
+func _ability_phase_shift() -> void:
+	# Intangible for 2s - no damage, no attacks, move through enemies
+	invincible = true
+	set_meta("phase_shift_active", true)
+	collision_layer = 0
+	sprite.modulate = Color(0.5, 0.7, 1.5, 0.3)
+	get_tree().create_timer(2.0).timeout.connect(func():
+		if is_instance_valid(self):
+			invincible = false
+			set_meta("phase_shift_active", false)
+			collision_layer = 1
+			sprite.modulate = Color.WHITE
+	)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("teleport", -4.0)
+
+func _ability_reflect_barrier() -> void:
+	# Reflect all projectiles for 4s
+	set_meta("reflect_barrier_active", true)
+	sprite.modulate = Color(0.5, 2.0, 2.0)
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate", Color(0.7, 1.4, 1.4), 0.5)
+	tween.tween_property(sprite, "modulate", Color(0.5, 2.0, 2.0), 0.5)
+	tween.set_loops(4)
+	tween.finished.connect(func():
+		sprite.modulate = Color.WHITE
+		set_meta("reflect_barrier_active", false)
+	)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("clack", 0.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position, 12.0, Color(0.3, 1.0, 1.0, 0.6))
+
+func _ability_soul_drain() -> void:
+	# Channel for 3s: damage nearby enemies, heal 50% of damage dealt
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_mult = 4.0 if in_ow else 1.0
+	var drain_radius = 16.0 * scale_mult
+	var drain_dmg = 2 + level_system.level
+	set_meta("channeling", true)
+	sprite.modulate = Color(1.0, 0.5, 2.0)
+	var tick_count = 0
+	var drain_timer = Timer.new()
+	drain_timer.wait_time = 0.5
+	drain_timer.one_shot = false
+	add_child(drain_timer)
+	drain_timer.timeout.connect(func():
+		tick_count += 1
+		if tick_count >= 6 or not is_instance_valid(self) or not get_meta("channeling", false):
+			set_meta("channeling", false)
+			sprite.modulate = Color.WHITE
+			drain_timer.stop()
+			drain_timer.queue_free()
+			return
+		var total_dealt = 0
+		var enemies = get_tree().get_nodes_in_group("enemy")
+		for e in enemies:
+			if is_instance_valid(e) and e.global_position.distance_to(global_position) < drain_radius:
+				if e.has_method("take_damage"):
+					e.take_damage(drain_dmg)
+					total_dealt += drain_dmg
+		if total_dealt > 0:
+			heal(int(total_dealt * 0.5))
+		var vfx2 = get_node_or_null("/root/VFXManager")
+		if vfx2:
+			vfx2.status_puff(global_position, Color(0.6, 0.2, 1.0))
+	)
+	drain_timer.start()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("curse", -2.0)
+
+func _ability_time_warp() -> void:
+	# Slow all enemies and enemy bullets by 60% for 4s
+	set_meta("time_warp_active", true)
+	get_tree().create_timer(4.0).timeout.connect(func():
+		if is_instance_valid(self):
+			set_meta("time_warp_active", false)
+	)
+	sprite.modulate = Color(0.7, 0.5, 2.0)
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate", Color.WHITE, 0.5)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("sorcery", 0.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position, 48.0, Color(0.5, 0.3, 1.0, 0.4))
+		vfx.shake(1.0, 0.1)
+
 # --- First-person 3D view ---
 
 func _input(event: InputEvent) -> void:
@@ -2653,9 +3357,9 @@ func _toggle_fps_mode() -> void:
 		_first_person_view.update_camera(global_position, fps_angle)
 	else:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		var cam2d = get_node_or_null("Camera2D")
-		if cam2d:
-			cam2d.enabled = true
+		var cam2d_restore = get_node_or_null("Camera2D")
+		if cam2d_restore:
+			cam2d_restore.enabled = true
 
 # ── New weapon_type abilities ──
 
@@ -2665,6 +3369,8 @@ func _ground_pound() -> void:
 	_stamina_regen_delay = 1.0
 	stamina_changed.emit(stamina)
 	_dash_cooldown = 1.0
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
 
 	var base_dmg = equipment_manager.get_damage()
 	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
@@ -2704,6 +3410,8 @@ func _hammer_throw() -> void:
 	_stamina_regen_delay = 1.0
 	stamina_changed.emit(stamina)
 	_dash_cooldown = 2.0
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
 
 	var aim_dir = _get_shoot_direction()
 	var bullet_scene = preload("res://scenes/bullet.tscn")
@@ -2758,6 +3466,9 @@ func _start_lunge() -> void:
 	_lunge_active = true
 	_lunge_hit_count = 0
 	_dash_timer = DASH_DURATION * 2.5  # 2.5x distance for a proper charge
+	if _player_anim:
+		_player_anim.set_direction(_dash_direction)  # lock direction to lunge direction
+		_player_anim.set_state(PlayerAnimator.AnimState.DASH)
 	_dash_hit_enemies.clear()
 	invincible = true
 	sprite.modulate = Color(1.5, 1.0, 0.5, 0.6)
@@ -2774,6 +3485,8 @@ func _power_shot() -> void:
 	_stamina_regen_delay = 1.0
 	stamina_changed.emit(stamina)
 	_dash_cooldown = 1.5
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
 
 	var aim_dir = _get_shoot_direction()
 	var bullet_scene = preload("res://scenes/bullet.tscn")
@@ -2834,6 +3547,8 @@ func _handle_barrage() -> void:
 	_stamina_regen_delay = 1.0
 	stamina_changed.emit(stamina)
 	_barrage_cooldown = 2.0
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
 
 	var aim_dir = _get_shoot_direction()
 	var bullet_scene = preload("res://scenes/bullet.tscn")
@@ -2854,3 +3569,495 @@ func _handle_barrage() -> void:
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("shoot_a", -3.0, 0.1)
+
+func _wand_blink() -> void:
+	stamina -= 15.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 0.8
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+
+	var dir = _last_move_dir if _last_move_dir != Vector2.ZERO else _get_shoot_direction()
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var blink_dist = 60.0 * (4.0 if in_ow else 1.0)
+	var target = global_position + dir * blink_dist
+	invincible = true
+	sprite.modulate.a = 0.3
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.dash_afterimage(sprite, global_position)
+	global_position = target
+	if vfx:
+		vfx.hit_spark(global_position, Color(0.5, 0.7, 1.0))
+	_dash_linger = 0.2
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate:a", 1.0, 0.2)
+	tween.tween_callback(func(): invincible = false)
+	var sfx_wb = get_node_or_null("/root/SFXManager")
+	if sfx_wb:
+		sfx_wb.play("spell_a", -4.0, 0.1)
+
+func _tome_nova_burst() -> void:
+	stamina -= 30.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 1.5
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+
+	var base_dmg = equipment_manager.get_damage()
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_m = 4.0 if in_ow else 1.0
+	var radius = 40.0 * scale_m
+	var total_dmg = int(base_dmg * 3.0 + level_system.level * 0.5)
+	var bullet_scene = preload("res://scenes/bullet.tscn")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if bullets_container:
+		for i in range(8):
+			var angle = i * TAU / 8.0
+			var dir = Vector2(cos(angle), sin(angle))
+			var bullet = bullet_scene.instantiate()
+			bullet.global_position = global_position
+			bullet.direction = dir
+			bullet.is_player_bullet = true
+			bullet.speed = equipment_manager.get_bullet_speed() * 0.6
+			bullet.damage = int(base_dmg * 1.5)
+			bullet.pierce_count = 2
+			bullet.lifetime = 0.5
+			bullets_container.add_child(bullet)
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		if e.global_position.distance_to(global_position) > radius:
+			continue
+		if e.has_method("take_damage"):
+			e.take_damage(total_dmg)
+		if e.has_method("apply_status"):
+			e.apply_status("SLOWED", 1.5)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position, radius, Color(0.4, 0.3, 1.0, 0.6))
+		vfx.shake(2.5, 0.15)
+	var sfx_tn = get_node_or_null("/root/SFXManager")
+	if sfx_tn:
+		sfx_tn.play("area_effect_a", -2.0, 0.0)
+
+func _javelin_throw() -> void:
+	stamina -= 20.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 1.2
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+
+	var aim_dir = _get_shoot_direction()
+	var bullet_scene = preload("res://scenes/bullet.tscn")
+	var bullet = bullet_scene.instantiate()
+	bullet.global_position = global_position
+	bullet.direction = aim_dir
+	bullet.is_player_bullet = true
+	bullet.speed = equipment_manager.get_bullet_speed() * 2.0
+	bullet.damage = int(equipment_manager.get_damage() * 3.5)
+	bullet.pierce_count = 5
+	bullet.lifetime = 2.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if bullets_container:
+		bullets_container.add_child(bullet)
+	var sfx_jt = get_node_or_null("/root/SFXManager")
+	if sfx_jt:
+		sfx_jt.play("swing", -2.0, 0.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.hit_spark(global_position + aim_dir * 6.0, Color(0.8, 0.7, 0.3))
+
+func _sling_scatter_volley() -> void:
+	stamina -= 20.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 1.0
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+
+	var aim_dir = _get_shoot_direction()
+	var bullet_scene = preload("res://scenes/bullet.tscn")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	for i in range(6):
+		var angle_offset = (i - 2.5) * 0.2 + randf_range(-0.05, 0.05)
+		var dir = aim_dir.rotated(angle_offset)
+		var bullet = bullet_scene.instantiate()
+		bullet.global_position = global_position
+		bullet.direction = dir
+		bullet.is_player_bullet = true
+		bullet.speed = equipment_manager.get_bullet_speed() * (0.9 + randf() * 0.3)
+		bullet.damage = int(equipment_manager.get_damage() * 1.2)
+		bullet.lifetime = 0.7
+		bullets_container.add_child(bullet)
+	var sfx_ss = get_node_or_null("/root/SFXManager")
+	if sfx_ss:
+		sfx_ss.play("shoot_a", -3.0, 0.1)
+
+func _halberd_sweep() -> void:
+	stamina -= 25.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 1.0
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+
+	var aim_dir = _get_shoot_direction()
+	var base_dmg = equipment_manager.get_damage()
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_m = 4.0 if in_ow else 1.0
+	var sweep_range = 28.0 * scale_m
+	var sweep_angle = PI * 0.6
+	var total_dmg = int(base_dmg * 2.0)
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		var to_enemy = e.global_position - global_position
+		var dist = to_enemy.length()
+		if dist > sweep_range:
+			continue
+		var angle_diff = abs(aim_dir.angle_to(to_enemy.normalized()))
+		if angle_diff > sweep_angle / 2.0:
+			continue
+		if e.has_method("take_damage"):
+			e.take_damage(total_dmg)
+		var kb_dir = to_enemy.normalized()
+		e.velocity = kb_dir * 300.0 * scale_m
+	var bullet_scene = preload("res://scenes/bullet.tscn")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if bullets_container:
+		for i in range(3):
+			var angle_off = (i - 1) * 0.35
+			var dir = aim_dir.rotated(angle_off)
+			var bullet = bullet_scene.instantiate()
+			bullet.global_position = global_position + aim_dir * 4.0
+			bullet.direction = dir
+			bullet.is_player_bullet = true
+			bullet.speed = equipment_manager.get_bullet_speed() * 0.7
+			bullet.damage = int(base_dmg * 1.2)
+			bullet.pierce_count = 2
+			bullet.lifetime = 0.4
+			bullets_container.add_child(bullet)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position + aim_dir * 12.0 * scale_m, sweep_range * 0.6, Color(0.8, 0.8, 0.8, 0.5))
+		vfx.shake(2.0, 0.12)
+	var sfx_hs = get_node_or_null("/root/SFXManager")
+	if sfx_hs:
+		sfx_hs.play("swing", -2.0, 0.0)
+
+func _earthquake_slam() -> void:
+	var base_dmg = equipment_manager.get_damage()
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_m = 4.0 if in_ow else 1.0
+	var radius = 28.0 * scale_m
+	var slam_dmg = int(base_dmg * 1.5)
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		if e.global_position.distance_to(global_position) > radius:
+			continue
+		if e.has_method("take_damage"):
+			e.take_damage(slam_dmg)
+		if e.has_method("apply_status"):
+			e.apply_status("STUNNED", 0.4)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position, radius, Color(0.6, 0.4, 0.2, 0.4))
+		vfx.shake(1.5, 0.1)
+	var sfx_eq = get_node_or_null("/root/SFXManager")
+	if sfx_eq:
+		sfx_eq.play("area_effect_a", -6.0, 0.1)
+
+func _flail_chain_lash() -> void:
+	stamina -= 20.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 1.2
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+	var aim_dir = _get_shoot_direction()
+	var base_dmg = equipment_manager.get_damage()
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_m = 4.0 if in_ow else 1.0
+	var lash_range = 32.0 * scale_m
+	var lash_angle = PI * 0.5
+	var total_dmg = int(base_dmg * 2.0)
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		var to_enemy = e.global_position - global_position
+		var dist = to_enemy.length()
+		if dist > lash_range:
+			continue
+		var angle_diff = abs(aim_dir.angle_to(to_enemy.normalized()))
+		if angle_diff > lash_angle / 2.0:
+			continue
+		if e.has_method("take_damage"):
+			e.take_damage(total_dmg)
+		var pull_vec = (global_position - e.global_position).normalized()
+		e.velocity = pull_vec * 250.0 * scale_m
+	var bullet_scene = preload("res://scenes/bullet.tscn")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if bullets_container:
+		var bullet = bullet_scene.instantiate()
+		bullet.global_position = global_position
+		bullet.direction = aim_dir
+		bullet.is_player_bullet = true
+		bullet.speed = equipment_manager.get_bullet_speed() * 0.5
+		bullet.damage = int(base_dmg * 1.0)
+		bullet.pierce_count = 3
+		bullet.lifetime = 0.6
+		bullet.behavior = bullet.BulletBehavior.BOOMERANG
+		bullet._origin_entity = self
+		bullets_container.add_child(bullet)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position + aim_dir * 16.0 * scale_m, lash_range * 0.5, Color(0.7, 0.5, 0.3, 0.5))
+		vfx.shake(2.0, 0.12)
+	var sfx_fl = get_node_or_null("/root/SFXManager")
+	if sfx_fl:
+		sfx_fl.play("swing", -2.0, 0.0)
+
+func _throwing_fan_of_knives() -> void:
+	stamina -= 15.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 1.0
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+	var aim_dir = _get_shoot_direction()
+	var bullet_scene = preload("res://scenes/bullet.tscn")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	for i in range(5):
+		var angle_offset = (i - 2) * 0.35
+		var dir = aim_dir.rotated(angle_offset)
+		var bullet = bullet_scene.instantiate()
+		bullet.global_position = global_position
+		bullet.direction = dir
+		bullet.is_player_bullet = true
+		bullet.speed = equipment_manager.get_bullet_speed() * (0.9 + randf() * 0.2)
+		bullet.damage = int(equipment_manager.get_damage() * 0.8)
+		bullet.lifetime = 0.6
+		bullets_container.add_child(bullet)
+	var sfx_fk = get_node_or_null("/root/SFXManager")
+	if sfx_fk:
+		sfx_fk.play("shoot_a", -3.0, 0.05)
+
+func _short_bow_evasive_shot() -> void:
+	stamina -= 15.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 0.8
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+	var aim_dir = _get_shoot_direction()
+	_dash_direction = -aim_dir
+	_is_dashing = true
+	_dash_timer = DASH_DURATION * 0.6
+	_dash_hit_enemies.clear()
+	invincible = true
+	sprite.modulate.a = 0.6
+	var bullet_scene = preload("res://scenes/bullet.tscn")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if bullets_container:
+		for i in range(3):
+			var spread = (i - 1) * 0.1
+			var dir = aim_dir.rotated(spread)
+			var bullet = bullet_scene.instantiate()
+			bullet.global_position = global_position
+			bullet.direction = dir
+			bullet.is_player_bullet = true
+			bullet.speed = equipment_manager.get_bullet_speed() * 1.2
+			bullet.damage = equipment_manager.get_damage()
+			bullet.lifetime = 1.0
+			bullets_container.add_child(bullet)
+	var sfx_es = get_node_or_null("/root/SFXManager")
+	if sfx_es:
+		sfx_es.play("shoot_a", -4.0, 0.05)
+
+func _greatsword_overhead_slam() -> void:
+	stamina -= 30.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 1.5
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+	var aim_dir = _get_shoot_direction()
+	var base_dmg = equipment_manager.get_damage()
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_m = 4.0 if in_ow else 1.0
+	var slam_range = 24.0 * scale_m
+	var slam_angle = PI * 0.5
+	var total_dmg = int(base_dmg * 3.5)
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		var to_enemy = e.global_position - global_position
+		if to_enemy.length() > slam_range:
+			continue
+		if abs(aim_dir.angle_to(to_enemy.normalized())) > slam_angle / 2.0:
+			continue
+		if e.has_method("take_damage"):
+			e.take_damage(total_dmg)
+		if e.has_method("apply_status"):
+			e.apply_status("STUNNED", 0.5)
+		e.velocity = to_enemy.normalized() * 200.0 * scale_m
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position + aim_dir * 12.0 * scale_m, slam_range * 0.7, Color(1.0, 0.6, 0.2, 0.6))
+		vfx.shake(3.5, 0.2)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("area_effect_a", -2.0, 0.0)
+
+func _great_axe_whirlwind_cleave() -> void:
+	stamina -= 25.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 1.2
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+	var base_dmg = equipment_manager.get_damage()
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_m = 4.0 if in_ow else 1.0
+	var radius = 30.0 * scale_m
+	var total_dmg = int(base_dmg * 2.5)
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		var dist = e.global_position.distance_to(global_position)
+		if dist > radius:
+			continue
+		if e.has_method("take_damage"):
+			e.take_damage(total_dmg)
+		var kb_dir = (e.global_position - global_position).normalized()
+		e.velocity = kb_dir * 350.0 * scale_m
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position, radius, Color(0.8, 0.3, 0.2, 0.5))
+		vfx.shake(3.0, 0.18)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("swing", -2.0, 0.0)
+
+func _whip_lasso_pull() -> void:
+	stamina -= 15.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 1.0
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_m = 4.0 if in_ow else 1.0
+	var pull_range = 48.0 * scale_m
+	var nearest: Node2D = null
+	var nearest_dist = pull_range
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		var dist = e.global_position.distance_to(global_position)
+		if dist < nearest_dist and dist > 4.0 * scale_m:
+			nearest = e
+			nearest_dist = dist
+	if nearest:
+		var pull_dir = (global_position - nearest.global_position).normalized()
+		var target_pos = global_position - pull_dir * 8.0 * scale_m
+		nearest.global_position = target_pos
+		nearest.velocity = Vector2.ZERO
+		if nearest.has_method("apply_status"):
+			nearest.apply_status("STUNNED", 0.3)
+		if nearest.has_method("take_damage"):
+			nearest.take_damage(int(equipment_manager.get_damage() * 1.5))
+		var vfx = get_node_or_null("/root/VFXManager")
+		if vfx:
+			vfx.hit_spark(nearest.global_position, Color(0.6, 0.4, 0.2))
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("swing", -3.0, 0.0)
+
+func _scythe_reap() -> void:
+	stamina -= 25.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 1.3
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+	var aim_dir = _get_shoot_direction()
+	var base_dmg = equipment_manager.get_damage()
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_m = 4.0 if in_ow else 1.0
+	var reap_range = 28.0 * scale_m
+	var reap_angle = PI
+	var total_dmg = int(base_dmg * 2.5)
+	var total_dealt = 0
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		var to_enemy = e.global_position - global_position
+		if to_enemy.length() > reap_range:
+			continue
+		if abs(aim_dir.angle_to(to_enemy.normalized())) > reap_angle / 2.0:
+			continue
+		if e.has_method("take_damage"):
+			e.take_damage(total_dmg)
+			total_dealt += total_dmg
+	if total_dealt > 0:
+		var heal_amount = maxi(1, int(total_dealt * 0.1))
+		heal(heal_amount)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position + aim_dir * 10.0 * scale_m, reap_range * 0.6, Color(0.3, 0.8, 0.2, 0.5))
+		vfx.shake(2.0, 0.12)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("swing", -2.0, 0.0)
+
+func _claws_pounce() -> void:
+	stamina -= 20.0
+	_stamina_regen_delay = 1.0
+	stamina_changed.emit(stamina)
+	_dash_cooldown = 0.8
+	if _player_anim:
+		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_m = 4.0 if in_ow else 1.0
+	var pounce_range = 40.0 * scale_m
+	var nearest: Node2D = null
+	var nearest_dist = pounce_range
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		var dist = e.global_position.distance_to(global_position)
+		if dist < nearest_dist and dist > 4.0 * scale_m:
+			nearest = e
+			nearest_dist = dist
+	if nearest:
+		var to_enemy = (nearest.global_position - global_position).normalized()
+		global_position = nearest.global_position - to_enemy * 6.0 * scale_m
+		if nearest.has_method("take_damage"):
+			nearest.take_damage(int(equipment_manager.get_damage() * 3.0))
+		if nearest.has_method("apply_status"):
+			nearest.apply_status("STUNNED", 0.3)
+		var vfx = get_node_or_null("/root/VFXManager")
+		if vfx:
+			vfx.hit_spark(nearest.global_position, Color(1.0, 0.5, 0.2))
+			vfx.shake(2.0, 0.1)
+	else:
+		var dir = _last_move_dir if _last_move_dir != Vector2.ZERO else _get_shoot_direction()
+		_dash_direction = dir
+		_is_dashing = true
+		_dash_timer = DASH_DURATION * 0.8
+		_dash_hit_enemies.clear()
+		invincible = true
+		sprite.modulate.a = 0.6
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("swing", -3.0, 0.05)

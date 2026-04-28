@@ -8,7 +8,7 @@ id = "pq_cave"
 title = "Shadows Below"
 summary = "Solmund wants you to observe the creatures in the dungeon. Go below and look carefully at what you're really fighting."
 level = 3
-location = "haven"
+location = "aria"
 properties = [{
 "index": 0,
 "name": "Creatures Observed",
@@ -75,7 +75,7 @@ events = [{
 }],
 "type": "kill"
 }, {
-"param": "haven",
+"param": "aria",
 "script": [{
 "attribute": "session-pq_cave-0",
 "cmd": "if",

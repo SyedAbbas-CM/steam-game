@@ -27,6 +27,8 @@ const LEVEL_BONUSES: Dictionary = {
 	StatModifier.StatType.DODGE_CHANCE: 0.15,
 	StatModifier.StatType.PICKUP_RADIUS: 0.5,
 	StatModifier.StatType.COOLDOWN_REDUCTION: 0.2,
+	StatModifier.StatType.MAX_STAMINA: 5.0,     # +5 max stamina per level
+	StatModifier.StatType.STAMINA_REGEN: 0.5,   # +0.5 regen/s per level
 }
 
 # Stat point allocation categories — each gives a bundle of stat bonuses per point
@@ -81,8 +83,7 @@ func gain_xp(amount: int, xp_mult: float = 1.0) -> void:
 	while xp >= xp_to_next_level() and level < MAX_LEVEL:
 		xp -= xp_to_next_level()
 		level += 1
-		if level % 5 == 0:
-			unspent_stat_points += 1
+		unspent_stat_points += 1
 		leveled_up.emit(level)
 		print("LEVEL UP! Now level %d (next: %d XP)" % [level, xp_to_next_level()])
 
@@ -118,7 +119,15 @@ func get_power_level() -> int:
 static func power_to_level(power: int) -> int:
 	return maxi(1, power / 10)
 
+## Ensure total points match expected (1 per level). Call anytime.
+func ensure_retroactive_points() -> void:
+	var total_spent = get_total_allocated_points()
+	var expected_total = level - 1
+	if total_spent + unspent_stat_points < expected_total:
+		unspent_stat_points = expected_total - total_spent
+
 func allocate_stat_point(category: String) -> bool:
+	ensure_retroactive_points()
 	if unspent_stat_points <= 0:
 		return false
 	if not ALLOCATION_CATEGORIES.has(category):
@@ -145,3 +154,8 @@ func load_from_dict(data: Dictionary) -> void:
 	xp = data.get("xp", 0)
 	unspent_stat_points = data.get("unspent_stat_points", 0)
 	allocated = data.get("allocated", {}).duplicate()
+	# Retroactive fix: ensure total points = level - 1 (1 per level after level 1)
+	var total_spent = get_total_allocated_points()
+	var expected_total = level - 1
+	if total_spent + unspent_stat_points < expected_total:
+		unspent_stat_points = expected_total - total_spent

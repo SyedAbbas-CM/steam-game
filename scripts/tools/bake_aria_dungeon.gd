@@ -55,7 +55,6 @@ func _bake():
 
 	# Generate room layout (8 rooms for Aria)
 	seed(42)
-	var rooms = _generate_rooms(8)
 	var start_pos = rooms[0]["pos"]
 	var stairs_pos = rooms[rooms.size() - 1]["pos"]
 
@@ -81,8 +80,6 @@ func _bake():
 	var sw = stairs_room["width"]
 	var sh = stairs_room["height"]
 	var stairs_origin = _grid_to_tile_origin(stairs_pos)
-	var cx = sw / 2
-	var cy = sh / 2 - 2
 	if cy > 0 and cy < sh and stairs_mask[cy][cx]:
 		deco_layer.set_cell(stairs_origin + Vector2i(cx, cy), SRC_ENV, Vector2i(8, THEME_ROW))
 	else:
@@ -93,7 +90,6 @@ func _bake():
 	for room in rooms:
 		var label = Label.new()
 		label.name = "RoomLabel_%d_%d" % [room["pos"].x, room["pos"].y]
-		var origin = _grid_to_tile_origin(room["pos"])
 		label.position = Vector2(origin.x * TILE_SIZE + 4, origin.y * TILE_SIZE + 4)
 		label.text = room.get("type_name", "combat")
 		label.add_theme_font_size_override("font_size", 6)
@@ -210,9 +206,7 @@ func _paint_room(floor_l: TileMapLayer, wall_l: TileMapLayer, deco_l: TileMapLay
 	var w = room["width"] as int
 	var h = room["height"] as int
 
-	var floor_tile = Vector2i(5, THEME_ROW)
 	var floor_tile_2 = Vector2i(6, THEME_ROW)
-	var wall_tile = Vector2i(4, THEME_ROW)
 	var wall_cracked = Vector2i(3, THEME_ROW)
 	var wall_candle = Vector2i(1, THEME_ROW)
 	var wall_candle2 = Vector2i(2, THEME_ROW)
@@ -221,9 +215,7 @@ func _paint_room(floor_l: TileMapLayer, wall_l: TileMapLayer, deco_l: TileMapLay
 	# Paint floor and walls using mask
 	for y in range(h):
 		for x in range(w):
-			var tile_pos = origin + Vector2i(x, y)
 			if mask[y][x]:
-				var tile = floor_tile if randf() > 0.15 else floor_tile_2
 				floor_l.set_cell(tile_pos, SRC_ENV, tile)
 			elif _is_wall_adjacent(mask, x, y, w, h):
 				var wt = _pick_wall_tile(mask, x, y, w, h, wall_roof, wall_tile, wall_candle, wall_candle2, wall_cracked)
@@ -282,8 +274,6 @@ func _random_interior(mask: Array, w: int, h: int, border: int) -> Vector2i:
 # ---- Decorations ----
 
 func _deco_start_room(deco_l: TileMapLayer, origin: Vector2i, mask: Array, w: int, h: int) -> void:
-	var cx = w / 2
-	var cy = h / 2
 	deco_l.set_cell(origin + Vector2i(cx, cy), SRC_DNG, Vector2i(10, 0))  # campfire
 	deco_l.set_cell(origin + Vector2i(cx - 2, cy), SRC_DNG, Vector2i(9, 1))  # bench
 	deco_l.set_cell(origin + Vector2i(cx + 2, cy), SRC_DNG, Vector2i(9, 1))  # bench
@@ -297,8 +287,6 @@ func _deco_start_room(deco_l: TileMapLayer, origin: Vector2i, mask: Array, w: in
 
 func _deco_combat_room(deco_l: TileMapLayer, liquid_l: TileMapLayer, floor_l: TileMapLayer, origin: Vector2i, mask: Array, w: int, h: int, room: Dictionary) -> void:
 	var variant = randi() % 6
-	var cx = w / 2
-	var cy = h / 2
 	match variant:
 		0:  # Lava flow room
 			_paint_liquid_flow(liquid_l, floor_l, deco_l, origin, mask, w, h, "lava", 0.4, room)
@@ -320,35 +308,25 @@ func _deco_combat_room(deco_l: TileMapLayer, liquid_l: TileMapLayer, floor_l: Ti
 			_paint_liquid_flow(liquid_l, floor_l, deco_l, origin, mask, w, h, "water", 0.3, room, false)
 			# Scatter moss around water
 			for _i in range(6):
-				var p = _random_interior(mask, w, h, 2)
-				var cell = origin + p
 				if deco_l.get_cell_source_id(cell) == -1:
-					var moss_tiles = [Vector2i(0, 5), Vector2i(1, 5), Vector2i(2, 5), Vector2i(3, 5)]
 					deco_l.set_cell(cell, SRC_DNG, moss_tiles[randi() % moss_tiles.size()])
 		5:  # Bone/rubble room
 			for _i in range(5):
-				var p = _random_interior(mask, w, h, 2)
-				var cell = origin + p
 				if deco_l.get_cell_source_id(cell) == -1:
 					var bone_tiles = [Vector2i(0, 4), Vector2i(1, 4), Vector2i(4, 4), Vector2i(5, 4)]
 					deco_l.set_cell(cell, SRC_DNG, bone_tiles[randi() % bone_tiles.size()])
 			# Add barrels/crates near walls
 			for _i in range(3):
-				var p = _random_interior(mask, w, h, 1)
-				var cell = origin + p
 				if deco_l.get_cell_source_id(cell) == -1:
 					var prop_tiles = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(4, 0)]
 					deco_l.set_cell(cell, SRC_DNG, prop_tiles[randi() % prop_tiles.size()])
 
 func _deco_treasure_room(deco_l: TileMapLayer, origin: Vector2i, mask: Array, w: int, h: int) -> void:
-	var cx = w / 2
-	var cy = h / 2
 	deco_l.set_cell(origin + Vector2i(cx - 1, cy), SRC_DNG, Vector2i(2, 0))  # chest
 	deco_l.set_cell(origin + Vector2i(cx, cy), SRC_DNG, Vector2i(5, 0))      # treasure
 	deco_l.set_cell(origin + Vector2i(cx + 1, cy), SRC_DNG, Vector2i(2, 0))  # chest
 	# Scatter pots/urns
 	for _i in range(4):
-		var p = _random_interior(mask, w, h, 2)
 		var pot_tiles = [Vector2i(4, 3), Vector2i(5, 3), Vector2i(10, 3), Vector2i(9, 3)]
 		deco_l.set_cell(origin + p, SRC_DNG, pot_tiles[randi() % pot_tiles.size()])
 	# Gold orbs
@@ -356,15 +334,11 @@ func _deco_treasure_room(deco_l: TileMapLayer, origin: Vector2i, mask: Array, w:
 	deco_l.set_cell(origin + Vector2i(cx + 2, cy - 2), SRC_ENV, Vector2i(3, 19))
 
 func _deco_shrine_room(deco_l: TileMapLayer, liquid_l: TileMapLayer, floor_l: TileMapLayer, origin: Vector2i, mask: Array, w: int, h: int, room: Dictionary) -> void:
-	var cx = w / 2
-	var cy = h / 2
 	# Central water pool (non-directional, pool style)
 	_paint_liquid_flow(liquid_l, floor_l, deco_l, origin, mask, w, h, "water", 0.3, room, false)
 	# Pillars around center
 	for dx in [-3, 3]:
 		for dy in [-3, 3]:
-			var px = cx + dx
-			var py = cy + dy
 			if px > 0 and px < w and py > 0 and py < h and mask[py][px]:
 				deco_l.set_cell(origin + Vector2i(px, py), SRC_DNG, Vector2i(5, 2))
 	# Blue orbs
@@ -383,7 +357,6 @@ func _deco_shrine_room(deco_l: TileMapLayer, liquid_l: TileMapLayer, floor_l: Ti
 			deco_l.set_cell(origin + Vector2i(gx, gy), SRC_DNG, glass_tiles[randi() % glass_tiles.size()])
 	# Candelabras flanking entrance
 	for dx in [-5, 5]:
-		var tx = cx + dx
 		if tx > 0 and tx < w and cy > 0 and cy < h and mask[cy][tx]:
 			deco_l.set_cell(origin + Vector2i(tx, cy), SRC_DNG, Vector2i(4, 1))
 
@@ -399,15 +372,11 @@ func _deco_stairs_room(deco_l: TileMapLayer, origin: Vector2i, mask: Array, w: i
 				deco_l.set_cell(origin + Vector2i(px, py), SRC_DNG, Vector2i(4, 1))
 	# Bones, skulls, and cobwebs
 	for _i in range(5):
-		var p = _random_interior(mask, w, h, 1)
-		var cell = origin + p
 		if deco_l.get_cell_source_id(cell) == -1:
 			var deco_tiles = [Vector2i(0, 4), Vector2i(1, 4), Vector2i(2, 4), Vector2i(3, 4)]
 			deco_l.set_cell(cell, SRC_DNG, deco_tiles[randi() % deco_tiles.size()])
 	# Moss near walls
 	for _i in range(3):
-		var p = _random_interior(mask, w, h, 1)
-		var cell = origin + p
 		if deco_l.get_cell_source_id(cell) == -1:
 			var moss_tiles = [Vector2i(0, 5), Vector2i(1, 5), Vector2i(2, 5)]
 			deco_l.set_cell(cell, SRC_DNG, moss_tiles[randi() % moss_tiles.size()])
@@ -443,7 +412,6 @@ func _paint_liquid_flow(liquid_l: TileMapLayer, floor_l: TileMapLayer, deco_l: T
 		room["liquid_type"] = liquid_type
 
 	# Get liquid tiles
-	var liquid_tiles: Array = []
 	match liquid_type:
 		"lava": liquid_tiles = [Vector2i(0, 17), Vector2i(0, 18)]
 		"poison": liquid_tiles = [Vector2i(1, 17), Vector2i(1, 18)]
@@ -510,15 +478,12 @@ func _paint_corridor(floor_l: TileMapLayer, wall_l: TileMapLayer, liquid_l: Tile
 			"water": liquid_tiles = [Vector2i(2, 17), Vector2i(2, 18)]
 
 	if direction == "east":
-		var from_exit = RoomShapeGenerator.get_exit_point(from_mask, fw, fh, "east")
-		var to_exit = RoomShapeGenerator.get_exit_point(to_mask, tw, th, "west")
 		var start_x = from_origin.x + fw
 		var end_x = to_origin.x
 		var from_mid_y = from_origin.y + from_exit.y
 		var to_mid_y = to_origin.y + to_exit.y
 
 		for x in range(start_x, end_x):
-			var t = 0.0
 			if end_x > start_x:
 				t = float(x - start_x) / float(end_x - start_x)
 			var mid_y = int(lerp(float(from_mid_y), float(to_mid_y), t))

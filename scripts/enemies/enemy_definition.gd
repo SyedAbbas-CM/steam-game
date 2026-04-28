@@ -13,7 +13,10 @@ enum AttackType {
 	BOMB_TOSS, CARPET_BOMB, FIRE_RAIN, CLUSTER_BOMB, MINE_DROP,
 	BARRIER_WALL, PULL_SHOT, PUSH_WAVE,
 	VORTEX, RING_PULSE, ARTILLERY, WHIP_LASH, POISON_CLOUD, DASH_STRIKE,
-	LANCE_THRUST, SHIELD_WALL, CURSE_BOLT, SUMMON_WALL, LEAPING_SLAM, ARROW_VOLLEY
+	LANCE_THRUST, SHIELD_WALL, CURSE_BOLT, SUMMON_WALL, LEAPING_SLAM, ARROW_VOLLEY,
+	# Real telegraphed melee attacks (no bullets)
+	SWORD_SLASH, SPEAR_LUNGE, CHARGE_BULL, CLEAVE_COMBO, WHIRLWIND,
+	GROUND_POUND, TAIL_WHIP, SHIELD_BASH, GRAB_THROW, STOMP_WAVE
 }
 
 enum SizeClass { NORMAL, LARGE, BOSS }
@@ -34,6 +37,8 @@ enum SizeClass { NORMAL, LARGE, BOSS }
 @export_group("Attack")
 @export var attack_type: AttackType = AttackType.RANGED
 @export var attack_damage: int = 1
+@export var damage_type: CombatTypes.DamageType = CombatTypes.DamageType.NORMAL
+@export var armor_type: CombatTypes.ArmorType = CombatTypes.ArmorType.UNARMORED
 @export var attack_speed: float = 1.5
 @export var bullet_speed: float = 80.0
 @export var bullet_count: int = 1
@@ -47,6 +52,9 @@ enum SizeClass { NORMAL, LARGE, BOSS }
 @export var ignores_terrain: bool = false  # flying/ghost
 @export var knockback_resistance: float = 0.0  # 0=normal, 1=immovable
 @export var status_immunities: Array[String] = []
+@export var movement_pattern: MovementPattern  ## null = use legacy hardcoded movement
+@export var attack_modifier: AttackModifier  ## null = no modification to bullets
+@export var attack_slots: Array = []  ## Array of AttackSlot; empty = legacy
 
 @export_group("Special")
 @export var summon_count: int = 2
@@ -88,6 +96,7 @@ enum SizeClass { NORMAL, LARGE, BOSS }
 @export var sprite_color: Color = Color.WHITE
 @export var use_loy_sprite: bool = false  # true = use LoY char sprite sheet
 @export var loy_tile_index: int = -1  # LoY tile index for chars.png/chars2.png
+@export var anim_data: EnemyAnimData  # null = static sprite (default)
 
 @export_group("Quest")
 @export var quest_kill_name: String = ""  # If set, on_enemy_killed uses this name instead of enemy_name

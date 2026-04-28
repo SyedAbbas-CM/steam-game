@@ -27,14 +27,19 @@ func resolve(units: BattleUnitSystem, _dt: float, blocked_tiles: Dictionary = {}
 				var ny := dy / dist
 				var overlap := min_dist - dist
 
+				# Mass-based separation — grouped infantry are heavier
+				var eff_mass_i := _effective_mass(units, i)
+				var eff_mass_j := _effective_mass(units, j)
+				var total_mass := eff_mass_i + eff_mass_j
+				var ratio_i := eff_mass_j / total_mass
+				var ratio_j := eff_mass_i / total_mass
+
+				var sep := overlap * 0.95
+
 				var same_faction := units.faction[i] == units.faction[j]
 
 				if same_faction:
 					# Soft separation only — no velocity response, no blocking behaviors
-					var total_mass := units.mass[i] + units.mass[j]
-					var ratio_i := units.mass[j] / total_mass
-					var ratio_j := units.mass[i] / total_mass
-					var sep := overlap * 0.35
 					units.x[i] -= nx * sep * ratio_i
 					units.y[i] -= ny * sep * ratio_i
 					units.x[j] += nx * sep * ratio_j
@@ -50,13 +55,6 @@ func resolve(units: BattleUnitSystem, _dt: float, blocked_tiles: Dictionary = {}
 					_apply_impact_damage(units, i, j, nx, ny)
 					_apply_charge_impact(units, i, j, nx, ny)
 					_apply_charge_impact(units, j, i, -nx, -ny)
-
-				# Mass-based separation
-				var total_mass := units.mass[i] + units.mass[j]
-				var ratio_i := units.mass[j] / total_mass
-				var ratio_j := units.mass[i] / total_mass
-
-				var sep := overlap * 0.95
 
 				# Save positions before separation
 				var prev_ix := units.x[i]
@@ -129,6 +127,21 @@ func _apply_charge_impact(units: BattleUnitSystem, charger: int, target: int, nx
 		return  # Not moving fast enough to charge
 
 	var charge_kb: float = BattleUnitSystem.UNIT_STATS["charge_knockback"][t]
+	# Cavalry charge momentum: nearby charging cavalry add to impact force
+	# Each nearby ally cavalry adds +10% charge power (additive, capped at +80%)
+	var nearby_cav := units.get_nearby(units.x[charger], units.y[charger], 80.0)
+	var cav_bonus := 0.0
+	for k in nearby_cav:
+		if k == charger or units.alive[k] == 0 or units.faction[k] != units.faction[charger]:
+			continue
+		if not _is_cavalry(units.unit_type[k]):
+			continue
+		var k_spd := sqrt(units.vx[k] * units.vx[k] + units.vy[k] * units.vy[k])
+		if k_spd > units.max_speed[k] * 0.4:  # only count cavalry that are also charging
+			cav_bonus += 0.10
+	cav_bonus = minf(0.80, cav_bonus)
+	charge_kb *= (1.0 + cav_bonus)
+
 	var kb_target := 1.0 - _effective_kb_resist(units, target)
 	var knockback := charge_kb * speed_ratio * kb_target
 
@@ -136,18 +149,17 @@ func _apply_charge_impact(units: BattleUnitSystem, charger: int, target: int, nx
 		# Apply knockback velocity to target
 		units.vx[target] += nx * knockback
 		units.vy[target] += ny * knockback
-		# Charge damage (one-time)
+		# Charge damage (one-time) — boosted by nearby cavalry momentum
 		var charge_bonus: float = BattleUnitSystem.UNIT_STATS["charge_bonus"][t]
-		var charge_dmg: float = float(BattleUnitSystem.UNIT_STATS["attack_damage"][t]) * charge_bonus * speed_ratio
+		var charge_dmg: float = float(BattleUnitSystem.UNIT_STATS["attack_damage"][t]) * charge_bonus * speed_ratio * (1.0 + cav_bonus)
 		# Anti-cavalry defense — infantry types resist charges
 		var target_type := units.unit_type[target]
+		var anti_cav: float = BattleUnitSystem.UNIT_STATS["anti_cav_bonus"][target_type]
 		if target_type == BattleUnitSystem.UnitType.HEAVY_INFANTRY:
-			var anti_cav: float = BattleUnitSystem.UNIT_STATS["anti_cav_bonus"][target_type]
 			if units.ability_active[target] == 1:
 				anti_cav *= 2.0
 			charge_dmg /= anti_cav
 		elif target_type == BattleUnitSystem.UnitType.INFANTRY:
-			var anti_cav: float = BattleUnitSystem.UNIT_STATS["anti_cav_bonus"][target_type]
 			if units.ability_active[target] == 1:
 				anti_cav *= 1.5
 			if units.neighbor_count[target] >= 3:
@@ -155,7 +167,6 @@ func _apply_charge_impact(units: BattleUnitSystem, charger: int, target: int, nx
 			charge_dmg /= anti_cav
 		elif target_type == BattleUnitSystem.UnitType.SPEAR:
 			# Spear infantry: THE anti-cavalry unit
-			var anti_cav: float = BattleUnitSystem.UNIT_STATS["anti_cav_bonus"][target_type]
 			if units.ability_active[target] == 1:
 				# SPEAR_BRACE: multiplier + reflected damage + stun charger
 				anti_cav *= 2.0
@@ -200,43 +211,11 @@ func _apply_charge_impact(units: BattleUnitSystem, charger: int, target: int, nx
 		# Trigger FEAR PULSE — cavalry charge scatters weak infantry nearby
 		_trigger_fear_pulse(units, charger, units.x[target], units.y[target])
 
-func _is_in_blocked(px: float, py: float, radius: float, blocked_tiles: Dictionary) -> bool:
-	## Check if position overlaps any blocked tile (center + 4 edge + 4 diagonal offsets)
-	var half_r := radius * 0.5
-	for off in [Vector2(0, 0), Vector2(half_r, 0), Vector2(-half_r, 0), Vector2(0, half_r), Vector2(0, -half_r),
-				Vector2(half_r, half_r), Vector2(-half_r, half_r), Vector2(half_r, -half_r), Vector2(-half_r, -half_r)]:
-		var tx := int(floor((px + off.x) / TILE_SIZE))
-		var ty := int(floor((py + off.y) / TILE_SIZE))
-		if blocked_tiles.has(Vector2i(tx, ty)):
-			return true
-	return false
-
-func _effective_kb_resist(units: BattleUnitSystem, i: int) -> float:
-	## Infantry/heavy_inf/spear in groups get massive knockback resist — they brace together.
-	var base := units.knockback_resist[i]
-	var t := units.unit_type[i]
-	if t == BattleUnitSystem.UnitType.INFANTRY:
-		var group_bonus := minf(0.64, float(units.neighbor_count[i]) * 0.08)
-		if units.ability_active[i] == 1:
-			group_bonus += 0.25
-		base = minf(0.98, base + group_bonus)
-	elif t == BattleUnitSystem.UnitType.HEAVY_INFANTRY:
-		var group_bonus := minf(0.06, float(units.neighbor_count[i]) * 0.015)
-		if units.ability_active[i] == 1:
-			group_bonus += 0.04
-		base = minf(0.99, base + group_bonus)
-	elif t == BattleUnitSystem.UnitType.SPEAR:
-		var group_bonus := minf(0.50, float(units.neighbor_count[i]) * 0.07)
-		if units.ability_active[i] == 1:
-			group_bonus += 0.20
-		base = minf(0.97, base + group_bonus)
-	return base
-
 func _trigger_fear_pulse(units: BattleUnitSystem, charger: int, impact_x: float, impact_y: float) -> void:
 	## Cavalry charge creates a fear pulse that can scatter weak infantry nearby.
-	var nearby := units.get_nearby(impact_x, impact_y, 120.0)
 	var charger_fac := units.faction[charger]
 	var group_counts: Dictionary = {}  # group_id -> {total, scattered}
+	var nearby := units.get_nearby(impact_x, impact_y, 150.0)
 
 	for j in nearby:
 		if units.alive[j] == 0 or units.faction[j] == charger_fac:
@@ -286,7 +265,9 @@ func _trigger_fear_pulse(units: BattleUnitSystem, charger: int, impact_x: float,
 		units.scatter_dir_y[j] = sin(flee_angle)
 
 		# Track for group morale cascade
-		var gid := units.saved_group_id[j]
+		var gid := units.group_id[j]
+		if gid < 0:
+			gid = units.saved_group_id[j]
 		if gid >= 0:
 			if not group_counts.has(gid):
 				group_counts[gid] = {"total": 0, "scattered": 0}
@@ -311,6 +292,56 @@ func _trigger_fear_pulse(units: BattleUnitSystem, charger: int, impact_x: float,
 					continue
 				if (units.group_id[j] == gid or units.saved_group_id[j] == gid) and units.scatter_time[j] <= 0.0:
 					units.morale[j] = maxf(0.0, units.morale[j] - 15.0)
+
+func _is_in_blocked(px: float, py: float, radius: float, blocked_tiles: Dictionary) -> bool:
+	## Check if position overlaps any blocked tile (center + 4 edge + 4 diagonal offsets)
+	var half_r := radius * 0.5
+	for off in [Vector2(0, 0), Vector2(half_r, 0), Vector2(-half_r, 0), Vector2(0, half_r), Vector2(0, -half_r),
+				Vector2(half_r, half_r), Vector2(-half_r, half_r), Vector2(half_r, -half_r), Vector2(-half_r, -half_r)]:
+		var tx := int(floor((px + off.x) / TILE_SIZE))
+		var ty := int(floor((py + off.y) / TILE_SIZE))
+		if blocked_tiles.has(Vector2i(tx, ty)):
+			return true
+	return false
+
+func _effective_kb_resist(units: BattleUnitSystem, i: int) -> float:
+	## Infantry/heavy_inf in groups get massive knockback resist — they brace together.
+	var base := units.knockback_resist[i]
+	var t := units.unit_type[i]
+	if t == BattleUnitSystem.UnitType.INFANTRY:
+		# Each nearby ally adds +0.08 resist, up to 8 neighbors = +0.64
+		var group_bonus := minf(0.64, float(units.neighbor_count[i]) * 0.08)
+		# Shield wall ability: near-immovable
+		if units.ability_active[i] == 1:
+			group_bonus += 0.25
+		base = minf(0.98, base + group_bonus)
+	elif t == BattleUnitSystem.UnitType.HEAVY_INFANTRY:
+		# Already high resist, but group adds a bit more
+		var group_bonus := minf(0.06, float(units.neighbor_count[i]) * 0.015)
+		if units.ability_active[i] == 1:
+			group_bonus += 0.04
+		base = minf(0.99, base + group_bonus)
+	return base
+
+func _effective_mass(units: BattleUnitSystem, i: int) -> float:
+	## Grouped infantry/spear are physically heavier — bracing together.
+	## Cavalry charging together also add collective mass.
+	var base_mass: float = units.mass[i]
+	var t := units.unit_type[i]
+	var n := units.neighbor_count[i]
+	if _is_infantry(t) and n >= 2:
+		# Each neighbor adds 50% of own mass, with 5% superlinear bonus per neighbor
+		var brace := 1.0 + float(mini(n, 10)) * 0.05
+		base_mass += float(n) * units.mass[i] * 0.5 * brace
+	elif _is_cavalry(t) and n >= 1:
+		# Cavalry mass grows slightly with nearby cavalry (wedge formation weight)
+		var cav_neighbors := 0
+		var nearby := units.get_nearby(units.x[i], units.y[i], 60.0)
+		for k in nearby:
+			if k != i and units.alive[k] == 1 and units.faction[k] == units.faction[i] and _is_cavalry(units.unit_type[k]):
+				cav_neighbors += 1
+		base_mass += float(mini(cav_neighbors, 5)) * units.mass[i] * 0.15
+	return base_mass
 
 func _is_cavalry(t: int) -> bool:
 	return t == BattleUnitSystem.UnitType.CAVALRY or t == BattleUnitSystem.UnitType.HEAVY_CAVALRY or t == BattleUnitSystem.UnitType.HORSE_ARCHER

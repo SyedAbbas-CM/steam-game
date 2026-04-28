@@ -29,7 +29,7 @@ z_index = 2
 
 [node name="Decorations" type="TileMapLayer" parent="DungeonManager"]
 tile_set = ExtResource("6_tileset")
-z_index = 3
+z_index = 0
 
 [node name="RoomTriggers" type="Node2D" parent="DungeonManager"]
 

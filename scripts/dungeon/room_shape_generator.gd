@@ -29,6 +29,8 @@ static func generate_shape(shape: RoomData.RoomShape) -> Dictionary:
 			return _rect(randi_range(7, 9), randi_range(7, 9))
 		RoomData.RoomShape.ARENA:
 			return _rect(randi_range(23, 25), randi_range(19, 23))
+		RoomData.RoomShape.GRAND_HALL:
+			return _rect(randi_range(35, 39), randi_range(29, 33))
 		_:
 			return _rect(randi_range(13, 19), randi_range(11, 17))
 
@@ -44,11 +46,11 @@ static func _rect(w: int, h: int) -> Dictionary:
 
 # Circle shape — elliptical floor within bounding box
 static func _circle(w: int, h: int) -> Dictionary:
-	var mask: Array = []
-	var cx = w / 2.0
-	var cy = h / 2.0
 	var rx = (w - 2) / 2.0  # leave 1-tile border
 	var ry = (h - 2) / 2.0
+	var cx = (w - 1) / 2.0
+	var cy = (h - 1) / 2.0
+	var mask: Array = []
 	for y in range(h):
 		var row: Array = []
 		for x in range(w):
@@ -62,11 +64,11 @@ static func _circle(w: int, h: int) -> Dictionary:
 # top_cut: which vertical half is cut (true=cut top portion, false=cut bottom)
 # right_cut: which horizontal half is cut (true=cut right, false=cut left)
 static func _l_shape(top_cut: bool, right_cut: bool) -> Dictionary:
-	var w = randi_range(17, 23)
-	var h = randi_range(15, 21)
-	var mask: Array = []
+	var w = 19
+	var h = 17
 	var cut_w = 10  # half the room width for the cutout
 	var cut_h = 9   # half the room height for the cutout
+	var mask: Array = []
 
 	for y in range(h):
 		var row: Array = []

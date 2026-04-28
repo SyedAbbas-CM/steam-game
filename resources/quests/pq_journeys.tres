@@ -6,13 +6,13 @@
 script = ExtResource("1")
 id = "pq_journeys"
 title = "The Pilgrim's Path"
-summary = "Muraad asks you to walk the four journeys: visit the The Barrows, then the Farmlands, return to Aria, and finally speak to someone in town."
+summary = "Muraad asks you to walk the four journeys: visit the Graveyard, then the Farmlands, return to Aria, and finally speak to someone in town."
 level = 7
-location = "haven"
+location = "aria"
 prerequisite = "pq_cave"
 properties = [{
 "index": 0,
-"name": "The Barrows Visited",
+"name": "Graveyard Visited",
 "type": "yesno"
 }, {
 "index": 1,
@@ -38,7 +38,7 @@ start_script = [{
 "cmd": "showDialog",
 "name": "Muraad",
 "portrait": 165,
-"text": "First, visit the The Barrows north of town — face what ends. Then go to the Farmlands east of town — see what grows. Return here, and I'll tell you the rest.",
+"text": "First, visit the Graveyard north of town — face what ends. Then go to the Farmlands east of town — see what grows. Return here, and I'll tell you the rest.",
 "options": [{
 "name": "I'll walk",
 "script": [{
@@ -53,7 +53,7 @@ start_script = [{
 }]
 }]
 events = [{
-"param": "barrows",
+"param": "aria-g",
 "script": [{
 "attribute": "session-pq_journeys-0",
 "cmd": "if",
@@ -76,7 +76,7 @@ events = [{
 }],
 "type": "zone_enter"
 }, {
-"param": "duskfarm",
+"param": "farm",
 "script": [{
 "attribute": "session-pq_journeys-0",
 "cmd": "if",
@@ -105,7 +105,7 @@ events = [{
 }],
 "type": "zone_enter"
 }, {
-"param": "haven",
+"param": "aria",
 "script": [{
 "attribute": "session-pq_journeys-1",
 "cmd": "if",
@@ -233,7 +233,7 @@ events = [{
 }],
 "type": "activate"
 }, {
-"param": "Corvus",
+"param": "Yoregot",
 "script": [{
 "attribute": "session-pq_journeys-2",
 "cmd": "if",

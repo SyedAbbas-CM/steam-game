@@ -57,7 +57,7 @@ func _physics_process(_delta: float) -> void:
 
 func _do_follow() -> void:
 	var target_pos = _get_follow_position()
-	var dir = (target_pos - global_position)
+	var dir = target_pos - owner.global_position
 
 	if dir.length() > 3.0:
 		velocity = dir.normalized() * definition.move_speed
@@ -89,6 +89,7 @@ func _check_for_targets() -> void:
 		current_state = State.ATTACKING
 
 func _do_attack() -> void:
+	var dir: Vector2 = (target.global_position - global_position).normalized() if is_instance_valid(target) else Vector2.ZERO
 	if not is_instance_valid(target):
 		target = null
 		current_state = State.FOLLOWING
@@ -103,7 +104,6 @@ func _do_attack() -> void:
 
 	# Move to attack range
 	if dist > definition.attack_range * 0.8:
-		var dir = (target.global_position - global_position).normalized()
 		velocity = dir * definition.move_speed * 0.7
 	else:
 		velocity = Vector2.ZERO
@@ -119,12 +119,13 @@ func _do_attack() -> void:
 		sprite.flip_h = false
 
 func _do_retreat() -> void:
-	var dir = (player.global_position - global_position).normalized()
+	var dir = (player.global_position - global_position).normalized() if is_instance_valid(player) else Vector2.ZERO
 	velocity = dir * definition.move_speed
 	if global_position.distance_to(player.global_position) < definition.follow_distance:
 		current_state = State.FOLLOWING
 
 func _shoot_at(enemy: Node2D) -> void:
+	var sfx = get_node_or_null("/root/SFXManager")
 	can_shoot = false
 	shoot_timer.start()
 
@@ -140,7 +141,6 @@ func _shoot_at(enemy: Node2D) -> void:
 	bullet.speed = 120.0
 	bullet.damage = definition.damage
 	bullets_container.add_child(bullet)
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("shoot_a", -8.0, 0.15)
 

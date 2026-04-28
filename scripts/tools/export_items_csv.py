@@ -100,6 +100,8 @@ def main():
             'bullet_sprite_index': get_field(content, 'bullet_sprite_index') or '',
             'weapon_range': get_field(content, 'weapon_range') or '',
             'weapon_type': get_field(content, 'weapon_type').strip('"') if get_field(content, 'weapon_type') else '',
+            'weapon_type': get_field(content, 'weapon_type').strip('"') if get_field(content, 'weapon_type') else '',
+            'weapon_type': get_field(content, 'weapon_type').strip('"') if get_field(content, 'weapon_type') else '',
             'ability_id': get_field(content, 'ability_id').strip('"') if get_field(content, 'ability_id') else '',
             'heal_hp': get_field(content, 'heal_hp') or '',
             'heal_mp': get_field(content, 'heal_mp') or '',

@@ -11,12 +11,14 @@ const DAMAGE_INTERVAL = 0.5
 const POISON_STATUS_DURATION = 4.0
 const ENEMY_DAMAGE_MULT = 2
 
+var player: Node2D
 var _cloud: Node2D
 var _cloud_timer: float = 0.0
 var _damage_timer: float = 0.0
 
 func _ready() -> void:
 	super._ready()
+	player = get_tree().get_first_node_in_group("player")
 
 func get_damage() -> int:
 	return 1
@@ -32,7 +34,6 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if not _triggered:
-		var player = _find_player()
 		if player:
 			if global_position.distance_squared_to(player.global_position) <= PROXIMITY_RANGE_SQ:
 				_triggered = true
@@ -54,7 +55,7 @@ func _physics_process(delta: float) -> void:
 			var player = _find_player()
 			if player and cloud_pos.distance_to(player.global_position) <= CLOUD_RADIUS:
 				if player.has_method("take_damage"):
-					player.take_damage(damage)
+					player.take_damage(damage, Vector2.INF, false, false, CombatTypes.DamageType.TRUE)
 				if "status_manager" in player and player.status_manager:
 					player.status_manager.apply_status("POISONED", POISON_STATUS_DURATION)
 
@@ -62,7 +63,7 @@ func _physics_process(delta: float) -> void:
 			for enemy in get_tree().get_nodes_in_group("enemy"):
 				if is_instance_valid(enemy) and cloud_pos.distance_to(enemy.global_position) <= CLOUD_RADIUS:
 					if enemy.has_method("take_damage"):
-						enemy.take_damage(damage * ENEMY_DAMAGE_MULT, false)
+						enemy.take_damage(damage * ENEMY_DAMAGE_MULT, false, CombatTypes.DamageType.TRUE)
 					if randf() < 0.15 and enemy.has_method("apply_status"):
 						enemy.apply_status("CONFUSED", 3.0)
 

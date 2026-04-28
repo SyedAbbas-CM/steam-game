@@ -76,7 +76,6 @@ func _init() -> void:
 	var old_dir = DirAccess.open(chunk_dir)
 	if old_dir:
 		old_dir.list_dir_begin()
-		var fname = old_dir.get_next()
 		while fname != "":
 			if fname.begins_with("chunk_") and fname.ends_with(".tres"):
 				old_dir.remove(fname)

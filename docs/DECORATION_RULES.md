@@ -240,6 +240,36 @@ Exception: `WALKABLE_DECO_OVERRIDES` (carpets, trap tracks) skip collision.
 
 ---
 
+## Collideable vs Non-Collideable Decorations
+
+In the dungeon system, `SOLID_DECO_ROWS = [0, 1, 2, 3]` — any source 1 tile in atlas rows 0-3 generates a collision shape (blocks player/enemy movement). Tiles in rows 4+ are non-collideable floor overlays.
+
+Exception: tiles in `WALKABLE_DECO_OVERRIDES` are exempt from collision even if in rows 0-3 (carpets, track tiles).
+
+### Collideable (rows 0-3) — Block movement, breakable by boss smash
+
+| Row | Sprites |
+|-----|---------|
+| 0 | Barrels (0,0)(1,0), Stone block (2,0), Chests (3,0)(4,0), Furnaces (5,0)(6,0), Gold piles (7,0)(8,0), Bed (9,0)(10,0) |
+| 1 | Chairs (0,1)(1,1), Pillars (2,1), Lamps (3,1)(4,1), Tables (5,1)(6,1), Bookshelves (7,1)(8,1), Stained glass (9,1)(10,1), Wall candle (11,1) |
+| 2 | Pots (0,2)(1,2), Bones (2,2)(3,2), Anvil (4,2) — **EXCEPT** carpet vertical (16,2)(17,2)(18,2) which are walkable |
+| 3 | Crates (2,3)(3,3) — **EXCEPT** carpet horizontal (12,3)(13,3)(14,3) and connector (15,3)(16,3)(17,3) which are walkable |
+
+### Non-Collideable (rows 4+) — Walkable floor overlays
+
+| Row | Sprites |
+|-----|---------|
+| 4 | Rubble/cobwebs (0,4)(1,4)(2,4) |
+| 5 | Moss (0,5)(1,5) |
+| 6 | Skulls (0,6)(1,6)(9,6), Blood splatters (10,6)-(15,6), Wardrobes (16,6)(17,6), Throne (18,6) |
+| 7 | Candle stand (0,7), Potion cabinet (1,7), Weapon displays (2,7)(3,7)(4,7), Book stand (9,7), Floor candles (12,7)(13,7) |
+| 8 | Track tiles (0,8)(1,8), Saw blade (3,8), Electric (4,8), Explosive barrel (6,8), Bell (9,8), Braziers (10,8)(11,8) |
+
+**Important**: Row 6-8 items like throne, wardrobes, potion cabinet, and weapon displays are currently NON-collideable by default. If you want specific items to block movement, add their atlas coords to `SOLID_DECO_ROWS` or handle them specially in `_generate_deco_collisions()`.
+
+### Carpet Tiles (always walkable)
+Carpet tiles are in rows 2-3 (normally solid) but are listed in `WALKABLE_DECO_OVERRIDES`, so they never generate collision. Paint carpet on the **floor layer** (source 1) so it renders underneath furniture on the deco layer.
+
 ## What NOT to Do
 
 - Don't scatter items without a theme reason

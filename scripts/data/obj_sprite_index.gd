@@ -210,7 +210,7 @@ static func get_region(index: int) -> Rect2:
 
 ## Mapping of weapon name keywords to bullet sprite indices
 static func get_bullet_sprite_for_weapon(weapon_name: String) -> int:
-	var lower = weapon_name.to_lower()
+	var lower := weapon_name.to_lower()
 	# Bows → arrows
 	if "bow" in lower or "crossbow" in lower:
 		return ARROW_RIGHT

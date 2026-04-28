@@ -8,7 +8,7 @@ id = "pq_mean"
 title = "The Balance"
 summary = "Telos wants you to kill exactly 5 Skeletons in the dungeon. Not 4, not 6. Five. Discipline is the foundation."
 level = 4
-location = "haven"
+location = "aria"
 properties = [{
 "index": 0,
 "name": "Skeletons Killed",
@@ -47,7 +47,7 @@ events = [{
 }],
 "type": "kill"
 }, {
-"param": "haven",
+"param": "aria",
 "script": [{
 "attribute": "session-pq_mean-0",
 "cmd": "if",

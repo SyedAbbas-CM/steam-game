@@ -11,13 +11,13 @@ static func generate_liquid_fill(floor_mask: Array, intensity: float, seed_val: 
 	if h == 0:
 		return []
 	var w = floor_mask[0].size()
-
 	var noise = FastNoiseLite.new()
+	var liquid_mask: Array = []
+
 	noise.seed = seed_val
 	noise.frequency = 0.15
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 
-	var liquid_mask: Array = []
 	for y in range(h):
 		var row: Array = []
 		for x in range(w):

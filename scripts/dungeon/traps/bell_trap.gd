@@ -32,7 +32,6 @@ func _on_bullet_hit(area: Node2D) -> void:
 	if area is Area2D and area.collision_layer & 4:
 		_hp -= 1
 		_play_sfx("click", -4.0, 0.1)
-		var vfx = get_node_or_null("/root/VFXManager")
 		if vfx:
 			vfx.hit_spark(global_position, Color(0.8, 0.7, 0.3))
 		if _hp <= 0:

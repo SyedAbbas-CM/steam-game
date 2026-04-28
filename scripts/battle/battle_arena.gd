@@ -75,6 +75,7 @@ var fences_layer: TileMapLayer
 # -- State --
 var _blocked_tiles: Dictionary = {}  # Vector2i -> true
 var battle_time: float = 0.0
+
 var _deferred_visual_data: Array = []  # [[TileMapLayer, PackedInt32Array], ...]
 var _deferred_load_index: int = 0
 var speed_multiplier: float = 1.0
@@ -89,8 +90,8 @@ var _blue_commanders: PackedInt32Array = PackedInt32Array()  # unit indices of B
 var _commander_switch_cooldown: float = 0.0
 
 # Wave spawning
-const WAVE_THRESHOLD := 60
-const WAVE_SIZE := 30
+const WAVE_THRESHOLD := 100
+const WAVE_SIZE := 80
 const WAVE_INTERVAL := 30.0
 const MAX_RED_WAVES := 2  # Cap enemy reinforcements to prevent endless battles
 var _pending_blue_waves: Array = []  # Array of army arrays
@@ -436,9 +437,9 @@ func _finalize_battle_init() -> void:
 		gm._hide_loading_screen()
 
 func _extract_blocked_from_data(layer_name: String, data: PackedInt32Array) -> int:
+	var added := 0
 	var i := 0
 	var count := data.size()
-	var added := 0
 	var rx := tile_region.position.x - 2
 	var rex := tile_region.end.x + 2
 	var ry := tile_region.position.y - 2
@@ -477,10 +478,10 @@ func _build_blocking_map() -> void:
 
 func _add_boundary_walls() -> void:
 	## Create 4 thick invisible walls around the arena perimeter
-	var wall_thickness := TILE_SIZE * 3.0
 	var ox: float = tile_region.position.x * TILE_SIZE
 	var oy: float = tile_region.position.y * TILE_SIZE
 	var w: float = tile_region.size.x * TILE_SIZE
+	var wall_thickness := TILE_SIZE * 3.0
 	var h: float = tile_region.size.y * TILE_SIZE
 	# Top wall
 	var s_top := CollisionShape2D.new()
@@ -665,13 +666,13 @@ func _split_into_waves(army: Array, wave_size: int) -> Array:
 		if remaining_total <= 0:
 			break
 
-		var this_wave_size := mini(wave_size, remaining_total)
 		var wave: Array = []
+		var this_wave_size := mini(wave_size, remaining_total)
 		for t in remaining_counts:
 			if remaining_counts[t] <= 0:
 				continue
 			var proportion: float = float(remaining_counts[t]) / float(remaining_total)
-			var count := maxi(1, int(this_wave_size * proportion))
+			var count := maxi(1, int(proportion * this_wave_size))
 			count = mini(count, remaining_counts[t])
 			remaining_counts[t] -= count
 			wave.append({"type": t, "count": count, "formation": type_info[t]["formation"]})
@@ -729,9 +730,8 @@ func _spawn_faction_with_divisions(army: Array, divisions: Array, fac: int, rect
 	else:
 		valid_pos.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
 
-	var pos_idx := 0
-
 	# Spawn division groups first
+	var pos_idx := 0
 	for div in divisions:
 		var div_name: String = div.get("name", "Division")
 		for u in div.get("units", []):
@@ -741,27 +741,27 @@ func _spawn_faction_with_divisions(army: Array, divisions: Array, fac: int, rect
 				continue
 			var u_type: int = type_map[type_name]
 			var formation: int = formation_map.get(type_name, BattleUnitSystem.FormationType.LINE)
-			var group_name := "%s_%s" % [div_name, UNIT_NAMES_SHORT.get(u_type, "unit")]
-			var group := commander.create_group(group_name, fac, u_type, formation, true)
+			var group_name := "%s_%s" % [div_name, type_name]
+			var group := commander.create_group(group_name, fac, formation)
 			var div_stat_mult := _get_stat_mult(fac, u_type)
 			for _i in count:
 				if pos_idx >= valid_pos.size():
 					break
 				var pos: Vector2 = valid_pos[pos_idx]
 				pos_idx += 1
-				var idx := units.spawn(pos.x + randf_range(-4, 4), pos.y + randf_range(-4, 4), u_type, fac, group.id, div_stat_mult)
+				var idx := units.spawn(pos.x, pos.y, u_type, fac, group.id, div_stat_mult)
 				if _i == 0 and idx >= 0:
 					_make_commander(idx)
 
 	# Spawn remaining (unassigned) units as default groups
-	var spawn_order: Array[int] = [
+	var type_to_entry := {}
+	var spawn_order := [
 		BattleUnitSystem.UnitType.INFANTRY, BattleUnitSystem.UnitType.HEAVY_INFANTRY,
 		BattleUnitSystem.UnitType.SPEAR,
 		BattleUnitSystem.UnitType.CAVALRY, BattleUnitSystem.UnitType.HEAVY_CAVALRY,
 		BattleUnitSystem.UnitType.ARCHER, BattleUnitSystem.UnitType.RANGED_INFANTRY,
 		BattleUnitSystem.UnitType.MAGE, BattleUnitSystem.UnitType.HORSE_ARCHER,
 	]
-	var type_to_entry: Dictionary = {}
 	for entry in army:
 		type_to_entry[entry.get("type", 0)] = entry
 
@@ -771,18 +771,18 @@ func _spawn_faction_with_divisions(army: Array, divisions: Array, fac: int, rect
 		var entry: Dictionary = type_to_entry[u_type]
 		var total_count: int = entry.get("count", 0)
 		var assigned: int = div_assigned.get(u_type, 0)
-		var remaining := maxi(0, total_count - assigned)
+		var remaining := total_count - assigned
 		if remaining <= 0:
 			continue
 		var group_name := "%s_%s" % [BattleUnitSystem.UnitType.keys()[u_type], "BLUE" if fac == BattleUnitSystem.Faction.BLUE else "RED"]
-		var group := commander.create_group(group_name, fac, u_type, entry.get("formation", 0), true)
+		var group := commander.create_group(group_name, fac, entry.get("formation", BattleUnitSystem.FormationType.LINE))
 		var rem_stat_mult := _get_stat_mult(fac, u_type)
 		for _i in remaining:
 			if pos_idx >= valid_pos.size():
 				break
 			var pos: Vector2 = valid_pos[pos_idx]
 			pos_idx += 1
-			var idx := units.spawn(pos.x + randf_range(-4, 4), pos.y + randf_range(-4, 4), u_type, fac, group.id, rem_stat_mult)
+			var idx := units.spawn(pos.x, pos.y, u_type, fac, group.id, rem_stat_mult)
 			if _i == 0 and idx >= 0:
 				_make_commander(idx)
 
@@ -815,7 +815,7 @@ func _get_veteran_ranks_for_type(fac: int, u_type: int, count: int) -> Array[int
 	if not gm or not gm.save_data:
 		return ranks
 	var veterans: Dictionary = gm.save_data.army_state.get("veterans", {})
-	var type_names := ["infantry", "heavy_infantry", "cavalry", "heavy_cavalry", "archer", "mage"]
+	var type_names := ["infantry", "heavy_infantry", "cavalry", "heavy_cavalry", "archer", "mage", "spear", "horse_archer", "ranged_infantry"]
 	if u_type < 0 or u_type >= type_names.size():
 		return ranks
 	var tname: String = type_names[u_type]
@@ -862,7 +862,7 @@ func _get_enemy_scaling_mult() -> float:
 	var gm = get_node_or_null("/root/GameManager")
 	if not gm:
 		return 1.0
-	var cfg := _config
+	var cfg: Dictionary = gm.battle_config if gm.get("battle_config") else {}
 	var tier: int = cfg.get("enemy_tier", 1)
 	var zone_count: int = cfg.get("enemy_zone_count", 0)
 	var tier_mult := 1.0 + (tier - 1) * 0.15  # tier 3 = 1.3x
@@ -963,10 +963,16 @@ func _spawn_faction_in_rect(army: Array, fac: int, rect: Rect2) -> void:
 		BattleUnitSystem.UnitType.HORSE_ARCHER,
 	]
 
-	# Build a lookup: unit_type → army entry
+	# Build a lookup: unit_type → army entry.
+	# Multiple entries of the same type are merged (sum counts, keep first formation).
 	var type_to_entry: Dictionary = {}
 	for entry in army:
-		type_to_entry[entry.get("type", 0)] = entry
+		var t: int = entry.get("type", 0)
+		var c: int = int(entry.get("count", 0))
+		if type_to_entry.has(t):
+			type_to_entry[t]["count"] = int(type_to_entry[t]["count"]) + c
+		else:
+			type_to_entry[t] = {"count": c, "formation": entry.get("formation", BattleUnitSystem.FormationType.LINE)}
 
 	var pos_idx := 0
 	for u_type in spawn_order:
@@ -977,13 +983,13 @@ func _spawn_faction_in_rect(army: Array, fac: int, rect: Rect2) -> void:
 		var formation: int = entry.get("formation", BattleUnitSystem.FormationType.LINE)
 
 		var group_name := "%s_%s" % [BattleUnitSystem.UnitType.keys()[u_type], "BLUE" if fac == BattleUnitSystem.Faction.BLUE else "RED"]
-		var group := commander.create_group(group_name, fac, u_type, formation, true)
 
 		# Get stat multiplier for this faction (enemy scaling)
 		var stat_mult := _get_stat_mult(fac, u_type)
 		# Get veteran ranks for BLUE units
 		var vet_ranks := _get_veteran_ranks_for_type(fac, u_type, u_count)
 
+		var group := commander.create_group(group_name, fac, formation)
 		for ui in u_count:
 			if pos_idx >= valid_pos.size():
 				push_warning("BattleArena: Ran out of valid spawn positions for %s" % group_name)
@@ -991,7 +997,7 @@ func _spawn_faction_in_rect(army: Array, fac: int, rect: Rect2) -> void:
 			var pos: Vector2 = valid_pos[pos_idx]
 			pos_idx += 1
 			var vet_rank: int = vet_ranks[ui] if ui < vet_ranks.size() else 0
-			var idx := units.spawn(pos.x + randf_range(-4, 4), pos.y + randf_range(-4, 4), u_type, fac, group.id, stat_mult, vet_rank)
+			var idx := units.spawn(pos.x, pos.y, u_type, fac, group.id, stat_mult, vet_rank)
 			# First unit in group becomes commander (prefer highest veteran)
 			if ui == 0 and idx >= 0:
 				_make_commander(idx)
@@ -1026,11 +1032,11 @@ func _input(event: InputEvent) -> void:
 	# Scroll wheel zoom (works in and out of command mode)
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			var z := clampf(_target_zoom.x * 1.15, 0.15, 2.0)
+			var z := clampf(_target_zoom.x * 1.1, 0.15, 2.0)
 			_target_zoom = Vector2(z, z)
 			get_viewport().set_input_as_handled()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			var z := clampf(_target_zoom.x * 0.87, 0.15, 2.0)
+			var z := clampf(_target_zoom.x / 1.1, 0.15, 2.0)
 			_target_zoom = Vector2(z, z)
 			get_viewport().set_input_as_handled()
 
@@ -1129,8 +1135,8 @@ func _switch_to_player() -> void:
 
 func _release_army() -> void:
 	## Release all FOLLOW groups: scatter them and charge toward the enemy
-	var blue_groups := commander.get_faction_groups(BattleUnitSystem.Faction.BLUE)
 	var released := 0
+	var blue_groups := commander.get_faction_groups(BattleUnitSystem.Faction.BLUE)
 	for g in blue_groups:
 		if g.command == BattleCommander.CommandType.FOLLOW:
 			g.command = BattleCommander.CommandType.ATTACK
@@ -1398,9 +1404,9 @@ func _update_unit_physics(dt: float, ox: float, oy: float, bw: float, bh: float)
 		var ty := int(floor(prev_y / TILE_SIZE))
 		if _blocked_tiles.has(Vector2i(tx, ty)):
 			blocked_x = true
+		var slide_force := absf(units.vx[i]) * 0.6
 		if blocked_x:
 			units.x[i] = prev_x
-			var slide_force := absf(units.vx[i]) * 0.6
 			if units.vy[i] > 0.01:
 				units.vy[i] += slide_force
 			elif units.vy[i] < -0.01:
@@ -1415,7 +1421,7 @@ func _update_unit_physics(dt: float, ox: float, oy: float, bw: float, bh: float)
 			blocked_y = true
 		if blocked_y:
 			units.y[i] = prev_y
-			var slide_force := absf(units.vy[i]) * 0.6
+			slide_force = absf(units.vy[i]) * 0.6
 			if units.vx[i] > 0.01:
 				units.vx[i] += slide_force
 			elif units.vx[i] < -0.01:
@@ -1426,18 +1432,25 @@ func _update_unit_physics(dt: float, ox: float, oy: float, bw: float, bh: float)
 		if blocked_x and blocked_y:
 			units.vx[i] = 0.0
 			units.vy[i] = 0.0
-		# Emergency unstuck (only check center tile, no spiral)
+		# Emergency: if unit is STILL inside a blocked tile, push to nearest clear tile
 		var final_tx := int(floor(units.x[i] / TILE_SIZE))
 		var final_ty := int(floor(units.y[i] / TILE_SIZE))
 		if _blocked_tiles.has(Vector2i(final_tx, final_ty)):
-			for dir in [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]:
-				var check := Vector2i(final_tx + dir.x, final_ty + dir.y)
-				if not _blocked_tiles.has(check):
-					units.x[i] = (check.x + 0.5) * TILE_SIZE
-					units.y[i] = (check.y + 0.5) * TILE_SIZE
-					units.vx[i] = 0.0
-					units.vy[i] = 0.0
+			# Spiral search for nearest unblocked tile (up to 8 tiles away)
+			var escaped := false
+			for push_dist in range(1, 9):
+				if escaped:
 					break
+				for dir in [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1),
+							Vector2i(1,1), Vector2i(-1,1), Vector2i(1,-1), Vector2i(-1,-1)]:
+					var check := Vector2i(final_tx + dir.x * push_dist, final_ty + dir.y * push_dist)
+					if not _blocked_tiles.has(check):
+						units.x[i] = (check.x + 0.5) * TILE_SIZE
+						units.y[i] = (check.y + 0.5) * TILE_SIZE
+						units.vx[i] = 0.0
+						units.vy[i] = 0.0
+						escaped = true
+						break
 		units.x[i] = clampf(units.x[i], ox + r, ox + bw - r)
 		units.y[i] = clampf(units.y[i], oy + r, oy + bh - r)
 
@@ -1458,8 +1471,8 @@ func _end_battle(victory: bool) -> void:
 
 	# Compute survival ratios for territory consequences
 	var blue_alive := units.count_by_faction(BattleUnitSystem.Faction.BLUE)
-	var red_alive := units.count_by_faction(BattleUnitSystem.Faction.RED)
 	var blue_survival := float(blue_alive) / maxf(float(_initial_blue_count), 1.0)
+	var red_alive := units.count_by_faction(BattleUnitSystem.Faction.RED)
 	var red_survival := float(red_alive) / maxf(float(_initial_red_count), 1.0)
 
 	var gm = get_node_or_null("/root/GameManager")
@@ -1514,9 +1527,8 @@ func _process_veterans(victory: bool) -> void:
 
 	if not gm.save_data.army_state.has("veterans"):
 		gm.save_data.army_state["veterans"] = {}
-	var veterans: Dictionary = gm.save_data.army_state["veterans"]
 
-	var type_name_map := {
+	var type_key_map := {
 		BattleUnitSystem.UnitType.INFANTRY: "infantry",
 		BattleUnitSystem.UnitType.HEAVY_INFANTRY: "heavy_infantry",
 		BattleUnitSystem.UnitType.CAVALRY: "cavalry",
@@ -1529,7 +1541,7 @@ func _process_veterans(victory: bool) -> void:
 	var survivors := {}  # type_name -> {0: count, 1: count, 2: count, 3: count}
 	for i in units.count:
 		if units.alive[i] == 1 and units.faction[i] == BattleUnitSystem.Faction.BLUE:
-			var tname: String = type_name_map.get(units.unit_type[i], "")
+			var tname: String = type_key_map.get(units.unit_type[i], "")
 			if tname == "":
 				continue
 			if not survivors.has(tname):
@@ -1541,10 +1553,10 @@ func _process_veterans(victory: bool) -> void:
 	# Raw(0 battles)→Trained(1)→Veteran(3)→Elite(5)
 	# For simplicity: surviving raw → trained, surviving trained → veteran (if 3+ battles tracked),
 	# We just promote each tier up by 1 rank on victory
+	var veterans: Dictionary = gm.save_data.army_state["veterans"]
 	for tname in survivors:
 		if not veterans.has(tname):
 			veterans[tname] = {"trained": 0, "veteran": 0, "elite": 0}
-		var vet_data: Dictionary = veterans[tname]
 		# Promote existing veterans that survived
 		var surviving_elite: int = survivors[tname].get(3, 0)
 		var surviving_veteran: int = survivors[tname].get(2, 0)
@@ -1556,6 +1568,7 @@ func _process_veterans(victory: bool) -> void:
 		var new_veteran: int = int(surviving_veteran * 0.5) + int(surviving_trained * 0.4)
 		var new_trained: int = int(surviving_trained * 0.6) + int(surviving_raw * 0.3)
 
+		var vet_data: Dictionary = veterans.get(tname, {})
 		vet_data["elite"] = new_elite
 		vet_data["veteran"] = new_veteran
 		vet_data["trained"] = new_trained
@@ -1580,14 +1593,12 @@ func _reduce_veterans_on_defeat() -> void:
 		veterans[tname] = vet_data
 
 func _update_hired_fighter_losses() -> void:
-	## After battle, reduce hired fighters by how many died.
+	## After battle, reduce hired fighters to match surviving blue units.
+	## Also sync army_divisions to reflect losses.
 	var gm = get_node_or_null("/root/GameManager")
 	if not gm or not gm.save_data:
 		return
 	if not gm.save_data.army_state.has("hired_fighters"):
-		return
-	var hired: Dictionary = gm.save_data.army_state["hired_fighters"]
-	if hired.is_empty():
 		return
 
 	# Count surviving blue units by type
@@ -1602,8 +1613,6 @@ func _update_hired_fighter_losses() -> void:
 		BattleUnitSystem.UnitType.HORSE_ARCHER: "horse_archer",
 		BattleUnitSystem.UnitType.RANGED_INFANTRY: "ranged_infantry",
 	}
-	# Base army counts (what player would have without hired fighters)
-	var base_counts := {"infantry": 10, "archer": 7, "cavalry": 5, "heavy_infantry": 4, "heavy_cavalry": 2, "mage": 2, "spear": 0, "horse_archer": 0, "ranged_infantry": 0}
 
 	var surviving := {}
 	for i in units.count:
@@ -1612,12 +1621,18 @@ func _update_hired_fighter_losses() -> void:
 			if tname != "":
 				surviving[tname] = surviving.get(tname, 0) + 1
 
-	# Hired fighters that survived = max(0, surviving - base_count)
+	# Surviving count IS the new hired count (no free militia except 5 min infantry)
+	# Subtract the 5 minimum militia infantry that aren't "hired"
+	var hired: Dictionary = gm.save_data.army_state.get("hired_fighters", {})
+	var old_hired := hired.duplicate()
 	for type_name in hired:
-		var base: int = base_counts.get(type_name, 0)
 		var alive: int = surviving.get(type_name, 0)
-		var hired_survived := maxi(0, alive - base)
-		hired[type_name] = hired_survived
+		if type_name == "infantry":
+			# 5 minimum militia aren't hired — don't count them
+			hired[type_name] = maxi(0, alive - 5)
+		else:
+			# All surviving of this type are hired
+			hired[type_name] = alive
 	# Clean up zeros
 	var to_remove: Array[String] = []
 	for type_name in hired:
@@ -1625,6 +1640,43 @@ func _update_hired_fighter_losses() -> void:
 			to_remove.append(type_name)
 	for type_name in to_remove:
 		hired.erase(type_name)
+
+	# Debug: print losses
+	for type_name in old_hired:
+		var was: int = int(old_hired[type_name])
+		var now: int = int(hired.get(type_name, 0))
+		if was != now:
+			print("  Army loss: %s %d -> %d (-%d)" % [type_name, was, now, was - now])
+
+	# Sync divisions — cap each division's unit counts to available hired fighters
+	_sync_divisions_to_hired(gm.save_data)
+
+func _sync_divisions_to_hired(save_data) -> void:
+	## After losses, reduce division unit counts so they don't exceed available troops.
+	var hired: Dictionary = save_data.army_state.get("hired_fighters", {})
+	# Count how many of each type are allocated across all divisions
+	var allocated := {}  # type_name -> total across all divs
+	for div in save_data.army_divisions:
+		for unit_entry in div.get("units", []):
+			var tn: String = unit_entry.get("type", "")
+			allocated[tn] = allocated.get(tn, 0) + int(unit_entry.get("count", 0))
+
+	# For each type, if allocated > available, scale down proportionally
+	for tn in allocated:
+		var available: int = int(hired.get(tn, 0))
+		if tn == "infantry":
+			available += 5  # account for minimum militia
+		var total_alloc: int = allocated[tn]
+		if total_alloc > available and total_alloc > 0:
+			var ratio := float(available) / float(total_alloc)
+			var remaining := available
+			for div in save_data.army_divisions:
+				for unit_entry in div.get("units", []):
+					if unit_entry.get("type", "") == tn:
+						var new_count := mini(remaining, maxi(0, int(int(unit_entry["count"]) * ratio)))
+						remaining -= new_count
+						unit_entry["count"] = new_count
+			print("  Division sync: %s allocated %d -> capped to %d" % [tn, total_alloc, available])
 
 func _on_player_died() -> void:
 	if battle_ended:
@@ -1712,16 +1764,16 @@ const PLAYER_CONTACT_DMG_INTERVAL := 0.4  # Melee damage every 0.4s
 func _resolve_player_unit_collision() -> void:
 	if not player or not is_instance_valid(player):
 		return
-	var px: float = player.global_position.x
-	var py: float = player.global_position.y
-	var player_r: float = 14.0  # player collision radius
-	var nearby := units.get_nearby(px, py, 60.0)
+	var px := player.global_position.x
+	var py := player.global_position.y
+	var player_r := 12.0
+	var nearby := units.get_nearby(px, py, 64.0)
 	var contact_enemies := 0
 	for idx in nearby:
 		if units.alive[idx] == 0:
 			continue
-		var dx := units.x[idx] - px
-		var dy := units.y[idx] - py
+		var dx := px - units.x[idx]
+		var dy := py - units.y[idx]
 		var dist := sqrt(dx * dx + dy * dy)
 		var min_dist := player_r + units.radius[idx]
 		if dist < min_dist and dist > 0.1:
@@ -1751,15 +1803,15 @@ func _resolve_player_unit_collision() -> void:
 			var player_dmg := 5.0
 			if player.get("equipment_manager"):
 				player_dmg = float(player.equipment_manager.get_damage()) * 0.5
-			for idx2 in nearby:
-				if units.alive[idx2] == 0 or units.faction[idx2] != BattleUnitSystem.Faction.RED:
-					continue
-				var d2 := sqrt((units.x[idx2] - px) * (units.x[idx2] - px) + (units.y[idx2] - py) * (units.y[idx2] - py))
-				if d2 < player_r + units.radius[idx2] + 5.0:
-					var angle := atan2(units.y[idx2] - py, units.x[idx2] - px)
-					units.damage(idx2, player_dmg, angle, false)
-					units.vx[idx2] += cos(angle) * 1.5
-					units.vy[idx2] += sin(angle) * 1.5
+				for idx2 in nearby:
+					if units.alive[idx2] == 0 or units.faction[idx2] != BattleUnitSystem.Faction.RED:
+						continue
+					var d2 := sqrt((units.x[idx2] - px) * (units.x[idx2] - px) + (units.y[idx2] - py) * (units.y[idx2] - py))
+					if d2 < player_r + units.radius[idx2] + 5.0:
+						var angle := atan2(units.y[idx2] - py, units.x[idx2] - px)
+						units.damage(idx2, player_dmg, angle, false)
+						units.vx[idx2] += cos(angle) * 1.5
+						units.vy[idx2] += sin(angle) * 1.5
 			# Enemies damage player
 			var melee_dmg := contact_enemies * 3
 			if player.has_method("take_damage"):
@@ -1788,17 +1840,18 @@ func _check_player_bullets_vs_soa() -> void:
 		var by: float = bullet.global_position.y
 		var bdmg: int = bullet.get("damage") if bullet.get("damage") else 10
 		var hit_r: float = 6.0  # bullet hit radius
+		var nearby := units.get_nearby(bx, by, 32.0)
+		var vfx = get_node_or_null("/root/VFXManager")
 		# Check against nearby SoA units (all factions — player can hit both, but focus on RED enemies)
-		var nearby := units.get_nearby(bx, by, 40.0)
 		for idx in nearby:
 			if units.alive[idx] == 0:
 				continue
 			# Player bullets hit RED (enemy) units
 			if units.faction[idx] != BattleUnitSystem.Faction.RED:
 				continue
-			var dx := units.x[idx] - bx
-			var dy := units.y[idx] - by
-			var dist := sqrt(dx * dx + dy * dy)
+			var dx: float = units.x[idx] - bx
+			var dy: float = units.y[idx] - by
+			var dist: float = sqrt(dx * dx + dy * dy)
 			if dist < units.radius[idx] + hit_r:
 				var angle := atan2(dy, dx)
 				units.damage(idx, float(bdmg), angle, false)
@@ -1808,7 +1861,6 @@ func _check_player_bullets_vs_soa() -> void:
 					units.vx[idx] += (dx / dist) * kb
 					units.vy[idx] += (dy / dist) * kb
 				# VFX
-				var vfx = get_node_or_null("/root/VFXManager")
 				if vfx and vfx.has_method("spawn_hit_spark"):
 					vfx.spawn_hit_spark(Vector2(units.x[idx], units.y[idx]))
 				# Consume bullet (pierce handling)
@@ -1823,8 +1875,6 @@ func _check_player_bullets_vs_soa() -> void:
 func _check_soa_projectiles_vs_player() -> void:
 	if not player or not is_instance_valid(player):
 		return
-	var px: float = player.global_position.x
-	var py: float = player.global_position.y
 	var player_r: float = 12.0  # player hit radius
 	for i in projectiles.count:
 		if projectiles.alive[i] == 0:
@@ -1832,9 +1882,9 @@ func _check_soa_projectiles_vs_player() -> void:
 		# Only RED (enemy) projectiles hit player
 		if projectiles.proj_faction[i] != BattleUnitSystem.Faction.RED:
 			continue
-		var dx := px - projectiles.x[i]
-		var dy := py - projectiles.y[i]
-		var dist := sqrt(dx * dx + dy * dy)
+		var dx: float = projectiles.x[i] - player.global_position.x
+		var dy: float = projectiles.y[i] - player.global_position.y
+		var dist: float = sqrt(dx * dx + dy * dy)
 		if dist < player_r + 3.0:  # 3.0 = projectile radius
 			# Damage the player
 			var dmg_val: float = projectiles.dmg[i]
@@ -1858,6 +1908,7 @@ func _check_player_abilities_vs_soa() -> void:
 
 	var px: float = player.global_position.x
 	var py: float = player.global_position.y
+	var nearby := units.get_nearby(px, py, 180.0)
 
 	# Dash damage — player is dashing through enemies
 	if player.get("_is_dashing") and player._is_dashing:
@@ -1865,13 +1916,12 @@ func _check_player_abilities_vs_soa() -> void:
 		var dash_dmg := 8.0
 		if player.get("equipment_manager"):
 			dash_dmg = float(player.equipment_manager.get_damage()) * 0.8
-		var nearby := units.get_nearby(px, py, dash_radius + 30.0)
 		for idx in nearby:
 			if units.alive[idx] == 0 or units.faction[idx] != BattleUnitSystem.Faction.RED:
 				continue
-			var dx := units.x[idx] - px
-			var dy := units.y[idx] - py
-			var dist := sqrt(dx * dx + dy * dy)
+			var dx: float = units.x[idx] - px
+			var dy: float = units.y[idx] - py
+			var dist: float = sqrt(dx * dx + dy * dy)
 			if dist < dash_radius + units.radius[idx]:
 				var angle := atan2(dy, dx)
 				units.damage(idx, dash_dmg, angle, false)
@@ -1892,8 +1942,8 @@ func _check_player_abilities_vs_soa() -> void:
 		var aoe_cone: float = aoe.get("cone_angle", PI * 2.0)
 		# Some abilities (frost nova) target a position, not the player
 		var aoe_center: Vector2 = aoe.get("center", Vector2(px, py))
-		var nearby := units.get_nearby(aoe_center.x, aoe_center.y, aoe_radius + 30.0)
-		for idx in nearby:
+		var aoe_nearby := units.get_nearby(aoe_center.x, aoe_center.y, aoe_radius + 30.0)
+		for idx in aoe_nearby:
 			if units.alive[idx] == 0 or units.faction[idx] != BattleUnitSystem.Faction.RED:
 				continue
 			var dx := units.x[idx] - aoe_center.x

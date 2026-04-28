@@ -47,6 +47,7 @@ var _thrown_timer: float = 0.0
 var _thrown_velocity: Vector2 = Vector2.ZERO
 var _thrower_dmg: int = 0
 var _loy_sprite: Sprite2D  # separate sprite for LoY characters
+var _enemy_anim: EnemyAnimator
 # Nudge from dash knockback
 var _nudge_timer: float = 0.0
 var _nudge_velocity: Vector2 = Vector2.ZERO
@@ -59,6 +60,15 @@ var _animator: SpriteAnimator
 var _nav: RefCounted  # DungeonNav flow-field navigation (set by dungeon manager)
 var _dm: Node  # DungeonManager ref for obstacle breaking (set by dungeon manager)
 
+# Movement type state
+var _spawn_pos: Vector2 = Vector2.ZERO  # position when first placed
+var _orbit_angle: float = 0.0  # current angle for orbit movements
+var _patrol_dir: float = 1.0  # +1 or -1 for patrol direction
+var _patrol_offset: float = 0.0  # current offset from spawn
+var _dash_state: int = 0  # 0=idle, 1=dashing in, 2=pausing, 3=dashing out
+var _dash_timer: float = 0.0
+var _dash_cd: float = 0.0
+
 # Boss/Elite behavior vars
 var _enraged: bool = false
 var _slam_timer: float = 7.0  # boss ground slam cooldown
@@ -70,6 +80,10 @@ var _boss_name_label: Label  # name label above boss
 # Random attack pool for elites/bosses
 var _attack_pool: Array[int] = []  # random attack types assigned on setup
 var _attack_pool_idx: int = 0  # cycles through pool
+
+# AttackSlot system: per-attack modifiers
+var _active_modifier: AttackModifier  # set per-attack from slot, cleared after firing
+var _slot_idx: int = 0  # cycles through definition.attack_slots
 
 # Behavioral overhaul: Mummy bodyguard / Arch Mage shared vision
 var _attached_ally: Node2D           # mummy bodyguard target
@@ -109,7 +123,10 @@ func _ready() -> void:
 		player = get_tree().get_first_node_in_group("player")
 
 func setup(def: EnemyDefinition) -> void:
+	var dm = get_tree().get_first_node_in_group("dungeon_manager") if is_inside_tree() else null
+	var spr = $Sprite2D
 	definition = def
+	_spawn_pos = global_position
 	hp = def.max_hp
 	_max_hp = def.max_hp
 	shield_hp = def.shield_hp
@@ -118,7 +135,12 @@ func setup(def: EnemyDefinition) -> void:
 	shoot_interval = def.attack_speed
 	drop_table = def.drop_table
 
-	if def.use_loy_sprite and def.loy_tile_index >= 0:
+	if def.anim_data and def.anim_data.spritesheet_path != "":
+		_enemy_anim = EnemyAnimator.new()
+		add_child(_enemy_anim)
+		_enemy_anim.setup($Sprite2D, def.anim_data)
+		$Sprite2D.scale = Vector2(1, 1)
+	elif def.use_loy_sprite and def.loy_tile_index >= 0:
 		_setup_loy_sprite(def.loy_tile_index)
 	else:
 		$Sprite2D.frame = def.sprite_frame
@@ -128,7 +150,6 @@ func setup(def: EnemyDefinition) -> void:
 
 	# Scale and weight for large/boss enemies
 	# Only scale the sprite — scaling the whole node makes hitboxes huge in dungeons
-	var spr = $Sprite2D
 	var loy_spr = get_node_or_null("LoYSprite")
 	var size_mult = 1.0
 	match def.size_class:
@@ -145,7 +166,6 @@ func setup(def: EnemyDefinition) -> void:
 		if loy_spr: loy_spr.scale *= size_mult
 
 	# Enlarge hitboxes for overworld enemies (32px tiles, need bigger targets)
-	var dm = get_tree().get_first_node_in_group("dungeon_manager") if is_inside_tree() else null
 	if not dm:
 		var hurtbox_shape = get_node_or_null("Hurtbox/CollisionShape2D")
 		if hurtbox_shape and hurtbox_shape.shape is CircleShape2D:
@@ -171,9 +191,13 @@ func setup(def: EnemyDefinition) -> void:
 		_create_boss_name_label(def.enemy_name)
 		_create_boss_shadow()
 
-	# Assign random attack pool for elites/bosses
-	if _is_boss_or_large:
+	# Assign random attack pool for elites/bosses (skip if attack_slots defined)
+	if _is_boss_or_large and def.attack_slots.size() == 0:
 		_assign_random_attack_pool(def)
+
+	# Auto-assign movement pattern if none set (skip test/move enemies that already have one)
+	if not def.movement_pattern:
+		_assign_random_movement(def)
 
 	# Awareness indicator (? or !) above sprite
 	_awareness_indicator = Label.new()
@@ -227,7 +251,160 @@ const ATTACK_POOL_CANDIDATES: Array = [
 	EnemyDefinition.AttackType.BARRIER_WALL,
 	EnemyDefinition.AttackType.PULL_SHOT,
 	EnemyDefinition.AttackType.PUSH_WAVE,
+	# Original 5 melee attacks — tested and approved
+	EnemyDefinition.AttackType.SWORD_SLASH,
+	EnemyDefinition.AttackType.SPEAR_LUNGE,
+	EnemyDefinition.AttackType.CHARGE_BULL,
+	EnemyDefinition.AttackType.CLEAVE_COMBO,
+	EnemyDefinition.AttackType.WHIRLWIND,
+	# New 5 melee attacks — add here after testing in test arena
+	#EnemyDefinition.AttackType.GROUND_POUND,
+	#EnemyDefinition.AttackType.TAIL_WHIP,
+	#EnemyDefinition.AttackType.SHIELD_BASH,
+	#EnemyDefinition.AttackType.GRAB_THROW,
+	#EnemyDefinition.AttackType.STOMP_WAVE,
 ]
+
+## Melee-only pool for normal enemies' random secondary melee attack
+const MELEE_ATTACK_POOL: Array = [
+	EnemyDefinition.AttackType.SWORD_SLASH,
+	EnemyDefinition.AttackType.SPEAR_LUNGE,
+	EnemyDefinition.AttackType.CHARGE_BULL,
+	EnemyDefinition.AttackType.CLEAVE_COMBO,
+	EnemyDefinition.AttackType.WHIRLWIND,
+	# New 5 — uncomment after testing
+	#EnemyDefinition.AttackType.GROUND_POUND,
+	#EnemyDefinition.AttackType.TAIL_WHIP,
+	#EnemyDefinition.AttackType.SHIELD_BASH,
+	#EnemyDefinition.AttackType.GRAB_THROW,
+	#EnemyDefinition.AttackType.STOMP_WAVE,
+]
+
+## Movement pattern pools — preloaded for random assignment
+## Aggressive: melee-oriented enemies that chase and engage
+static var _MOVE_POOL_MELEE: Array = []
+## Ranged: enemies that prefer distance
+static var _MOVE_POOL_RANGED: Array = []
+## Support: summoners, healers, defensive enemies
+static var _MOVE_POOL_SUPPORT: Array = []
+## Boss: larger, more dramatic movements
+static var _MOVE_POOL_BOSS: Array = []
+static var _move_pools_loaded: bool = false
+
+static func _load_movement_pools() -> void:
+	if _move_pools_loaded:
+		return
+	_move_pools_loaded = true
+	# Old weighted presets (basic approach, weave, strafe, etc.)
+	var _chase_direct = preload("res://resources/movements/chase_direct.tres")
+	var _chase_weave = preload("res://resources/movements/chase_weave.tres")
+	var _chase_aggressive = preload("res://resources/movements/chase_aggressive.tres")
+	var _strafe_run = preload("res://resources/movements/strafe_run.tres")
+	var _lunge_circle = preload("res://resources/movements/lunge_circle.tres")
+	var _kite_ranged = preload("res://resources/movements/kite_ranged.tres")
+	var _hold_ranged = preload("res://resources/movements/hold_ranged.tres")
+	var _anchor_turret = preload("res://resources/movements/anchor_turret.tres")
+	var _defensive_wall = preload("res://resources/movements/defensive_wall.tres")
+	# New special presets
+	var _zigzag = preload("res://resources/movements/zigzag.tres")
+	var _dash_in_out = preload("res://resources/movements/dash_in_out.tres")
+	var _swoop = preload("res://resources/movements/swoop.tres")
+	var _intercept = preload("res://resources/movements/intercept.tres")
+	var _elastic = preload("res://resources/movements/elastic.tres")
+	var _bait_punish = preload("res://resources/movements/bait_punish.tres")
+	var _orbit_player = preload("res://resources/movements/orbit_player.tres")
+	var _kite = preload("res://resources/movements/kite.tres")
+	var _patrol_h = preload("res://resources/movements/patrol_horizontal.tres")
+	var _patrol_v = preload("res://resources/movements/patrol_vertical.tres")
+	var _flee = preload("res://resources/movements/flee.tres")
+	var _edge_skater = preload("res://resources/movements/edge_skater.tres")
+	var _wall_bounce = preload("res://resources/movements/wall_bounce.tres")
+	var _orbit_ally = preload("res://resources/movements/orbit_ally.tres")
+	var _orbit_point = preload("res://resources/movements/orbit_point.tres")
+	var _teleport = preload("res://resources/movements/teleport.tres")
+	var _mirror = preload("res://resources/movements/mirror.tres")
+	var _ambush = preload("res://resources/movements/ambush.tres")
+	# Melee pool: basic approach-heavy + special aggressive
+	_MOVE_POOL_MELEE = [
+		_chase_direct, _chase_direct, _chase_direct,  # basic approach (common)
+		_chase_weave, _chase_weave,                    # weaving approach
+		_chase_aggressive,                             # fast aggressive
+		_lunge_circle,                                 # lunge + circle
+		_strafe_run,                                   # strafe while closing
+		# Special types
+		_zigzag, _dash_in_out, _swoop, _intercept, _elastic, _bait_punish,
+	]
+	# Ranged pool: basic hold/kite + special distance types
+	_MOVE_POOL_RANGED = [
+		_hold_ranged, _hold_ranged, _hold_ranged,     # hold position (common)
+		_kite_ranged, _kite_ranged,                    # kite away when close
+		_anchor_turret,                                # anchor and shoot
+		_strafe_run,                                   # strafe while shooting
+		# Special types
+		_orbit_player, _kite, _patrol_h, _patrol_v, _flee,
+		_edge_skater, _wall_bounce,
+	]
+	# Support pool: basic defensive + special utility
+	_MOVE_POOL_SUPPORT = [
+		_defensive_wall, _defensive_wall,              # hold ground (common)
+		_hold_ranged, _hold_ranged,                    # stay at range
+		_kite_ranged,                                  # kite if pressured
+		# Special types
+		_orbit_ally, _orbit_point, _teleport, _mirror, _ambush, _flee,
+	]
+	# Boss pool: no basic — always dramatic
+	_MOVE_POOL_BOSS = [
+		_chase_aggressive, _lunge_circle,              # weighted but aggressive
+		_orbit_player, _intercept, _elastic, _swoop,
+		_bait_punish, _kite, _edge_skater, _mirror,
+	]
+
+const _MELEE_ATTACK_TYPES: Array = [
+	EnemyDefinition.AttackType.MELEE,
+	EnemyDefinition.AttackType.CHARGE,
+	EnemyDefinition.AttackType.DASH,
+	EnemyDefinition.AttackType.SWORD_SLASH,
+	EnemyDefinition.AttackType.SPEAR_LUNGE,
+	EnemyDefinition.AttackType.CHARGE_BULL,
+	EnemyDefinition.AttackType.CLEAVE_COMBO,
+	EnemyDefinition.AttackType.WHIRLWIND,
+	EnemyDefinition.AttackType.GROUND_POUND,
+	EnemyDefinition.AttackType.TAIL_WHIP,
+	EnemyDefinition.AttackType.SHIELD_BASH,
+	EnemyDefinition.AttackType.GRAB_THROW,
+	EnemyDefinition.AttackType.STOMP_WAVE,
+	EnemyDefinition.AttackType.DASH_STRIKE,
+	EnemyDefinition.AttackType.WHIP_LASH,
+]
+
+const _SUPPORT_ATTACK_TYPES: Array = [
+	EnemyDefinition.AttackType.HEAL,
+	EnemyDefinition.AttackType.SUMMON,
+	EnemyDefinition.AttackType.SHIELD,
+	EnemyDefinition.AttackType.BARRIER_WALL,
+	EnemyDefinition.AttackType.PUSH_WAVE,
+	EnemyDefinition.AttackType.PULL_SHOT,
+	EnemyDefinition.AttackType.POISON_CLOUD,
+]
+
+func _assign_random_movement(def: EnemyDefinition) -> void:
+	var is_boss = def.size_class >= EnemyDefinition.SizeClass.BOSS
+	# 80% of enemies use default movement (straight approach), 20% get a special pattern
+	# Bosses always get a special pattern
+	if not is_boss and randf() > 0.1:
+		return  # keep default WEIGHTED (basic approach)
+	_load_movement_pools()
+	var pool: Array
+	if is_boss:
+		pool = _MOVE_POOL_BOSS
+	elif def.attack_type in _MELEE_ATTACK_TYPES:
+		pool = _MOVE_POOL_MELEE
+	elif def.attack_type in _SUPPORT_ATTACK_TYPES:
+		pool = _MOVE_POOL_SUPPORT
+	else:
+		pool = _MOVE_POOL_RANGED
+	if pool.size() > 0:
+		def.movement_pattern = pool[randi() % pool.size()]
 
 func _assign_random_attack_pool(def: EnemyDefinition) -> void:
 	var is_boss = def.size_class >= EnemyDefinition.SizeClass.BOSS
@@ -263,13 +440,13 @@ func _next_pool_attack() -> int:
 	return atk
 
 func _create_boss_hp_bar() -> void:
+	var bar_w = 20.0  # fixed world pixels
 	# Use a top-level Node2D to avoid inheriting enemy scale
 	var bar_anchor = Node2D.new()
 	bar_anchor.top_level = true  # ignores parent transform
 	bar_anchor.z_index = 10
 	add_child(bar_anchor)
 
-	var bar_w = 20.0  # fixed world pixels
 	var bar_h = 2.0
 
 	_hp_bar_bg = ColorRect.new()
@@ -296,23 +473,32 @@ func _update_boss_hp_bar() -> void:
 		_hp_bar_bg.get_parent().global_position = global_position
 
 func _create_boss_name_label(boss_name: String) -> void:
+	var container = Control.new()
 	var anchor = Node2D.new()
 	anchor.top_level = true
 	anchor.z_index = 10
 	add_child(anchor)
+	# Render at font_size 16 (crisp) then scale container to 0.25 for sharp small text
+	container.scale = Vector2(0.25, 0.25)
+	anchor.add_child(container)
 	_boss_name_label = Label.new()
 	_boss_name_label.text = boss_name
-	_boss_name_label.add_theme_font_size_override("font_size", 8)
+	_boss_name_label.add_theme_font_size_override("font_size", 16)
 	_boss_name_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
 	_boss_name_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
-	_boss_name_label.add_theme_constant_override("shadow_offset_x", 1)
-	_boss_name_label.add_theme_constant_override("shadow_offset_y", 1)
+	_boss_name_label.add_theme_constant_override("shadow_offset_x", 2)
+	_boss_name_label.add_theme_constant_override("shadow_offset_y", 2)
 	_boss_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_boss_name_label.position = Vector2(-30, -16)
-	_boss_name_label.size = Vector2(60, 12)
-	anchor.add_child(_boss_name_label)
+	_boss_name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	# At font_size 16, ~9px per char; after 0.25 scale → ~2.25 world px per char
+	var est_w = boss_name.length() * 9.0
+	_boss_name_label.position = Vector2(-est_w / 2.0, -72)  # -72 * 0.25 = -18 world px above
+	_boss_name_label.size = Vector2(est_w, 20)
+	container.add_child(_boss_name_label)
 
 func _create_boss_shadow() -> void:
+	var _elapsed: float = 0.0
+	var alpha: float = 0.4
 	_boss_shadow = Node2D.new()
 	_boss_shadow.z_index = -1
 	add_child(_boss_shadow)
@@ -321,21 +507,21 @@ func _create_boss_shadow() -> void:
 	_boss_shadow.add_child(shadow_draw)
 
 class _BossShadowDraw extends Node2D:
-	var _elapsed: float = 0.0
+	var _elapsed := 0.0
 	func _process(delta: float) -> void:
 		_elapsed += delta
 		queue_redraw()
 	func _draw() -> void:
-		var alpha = 0.2 + 0.1 * sin(_elapsed * 3.0)
+		var alpha := clampf(0.3 + 0.1 * sin(_elapsed * 2.0), 0.1, 0.5)
 		draw_circle(Vector2.ZERO, 10.0, Color(0.1, 0.0, 0.15, alpha))
 
 func _setup_loy_sprite(tile_index: int) -> void:
+	var atlas = AtlasTexture.new()
 	var tex_path = LoySpriteIndex.get_char_texture_path(tile_index)
 	var region = LoySpriteIndex.get_char_region(tile_index)
 	var tex = load(tex_path) as Texture2D
 	if not tex:
 		return
-	var atlas = AtlasTexture.new()
 	atlas.atlas = tex
 	atlas.region = region
 	$Sprite2D.texture = atlas
@@ -356,18 +542,64 @@ func _physics_process(delta: float) -> void:
 		if not player:
 			return
 
+	var to_player = player.global_position - global_position
+	var dist = to_player.length()
+	var player_vel: Vector2 = player.velocity if player is CharacterBody2D else Vector2.ZERO
+	var t = Time.get_ticks_msec() / 1000.0
+	var is_boss = definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS
+
 	# Tick hit aggro timer (global, not just in chase)
 	if _hit_aggro_timer > 0:
 		_hit_aggro_timer -= delta
 
-	# Boss HP regen (1% max HP/sec after 3s without taking damage)
+	# WHIRLWIND tick: bouncing spin — damage handled by _MeleeSpinBar child
+	# Runs its own move_and_slide + bounce, then skips the state machine entirely.
+	if has_meta("whirlwind_active") and get_meta("whirlwind_active"):
+		var ww_time = get_meta("whirlwind_time") - delta
+		set_meta("whirlwind_time", ww_time)
+		# Use stored velocity (bouncing projectile style)
+		velocity = get_meta("whirlwind_velocity")
+		# Sprite spin fast
+		$Sprite2D.rotation += delta * 30.0
+		if ww_time <= 0:
+			set_meta("whirlwind_active", false)
+			$Sprite2D.rotation = 0
+			velocity = Vector2.ZERO
+			cooldown_timer = 0.5
+			state = State.COOLDOWN
+		else:
+			# Move and bounce off walls
+			move_and_slide()
+			for i in range(get_slide_collision_count()):
+				var col = get_slide_collision(i)
+				if col:
+					var n = col.get_normal()
+					var ww_vel = get_meta("whirlwind_velocity") as Vector2
+					var reflected = ww_vel.bounce(n)
+					reflected = reflected.rotated(randf_range(-0.15, 0.15))
+					set_meta("whirlwind_velocity", reflected.normalized() * 140.0)
+					var sfx_b = get_node_or_null("/root/SFXManager")
+					if sfx_b:
+						sfx_b.play("impact_a", -8.0, 0.1)
+					break
+			_contact_cooldown -= delta
+			if _contact_cooldown <= 0:
+				_check_contact_damage()
+		return  # Skip state machine — whirlwind controls movement
+
+	# HP regen for LARGE/BOSS (after no damage for a delay)
+	# LARGE (elites): 1% max HP per 2s after 4s no damage
+	# BOSS: 1% max HP per 3s after 5s no damage (slower regen)
 	_time_since_hit += delta
-	if _is_boss_or_large and _time_since_hit > 3.0 and hp < _max_hp:
-		_regen_accum += delta
-		if _regen_accum >= 1.0:
-			_regen_accum -= 1.0
-			hp = mini(hp + maxi(1, _max_hp / 100), _max_hp)
-			_update_boss_hp_bar()
+	if _is_boss_or_large and hp < _max_hp:
+		var regen_delay = 5.0 if is_boss else 4.0
+		var regen_interval = 3.0 if is_boss else 2.0
+		if _time_since_hit > regen_delay:
+			_regen_accum += delta
+			if _regen_accum >= regen_interval:
+				_regen_accum -= regen_interval
+				hp = mini(hp + maxi(1, _max_hp / 100), _max_hp)
+				_update_boss_hp_bar()
 
 	# Keep HP bar following enemy
 	if _hp_bar_bg:
@@ -399,7 +631,6 @@ func _physics_process(delta: float) -> void:
 
 	# Elite yellow glow pulse
 	if definition and definition.size_class == EnemyDefinition.SizeClass.LARGE and not _enraged:
-		var t = Time.get_ticks_msec() / 1000.0
 		var glow = Color(1.0 + 0.15 * sin(t * 3.0), 1.0 + 0.1 * sin(t * 3.0), 0.7)
 		$Sprite2D.modulate = glow
 
@@ -412,14 +643,20 @@ func _physics_process(delta: float) -> void:
 			_break_timer = 0.1 if _stuck else 0.3  # break faster when stuck
 			_break_nearby_obstacles()
 
-	var to_player = player.global_position - global_position
-	var dist = to_player.length()
+	# Time Warp: slow enemy movement by 60%
+	var _time_warp_mult = 1.0
+	if is_instance_valid(player) and player.has_meta("time_warp_active") and player.get_meta("time_warp_active"):
+		_time_warp_mult = 0.4
+
 	var dir = to_player.normalized() if dist > 0 else Vector2.ZERO
 
-	if dir.x < 0:
-		$Sprite2D.flip_h = true
-	elif dir.x > 0:
-		$Sprite2D.flip_h = false
+	if _enemy_anim:
+		_enemy_anim.set_direction(dir)
+	else:
+		if dir.x < 0:
+			$Sprite2D.flip_h = true
+		elif dir.x > 0:
+			$Sprite2D.flip_h = false
 
 	var aggro_range = 100.0
 	if definition:
@@ -479,14 +716,21 @@ func _physics_process(delta: float) -> void:
 					else:
 						_wander_dir = Vector2.ZERO
 				velocity = _wander_dir * speed * 0.6
-				if _wander_dir.x < 0:
+				if _enemy_anim:
+					_enemy_anim.set_direction(_wander_dir)
+				elif _wander_dir.x < 0:
 					$Sprite2D.flip_h = true
 				elif _wander_dir.x > 0:
 					$Sprite2D.flip_h = false
 			else:
 				velocity = Vector2.ZERO
+			# Ambush enemies: skip awareness system, go straight to chase
+			var _is_ambush_mt = definition and definition.movement_pattern and definition.movement_pattern.move_type == MovementPattern.MoveType.AMBUSH
+			if _is_ambush_mt and dist < aggro_range:
+				_awareness = 1.0
+				state = State.CHASE
 			# Awareness ramp/decay (skip if passive)
-			if not is_passive:
+			if not is_passive and not _is_ambush_mt:
 				# LOS check is expensive — do it periodically, cache result
 				var _player_sneaking = is_instance_valid(player) and player.has_method("is_sneaking") and player.is_sneaking()
 				# Sneaking halves effective detection range
@@ -529,7 +773,6 @@ func _physics_process(delta: float) -> void:
 			_chase_timer += delta
 			# Track player's position and movement direction while chasing
 			if is_instance_valid(player):
-				var player_vel = player.velocity if "velocity" in player else Vector2.ZERO
 				if player_vel.length() > 5.0:
 					_last_known_player_dir = player_vel.normalized()
 				_last_known_player_pos = player.global_position
@@ -544,27 +787,70 @@ func _physics_process(delta: float) -> void:
 				_do_chase(dir, dist, delta)
 		State.ATTACK:
 			_do_attack(dir)
+			if _has_continuous_movement():
+				_apply_movement_pattern(definition.movement_pattern, dir, dist, delta)
 		State.COOLDOWN:
 			cooldown_timer -= delta
 			var pref = definition.preferred_distance if definition else 0.0
-			if pref > 0:
-				# Ranged enemy — hold position during cooldown
-				velocity = Vector2.ZERO
+			if _has_continuous_movement():
+				_apply_movement_pattern(definition.movement_pattern, dir, dist, delta)
 			else:
-				# Melee enemy — keep advancing during cooldown
-				if dist > 20.0:
-					velocity = dir * speed * 0.4
-				else:
+				if pref > 0:
+					# Ranged enemy — hold position during cooldown
 					velocity = Vector2.ZERO
+				else:
+					# Melee enemy — keep advancing during cooldown
+					if dist > 20.0:
+						velocity = dir * speed * 0.4
+					else:
+						velocity = Vector2.ZERO
 			if cooldown_timer <= 0:
 				state = State.CHASE
 		State.CHARGING:
 			charge_timer -= delta
-			velocity = charge_dir * (definition.charge_speed if definition else 80.0)
+			var _is_bull = has_meta("bull_charge") and get_meta("bull_charge")
+			var charge_spd = (definition.charge_speed if definition else 80.0)
+			if _is_bull:
+				charge_spd = 100.0  # slow heavy charge
+			velocity = charge_dir * charge_spd
+			# CHARGE_BULL: damage on contact during charge
+			if _is_bull and is_instance_valid(player):
+				if not get_meta("bull_charge_dmg_dealt") and global_position.distance_to(player.global_position) < 20.0:
+					if player.has_method("take_damage"):
+						var bdmg = int((definition.attack_damage if definition else 2) * 2.0)
+						player.take_damage(bdmg, global_position, true, false)
+					# Strong push in charge direction
+					player.velocity += charge_dir * 250.0
+					set_meta("bull_charge_dmg_dealt", true)
+					var vfx_b = get_node_or_null("/root/VFXManager")
+					if vfx_b:
+						vfx_b.shockwave(player.global_position, 16.0, Color(1.0, 0.2, 0.1, 0.7))
+						vfx_b.shake(4.0, 0.2)
+			# CHARGE_BULL: wall collision stun — check slide collisions
+			if _is_bull and get_slide_collision_count() > 0:
+				charge_timer = 0
+				set_meta("bull_charge", false)
+				set_meta("stunned", true)
+				cooldown_timer = 1.5
+				state = State.COOLDOWN
+				velocity = Vector2.ZERO
+				var vfx_w = get_node_or_null("/root/VFXManager")
+				if vfx_w:
+					vfx_w.shake(5.0, 0.25)
+				var sfx_w = get_node_or_null("/root/SFXManager")
+				if sfx_w:
+					sfx_w.play("impact_b", -3.0, 0.1)
+				get_tree().create_timer(1.5).timeout.connect(
+					func():
+						if is_instance_valid(self):
+							set_meta("stunned", false)
+				)
 			if charge_timer <= 0:
 				velocity = Vector2.ZERO
 				cooldown_timer = shoot_interval
 				state = State.COOLDOWN
+				if _is_bull:
+					set_meta("bull_charge", false)
 		State.STEALTHED:
 			_stealth_timer -= delta
 			velocity = dir * speed * 0.5
@@ -573,7 +859,7 @@ func _physics_process(delta: float) -> void:
 				# Backstab: if close enough, deal 25% max HP from behind
 				if player and is_instance_valid(player) and global_position.distance_to(player.global_position) < 30.0:
 					if player.has_method("take_damage"):
-						var dmg = definition.attack_damage if definition else 2
+						var dmg = maxi(1, int(player.max_hp * 0.25))
 						player.take_damage(dmg, global_position, false, true)
 				state = State.ATTACK
 				var sfx_bs = get_node_or_null("/root/SFXManager")
@@ -689,12 +975,752 @@ func _physics_process(delta: float) -> void:
 		_shoot_single(Vector2.RIGHT.rotated(_beam_angle))
 
 	_maybe_leave_trail(delta)
-	move_and_slide()
+	if has_meta("_wall_bounce_handled"):
+		remove_meta("_wall_bounce_handled")
+	else:
+		move_and_slide()
+
+	# Update enemy animation state
+	if _enemy_anim:
+		if velocity.length_squared() > 4.0:
+			_enemy_anim.set_state(EnemyAnimator.AnimState.WALK)
+		else:
+			_enemy_anim.set_state(EnemyAnimator.AnimState.IDLE)
+
+	# (Whirlwind bounce is handled in the early-return block above)
+
+	# Time Warp velocity reduction
+	if _time_warp_mult < 1.0:
+		velocity *= _time_warp_mult
 
 	# Contact damage — check if we collided with the player
 	_contact_cooldown -= delta
 	if _contact_cooldown <= 0:
 		_check_contact_damage()
+
+func _move_intercept(dir: Vector2, dist: float, p: MovementPattern, spd: float, delta: float) -> void:
+	var perp = Vector2(-dir.y, dir.x)
+	var player_vel: Vector2 = player.velocity if is_instance_valid(player) and player is CharacterBody2D else Vector2.ZERO
+	var to_target = Vector2.ZERO
+	if not has_meta("ic_state"):
+		set_meta("ic_state", 0)  # 0=tracking, 1=committed
+		set_meta("ic_timer", 0.0)
+		set_meta("ic_target", Vector2.ZERO)
+	var ic_state: int = get_meta("ic_state")
+	var ic_timer: float = get_meta("ic_timer")
+	if ic_state == 0:
+		# Tracking — orbit at distance, wait for opening
+		velocity = (perp * 0.8 + dir * 0.2).normalized() * spd * 0.5
+		ic_timer += delta
+		set_meta("ic_timer", ic_timer)
+		if ic_timer >= 1.0 and is_instance_valid(player):
+			# Commit! Predict player position FAR ahead
+			var predict_pos = player.global_position + player_vel * p.intercept_predict_time
+			set_meta("ic_target", predict_pos)
+			set_meta("ic_state", 1)
+			set_meta("ic_timer", p.intercept_commit_time)
+	else:
+		# Committed — ROCKET to intercept point, no course correction, immune to pushback
+		ic_timer -= delta
+		set_meta("ic_timer", ic_timer)
+		if to_target.length() > 5.0 and ic_timer > 0:
+			velocity = to_target.normalized() * spd * 5.0
+		else:
+			# Overshoot or arrived — brief pause then reset
+			set_meta("ic_state", 0)
+			set_meta("ic_timer", 0.0)
+			velocity = Vector2.ZERO
+
+## Elastic: spring-tethered to spawn with real tension, acceleration, and bounce rebound
+func _move_elastic(dir: Vector2, p: MovementPattern, spd: float, delta: float) -> void:
+	var bounces: int = 0
+	var to_spawn: Vector2 = _spawn_pos - global_position
+	if not has_meta("el_state"):
+		set_meta("el_state", 0)  # 0=stretching out, 1=snapping back, 2=rebounding past spawn
+		set_meta("el_vel", Vector2.ZERO)
+		set_meta("el_bounces", 0)
+	var el_state: int = get_meta("el_state")
+	var el_vel: Vector2 = get_meta("el_vel")
+	var anchor_dist = to_spawn.length()
+	var to_spawn_dir = to_spawn.normalized() if anchor_dist > 1.0 else Vector2.ZERO
+	match el_state:
+		0:  # Stretching out toward player — spring tension builds
+			var tension = clampf(anchor_dist / p.elastic_max_stretch, 0.0, 1.0)
+			# Accelerate toward player but tension pulls back progressively
+			var accel = dir * spd * 3.0 * (1.0 - tension * 0.9)
+			# Spring pull back toward anchor
+			var spring_pull = to_spawn_dir * tension * spd * 4.0
+			el_vel = (el_vel + (accel + spring_pull) * delta).limit_length(spd * 2.0)
+			velocity = el_vel
+			set_meta("el_vel", el_vel)
+			if anchor_dist >= p.elastic_max_stretch:
+				# SNAP! Convert all distance into recoil energy
+				set_meta("el_state", 1)
+				set_meta("el_vel", to_spawn_dir * p.elastic_whip_speed)
+				set_meta("el_bounces", 0)
+		1:  # Snapping back toward spawn — accelerating, unstoppable
+			# Spring acceleration toward anchor
+			el_vel += to_spawn_dir * p.elastic_whip_speed * 3.0 * delta
+			el_vel = el_vel.limit_length(p.elastic_whip_speed)
+			velocity = el_vel
+			set_meta("el_vel", el_vel)
+			if anchor_dist < 10.0:
+				# Passed through spawn — rebound out the other side
+				set_meta("el_state", 2)
+				# Keep velocity but dampen for bounce
+				set_meta("el_vel", el_vel * 0.6)
+				set_meta("el_bounces", get_meta("el_bounces") + 1)
+		2:  # Rebounding past spawn — oscillating bounce
+			# Spring pulls back toward anchor
+			el_vel += to_spawn_dir * spd * 6.0 * delta
+			# Damping
+			el_vel *= (1.0 - 1.5 * delta)
+			velocity = el_vel
+			set_meta("el_vel", el_vel)
+			if anchor_dist < 10.0 and el_vel.length() < spd * 0.3:
+				# Settled — restart stretch cycle
+				set_meta("el_state", 0)
+				set_meta("el_vel", Vector2.ZERO)
+			elif anchor_dist < 10.0 and bounces < 3:
+				# Another bounce through
+				set_meta("el_state", 1)
+				set_meta("el_vel", el_vel * 0.5)
+				set_meta("el_bounces", bounces + 1)
+
+## Edge Skater: rides along walls, flowing around perimeter
+func _move_edge_skater(p: MovementPattern, spd: float, delta: float) -> void:
+	if not has_meta("es_dir"):
+		# Start moving in a random cardinal direction
+		var dirs = [Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT, Vector2.UP]
+		set_meta("es_dir", dirs[randi() % 4])
+		set_meta("es_wall_timer", 0.0)
+	var es_dir: Vector2 = get_meta("es_dir")
+	var es_speed = spd * p.edge_skate_speed
+	# Move along current direction
+	velocity = es_dir * es_speed
+	# Use move_and_slide collision to detect walls
+	move_and_slide()
+	if get_slide_collision_count() > 0:
+		# Hit a wall — turn 90 degrees (clockwise)
+		var col = get_slide_collision(0)
+		var normal = col.get_normal()
+		# Slide along the wall: turn perpendicular to normal
+		es_dir = Vector2(-normal.y, normal.x)  # 90 degrees CW
+		set_meta("es_dir", es_dir)
+		velocity = es_dir * es_speed
+	# Also check if we're drifting away from walls — steer back toward nearest wall
+	set_meta("es_wall_timer", get_meta("es_wall_timer") + delta)
+	if get_meta("es_wall_timer") > 2.0 and get_slide_collision_count() == 0:
+		# Haven't hit a wall in 2s — veer toward spawn (room center has walls around it)
+		var to_wall = (_spawn_pos - global_position)
+		if to_wall.length() > 60.0:
+			# We're far from center, probably near walls already — try perpendicular
+			velocity = Vector2(-es_dir.y, es_dir.x) * es_speed * 0.5 + es_dir * es_speed * 0.5
+	set_meta("_wall_bounce_handled", true)  # skip double move_and_slide
+
+## Bait & Punish: retreat to bait, then flip into punish charge
+func _move_bait_punish(dir: Vector2, dist: float, p: MovementPattern, spd: float, delta: float) -> void:
+	if not has_meta("bp_state"):
+		set_meta("bp_state", 0)  # 0=bait (flee), 1=watching, 2=punish
+		set_meta("bp_timer", 0.0)
+		set_meta("bp_prev_dist", dist)
+	var bp_state: int = get_meta("bp_state")
+	var bp_timer: float = get_meta("bp_timer")
+	match bp_state:
+		0:  # Bait — flee away from player
+			velocity = _steer_around_walls(-dir) * spd * 1.2
+			bp_timer += delta
+			set_meta("bp_timer", bp_timer)
+			if bp_timer >= p.bait_flee_time:
+				set_meta("bp_state", 1)
+				set_meta("bp_timer", 0.0)
+				set_meta("bp_prev_dist", dist)
+		1:  # Watching — check if player is chasing (distance decreasing)
+			velocity = Vector2.ZERO  # pause briefly
+			bp_timer += delta
+			set_meta("bp_timer", bp_timer)
+			var prev_d: float = get_meta("bp_prev_dist")
+			if dist < prev_d - 5.0 or bp_timer > 0.5:
+				# Player is pursuing or timeout — PUNISH
+				set_meta("bp_state", 2)
+				set_meta("bp_timer", 1.0)
+			elif bp_timer > 1.0:
+				# Player didn't chase — go back to bait
+				set_meta("bp_state", 0)
+				set_meta("bp_timer", 0.0)
+		2:  # Punish — charge at player at high speed
+			velocity = _steer_around_walls(dir) * p.punish_speed
+			bp_timer -= delta
+			set_meta("bp_timer", bp_timer)
+			if bp_timer <= 0 or dist < 10.0:
+				set_meta("bp_state", 0)
+				set_meta("bp_timer", 0.0)
+
+## Ambush: permanently invisible, hides near walls, repositions when hit
+func _move_ambush(dir: Vector2, dist: float, p: MovementPattern, spd: float, delta: float) -> void:
+	var spr = $Sprite2D
+	# Permanently semi-invisible
+	if not has_meta("amb_init"):
+		set_meta("amb_init", true)
+		set_meta("amb_state", 0)  # 0=hiding, 1=engaging
+		if spr:
+			spr.modulate.a = 0.08  # nearly invisible
+	var amb_state: int = get_meta("amb_state")
+	if amb_state == 0:
+		# Hiding — creep slowly toward player but stay very faint
+		if spr and spr.modulate.a > 0.08:
+			spr.modulate.a = maxf(spr.modulate.a - delta * 0.5, 0.08)
+		if dist > 40.0:
+			velocity = _steer_around_walls(dir) * spd * 0.3
+		else:
+			velocity = Vector2.ZERO
+		# If player is close and fighting other enemies, engage
+		var other_enemies_fighting = false
+		for e in get_tree().get_nodes_in_group("enemy"):
+			if e != self and is_instance_valid(e) and e.state == State.CHASE and e.state != State.DEAD:
+				if e.global_position.distance_to(global_position) < 200.0:
+					other_enemies_fighting = true
+					break
+		if (dist < 60.0 and other_enemies_fighting) or dist < 25.0:
+			set_meta("amb_state", 1)
+			if spr:
+				spr.modulate.a = 0.5  # become partially visible when attacking
+	else:
+		# Engaging — chase and attack, become more visible
+		if spr:
+			spr.modulate.a = minf(spr.modulate.a + delta * 0.3, 0.5)
+		velocity = _steer_around_walls(dir) * spd * 1.5
+		# If player gets far, go back to hiding
+		if dist > 100.0:
+			set_meta("amb_state", 0)
+	# Reactive teleport when hit — reposition and go back to hiding
+	if not has_meta("amb_last_hp"):
+		set_meta("amb_last_hp", hp)
+	var alh: int = get_meta("amb_last_hp")
+	if hp < alh:
+		set_meta("amb_last_hp", hp)
+		# Teleport away to valid floor position and hide again
+		global_position = _find_valid_floor_pos(_spawn_pos, 30.0, 60.0)
+		set_meta("amb_state", 0)
+		if spr:
+			spr.modulate.a = 0.08
+
+func _apply_movement_pattern(p: MovementPattern, dir: Vector2, dist: float, delta: float) -> void:
+	var to_ally: Vector2 = Vector2.ZERO
+	var eff_speed: float = speed
+	var ally_dist: float = 0.0
+	var center: Vector2 = global_position
+	if _enraged:
+		eff_speed *= (1.0 + p.enrage_speed_bonus)
+
+	# Bodyguard override: follow ally instead of player
+	if _bodyguard_mode and is_instance_valid(_attached_ally):
+		if ally_dist > 12.0:
+			velocity = _steer_around_walls(to_ally) * eff_speed * 0.8
+		else:
+			velocity = Vector2.ZERO
+		return
+
+	# Dispatch by movement type
+	match p.move_type:
+		MovementPattern.MoveType.ORBIT_PLAYER:
+			_move_orbit_target(player.global_position if is_instance_valid(player) else global_position, p, eff_speed, delta)
+		MovementPattern.MoveType.ORBIT_POINT:
+			_move_orbit_target(_spawn_pos, p, eff_speed, delta)
+		MovementPattern.MoveType.ORBIT_ALLY:
+			var ally = _find_nearest_ally()
+			_move_orbit_target(center, p, eff_speed, delta)
+		MovementPattern.MoveType.PATROL_H:
+			_move_patrol(Vector2.RIGHT, p, eff_speed, delta)
+		MovementPattern.MoveType.PATROL_V:
+			_move_patrol(Vector2.DOWN, p, eff_speed, delta)
+		MovementPattern.MoveType.FLEE:
+			velocity = _steer_around_walls(-dir) * eff_speed
+		MovementPattern.MoveType.ZIGZAG:
+			_move_zigzag(dir, p, eff_speed, delta)
+		MovementPattern.MoveType.WALL_BOUNCE:
+			_move_wall_bounce(p, eff_speed, delta)
+		MovementPattern.MoveType.DASH_IN_OUT:
+			_move_dash_in_out(dir, dist, p, eff_speed, delta)
+		MovementPattern.MoveType.KITE:
+			_move_kite(dir, dist, p, eff_speed)
+		MovementPattern.MoveType.SWOOP:
+			_move_swoop(dir, dist, p, delta)
+		MovementPattern.MoveType.TELEPORT:
+			_move_teleport(p, eff_speed, delta)
+		MovementPattern.MoveType.MIRROR:
+			_move_mirror(p, eff_speed, delta)
+		MovementPattern.MoveType.INTERCEPT:
+			_move_intercept(dir, dist, p, eff_speed, delta)
+		MovementPattern.MoveType.ELASTIC:
+			_move_elastic(dir, p, eff_speed, delta)
+		MovementPattern.MoveType.EDGE_SKATER:
+			_move_edge_skater(p, eff_speed, delta)
+		MovementPattern.MoveType.BAIT_PUNISH:
+			_move_bait_punish(dir, dist, p, eff_speed, delta)
+		MovementPattern.MoveType.AMBUSH:
+			_move_ambush(dir, dist, p, eff_speed, delta)
+		_:
+			_move_weighted(p, dir, dist, delta, eff_speed)
+
+## Orbit around a center point at orbit_radius — always tangential, corrects radius
+func _move_orbit_target(center: Vector2, p: MovementPattern, spd: float, delta: float) -> void:
+	_orbit_angle += p.orbit_speed * delta
+	var to_center = center - global_position
+	var current_dist = to_center.length()
+	if current_dist < 1.0:
+		velocity = Vector2.RIGHT * spd
+		return
+	# Tangential direction (perpendicular to radius)
+	var tangent = Vector2(-to_center.y, to_center.x).normalized()
+	if p.orbit_speed < 0:
+		tangent = -tangent
+	# Radial correction — gentle, capped at 30% of speed so tangent always dominates
+	var radial_error = current_dist - p.orbit_radius
+	var correction_strength = clampf(radial_error / p.orbit_radius, -0.3, 0.3) * spd
+	var correction = to_center.normalized() * correction_strength
+	velocity = (tangent * spd + correction)
+
+## Patrol back and forth along an axis from spawn
+func _move_patrol(axis: Vector2, p: MovementPattern, spd: float, delta: float) -> void:
+	var target: Vector2 = player.global_position if is_instance_valid(player) else global_position
+	_patrol_offset += _patrol_dir * spd * delta
+	if absf(_patrol_offset) > p.patrol_length:
+		_patrol_dir = -_patrol_dir
+		_patrol_offset = clampf(_patrol_offset, -p.patrol_length, p.patrol_length)
+	var to_target = target - global_position
+	if to_target.length() > 2.0:
+		velocity = _steer_around_walls(to_target.normalized()) * spd
+	else:
+		velocity = axis * _patrol_dir * spd
+
+## Zigzag: sharp lateral zigzag while slowly approaching player
+func _move_zigzag(dir: Vector2, p: MovementPattern, spd: float, delta: float) -> void:
+	var perp = Vector2(-dir.y, dir.x)
+	var side = 1.0 if sin(_melee_flank_timer / 0.4 * PI) >= 0.0 else -1.0
+	_melee_flank_timer += delta
+	var zigzag_period = 0.4
+	# Mostly sideways (perpendicular to player), slight forward creep
+	var zigzag_dir = (perp * side * 3.0 + dir * 0.3).normalized()
+	velocity = _steer_around_walls(zigzag_dir) * spd
+
+## Wall bounce: picks a random direction on first call, bounces off walls like a billiard ball
+func _move_wall_bounce(p: MovementPattern, spd: float, delta: float) -> void:
+	if not has_meta("bounce_dir"):
+		set_meta("bounce_dir", Vector2.from_angle(randf() * TAU))
+	var bdir: Vector2 = get_meta("bounce_dir")
+	velocity = bdir * spd
+	move_and_slide()
+	# Check wall collisions and reflect
+	for i in range(get_slide_collision_count()):
+		var col = get_slide_collision(i)
+		if col:
+			bdir = bdir.bounce(col.get_normal())
+			set_meta("bounce_dir", bdir)
+	# Don't let move_and_slide run again in physics — mark handled
+	set_meta("_wall_bounce_handled", true)
+
+## Kite: maintain exact distance from player — retreat if too close, advance if too far
+func _move_kite(dir: Vector2, dist: float, p: MovementPattern, spd: float) -> void:
+	var perp: Vector2 = Vector2.ZERO
+	var ideal = p.kite_distance
+	var margin = 10.0
+	if dist < ideal - margin:
+		# Too close — back away
+		velocity = _steer_around_walls(-dir) * spd
+	elif dist > ideal + margin:
+		# Too far — approach
+		velocity = _steer_around_walls(dir) * spd * 0.7
+	else:
+		# At ideal range — strafe sideways
+		velocity = _steer_around_walls(perp) * spd * 0.8
+
+## Swoop: fast arc that passes BESIDE the player (not through), loops wide, comes back
+func _move_swoop(dir: Vector2, dist: float, p: MovementPattern, delta: float) -> void:
+	var side: Vector2 = Vector2.ZERO
+	var perp: Vector2 = Vector2.ZERO
+	var timer = Timer.new()
+	# States: 0=looping out (wide arc away), 1=swooping in (fast pass beside player)
+	if not has_meta("swoop_state"):
+		set_meta("swoop_state", 1)
+		set_meta("swoop_side", 1.0 if randf() > 0.5 else -1.0)
+		set_meta("swoop_closest", 999.0)
+	var sw_state: int = get_meta("swoop_state")
+	if sw_state == 1:
+		# Aim beside the player — heavy lateral component so we pass at ~30px offset
+		var swoop_dir = (dir + perp * side * 2.5).normalized()
+		velocity = swoop_dir * p.swoop_speed
+		# Track closest approach — once we start getting farther, we've passed
+		var prev_closest: float = get_meta("swoop_closest")
+		if dist < prev_closest:
+			set_meta("swoop_closest", dist)
+		elif dist > prev_closest + 15.0:
+			# We've passed the player — start looping out
+			set_meta("swoop_state", 0)
+			set_meta("swoop_timer", 0.0)
+			set_meta("swoop_side", -side)
+			set_meta("swoop_closest", 999.0)
+	else:
+		# Looping out in a wide arc away from player
+		set_meta("swoop_timer", timer)
+		var arc_dir = (-dir + perp * side * 2.0).normalized()
+		velocity = arc_dir * p.swoop_speed * 0.5
+		if timer > 1.5 or dist > p.swoop_arc_size:
+			set_meta("swoop_state", 1)
+
+## Teleport: blinks to random position in room when hit, also periodic blink
+func _move_teleport(p: MovementPattern, spd: float, delta: float) -> void:
+	var timer = Timer.new()
+	var to_spawn: Vector2 = _spawn_pos - global_position
+	if not has_meta("tp_timer"):
+		set_meta("tp_timer", p.teleport_interval)
+		set_meta("tp_last_hp", hp)
+	set_meta("tp_timer", timer)
+	# Reactive teleport: blink immediately when taking damage
+	var last_hp: int = get_meta("tp_last_hp", hp)
+	var took_damage = hp < last_hp
+	set_meta("tp_last_hp", hp)
+	if took_damage or timer <= 0:
+		_do_teleport_blink(p)
+		set_meta("tp_timer", p.teleport_interval)
+	else:
+		# Slow drift between teleports
+		if to_spawn.length() > 8.0:
+			velocity = to_spawn.normalized() * spd * 0.3
+		else:
+			velocity = Vector2.ZERO
+
+## Find a valid floor position near a center point. Returns center if no floor found.
+func _find_valid_floor_pos(center: Vector2, min_dist: float, max_dist: float) -> Vector2:
+	var offset: Vector2 = Vector2.ZERO
+	var room_node = get_parent().get_parent() if get_parent() else null
+	var floor_tm: TileMapLayer = null
+	if room_node and room_node.has_node("Floor"):
+		floor_tm = room_node.get_node("Floor")
+	for _i in range(15):
+		var candidate = center + offset
+		if floor_tm:
+			var local_pos = floor_tm.to_local(candidate)
+			var cell = floor_tm.local_to_map(local_pos)
+			if floor_tm.get_cell_source_id(cell) >= 0:
+				return candidate
+		else:
+			return candidate
+	return center  # couldn't find valid spot, stay put
+
+func _do_teleport_blink(p: MovementPattern) -> void:
+	var tw = create_tween()
+	global_position = _find_valid_floor_pos(_spawn_pos, 20.0, p.teleport_range)
+	velocity = Vector2.ZERO
+	# Visual flash
+	var spr = get_node_or_null("Sprite2D")
+	if spr:
+		tw.tween_property(spr, "modulate:a", 0.2, 0.05)
+		tw.tween_property(spr, "modulate:a", 1.0, 0.15)
+
+## Mirror: copies player movement + constantly pulls player toward self
+func _move_mirror(p: MovementPattern, spd: float, delta: float) -> void:
+	var pull_dir: Vector2 = Vector2.ZERO
+	if not is_instance_valid(player):
+		velocity = Vector2.ZERO
+		return
+	if not has_meta("mirror_prev_player"):
+		set_meta("mirror_prev_player", player.global_position)
+	var prev_pp: Vector2 = get_meta("mirror_prev_player")
+	var player_vel = player.global_position - prev_pp
+	set_meta("mirror_prev_player", player.global_position)
+	# Move exactly as the player moves (copy their velocity)
+	if player_vel.length() > 0.5:
+		velocity = player_vel / maxf(delta, 0.001)
+	else:
+		# Player is still — slowly drift around at idle speed
+		_orbit_angle += 1.5 * delta
+		var idle_target = _spawn_pos + Vector2.from_angle(_orbit_angle) * 25.0
+		var to_idle = idle_target - global_position
+		if to_idle.length() > 3.0:
+			velocity = to_idle.normalized() * spd * 0.5
+		else:
+			velocity = Vector2.ZERO
+	# Pull effect: constantly drag player toward this enemy
+	if player is CharacterBody2D:
+		var pull_dist = pull_dir.length()
+		if pull_dist > 10.0 and pull_dist < 150.0:
+			var pull_strength = p.mirror_pull_strength * (1.0 - pull_dist / 150.0)
+			player.velocity += pull_dir.normalized() * pull_strength * delta
+
+## Dash to player, pause, dash back to spawn
+func _move_dash_in_out(dir: Vector2, dist: float, p: MovementPattern, spd: float, delta: float) -> void:
+	_dash_cd -= delta
+	_dash_timer -= delta
+	match _dash_state:
+		0:  # idle at spawn, wait for cooldown
+			var to_spawn = _spawn_pos - global_position
+			if to_spawn.length() > 4.0:
+				velocity = _steer_around_walls(to_spawn.normalized()) * spd * 0.5
+			else:
+				velocity = Vector2.ZERO
+			if _dash_cd <= 0:
+				_dash_state = 1
+				_dash_timer = 1.5  # max dash time
+		1:  # dashing in toward player
+			velocity = _steer_around_walls(dir) * p.dash_in_speed
+			if dist < 15.0 or _dash_timer <= 0:
+				_dash_state = 2
+				_dash_timer = p.dash_pause
+				velocity = Vector2.ZERO
+		2:  # pausing at player (attack happens via normal attack timer)
+			velocity = Vector2.ZERO
+			if _dash_timer <= 0:
+				_dash_state = 3
+				_dash_timer = 1.5
+		3:  # dashing back to spawn
+			var to_spawn = _spawn_pos - global_position
+			if to_spawn.length() > 8.0 and _dash_timer > 0:
+				velocity = _steer_around_walls(to_spawn.normalized()) * p.dash_in_speed
+			else:
+				_dash_state = 0
+				_dash_cd = p.dash_cooldown
+				velocity = Vector2.ZERO
+
+func _find_nearest_ally() -> Node2D:
+	var nearest_dist := INF
+	var nearest: Node2D = null
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if e == self or not is_instance_valid(e) or e.state == State.DEAD:
+			continue
+		var d = global_position.distance_to(e.global_position)
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest = e
+	return nearest
+
+## Legacy weighted movement (existing system)
+func _move_weighted(p: MovementPattern, dir: Vector2, dist: float, delta: float, eff_speed: float) -> void:
+	var flow_dir: Vector2 = Vector2.ZERO
+	var t: float = Time.get_ticks_msec() / 1000.0
+	var sfx = get_node_or_null("/root/SFXManager")
+	var pref = p.preferred_distance if p.preferred_distance > 0 else (definition.preferred_distance if definition else 0.0)
+
+	var aw = p.approach_weight
+	var rw = p.retreat_weight
+	var sw = p.strafe_weight
+	var hw = p.hold_weight
+
+	if pref > 0:
+		if dist < p.close_threshold:
+			if p.close_approach >= 0: aw = p.close_approach
+			if p.close_retreat >= 0: rw = p.close_retreat
+			if p.close_strafe >= 0: sw = p.close_strafe
+			eff_speed *= p.close_speed_mult
+		elif dist > pref * p.far_threshold_mult:
+			if p.far_approach >= 0: aw = p.far_approach
+			if p.far_retreat >= 0: rw = p.far_retreat
+			if p.far_strafe >= 0: sw = p.far_strafe
+			eff_speed *= p.far_speed_mult
+		elif dist < pref * 0.8:
+			rw += t * 0.5
+			aw *= (1.0 - t * 0.5)
+		elif dist > pref:
+			var denom = pref * (p.far_threshold_mult - 1.0)
+			if denom > 0:
+				aw += t * 0.3
+
+	if _enraged:
+		aw += p.enrage_approach_boost
+
+	var approach_vec = dir
+	var retreat_vec = -dir
+	var strafe_vec = dir.rotated(PI * 0.5 * _melee_dodge_dir)
+
+	if p.weave_amplitude > 0:
+		var weave_angle = PI * p.weave_amplitude * sin(_melee_flank_timer * 3.0)
+		approach_vec = dir.rotated(weave_angle)
+		_melee_flank_timer += delta
+
+	var total = aw + rw + sw + hw
+	if total < 0.01:
+		velocity = Vector2.ZERO
+	else:
+		var move_component = approach_vec * aw + retreat_vec * rw + strafe_vec * sw
+		var hold_factor = 1.0 - (hw / total)
+		if move_component.length() < 0.01:
+			velocity = Vector2.ZERO
+		else:
+			var final_dir = move_component.normalized()
+			if _nav and _nav.is_ready() and not (definition and definition.ignores_terrain) and dist > 12.0:
+				if aw > rw and aw > sw:
+					if flow_dir != Vector2.ZERO:
+						final_dir = flow_dir
+			velocity = _steer_around_walls(final_dir) * eff_speed * hold_factor
+
+	if p.can_charge and _boss_charge_cd <= 0 and dist > p.charge_min_dist and dist < p.charge_max_dist:
+		_boss_charge_cd = p.charge_cooldown if not _enraged else p.charge_cooldown * 0.5
+		charge_dir = dir
+		charge_timer = p.charge_duration
+		state = State.CHARGING
+		velocity = dir * speed * p.charge_speed_mult
+		if sfx:
+			sfx.play("attack_b", -6.0, 0.1)
+
+	if p.dodge_enabled:
+		_melee_dodge_timer -= delta
+		if _melee_dodge_timer <= 0:
+			_melee_dodge_timer = randf_range(p.dodge_interval_min, p.dodge_interval_max)
+			_melee_dodge_dir = -_melee_dodge_dir
+
+func _do_legacy_movement(dir: Vector2, dist: float, delta: float) -> void:
+	var dodge: float = 0.0
+	var is_boss: bool = definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS
+	var away: Vector2 = Vector2.ZERO
+	var sfx_l = get_node_or_null("/root/SFXManager")
+	var weave: Vector2 = Vector2.ZERO
+	var approach: Vector2 = Vector2.ZERO
+	var to_ally: Vector2 = Vector2.ZERO
+	var atk_type_m: int = definition.attack_type if definition else 0
+	var strafe: Vector2 = Vector2.ZERO
+	var sfx_bc = get_node_or_null("/root/SFXManager")
+	var ally_dist: float = 0.0
+	var base_atk: int = definition.attack_damage if definition else 2
+	var atk_type: int = definition.attack_type if definition else 0
+	var pref_dist = definition.preferred_distance if definition else 0.0
+	var move_dir = dir
+	var eff_speed = speed
+	var enraged = _enraged
+
+	if enraged:
+		eff_speed *= 1.5
+
+	# Use flow-field pathfinding if available (dungeon) and not a ghost
+	var use_flow = _nav and _nav.is_ready() and not (definition and definition.ignores_terrain)
+	if use_flow and dist > 12.0:
+		var flow_dir = _nav.get_flow_direction(global_position)
+		if flow_dir != Vector2.ZERO:
+			move_dir = flow_dir
+	elif not (definition and definition.ignores_terrain):
+		move_dir = _steer_around_walls(dir)
+
+	# Boss/Elite special movement behaviors
+	if _is_boss_or_large and definition:
+		match base_atk:
+			EnemyDefinition.AttackType.MELEE, EnemyDefinition.AttackType.CHARGE, EnemyDefinition.AttackType.DASH:
+				if _boss_charge_cd <= 0 and dist > 20 and dist < 80:
+					_boss_charge_cd = 3.0 if not enraged else 1.5
+					charge_dir = dir
+					charge_timer = 0.4
+					state = State.CHARGING
+					velocity = dir * eff_speed * 3.0
+					if sfx_bc:
+						sfx_bc.play("attack_b", -4.0, 0.1)
+					return
+				velocity = move_dir * eff_speed * 1.5
+			EnemyDefinition.AttackType.SUMMON:
+				if _boss_summon_cd <= 0:
+					_boss_summon_cd = 5.0 if not enraged else 3.0
+					_do_summon()
+				if dist > 60:
+					velocity = move_dir * eff_speed * 0.4
+				else:
+					velocity = Vector2.ZERO
+			EnemyDefinition.AttackType.BEAM:
+				velocity = move_dir * eff_speed * 0.3
+			_:
+				if pref_dist > 0:
+					if dist > pref_dist:
+						velocity = move_dir * eff_speed * 0.8
+					else:
+						velocity = Vector2.ZERO
+				else:
+					velocity = move_dir * eff_speed * 1.2
+	elif pref_dist > 0:
+		if atk_type == EnemyDefinition.AttackType.PUSH_WAVE and _bodyguard_mode and is_instance_valid(_attached_ally):
+			if ally_dist > 12.0:
+				velocity = _steer_around_walls(to_ally) * eff_speed * 0.8
+			else:
+				velocity = Vector2.ZERO
+		elif atk_type in [EnemyDefinition.AttackType.FIRE_RAIN,
+			EnemyDefinition.AttackType.BOMB_TOSS, EnemyDefinition.AttackType.CARPET_BOMB,
+			EnemyDefinition.AttackType.CLUSTER_BOMB, EnemyDefinition.AttackType.MINE_DROP,
+			EnemyDefinition.AttackType.ARTILLERY, EnemyDefinition.AttackType.POISON_CLOUD]:
+			if is_boss:
+				if dist < pref_dist * 0.4:
+					velocity = _steer_around_walls(-dir) * eff_speed * 0.4
+				elif dist < pref_dist:
+					velocity = Vector2.ZERO
+				else:
+					velocity = move_dir * eff_speed * 0.5
+					_hold_timer = 0.0
+			else:
+				if dist < pref_dist:
+					velocity = _steer_around_walls(away) * eff_speed * 0.9
+				elif dist < pref_dist * 1.5:
+					velocity = Vector2.ZERO
+				else:
+					velocity = move_dir * eff_speed * 0.4
+					_hold_timer = 0.0
+		elif atk_type == EnemyDefinition.AttackType.BARRIER_WALL:
+			if dist < 20.0:
+				velocity = move_dir * eff_speed * 1.5
+			elif dist < pref_dist:
+				velocity = _steer_around_walls(away) * eff_speed * 0.7
+			else:
+				velocity = Vector2.ZERO
+		else:
+			if dist > pref_dist * 1.5:
+				velocity = move_dir * eff_speed * 0.8
+				_hold_timer = 0.0
+			else:
+				_hold_timer += delta
+				if _hold_timer > 3.0:
+					velocity = move_dir * eff_speed * 0.6
+					if _hold_timer > 4.5:
+						_hold_timer = 0.0
+				else:
+					velocity = Vector2.ZERO
+	else:
+		_melee_dodge_timer -= delta
+		_melee_lunge_cd -= delta
+		if atk_type_m == EnemyDefinition.AttackType.CHARGE or atk_type_m == EnemyDefinition.AttackType.DASH:
+			if dist > 50:
+				velocity = move_dir * eff_speed * 1.3
+			elif dist > 20:
+				_melee_flank_timer += delta
+				velocity = _steer_around_walls((strafe + approach).normalized()) * eff_speed * 1.1
+				if _melee_flank_timer > 1.5 and _melee_lunge_cd <= 0:
+					_melee_flank_timer = 0.0
+					_melee_lunge_cd = 2.5
+					charge_dir = dir
+					charge_timer = 0.3
+					state = State.CHARGING
+					velocity = dir * eff_speed * 3.0
+					if sfx_l:
+						sfx_l.play("attack_b", -6.0, 0.1)
+			else:
+				velocity = move_dir * eff_speed * 1.5
+			if _melee_dodge_timer <= 0:
+				_melee_dodge_timer = randf_range(0.8, 2.0)
+				_melee_dodge_dir = -_melee_dodge_dir
+		elif atk_type_m == EnemyDefinition.AttackType.NONE:
+			velocity = move_dir * eff_speed
+		elif atk_type_m == EnemyDefinition.AttackType.STRAFE_RUN:
+			velocity = _steer_around_walls((strafe + approach).normalized()) * eff_speed * 1.2
+			if _melee_dodge_timer <= 0:
+				_melee_dodge_timer = randf_range(0.6, 1.5)
+				_melee_dodge_dir = -_melee_dodge_dir
+			else:
+				if dist > 30:
+					velocity = _steer_around_walls(weave) * eff_speed * 1.2
+					_melee_flank_timer += delta
+				elif dist > 12:
+					if _melee_dodge_timer > 0:
+						var dodge_dir = dir.rotated(PI * 0.5 * _melee_dodge_dir)
+						velocity = _steer_around_walls(dodge_dir) * eff_speed * 1.4
+					else:
+						velocity = move_dir * eff_speed * 1.5
+				else:
+					velocity = move_dir * eff_speed * 1.5
+				if _melee_dodge_timer <= 0:
+					_melee_dodge_timer = randf_range(0.5, 1.2)
+					_melee_dodge_dir = -_melee_dodge_dir
 
 func _get_active_attack_type() -> EnemyDefinition.AttackType:
 	if not definition:
@@ -705,6 +1731,11 @@ func _get_active_attack_type() -> EnemyDefinition.AttackType:
 	# Elites/bosses cycle through their random attack pool
 	if _is_boss_or_large and not _attack_pool.is_empty():
 		return _next_pool_attack()
+	# Normal enemies with melee secondary: 40% chance to use melee when player is close
+	if definition.has_meta("melee_secondary") and is_instance_valid(player):
+		var _md = global_position.distance_to(player.global_position)
+		if _md < 50.0 and randf() < 0.4:
+			return definition.get_meta("melee_secondary") as EnemyDefinition.AttackType
 	if _current_phase == 3 and definition.phase_3_attack != EnemyDefinition.AttackType.NONE:
 		return definition.phase_3_attack
 	if _current_phase == 2 and definition.phase_2_attack != EnemyDefinition.AttackType.NONE:
@@ -721,10 +1752,10 @@ func _get_active_bullet_count() -> int:
 	return definition.bullet_count
 
 func _steer_around_walls(desired_dir: Vector2) -> Vector2:
+	var space = get_world_2d().direct_space_state
 	# Cast rays ahead to detect walls and steer around them
 	if desired_dir.length_squared() < 0.01:
 		return desired_dir
-	var space = get_world_2d().direct_space_state
 	var look_dist = 12.0  # how far ahead to check
 
 	# Check straight ahead
@@ -750,6 +1781,8 @@ var _boss_charge_cd: float = 0.0  # cooldown for boss charge attacks
 var _boss_summon_cd: float = 0.0  # cooldown for boss periodic summons
 
 func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
+	var side: Vector2 = Vector2.ZERO
+	var atk: int = definition.attack_type if definition else 0
 	# FEARED: run away from player
 	if has_meta("feared") and get_meta("feared"):
 		var flee_dir = -dir  # opposite of player direction
@@ -784,211 +1817,23 @@ func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
 		_begin_search()
 		return
 
-	var pref_dist = definition.preferred_distance if definition else 0.0
-	var move_dir = dir
-	var eff_speed = speed
-
-	# Boss enrage at <30% HP: faster movement + attacks
-	var enraged = _is_boss_or_large and hp < _max_hp * 0.3
-	if enraged:
-		eff_speed *= 1.5
-		if attack_timer > 0:
-			attack_timer -= delta  # double-tick attack timer when enraged
-
 	# Tick boss ability cooldowns
 	if _boss_charge_cd > 0:
 		_boss_charge_cd -= delta
 	if _boss_summon_cd > 0:
 		_boss_summon_cd -= delta
 
-	# Use flow-field pathfinding if available (dungeon) and not a ghost
-	var use_flow = _nav and _nav.is_ready() and not (definition and definition.ignores_terrain)
-	if use_flow and dist > 12.0:
-		var flow_dir = _nav.get_flow_direction(global_position)
-		if flow_dir != Vector2.ZERO:
-			move_dir = flow_dir
-	elif not (definition and definition.ignores_terrain):
-		# Fallback: steering-based wall avoidance (overworld or ghosts)
-		move_dir = _steer_around_walls(dir)
+	# Boss enrage at <30% HP
+	_enraged = _is_boss_or_large and hp < _max_hp * 0.3
+	if _enraged and attack_timer > 0:
+		attack_timer -= delta  # double-tick attack timer when enraged
 
-	# Boss/Elite special movement behaviors
-	if _is_boss_or_large and definition:
-		var base_atk = definition.attack_type
-		match base_atk:
-			EnemyDefinition.AttackType.MELEE, EnemyDefinition.AttackType.CHARGE, EnemyDefinition.AttackType.DASH:
-				# Melee bosses: periodic fast charges at player
-				if _boss_charge_cd <= 0 and dist > 20 and dist < 80:
-					_boss_charge_cd = 3.0 if not enraged else 1.5
-					charge_dir = dir
-					charge_timer = 0.4
-					state = State.CHARGING
-					velocity = dir * eff_speed * 3.0
-					var sfx_bc = get_node_or_null("/root/SFXManager")
-					if sfx_bc:
-						sfx_bc.play("attack_b", -4.0, 0.1)
-					return
-				# Chase aggressively — always approach
-				velocity = move_dir * eff_speed * 1.5
-			EnemyDefinition.AttackType.SUMMON:
-				# Summoner bosses: hold position, summon periodically
-				if _boss_summon_cd <= 0:
-					_boss_summon_cd = 5.0 if not enraged else 3.0
-					_do_summon()
-				# Stand ground and shoot — slight drift toward player
-				if dist > 60:
-					velocity = move_dir * eff_speed * 0.4
-				else:
-					velocity = Vector2.ZERO
-			EnemyDefinition.AttackType.BEAM:
-				# Beam bosses: slow turret, face player
-				velocity = move_dir * eff_speed * 0.3
-			_:
-				# Default boss: approach player, don't flee
-				if pref_dist > 0:
-					# Ranged boss — slow approach, hold at range, don't flee
-					if dist > pref_dist:
-						velocity = move_dir * eff_speed * 0.8
-					else:
-						velocity = Vector2.ZERO  # hold ground and shoot
-				else:
-					# Melee boss — chase
-					velocity = move_dir * eff_speed * 1.2
-	elif pref_dist > 0:
-		var atk_type = definition.attack_type if definition else EnemyDefinition.AttackType.RANGED
-
-		# --- Mummy Bodyguard (PUSH_WAVE) ---
-		if atk_type == EnemyDefinition.AttackType.PUSH_WAVE and _bodyguard_mode and is_instance_valid(_attached_ally):
-			var ally_dist = global_position.distance_to(_attached_ally.global_position)
-			if ally_dist > 12.0:
-				var to_ally = (_attached_ally.global_position - global_position).normalized()
-				velocity = _steer_around_walls(to_ally) * eff_speed * 0.8
-			else:
-				velocity = Vector2.ZERO  # hold position near ally
-
-		# --- All Bombing Enemies: Retreating AI ---
-		# Non-boss bomb enemies flee aggressively and lob from afar
-		elif atk_type in [EnemyDefinition.AttackType.FIRE_RAIN,
-			EnemyDefinition.AttackType.BOMB_TOSS, EnemyDefinition.AttackType.CARPET_BOMB,
-			EnemyDefinition.AttackType.CLUSTER_BOMB, EnemyDefinition.AttackType.MINE_DROP,
-			EnemyDefinition.AttackType.ARTILLERY, EnemyDefinition.AttackType.POISON_CLOUD]:
-			var is_boss = definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS
-			if is_boss:
-				# Bosses hold ground or slowly approach
-				if dist < pref_dist * 0.4:
-					velocity = _steer_around_walls(-dir) * eff_speed * 0.4
-				elif dist < pref_dist:
-					velocity = Vector2.ZERO
-				else:
-					velocity = move_dir * eff_speed * 0.5
-					_hold_timer = 0.0
-			else:
-				# All other bomb enemies (including elites): flee when close
-				if dist < pref_dist:
-					var away = -dir
-					velocity = _steer_around_walls(away) * eff_speed * 0.9
-				elif dist < pref_dist * 1.5:
-					# At preferred distance — strafe/hold
-					velocity = Vector2.ZERO
-				else:
-					# Too far — slow approach
-					velocity = move_dir * eff_speed * 0.4
-					_hold_timer = 0.0
-
-		# --- Evil Guardian Defensive (BARRIER_WALL) ---
-		elif atk_type == EnemyDefinition.AttackType.BARRIER_WALL:
-			if dist < 20.0:
-				# Cornered — aggressive melee chase
-				velocity = move_dir * eff_speed * 1.5
-			elif dist < pref_dist:
-				# Too close — retreat to preferred distance
-				var away = -dir
-				velocity = _steer_around_walls(away) * eff_speed * 0.7
-			else:
-				# At preferred distance — hold and place barriers
-				velocity = Vector2.ZERO
-
-		# --- Default ranged behavior ---
-		else:
-			if dist > pref_dist * 1.5:
-				velocity = move_dir * eff_speed * 0.8
-				_hold_timer = 0.0
-			else:
-				_hold_timer += delta
-				if _hold_timer > 3.0:
-					velocity = move_dir * eff_speed * 0.6
-					if _hold_timer > 4.5:
-						_hold_timer = 0.0
-				else:
-					velocity = Vector2.ZERO
+	# --- Data-driven movement pattern ---
+	if definition and definition.movement_pattern:
+		_apply_movement_pattern(definition.movement_pattern, dir, dist, delta)
 	else:
-		# Melee/no-preference enemy — dynamic combat movement
-		var atk_type_m = definition.attack_type if definition else EnemyDefinition.AttackType.MELEE
-		_melee_dodge_timer -= delta
-		_melee_lunge_cd -= delta
-
-		if atk_type_m == EnemyDefinition.AttackType.CHARGE or atk_type_m == EnemyDefinition.AttackType.DASH:
-			# Charge/Dash types: circle strafe then lunge in
-			if dist > 50:
-				# Far away — approach directly
-				velocity = move_dir * eff_speed * 1.3
-			elif dist > 20:
-				# Mid range — circle strafe to flank, then lunge
-				_melee_flank_timer += delta
-				var strafe = dir.rotated(PI * 0.5 * _melee_dodge_dir)
-				var approach = move_dir * 0.3
-				velocity = _steer_around_walls((strafe + approach).normalized()) * eff_speed * 1.1
-				# After circling ~1.5s, lunge in
-				if _melee_flank_timer > 1.5 and _melee_lunge_cd <= 0:
-					_melee_flank_timer = 0.0
-					_melee_lunge_cd = 2.5
-					charge_dir = dir
-					charge_timer = 0.3
-					state = State.CHARGING
-					velocity = dir * eff_speed * 3.0
-					var sfx_l = get_node_or_null("/root/SFXManager")
-					if sfx_l:
-						sfx_l.play("attack_b", -6.0, 0.1)
-			else:
-				# Very close — attack
-				velocity = move_dir * eff_speed * 1.5
-			# Randomly switch strafe direction
-			if _melee_dodge_timer <= 0:
-				_melee_dodge_timer = randf_range(0.8, 2.0)
-				_melee_dodge_dir = -_melee_dodge_dir
-
-		elif atk_type_m == EnemyDefinition.AttackType.NONE:
-			# Contact-only enemies: shamble directly toward player, no dodging
-			velocity = move_dir * eff_speed
-
-		elif atk_type_m == EnemyDefinition.AttackType.STRAFE_RUN:
-			# Strafe runners: always moving sideways, dashing through player
-			var strafe = dir.rotated(PI * 0.5 * _melee_dodge_dir)
-			var approach = move_dir * 0.5
-			velocity = _steer_around_walls((strafe + approach).normalized()) * eff_speed * 1.2
-			if _melee_dodge_timer <= 0:
-				_melee_dodge_timer = randf_range(0.6, 1.5)
-				_melee_dodge_dir = -_melee_dodge_dir
-
-		else:
-			# Default melee: approach with periodic side-dodges
-			if dist > 30:
-				# Approaching — weave slightly
-				var weave = dir.rotated(PI * 0.25 * _melee_dodge_dir * sin(_melee_flank_timer * 3.0))
-				velocity = _steer_around_walls(weave) * eff_speed * 1.2
-				_melee_flank_timer += delta
-			elif dist > 12:
-				# Close — side-dodge then strike
-				if _melee_dodge_timer > 0:
-					var dodge = dir.rotated(PI * 0.5 * _melee_dodge_dir)
-					velocity = _steer_around_walls(dodge) * eff_speed * 1.4
-				else:
-					velocity = move_dir * eff_speed * 1.5
-			else:
-				# Point blank — commit
-				velocity = move_dir * eff_speed * 1.5
-			if _melee_dodge_timer <= 0:
-				_melee_dodge_timer = randf_range(0.5, 1.2)
-				_melee_dodge_dir = -_melee_dodge_dir
+		# --- Legacy hardcoded movement ---
+		_do_legacy_movement(dir, dist, delta)
 
 	attack_timer -= delta
 	# Artillery: re-check shared vision every ~1s (allies may die)
@@ -1011,8 +1856,18 @@ func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
 		_has_los = _has_line_of_sight_or_shared()
 	else:
 		_has_los = _has_line_of_sight()
-	if attack_timer <= 0 and dist < _attack_range and _has_los:
-		var atk = _atk_check
+	# Movement-attack coupling: check modifier distance constraints
+	var _atk_mod = definition.attack_modifier if definition else null
+	var _mod_blocks_attack = false
+	if _atk_mod and attack_timer <= 0:
+		if _atk_mod.min_fire_distance > 0 and dist < _atk_mod.min_fire_distance:
+			_mod_blocks_attack = true
+		elif _atk_mod.max_fire_distance > 0 and dist > _atk_mod.max_fire_distance:
+			_mod_blocks_attack = true
+
+	if attack_timer <= 0 and dist < _attack_range and _has_los and not _mod_blocks_attack:
+		if _atk_mod and _atk_mod.requires_stationary and not _has_continuous_movement():
+			velocity = Vector2.ZERO
 		# All enemies shoot bullets as baseline — special types add extra behavior
 		match atk:
 			EnemyDefinition.AttackType.NONE:
@@ -1045,7 +1900,6 @@ func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
 					get_tree().create_timer(definition.charge_duration + 0.1 if definition else 0.5).timeout.connect(
 						func():
 							if is_instance_valid(self) and hp > 0 and state != State.DEAD:
-								var side = dir.rotated(PI * 0.5 * _melee_dodge_dir)
 								charge_dir = side
 								charge_timer = 0.2
 								state = State.CHARGING
@@ -1093,16 +1947,81 @@ func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
 				charge_timer = 0.4
 				attack_timer = shoot_interval * 0.5
 				state = State.CHARGING
+			EnemyDefinition.AttackType.SWORD_SLASH:
+				if dist < 28:
+					_shoot_sword_slash(dir)
+					attack_timer = shoot_interval
+				else:
+					state = State.ATTACK
+			EnemyDefinition.AttackType.SPEAR_LUNGE:
+				if dist < 65:
+					_shoot_spear_lunge(dir)
+					attack_timer = shoot_interval
+				else:
+					state = State.ATTACK
+			EnemyDefinition.AttackType.CHARGE_BULL:
+				if dist < 130 and dist > 25:
+					_shoot_charge_bull(dir)
+					attack_timer = shoot_interval
+				else:
+					state = State.ATTACK
+			EnemyDefinition.AttackType.CLEAVE_COMBO:
+				if dist < 30:
+					_shoot_cleave_combo(dir)
+					attack_timer = shoot_interval
+				else:
+					state = State.ATTACK
+			EnemyDefinition.AttackType.WHIRLWIND:
+				if dist < 50:
+					_shoot_whirlwind(dir)
+					attack_timer = shoot_interval
+				else:
+					state = State.ATTACK
+			EnemyDefinition.AttackType.GROUND_POUND:
+				if dist < 40:
+					_shoot_ground_pound(dir)
+					attack_timer = shoot_interval
+				else:
+					state = State.ATTACK
+			EnemyDefinition.AttackType.TAIL_WHIP:
+				if dist < 28:
+					_shoot_tail_whip(dir)
+					attack_timer = shoot_interval
+				else:
+					state = State.ATTACK
+			EnemyDefinition.AttackType.SHIELD_BASH:
+				if dist < 45:
+					_shoot_melee_shield_bash(dir)
+					attack_timer = shoot_interval
+				else:
+					state = State.ATTACK
+			EnemyDefinition.AttackType.GRAB_THROW:
+				if dist < 22:
+					_shoot_grab_throw(dir)
+					attack_timer = shoot_interval
+				else:
+					state = State.ATTACK
+			EnemyDefinition.AttackType.STOMP_WAVE:
+				if dist < 50:
+					_shoot_stomp_wave(dir)
+					attack_timer = shoot_interval
+				else:
+					state = State.ATTACK
 			_:
-				# RANGED, BURST, SUMMON, SLAM, SPIRAL, POISON_SHOT, SHIELD, BEAM, SPLIT
-				# VOLLEY, CROSS_SHOT, WAVE_SHOT, GATLING, MORTAR, NOVA, ZIGZAG
-				# SHOTGUN_BLAST, HELIX, METEOR_SHOWER, BOOMERANG_SHOT, MINEFIELD
-				# WALL_BOUNCE, LASER_GRID, GRAVITY_WELL, CHAIN_LIGHTNING, DEATH_SPIRAL
-				# BOMB_TOSS, CARPET_BOMB, FIRE_RAIN, CLUSTER_BOMB, MINE_DROP
 				state = State.ATTACK
 
+func _has_continuous_movement() -> bool:
+	if not definition or not definition.movement_pattern:
+		return false
+	return definition.movement_pattern.move_type != MovementPattern.MoveType.WEIGHTED
+
 func _do_attack(dir: Vector2) -> void:
-	velocity = Vector2.ZERO
+	var d: float = 0.0
+	# WHIRLWIND active: don't override velocity — bouncing is handled in physics tick
+	if has_meta("whirlwind_active") and get_meta("whirlwind_active"):
+		return
+	if not _has_continuous_movement():
+		velocity = Vector2.ZERO
 	# STUNNED: can't attack
 	if has_meta("stunned") and get_meta("stunned"):
 		state = State.CHASE
@@ -1121,7 +2040,6 @@ func _do_attack(dir: Vector2) -> void:
 			for e in get_tree().get_nodes_in_group("enemy"):
 				if e == self or not is_instance_valid(e) or e.state == State.DEAD:
 					continue
-				var d = global_position.distance_to(e.global_position)
 				if d < nearest_dist:
 					nearest_dist = d
 					nearest_ally = e
@@ -1142,7 +2060,13 @@ func _do_attack(dir: Vector2) -> void:
 		state = State.COOLDOWN
 		return
 
+	# AttackSlot system: cycle through defined slots with per-attack modifiers
 	var atk = _get_active_attack_type()
+	if definition and definition.attack_slots.size() > 0:
+		var slot = definition.attack_slots[_slot_idx % definition.attack_slots.size()]
+		atk = slot.attack_type
+		_active_modifier = slot.modifier  # may be null = plain attack
+		_slot_idx += 1
 
 	match atk:
 		EnemyDefinition.AttackType.NONE:
@@ -1276,6 +2200,26 @@ func _do_attack(dir: Vector2) -> void:
 			_shoot_leaping_slam(dir)
 		EnemyDefinition.AttackType.ARROW_VOLLEY:
 			_shoot_arrow_volley()
+		EnemyDefinition.AttackType.SWORD_SLASH:
+			_shoot_sword_slash(dir)
+		EnemyDefinition.AttackType.SPEAR_LUNGE:
+			_shoot_spear_lunge(dir)
+		EnemyDefinition.AttackType.CHARGE_BULL:
+			_shoot_charge_bull(dir)
+		EnemyDefinition.AttackType.CLEAVE_COMBO:
+			_shoot_cleave_combo(dir)
+		EnemyDefinition.AttackType.WHIRLWIND:
+			_shoot_whirlwind(dir)
+		EnemyDefinition.AttackType.GROUND_POUND:
+			_shoot_ground_pound(dir)
+		EnemyDefinition.AttackType.TAIL_WHIP:
+			_shoot_tail_whip(dir)
+		EnemyDefinition.AttackType.SHIELD_BASH:
+			_shoot_melee_shield_bash(dir)
+		EnemyDefinition.AttackType.GRAB_THROW:
+			_shoot_grab_throw(dir)
+		EnemyDefinition.AttackType.STOMP_WAVE:
+			_shoot_stomp_wave(dir)
 
 	# Bomb/heavy attacks get longer cooldowns — they're AOE so shouldn't spam
 	var _bomb_attacks = [
@@ -1290,6 +2234,7 @@ func _do_attack(dir: Vector2) -> void:
 		attack_timer = shoot_interval * 0.25  # aggressive fire rate for bullet attacks
 	cooldown_timer = 0.1
 	state = State.COOLDOWN
+	_active_modifier = null  # clear per-attack modifier after firing
 
 func _fire_attack_type(atk: int, dir: Vector2) -> void:
 	match atk:
@@ -1407,10 +2352,30 @@ func _fire_attack_type(atk: int, dir: Vector2) -> void:
 			_shoot_leaping_slam(dir)
 		EnemyDefinition.AttackType.ARROW_VOLLEY:
 			_shoot_arrow_volley()
+		EnemyDefinition.AttackType.SWORD_SLASH:
+			_shoot_sword_slash(dir)
+		EnemyDefinition.AttackType.SPEAR_LUNGE:
+			_shoot_spear_lunge(dir)
+		EnemyDefinition.AttackType.CHARGE_BULL:
+			_shoot_charge_bull(dir)
+		EnemyDefinition.AttackType.CLEAVE_COMBO:
+			_shoot_cleave_combo(dir)
+		EnemyDefinition.AttackType.WHIRLWIND:
+			_shoot_whirlwind(dir)
+		EnemyDefinition.AttackType.GROUND_POUND:
+			_shoot_ground_pound(dir)
+		EnemyDefinition.AttackType.TAIL_WHIP:
+			_shoot_tail_whip(dir)
+		EnemyDefinition.AttackType.SHIELD_BASH:
+			_shoot_melee_shield_bash(dir)
+		EnemyDefinition.AttackType.GRAB_THROW:
+			_shoot_grab_throw(dir)
+		EnemyDefinition.AttackType.STOMP_WAVE:
+			_shoot_stomp_wave(dir)
 
 func _do_boss_combo_attack(dir: Vector2) -> void:
+	var is_boss: bool = definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS
 	velocity = Vector2.ZERO
-	var is_boss = definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS
 
 	# Fire multiple attacks from the pool simultaneously
 	# Elites (phase 2+): fire 2 pool attacks
@@ -1434,6 +2399,7 @@ func _do_boss_combo_attack(dir: Vector2) -> void:
 func _check_contact_damage() -> void:
 	if state == State.DEAD or not is_instance_valid(player):
 		return
+	var dist = global_position.distance_to(player.global_position)
 	# Check physics collisions from move_and_slide first
 	var touching_player = false
 	for i in range(get_slide_collision_count()):
@@ -1443,7 +2409,6 @@ func _check_contact_damage() -> void:
 			break
 	# Also check distance as fallback
 	if not touching_player:
-		var dist = global_position.distance_to(player.global_position)
 		var in_ow = is_inside_tree() and get_tree().current_scene and get_tree().current_scene.name == "Overworld"
 		var contact_range = 8.0 * scale.x * (4.0 if in_ow else 1.0)
 		if dist > contact_range:
@@ -1460,7 +2425,7 @@ func _check_contact_damage() -> void:
 	var relative_speed = (velocity - player.velocity).length()
 
 	# Base contact damage from definition (prefer contact_damage, fall back to attack_damage)
-	var base_dmg = 1
+	var base_dmg := 1
 	if definition:
 		if definition.contact_damage > 0:
 			base_dmg = definition.contact_damage
@@ -1473,8 +2438,16 @@ func _check_contact_damage() -> void:
 
 	# Enemy deals damage to player
 	var player_dmg = int(ceil(base_dmg * momentum_mult * weight_mult))
+	# WEAKENED/STRENGTHENED contact damage
+	if has_meta("weakened") and get_meta("weakened"):
+		player_dmg = maxi(1, int(player_dmg * 0.5))
+	if has_meta("strengthened") and get_meta("strengthened"):
+		player_dmg = int(ceil(player_dmg * 1.5))
 	if player.has_method("take_damage"):
-		player.take_damage(maxi(player_dmg, 1), global_position, true)
+		if _is_boss_or_large:
+			player.set_meta("_hit_from_elite", true)
+		var contact_dmg_type: int = definition.damage_type if definition else 0
+		player.take_damage(maxi(player_dmg, 1), global_position, true, false, contact_dmg_type)
 
 	# Thorns: reflect damage to enemy on contact
 	var thorns_em = player.get_node_or_null("EquipmentManager")
@@ -1483,7 +2456,7 @@ func _check_contact_damage() -> void:
 		if thorns_dmg > 0:
 			take_damage(thorns_dmg)
 
-	var push_dir = (global_position - player.global_position).normalized()
+	var push_dir = (player.global_position - global_position).normalized()
 	if push_dir == Vector2.ZERO:
 		push_dir = Vector2.RIGHT.rotated(randf() * TAU)
 
@@ -1499,22 +2472,37 @@ func _check_contact_damage() -> void:
 				player.velocity = -push_dir * 300.0
 				player.global_position -= push_dir * 8.0
 	else:
+		# Check if movement makes this enemy unstoppable (swoop, bait punish, etc.)
+		var _mt = definition.movement_pattern.move_type if definition and definition.movement_pattern else 0
+		var _is_swooping = _mt == MovementPattern.MoveType.SWOOP and has_meta("swoop_state") and get_meta("swoop_state") == 1
+		var _is_punishing = _mt == MovementPattern.MoveType.BAIT_PUNISH and has_meta("bp_state") and get_meta("bp_state") == 2
+		var _is_intercepting = _mt == MovementPattern.MoveType.INTERCEPT and has_meta("ic_state") and get_meta("ic_state") == 1
+		var _is_elastic_snap = _mt == MovementPattern.MoveType.ELASTIC and has_meta("el_state") and get_meta("el_state") != 0
+		var _is_dash = _mt == MovementPattern.MoveType.DASH_IN_OUT and _dash_state == 1
+		var _unstoppable = _is_swooping or _is_punishing or _is_intercepting or _is_elastic_snap or _is_dash
+
 		# Normal enemies: mutual knockback (original behavior)
 		var enemy_dmg = int(ceil(momentum_mult / weight_mult))
-		if enemy_dmg > 0:
+		if enemy_dmg > 0 and not _unstoppable:
 			take_damage(enemy_dmg)
 
 		var kb_resist = definition.knockback_resistance if definition else 0.0
 		var kb_mult = 1.0 - clampf(kb_resist, 0.0, 1.0)
 
-		var sep_amount = 12.0 / weight_mult * kb_mult
-		global_position += push_dir * sep_amount
-		velocity = push_dir * 120.0 / weight_mult * kb_mult
-		_knockback_timer = 0.3
+		if _unstoppable:
+			# Unstoppable: no knockback on self, heavy push on player
+			if player is CharacterBody2D:
+				player.velocity = -push_dir * 250.0
+				player.global_position -= push_dir * 10.0
+		else:
+			var sep_amount = 6.0 / weight_mult * kb_mult
+			global_position += push_dir * sep_amount
+			velocity = push_dir * 50.0 / weight_mult * kb_mult
+			_knockback_timer = 0.1
 
-		if player is CharacterBody2D:
-			player.velocity = -push_dir * 60.0 * weight_mult
-			player.global_position -= push_dir * 4.0
+			if player is CharacterBody2D:
+				player.velocity = -push_dir * 120.0 * weight_mult
+				player.global_position -= push_dir * 6.0
 
 	# Poise check: heavy enemies can stagger the player
 	var stagger_power = weight_mult * momentum_mult
@@ -1534,15 +2522,19 @@ func _start_charge(dir: Vector2) -> void:
 const MAX_SUMMONED_ENEMIES: int = 15
 
 func _do_summon() -> void:
+	var minion = bullet_scene.instantiate()
+	var dm = get_node_or_null("/root/DungeonManager")
+	var spawn_pos: Vector2 = global_position
+	var minion_def = definition
+	var gp = get_meta("grid_pos", Vector2i(-999, -999))
+	var container = get_parent()
 	if not definition:
 		return
 	# Cap total enemies in the room to prevent flooding
-	var container = get_parent()
 	if container and container.get_child_count() >= MAX_SUMMONED_ENEMIES:
 		return
 	# Auto-create a weak minion if no summon_definition set
 	if not definition.summon_definition:
-		var minion_def = EnemyDefinition.new()
 		minion_def.enemy_name = "Minion"
 		minion_def.max_hp = maxi(1, definition.max_hp / 3)
 		minion_def.move_speed = definition.move_speed * 1.2
@@ -1561,34 +2553,27 @@ func _do_summon() -> void:
 	var sfx_sum = get_node_or_null("/root/SFXManager")
 	if sfx_sum:
 		sfx_sum.play("summon", -4.0, 0.1)
-	var enemy_scene = preload("res://scenes/enemy.tscn")
-	container = get_parent()
 	for i in range(definition.summon_count):
-		var angle = TAU / definition.summon_count * i
-		var spawn_pos = global_position + Vector2(cos(angle), sin(angle)) * 16.0
-		var minion = enemy_scene.instantiate()
 		minion.global_position = spawn_pos
 		minion.setup(definition.summon_definition.duplicate())
 		container.add_child(minion)
 		# Register with room state
-		var gp = get_meta("grid_pos", Vector2i(-999, -999))
 		if gp != Vector2i(-999, -999):
 			minion.set_meta("grid_pos", gp)
-			var dm = get_tree().get_first_node_in_group("dungeon_manager") if is_inside_tree() else null
 			if dm and dm.room_states.has(gp):
 				dm.room_states[gp]["alive"] += 1
 				minion.tree_exited.connect(dm._on_enemy_died.bind(gp))
 
 func _do_slam() -> void:
+	var radius: int = 16
+	var bodies: Array = []
+	var tween = create_tween()
 	if not is_inside_tree():
 		return
-	var bodies = get_tree().get_nodes_in_group("player")
-	var radius = definition.slam_radius if definition else 24.0
 	for body in bodies:
 		if body.global_position.distance_to(global_position) < radius:
 			if body.has_method("take_damage"):
 				body.take_damage(definition.attack_damage if definition else 1, global_position)
-	var tween = create_tween()
 	tween.tween_property($Sprite2D, "scale", Vector2(1.5, 1.5), 0.1)
 	tween.tween_property($Sprite2D, "scale", Vector2(1, 1), 0.2)
 	var sfx_slam = get_node_or_null("/root/SFXManager")
@@ -1600,25 +2585,27 @@ func _do_slam() -> void:
 		vfx_slam.shake(2.0, 0.15)
 
 func _do_teleport() -> void:
+	var angle: float = 0.0
+	var tween = create_tween()
+	var dist: float = 0.0
 	if not is_instance_valid(player):
 		return
 	var sfx_tp = get_node_or_null("/root/SFXManager")
 	if sfx_tp:
 		sfx_tp.play("teleport", -4.0, 0.15)
-	var angle = randf() * TAU
-	var dist = randf_range(20, 40)
 	global_position = player.global_position + Vector2(cos(angle), sin(angle)) * dist
 	$Sprite2D.modulate.a = 0.3
-	var tween = create_tween()
 	tween.tween_property($Sprite2D, "modulate:a", 1.0, 0.3)
 
 func _try_heal_nearby() -> void:
+	var orig: Vector2 = global_position
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	var tween = create_tween()
 	var heal_amt = definition.heal_amount if definition else 2
 	var heal_rng = definition.heal_range if definition else 48.0
 	var sfx_heal = get_node_or_null("/root/SFXManager")
 	if sfx_heal:
 		sfx_heal.play("heal_b", -4.0, 0.1)
-	var enemies = get_tree().get_nodes_in_group("enemy")
 	for e in enemies:
 		if e == self:
 			continue
@@ -1626,8 +2613,6 @@ func _try_heal_nearby() -> void:
 			if e.has_method("heal"):
 				e.heal(heal_amt)
 	$Sprite2D.modulate = Color.GREEN
-	var orig = definition.sprite_color if definition else Color.WHITE
-	var tween = create_tween()
 	tween.tween_property($Sprite2D, "modulate", orig, 0.3)
 
 func heal(amount: int) -> void:
@@ -1635,6 +2620,7 @@ func heal(amount: int) -> void:
 	hp = mini(hp + amount, max_val)
 
 func _maybe_leave_trail(delta: float) -> void:
+	var shape = CircleShape2D.new()
 	if not definition or not definition.leaves_trail:
 		return
 	_trail_timer -= delta
@@ -1645,7 +2631,6 @@ func _maybe_leave_trail(delta: float) -> void:
 	var hazard = HazardArea.new()
 	hazard.collision_layer = 0
 	hazard.collision_mask = 1
-	var shape = CollisionShape2D.new()
 	var rect = RectangleShape2D.new()
 	rect.size = Vector2(6, 6)
 	shape.shape = rect
@@ -1680,15 +2665,17 @@ func _maybe_leave_trail(delta: float) -> void:
 	timer.start()
 
 func _shoot_spiral(dir: Vector2) -> void:
-	var bullets_container = _get_bullets_container()
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var bc = bullets_container
+	var count: int = _get_active_bullet_count()
+	var angle: float = dir.angle() + _spiral_angle
 	if not bullets_container:
 		return
-	var count = _get_active_bullet_count()
 	if count <= 0:
 		return
 	if count < 4:
 		count = 4
-	var bspeed = definition.bullet_speed if definition else 60.0
 	# Fire 5 rapid volleys for a continuous spiral stream
 	var volleys = 5
 	for v in range(volleys):
@@ -1696,11 +2683,9 @@ func _shoot_spiral(dir: Vector2) -> void:
 			func():
 				if not is_instance_valid(self) or hp <= 0:
 					return
-				var bc = _get_bullets_container()
 				if not bc:
 					return
 				for i in range(count):
-					var angle = dir.angle() + _spiral_angle + (TAU / count) * i
 					_spawn_bullet(bc, Vector2.from_angle(angle), bspeed)
 				_spiral_angle += 0.35
 		)
@@ -1709,6 +2694,8 @@ func _enter_stealth() -> void:
 	_stealth_timer = definition.stealth_duration if definition else 2.0
 	$Sprite2D.modulate.a = 0.15
 	state = State.STEALTHED
+	# Reposition when going invisible — teleport to valid floor position
+	global_position = _find_valid_floor_pos(_spawn_pos, 30.0, 70.0)
 	var sfx_st = get_node_or_null("/root/SFXManager")
 	if sfx_st:
 		sfx_st.play("whistle", -6.0, 0.1)
@@ -1721,44 +2708,90 @@ func _start_beam(dir: Vector2) -> void:
 		sfx_beam.play("laser_a", -4.0, 0.1)
 
 func _shoot_single(dir: Vector2) -> void:
-	var bullets_container = _get_bullets_container()
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var spread: float = definition.spread_angle if definition else 0.3
+	var count: int = _get_active_bullet_count()
 	if not bullets_container:
 		return
-	var count = _get_active_bullet_count()
 	if count <= 0:
 		return
-	var bspeed = definition.bullet_speed if definition else 80.0
 	if count == 1:
 		_spawn_bullet(bullets_container, dir, bspeed)
 	else:
 		# Always fire one bullet directly at the player, spread others around it
-		var spread = 0.3
 		_spawn_bullet(bullets_container, dir, bspeed)  # center shot aimed at player
 		for i in range(1, count):
 			var angle_offset = (float(i) / count - 0.5) * spread * 2
 			_spawn_bullet(bullets_container, dir.rotated(angle_offset), bspeed)
 
 func _shoot_ring(dir: Vector2) -> void:
-	var bullets_container = _get_bullets_container()
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var count: int = _get_active_bullet_count()
 	if not bullets_container:
 		return
-	var count = _get_active_bullet_count()
 	if count <= 0:
 		return
 	if count < 4:
 		count = 8
-	var bspeed = definition.bullet_speed if definition else 70.0
-	var base_angle = dir.angle()  # center ring on player direction
 	for i in range(count):
-		var angle = base_angle + (TAU / count) * i
+		var angle: float = dir.angle() + TAU * float(i) / float(count)
 		_spawn_bullet(bullets_container, Vector2.from_angle(angle), bspeed)
+
+func _apply_attack_modifier(b) -> void:
+	var m = definition.attack_modifier if definition else null
+	if not m:
+		return
+	# Homing — apply to any bullet that isn't already using a special behavior
+	if m.homing_strength > 0 and b.behavior in [b.BulletBehavior.NORMAL, 0]:
+		b.behavior = b.BulletBehavior.HOMING_ENEMY
+		# Scale: 0.3 = gentle (1.5), 0.5 = moderate (2.5), 1.0 = aggressive (5.0)
+		b.homing_strength = m.homing_strength * 5.0
+	# Bounce
+	if m.bounce_count > 0:
+		b.bounce_count += m.bounce_count
+	# Pierce
+	if m.pierce_count > 0:
+		b.pierce_count += m.pierce_count
+	# Speed
+	if m.speed_mult != 1.0 and b.speed > 0:
+		b.speed *= m.speed_mult
+	# Split — only if bullet isn't already homing (homing + split conflicts)
+	if m.split_after > 0 and b.behavior != b.BulletBehavior.HOMING_ENEMY:
+		b.behavior = b.BulletBehavior.SPLITTING
+		b.set_meta("split_time", m.split_after)
+		b.set_meta("split_count", m.split_count)
+	# Status effects — use apply_status/status_duration metas (enemy bullet → player path)
+	if m.apply_burning:
+		b.set_meta("apply_status", "BURNING")
+		b.set_meta("status_duration", 3.0)
+	elif m.apply_slowed:
+		b.set_meta("apply_status", "SLOWED")
+		b.set_meta("status_duration", 2.0)
+	elif m.apply_poisoned:
+		b.poison_on_hit = true
+	elif m.apply_stunned:
+		b.set_meta("apply_status", "STUNNED")
+		b.set_meta("status_duration", 1.5)
+	# AoE — fireball_aoe only works for player bullets; for enemy bullets use lobbed bomb system instead
+	# (enemy AoE is handled via LOBBED behavior and bomb attacks, not this modifier)
 
 func _apply_enemy_bullet_props(bullet, spd: float) -> void:
 	bullet.is_player_bullet = false
 	bullet.speed = spd
 	if definition:
-		bullet.damage = definition.attack_damage if definition.attack_damage > 0 else 1
+		var base_dmg: int = definition.attack_damage
+		# WEAKENED — deal 50% less damage
+		if has_meta("weakened") and get_meta("weakened"):
+			base_dmg = maxi(1, int(base_dmg * 0.5))
+		# STRENGTHENED — deal 50% more damage
+		if has_meta("strengthened") and get_meta("strengthened"):
+			base_dmg = int(ceil(base_dmg * 1.5))
+		bullet.damage = base_dmg
 		bullet.enemy_kingdom = definition.kingdom
+		if _is_boss_or_large:
+			bullet.set_meta("from_elite", true)
 		if definition.bullet_sprite_index >= 0:
 			bullet.bullet_sprite_index = definition.bullet_sprite_index
 		# Poison bullets for POISON_SHOT enemies
@@ -1769,11 +2802,16 @@ func _apply_enemy_bullet_props(bullet, spd: float) -> void:
 		if definition.bullet_status_effect != "":
 			bullet.set_meta("apply_status", definition.bullet_status_effect)
 			bullet.set_meta("status_duration", definition.bullet_status_duration)
+		# Set combat damage type from definition
+		bullet.combat_damage_type = definition.damage_type
+		# Apply attack modifier (composable bullet properties)
+		_apply_attack_modifier(bullet)
 
 var _last_fire_sfx_frame: int = 0
 
 func _spawn_bullet(container: Node, dir: Vector2, spd: float) -> Area2D:
 	var bullet = bullet_scene.instantiate()
+	var sfx = get_node_or_null("/root/SFXManager")
 	bullet.global_position = global_position
 	bullet.direction = dir
 	_apply_enemy_bullet_props(bullet, spd)
@@ -1782,7 +2820,6 @@ func _spawn_bullet(container: Node, dir: Vector2, spd: float) -> Area2D:
 	var frame = Engine.get_physics_frames()
 	if frame != _last_fire_sfx_frame:
 		_last_fire_sfx_frame = frame
-		var sfx = get_node_or_null("/root/SFXManager")
 		if sfx:
 			sfx.play("fire_a", -10.0, 0.2)
 	return bullet
@@ -1806,18 +2843,17 @@ func _spawn_behavior_bullet(container: Node, dir: Vector2, spd: float, bhv: int)
 
 ## SHIELD_BASH: Spawns a frontal barrier arc then charges at player
 func _shoot_shield_bash(dir: Vector2) -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx_sh = get_node_or_null("/root/SFXManager")
+	var offset: Vector2 = Vector2.ZERO
+	var center: Vector2 = global_position
+	var b = bullet_scene.instantiate()
 	if sfx_sh:
 		sfx_sh.play("spell_a", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
 	# Spawn a 3-segment barrier arc in front of the enemy
-	var perp = dir.rotated(PI * 0.5)
-	var center = global_position + dir * 10.0
 	for i in range(3):
-		var offset = perp * ((i - 1) * 7.0)
-		var b = bullet_scene.instantiate()
 		b.global_position = center + offset
 		b.direction = Vector2.ZERO
 		b.behavior = b.BulletBehavior.BARRIER
@@ -1834,41 +2870,40 @@ func _shoot_shield_bash(dir: Vector2) -> void:
 
 ## VOLLEY: Lobs a spread of small bombs toward the player area — area denial
 func _shoot_volley(_dir: Vector2) -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var count: int = _get_active_bullet_count()
+	var target: Vector2 = player.global_position if is_instance_valid(player) else global_position
+	var bcc = get_tree().get_first_node_in_group("bullets")
 	if not is_instance_valid(player):
 		return
 	var sfx_v = get_node_or_null("/root/SFXManager")
 	if sfx_v:
 		sfx_v.play("shoot_b", -6.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = clampi(_get_active_bullet_count(), 3, 6)
 	var target_center = player.global_position
 	# Scatter lobbed shots in a pattern around the player
 	for i in range(count):
-		var angle = (TAU / count) * i
-		var offset = Vector2(cos(angle), sin(angle)) * randf_range(8, 18)
-		var target = target_center + offset
 		get_tree().create_timer(i * 0.1).timeout.connect(
 			func():
 				if is_instance_valid(self) and hp > 0:
-					var bcc = _get_bullets_container()
 					if bcc:
 						_spawn_lob_at(bcc, target, ObjSpriteIndex.FIREBALL, 8.0, 0.5, 4, 0)
 		)
 
 ## CROSS_SHOT: Fires + pattern, then delayed X pattern — two interlocked crosses
 func _shoot_cross(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var arm_dir: Vector2 = Vector2.RIGHT
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx_cr = get_node_or_null("/root/SFXManager")
 	if sfx_cr:
 		sfx_cr.play("fire_b", -6.0, 0.1)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var bspeed = definition.bullet_speed if definition else 75.0
 	# First cross: cardinal directions (+ shape)
 	for arm in range(4):
-		var arm_dir = Vector2.RIGHT.rotated(arm * PI / 2.0)
 		_spawn_bullet(bullets_container, arm_dir, bspeed)
 		_spawn_bullet(bullets_container, arm_dir, bspeed * 0.6)
 	# Delayed second cross: diagonal (X shape)
@@ -1876,150 +2911,143 @@ func _shoot_cross(dir: Vector2) -> void:
 		func():
 			if not is_instance_valid(self) or hp <= 0:
 				return
-			var bc = _get_bullets_container()
 			if not bc:
 				return
 			if sfx_cr:
 				sfx_cr.play("fire_b", -8.0, 0.1)
 			for arm in range(4):
-				var arm_dir = Vector2.RIGHT.rotated(arm * PI / 2.0 + PI / 4.0)
 				_spawn_bullet(bc, arm_dir, bspeed * 0.9)
 				_spawn_bullet(bc, arm_dir, bspeed * 0.5)
 	)
 
 ## WAVE_SHOT: Sine-wave spread — bullets fan out then converge in a wave pattern
 func _shoot_wave(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var count: int = _get_active_bullet_count()
+	var spawn_pos: Vector2 = global_position
+	var t: float = Time.get_ticks_msec() / 1000.0
 	var sfx_wv = get_node_or_null("/root/SFXManager")
 	if sfx_wv:
 		sfx_wv.play("spell_a", -7.0, 0.15)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 5)
-	var bspeed = definition.bullet_speed if definition else 65.0
-	var perp = dir.rotated(PI / 2.0)
 	for i in range(count):
-		var t = float(i) / (count - 1)
 		var wave_offset = sin(t * PI * 2.0) * 8.0
-		var spawn_pos = global_position + perp * wave_offset
 		_spawn_bullet_at(bullets_container, spawn_pos, dir, bspeed)
 
 ## GATLING: Long burst of fast bullets tracking the player — machine gun
 func _shoot_gatling(dir: Vector2) -> void:
+	var jitter: float = randf_range(-0.08, 0.08)
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var bc = bullets_container
+	var count: int = _get_active_bullet_count()
 	var sfx_gt = get_node_or_null("/root/SFXManager")
 	if sfx_gt:
 		sfx_gt.play("blaster", -6.0, 0.1)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 8) + 4  # longer burst than other attacks
-	var bspeed = (definition.bullet_speed if definition else 90.0) * 1.3
 	for i in range(count):
 		get_tree().create_timer(i * 0.05).timeout.connect(
 			func():
 				if not is_instance_valid(self) or hp <= 0:
 					return
-				var bc = _get_bullets_container()
 				if not bc:
 					return
 				# Re-aim at player each shot for tracking stream
-				var aim = dir
+				var aim := dir
 				if is_instance_valid(player):
 					aim = (player.global_position - global_position).normalized()
-				var jitter = randf_range(-0.08, 0.08)
 				_spawn_bullet(bc, aim.rotated(jitter), bspeed)
 		)
 
 ## MORTAR: Lobs bombs in high arc toward player area — artillery barrage
 func _shoot_mortar(_dir: Vector2) -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var radius: int = 16
+	var flight: float = 0.3
+	var count: int = _get_active_bullet_count()
+	var target: Vector2 = player.global_position if is_instance_valid(player) else global_position
+	var bcc = get_tree().get_first_node_in_group("bullets")
 	if not is_instance_valid(player):
 		return
 	var sfx_mt = get_node_or_null("/root/SFXManager")
 	if sfx_mt:
 		sfx_mt.play("bazooka", -6.0, 0.12)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = clampi(_get_active_bullet_count(), 2, 4)
-	var radius = definition.bomb_aoe_radius if definition else 12.0
-	var flight = (definition.bomb_flight_time if definition else 0.6) * 1.5
 	for i in range(count):
-		var offset = Vector2(randf_range(-20, 20), randf_range(-20, 20))
-		var target = player.global_position + offset
 		get_tree().create_timer(i * 0.3).timeout.connect(
 			func():
 				if is_instance_valid(self) and hp > 0:
-					var bcc = _get_bullets_container()
 					if bcc:
 						_spawn_lob_at(bcc, target, ObjSpriteIndex.FIREBALL, radius, flight, 8, 0)
 		)
 
 ## NOVA: Double ring burst — inner ring fast, outer ring slow with offset
 func _shoot_nova(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var count: int = _get_active_bullet_count()
+	var angle: float = 0.0
 	var sfx_nv = get_node_or_null("/root/SFXManager")
 	if sfx_nv:
 		sfx_nv.play("area_effect_b", -5.0, 0.08)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 6)
-	var bspeed = definition.bullet_speed if definition else 70.0
-	var base_angle = dir.angle()  # center on player direction
 	# Inner ring: fast, one bullet aimed at player
 	var inner = maxi(count / 2, 4)
 	for i in range(inner):
-		var angle = base_angle + (TAU / inner) * i
 		_spawn_bullet(bullets_container, Vector2.from_angle(angle), bspeed * 1.5)
 	# Outer ring: slow, offset by half step, delayed
 	get_tree().create_timer(0.15).timeout.connect(
 		func():
 			if is_instance_valid(self) and hp > 0:
-				var bc = _get_bullets_container()
 				if bc:
 					var outer = count
 					var half_step = TAU / outer / 2.0
 					for j in range(outer):
-						var angle = base_angle + (TAU / outer) * j + half_step
 						_spawn_bullet(bc, Vector2.from_angle(angle), bspeed * 0.6)
 	)
 
 ## ZIGZAG: Alternating left-right angled shots for a weaving bullet wall
 func _shoot_zigzag(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var bullet_dir: Vector2 = Vector2.ZERO
+	var count: int = _get_active_bullet_count()
 	var sfx_zz = get_node_or_null("/root/SFXManager")
 	if sfx_zz:
 		sfx_zz.play("woosh_b", -7.0, 0.12)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 5)
-	var bspeed = definition.bullet_speed if definition else 75.0
 	var zigzag_angle = 0.35
 	for i in range(count):
-		var side = 1.0 if i % 2 == 0 else -1.0
-		var bullet_dir = dir.rotated(zigzag_angle * side)
 		get_tree().create_timer(i * 0.06).timeout.connect(
 			func():
 				if is_instance_valid(self) and hp > 0:
-					var bc = _get_bullets_container()
 					if bc:
 						_spawn_bullet(bc, bullet_dir, bspeed)
 		)
 
 ## SHOTGUN_BLAST: Very wide cone, short-lived bullets — close-range devastation
 func _shoot_shotgun(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var count: int = _get_active_bullet_count()
+	var angle: float = 0.0
+	var b = bullet_scene.instantiate()
 	var sfx_sg = get_node_or_null("/root/SFXManager")
 	if sfx_sg:
 		sfx_sg.play("shotgun", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = maxi(_get_active_bullet_count(), 7)
-	var bspeed = (definition.bullet_speed if definition else 80.0) * 1.4
 	var cone = 1.2  # very wide cone
 	for i in range(count):
-		var angle = randf_range(-cone / 2.0, cone / 2.0)
 		var spd = bspeed * randf_range(0.7, 1.3)
-		var b = bullet_scene.instantiate()
 		b.global_position = global_position
 		b.direction = dir.rotated(angle)
 		b.lifetime = 0.6  # short range — dies quickly
@@ -2029,69 +3057,66 @@ func _shoot_shotgun(dir: Vector2) -> void:
 ## HELIX: Two intertwined spiraling bullet streams — continuous double helix
 var _helix_angle: float = 0.0
 func _shoot_helix(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var spawn_pos: Vector2 = global_position
 	var sfx_hx = get_node_or_null("/root/SFXManager")
 	if sfx_hx:
 		sfx_hx.play("spell_b", -7.0, 0.15)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var bspeed = definition.bullet_speed if definition else 70.0
 	# Fire 4 rapid pairs for a visible helix pattern
 	for v in range(4):
 		get_tree().create_timer(v * 0.1).timeout.connect(
 			func():
 				if not is_instance_valid(self) or hp <= 0:
 					return
-				var bc = _get_bullets_container()
 				if not bc:
 					return
-				var angle = _helix_angle + v * 0.6
 				for stream in range(2):
-					var offset = angle + stream * PI
+					var offset = _helix_angle + float(v) * 0.45 + float(stream) * PI
 					var bullet_dir = dir.rotated(sin(offset) * 0.7)
-					var perp = dir.rotated(PI / 2.0)
-					var spawn_pos = global_position + perp * cos(offset) * 8.0
 					_spawn_bullet_at(bc, spawn_pos, bullet_dir, bspeed)
 		)
 	_helix_angle += 2.4
 
 ## METEOR_SHOWER: Rains large lobbed meteors across the area — chaos from above
 func _shoot_meteor_shower(_dir: Vector2) -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var count: int = _get_active_bullet_count()
+	var target: Vector2 = player.global_position if is_instance_valid(player) else global_position
+	var bcc = get_tree().get_first_node_in_group("bullets")
 	if not is_instance_valid(player):
 		return
 	var sfx_ms = get_node_or_null("/root/SFXManager")
 	if sfx_ms:
 		sfx_ms.play("scatter", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = clampi(_get_active_bullet_count(), 3, 6)
 	# Rain meteors in random spots near player
 	for i in range(count):
-		var offset = Vector2(randf_range(-30, 30), randf_range(-30, 30))
-		var target = player.global_position + offset
 		get_tree().create_timer(i * 0.25).timeout.connect(
 			func():
 				if is_instance_valid(self) and hp > 0:
-					var bcc = _get_bullets_container()
 					if bcc:
 						_spawn_lob_at(bcc, target, ObjSpriteIndex.FIREBALL, 14.0, 0.7, 6, 0)
 		)
 
 ## BOOMERANG_SHOT: Fires bullets that arc out and curve back toward the enemy
 func _shoot_boomerang(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var spread: float = definition.spread_angle if definition else 0.3
+	var count: int = _get_active_bullet_count()
+	var t: float = Time.get_ticks_msec() / 1000.0
+	var b = bullet_scene.instantiate()
 	var sfx_bm = get_node_or_null("/root/SFXManager")
 	if sfx_bm:
 		sfx_bm.play("woosh_b", -6.0, 0.12)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 3)
-	var bspeed = (definition.bullet_speed if definition else 75.0) * 0.8
-	var spread = 0.6
 	for i in range(count):
-		var t = float(i) / maxf(count - 1, 1) - 0.5
-		var b = bullet_scene.instantiate()
 		b.global_position = global_position
 		b.direction = dir.rotated(t * spread)
 		b.is_player_bullet = false
@@ -2106,19 +3131,19 @@ func _shoot_boomerang(dir: Vector2) -> void:
 
 ## STRAFE_RUN: Fires a spread while moving perpendicular — hit-and-run style
 func _shoot_strafe_run(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var count: int = _get_active_bullet_count()
 	var sfx_sr = get_node_or_null("/root/SFXManager")
 	if sfx_sr:
 		sfx_sr.play("shoot_b", -7.0, 0.1)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 4)
-	var bspeed = (definition.bullet_speed if definition else 80.0) * 1.1
 	for i in range(count):
 		get_tree().create_timer(i * 0.08).timeout.connect(
 			func():
 				if is_instance_valid(self) and is_instance_valid(player) and hp > 0:
-					var bc = _get_bullets_container()
 					if bc:
 						# Re-aim at player each shot — tracks during strafe
 						var aim = (player.global_position - global_position).normalized()
@@ -2128,164 +3153,157 @@ func _shoot_strafe_run(dir: Vector2) -> void:
 
 ## MINEFIELD: Drops slow-moving bullets in all directions around self — area denial
 func _shoot_minefield() -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var spawn_offset: Vector2 = Vector2.ZERO
+	var count: int = _get_active_bullet_count()
+	var angle: float = 0.0
 	var sfx_mf = get_node_or_null("/root/SFXManager")
 	if sfx_mf:
 		sfx_mf.play("spell_a", -7.0, 0.2)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 8)
-	var bspeed = (definition.bullet_speed if definition else 50.0) * 0.3  # very slow
 	for i in range(count):
-		var angle = (TAU / count) * i + randf() * 0.3
-		var spawn_offset = Vector2.RIGHT.rotated(angle) * randf_range(4.0, 12.0)
 		_spawn_bullet_at(bullets_container, global_position + spawn_offset, Vector2.RIGHT.rotated(angle), bspeed)
 
 ## RETURNING_VOLLEY: Fires bullets that curve back toward the enemy after traveling a distance
 func _shoot_returning(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var count: int = _get_active_bullet_count()
+	var angle: float = 0.0
+	var b = bullet_scene.instantiate()
 	var sfx_rv = get_node_or_null("/root/SFXManager")
 	if sfx_rv:
 		sfx_rv.play("swerve", -6.0, 0.1)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 4)
-	var bspeed = definition.bullet_speed if definition else 70.0
-	var spread = 0.5
 	for i in range(count):
-		var t = float(i) / maxf(count - 1, 1) - 0.5
-		var angle = t * spread
-		var b = bullet_scene.instantiate()
 		b.global_position = global_position
 		b.direction = dir.rotated(angle)
-		b.is_player_bullet = false
-		b.speed = bspeed * randf_range(0.8, 1.2)
+		b.lifetime = 5.0
+		_apply_enemy_bullet_props(b, bspeed * randf_range(0.8, 1.2))
 		b.behavior = b.BulletBehavior.RETURNING
 		b._origin_pos = global_position
 		b._origin_entity = self
 		b._max_travel = randf_range(40.0, 70.0)
-		b.lifetime = 5.0
 		bullets_container.add_child(b)
 
 ## SEEKING_MINES: Drops slow homing mines that drift toward the player
 func _shoot_seeking_mines() -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var spawn_offset: Vector2 = Vector2.ZERO
+	var count: int = _get_active_bullet_count()
+	var angle: float = 0.0
+	var b = bullet_scene.instantiate()
 	var sfx_sm = get_node_or_null("/root/SFXManager")
 	if sfx_sm:
 		sfx_sm.play("spell_a", -7.0, 0.15)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 3)
-	var bspeed = (definition.bullet_speed if definition else 50.0) * 0.2
 	for i in range(count):
-		var angle = (TAU / count) * i + randf() * 0.4
-		var spawn_offset = Vector2.RIGHT.rotated(angle) * randf_range(6.0, 14.0)
-		var b = bullet_scene.instantiate()
 		b.global_position = global_position + spawn_offset
 		b.direction = Vector2.RIGHT.rotated(angle)
-		b.is_player_bullet = false
-		b.speed = bspeed
+		b.lifetime = 8.0
+		_apply_enemy_bullet_props(b, bspeed)
 		b.behavior = b.BulletBehavior.SEEKING_MINE
 		b._origin_pos = global_position
-		b.lifetime = 8.0
 		bullets_container.add_child(b)
 
 ## DETONATOR: Fires bullets that decelerate and explode into sub-bullets when stopped
 func _shoot_detonator(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var spread: float = definition.spread_angle if definition else 0.3
+	var count: int = _get_active_bullet_count()
+	var b = bullet_scene.instantiate()
 	var sfx_dt = get_node_or_null("/root/SFXManager")
 	if sfx_dt:
 		sfx_dt.play("fire_c", -6.0, 0.1)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 3)
-	var bspeed = (definition.bullet_speed if definition else 80.0) * 1.2
 	for i in range(count):
-		var spread = randf_range(-0.2, 0.2)
-		var b = bullet_scene.instantiate()
 		b.global_position = global_position
 		b.direction = dir.rotated(spread)
-		b.is_player_bullet = false
-		b.speed = bspeed
+		b.lifetime = 4.0
+		_apply_enemy_bullet_props(b, bspeed)
 		b.behavior = b.BulletBehavior.DECELERATING
 		b._origin_pos = global_position
 		b._decel_rate = randf_range(60.0, 120.0)
-		b.lifetime = 4.0
 		bullets_container.add_child(b)
 
 ## SPLITTER: Fires bullets aimed at player that split halfway to the target
 func _shoot_splitter(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var spread: float = definition.spread_angle if definition else 0.3
+	var dist_to_player: float = global_position.distance_to(player.global_position) if is_instance_valid(player) else 999.0
+	var count: int = _get_active_bullet_count()
+	var b = bullet_scene.instantiate()
 	var sfx_sp = get_node_or_null("/root/SFXManager")
 	if sfx_sp:
 		sfx_sp.play("spell_b", -6.0, 0.12)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 2)
-	var bspeed = (definition.bullet_speed if definition else 65.0) * 0.6  # slower approach
-	var dist_to_player = global_position.distance_to(player.global_position) if is_instance_valid(player) else 60.0
 	# Split timer = time to travel half the distance to player
 	var split_time = maxf((dist_to_player * 0.5) / maxf(bspeed, 1.0), 0.3)
 	for i in range(count):
-		var spread = float(i) / maxf(count - 1, 1) - 0.5
-		var b = bullet_scene.instantiate()
 		b.global_position = global_position
 		b.direction = dir.rotated(spread * 0.2)  # tighter aim at player
-		b.is_player_bullet = false
-		b.speed = bspeed
+		b.lifetime = 4.0
+		_apply_enemy_bullet_props(b, bspeed)
 		b.behavior = b.BulletBehavior.SPLITTING
 		b._origin_pos = global_position
 		b._split_count = randi_range(3, 5)
 		b.set_meta("split_time", split_time)
-		b.lifetime = 4.0
 		bullets_container.add_child(b)
 
 ## SINE_BARRAGE: Fires sine-wave bullets that oscillate while traveling — hard to dodge
 func _shoot_sine_barrage(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var spread: float = definition.spread_angle if definition else 0.3
+	var count: int = _get_active_bullet_count()
+	var b = bullet_scene.instantiate()
 	var sfx_sb = get_node_or_null("/root/SFXManager")
 	if sfx_sb:
 		sfx_sb.play("wiggle_a", -6.0, 0.1)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 4)
-	var bspeed = definition.bullet_speed if definition else 70.0
 	for i in range(count):
-		var spread = float(i) / maxf(count - 1, 1) - 0.5
-		var b = bullet_scene.instantiate()
 		b.global_position = global_position
 		b.direction = dir.rotated(spread * 0.3)
-		b.is_player_bullet = false
-		b.speed = bspeed * randf_range(0.8, 1.1)
+		b.lifetime = 4.0
+		_apply_enemy_bullet_props(b, bspeed * randf_range(0.8, 1.1))
 		b.behavior = b.BulletBehavior.SINE_WAVE
 		b._origin_pos = global_position
 		b._base_direction = b.direction
 		b._sine_amplitude = randf_range(4.0, 10.0)
 		b._sine_frequency = randf_range(6.0, 12.0)
-		b.lifetime = 4.0
 		bullets_container.add_child(b)
 
 ## HOMING_SALVO: Fires bullets that home toward the player — missile volley
 func _shoot_homing_salvo(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var count: int = _get_active_bullet_count()
+	var b = bullet_scene.instantiate()
 	var sfx_hs = get_node_or_null("/root/SFXManager")
 	if sfx_hs:
 		sfx_hs.play("fire_b", -5.0, 0.1)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 3)
-	var bspeed = (definition.bullet_speed if definition else 60.0) * 0.7
 	for i in range(count):
 		get_tree().create_timer(i * 0.1).timeout.connect(
 			func():
 				if not is_instance_valid(self) or hp <= 0:
 					return
-				var bc = _get_bullets_container()
 				if not bc:
 					return
 				# Fire in a wide arc — homing will correct course
 				var spread_angle = randf_range(-0.8, 0.8)
-				var b = bullet_scene.instantiate()
 				b.global_position = global_position
 				b.direction = dir.rotated(spread_angle)
 				b.is_player_bullet = false
@@ -2298,6 +3316,16 @@ func _shoot_homing_salvo(dir: Vector2) -> void:
 
 ## TELEGRAPH_EXPLOSION: Spawns a warning marker at player's position, then explodes after delay
 func _shoot_telegraph_explosion() -> void:
+	var marker = Sprite2D.new()
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var dmg: int = definition.attack_damage if definition else 2
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var b = bullet_scene.instantiate()
+	var radius: int = 16
+	var alpha: float = 0.4
+	var tween = create_tween()
+	var angle: float = 0.0
+	var ring_count: int = 8
 	if not is_instance_valid(player):
 		return
 	var sfx_te = get_node_or_null("/root/SFXManager")
@@ -2305,8 +3333,6 @@ func _shoot_telegraph_explosion() -> void:
 		sfx_te.play("ping", -4.0, 0.0)
 	var target_pos = player.global_position
 	# Visual telegraph: flash a warning at the target location
-	var marker = Sprite2D.new()
-	var radius = 24
 	var img = Image.create(radius * 2, radius * 2, false, Image.FORMAT_RGBA8)
 	for y in range(radius * 2):
 		for x in range(radius * 2):
@@ -2315,15 +3341,12 @@ func _shoot_telegraph_explosion() -> void:
 			var dist_sq = dx * dx + dy * dy
 			if dist_sq < radius * radius:
 				# Red circle with bright edge
-				var t = sqrt(dist_sq) / radius
-				var alpha = 0.3 + t * 0.4
 				img.set_pixel(x, y, Color(1.0, 0.15, 0.0, alpha))
 	marker.texture = ImageTexture.create_from_image(img)
 	marker.global_position = target_pos
 	marker.z_index = 1
 	get_tree().current_scene.add_child(marker)
 	# Blink the marker
-	var tween = create_tween()
 	tween.tween_property(marker, "modulate:a", 0.2, 0.3)
 	tween.tween_property(marker, "modulate:a", 1.0, 0.3)
 	tween.tween_property(marker, "modulate:a", 0.2, 0.2)
@@ -2339,14 +3362,9 @@ func _shoot_telegraph_explosion() -> void:
 			var sfx_boom = get_node_or_null("/root/SFXManager")
 			if sfx_boom:
 				sfx_boom.play("boom_b", -3.0, 0.08)
-			var bc = _get_bullets_container()
 			if not bc:
 				return
-			var ring_count = 12
-			var bspeed = definition.bullet_speed if definition else 70.0
 			for j in range(ring_count):
-				var angle = (TAU / ring_count) * j
-				var b = bullet_scene.instantiate()
 				b.global_position = target_pos
 				b.direction = Vector2.RIGHT.rotated(angle)
 				b.is_player_bullet = false
@@ -2357,52 +3375,50 @@ func _shoot_telegraph_explosion() -> void:
 			if is_instance_valid(player):
 				if player.global_position.distance_to(target_pos) < 20.0:
 					if player.has_method("take_damage"):
-						var dmg = definition.attack_damage if definition else 2
 						player.take_damage(dmg, target_pos)
 	)
 
 ## ORBIT_LAUNCH: Spawns bullets that orbit around the enemy then launch outward
 func _shoot_orbit_launch(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var count: int = _get_active_bullet_count()
+	var angle: float = 0.0
+	var b = bullet_scene.instantiate()
 	var sfx_ol = get_node_or_null("/root/SFXManager")
 	if sfx_ol:
 		sfx_ol.play("sorcery", -6.0, 0.12)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 4)
-	var bspeed = definition.bullet_speed if definition else 70.0
 	for i in range(count):
-		var angle = (TAU / count) * i
 		var orbit_offset = Vector2.RIGHT.rotated(angle) * 12.0
-		var b = bullet_scene.instantiate()
 		b.global_position = global_position + orbit_offset
 		b.direction = dir  # launch direction after orbit completes
-		b.is_player_bullet = false
-		b.speed = bspeed
+		b.lifetime = 5.0
+		_apply_enemy_bullet_props(b, bspeed)
 		b.behavior = b.BulletBehavior.ORBITING
 		b._origin_pos = global_position
 		b._origin_entity = self
 		b._orbit_center = global_position
 		b._orbit_radius = 12.0
 		b._orbit_time = randf_range(0.4, 0.8)
-		b.lifetime = 5.0
 		bullets_container.add_child(b)
 
 ## WALL_BOUNCE: Spread of bullets that bounce off walls
 func _shoot_wall_bounce(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var spread: float = definition.spread_angle if definition else 0.3
+	var count: int = _get_active_bullet_count()
+	var t: float = Time.get_ticks_msec() / 1000.0
+	var b = bullet_scene.instantiate()
 	var sfx_wb = get_node_or_null("/root/SFXManager")
 	if sfx_wb:
 		sfx_wb.play("rebound", -6.0, 0.1)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var count = maxi(_get_active_bullet_count(), 3)
-	var bspeed = (definition.bullet_speed if definition else 70.0) * 0.9
 	var bounces = definition.bounce_count if definition and definition.bounce_count > 0 else 2
-	var spread = 0.5
 	for i in range(count):
-		var t = float(i) / (count - 1) - 0.5 if count > 1 else 0.0
-		var b = bullet_scene.instantiate()
 		b.global_position = global_position
 		b.direction = dir.rotated(t * spread)
 		b.behavior = b.BulletBehavior.WALL_BOUNCE
@@ -2413,24 +3429,24 @@ func _shoot_wall_bounce(dir: Vector2) -> void:
 
 ## LASER_GRID: 4 perpendicular beams of tightly-packed bullets
 func _shoot_laser_grid(_dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var delay: float = 0.5
+	var b = bullet_scene.instantiate()
 	var sfx_lg = get_node_or_null("/root/SFXManager")
 	if sfx_lg:
 		sfx_lg.play("laser_b", -5.0, 0.08)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var bspeed = (definition.bullet_speed if definition else 70.0) * 1.2
 	# Fire 4 cardinal beams, each with multiple bullets for a laser-line feel
 	for arm in range(4):
 		var arm_dir = Vector2.RIGHT.rotated(arm * PI / 2.0)
 		for j in range(5):
-			var delay = j * 0.08
 			get_tree().create_timer(delay).timeout.connect(
 				func():
 					if is_instance_valid(self) and hp > 0:
-						var bc = _get_bullets_container()
 						if bc:
-							var b = bullet_scene.instantiate()
 							b.global_position = global_position
 							b.direction = arm_dir
 							b.lifetime = 1.5
@@ -2440,13 +3456,17 @@ func _shoot_laser_grid(_dir: Vector2) -> void:
 
 ## GRAVITY_WELL: Slow orb that pulls player toward it, then explodes into a ring
 func _shoot_gravity_well(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var pull_dir: Vector2 = Vector2.ZERO
+	var pos: Vector2 = global_position
+	var angle: float = 0.0
 	var sfx_gw = get_node_or_null("/root/SFXManager")
 	if sfx_gw:
 		sfx_gw.play("special_a", -5.0, 0.1)
-	var bullets_container = _get_bullets_container()
 	if not bullets_container:
 		return
-	var bspeed = 25.0  # intentionally slow
 	# Spawn the gravity orb (large, slow)
 	var orb = bullet_scene.instantiate()
 	orb.global_position = global_position
@@ -2459,11 +3479,8 @@ func _shoot_gravity_well(dir: Vector2) -> void:
 	get_tree().create_timer(2.8).timeout.connect(
 		func():
 			if is_instance_valid(orb):
-				var pos = orb.global_position
-				var bc = _get_bullets_container()
 				if bc:
 					for i in range(12):
-						var angle = (TAU / 12.0) * i
 						var sub = bullet_scene.instantiate()
 						sub.global_position = pos
 						sub.direction = Vector2.from_angle(angle)
@@ -2479,7 +3496,6 @@ func _shoot_gravity_well(dir: Vector2) -> void:
 		get_tree().create_timer(0.5 * tick).timeout.connect(
 			func():
 				if is_instance_valid(orb) and is_instance_valid(player):
-					var pull_dir = (orb.global_position - player.global_position)
 					if pull_dir.length() < 100.0:
 						# Stronger pull closer to orb
 						var strength = lerpf(30.0, 10.0, pull_dir.length() / 100.0)
@@ -2488,18 +3504,26 @@ func _shoot_gravity_well(dir: Vector2) -> void:
 
 ## CHAIN_LIGHTNING: Instant chain of damage areas from enemy to player with visual bolt
 func _shoot_chain_lightning(dir: Vector2) -> void:
+	var dmg: int = definition.attack_damage if definition else 2
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var vfx = get_node_or_null("/root/VFXManager")
+	var start: Vector2 = global_position
+	var to_player: Vector2 = (player.global_position - global_position) if is_instance_valid(player) else Vector2.ZERO
+	var delay: float = 0.5
+	var b = bullet_scene.instantiate()
+	var dist: float = 0.0
+	var tw = create_tween()
+	var target: Vector2 = player.global_position if is_instance_valid(player) else global_position
+	var bcc = get_tree().get_first_node_in_group("bullets")
 	if not is_instance_valid(player):
 		return
 	var sfx_cl = get_node_or_null("/root/SFXManager")
 	if sfx_cl:
 		sfx_cl.play("lightning_a", -4.0, 0.1)
-	var bc = _get_bullets_container()
-	if not bc:
+	if not bcc:
 		return
-	var start = global_position
-	var target = player.global_position
 	var chain_count = 6
-	var step = (target - start) / chain_count
+	var step = (target - start) / float(chain_count)
 	# Create visual lightning bolt line
 	var bolt_line = Line2D.new()
 	bolt_line.width = 2.0
@@ -2513,19 +3537,15 @@ func _shoot_chain_lightning(dir: Vector2) -> void:
 		bolt_line.add_point(pt)
 	get_tree().current_scene.add_child(bolt_line)
 	# Fade and remove bolt
-	var tw = create_tween()
 	tw.tween_property(bolt_line, "modulate:a", 0.0, 0.4)
 	tw.tween_callback(bolt_line.queue_free)
 	# Spawn damage areas along the chain that linger briefly
 	for i in range(chain_count):
 		var seg_pos = start + step * (i + 0.5) + Vector2(randf_range(-4, 4), randf_range(-4, 4))
-		var delay = i * 0.05
 		get_tree().create_timer(delay).timeout.connect(
 			func():
 				if is_instance_valid(self):
-					var bcc = _get_bullets_container()
 					if bcc:
-						var b = bullet_scene.instantiate()
 						b.global_position = seg_pos
 						b.direction = Vector2.ZERO
 						b.lifetime = 0.5
@@ -2534,41 +3554,37 @@ func _shoot_chain_lightning(dir: Vector2) -> void:
 						b.speed = 0.0
 						bcc.add_child(b)
 						# VFX spark
-						var vfx = get_node_or_null("/root/VFXManager")
 						if vfx:
 							vfx.hit_spark(seg_pos, Color(0.4, 0.7, 1.0))
 		)
 	# Direct damage if player is in chain path
 	if is_instance_valid(player):
-		var dist = start.distance_to(target)
 		if dist < 80.0:
 			# Check if player is roughly along the bolt line
-			var to_player = player.global_position - start
 			var bolt_dir = (target - start).normalized()
 			var proj = to_player.dot(bolt_dir)
 			var perp_dist = abs(to_player.cross(bolt_dir))
 			if proj > 0 and perp_dist < 15.0 and player.has_method("take_damage"):
-				var dmg = definition.attack_damage if definition else 2
 				player.take_damage(dmg, start)
 
 ## DEATH_SPIRAL: Expanding spiral of bullets fired from a position (used on death)
 func _shoot_death_spiral_at(pos: Vector2) -> void:
-	var bullets_container = _get_bullets_container()
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var delay: float = 0.5
+	var b = bullet_scene.instantiate()
 	if not bullets_container:
 		return
-	var bspeed = 50.0
 	var arms = 3
 	var bullets_per_arm = 8
 	for i in range(bullets_per_arm):
-		var delay = i * 0.12
 		get_tree().create_timer(delay).timeout.connect(
 			func():
-				var bc = _get_bullets_container()
 				if bc:
 					for arm in range(arms):
 						var base_angle = (TAU / arms) * arm
 						var spiral_angle = base_angle + i * 0.4
-						var b = bullet_scene.instantiate()
 						b.global_position = pos
 						b.direction = Vector2.from_angle(spiral_angle)
 						b.is_player_bullet = false
@@ -2584,7 +3600,12 @@ func _shoot_death_spiral_at(pos: Vector2) -> void:
 ## BARRIER_WALL: Spawns a line of stationary barrier bullets perpendicular to player direction
 ## Max 1 wall alive at a time — won't spawn if existing barriers are still up
 func _shoot_barrier_wall(dir: Vector2) -> void:
-	var bc = _get_bullets_container()
+	var b = bullet_scene.instantiate()
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var sfx = get_node_or_null("/root/SFXManager")
+	var count: int = _get_active_bullet_count()
+	var center: Vector2 = global_position
+	var offset: Vector2 = Vector2.ZERO
 	if not bc:
 		return
 	# Boss/large enemies get 2 walls (6 segments), normal gets 1 wall (3 segments)
@@ -2596,19 +3617,12 @@ func _shoot_barrier_wall(dir: Vector2) -> void:
 				existing_barriers += 1
 	if existing_barriers >= max_segments:
 		return  # walls still up, skip
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("spell_a", -5.0, 0.1)
-	var perp = dir.rotated(PI * 0.5)
 	# Boss/large: 5 segments per wall, wider spacing. Normal: 3 segments.
-	var count = 5 if _is_boss_or_large else 3
-	var spacing = 10.0 if _is_boss_or_large else 8.0
 	var seg_hp = 5 if _is_boss_or_large else 3
 	var seg_lifetime = 6.0 if _is_boss_or_large else 4.0
-	var center = global_position + dir * 15.0
 	for i in range(count):
-		var offset = perp * ((i - count / 2.0) * spacing)
-		var b = bullet_scene.instantiate()
 		b.global_position = center + offset
 		b.direction = Vector2.ZERO
 		b.behavior = b.BulletBehavior.BARRIER
@@ -2620,14 +3634,14 @@ func _shoot_barrier_wall(dir: Vector2) -> void:
 
 ## PULL_SHOT: Fires a slow orb toward player that pulls when nearby — large zone, long-lived
 func _shoot_pull_shot(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
+	var b = bullet_scene.instantiate()
 	if sfx:
 		sfx.play("special_a", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var bspeed = (definition.bullet_speed if definition else 50.0) * 0.1  # very slow crawl
-	var b = bullet_scene.instantiate()
 	b.global_position = global_position
 	b.direction = dir
 	b.behavior = b.BulletBehavior.PULL_ORB
@@ -2640,19 +3654,18 @@ func _shoot_pull_shot(dir: Vector2) -> void:
 
 ## PUSH_WAVE: Fires slow orbs in a cone toward the player — large zones, long-lived
 func _shoot_push_wave(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
+	var count: int = _get_active_bullet_count()
+	var d: float = 0.0
+	var b = bullet_scene.instantiate()
 	if sfx:
 		sfx.play("area_effect_b", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var bspeed = (definition.bullet_speed if definition else 50.0) * 0.1  # very slow
-	var count = clampi(_get_active_bullet_count(), 2, 3)
 	var cone_angle = PI * 0.4  # ~72 degree cone
 	for i in range(count):
-		var t = float(i) / max(count - 1, 1) - 0.5  # -0.5 to 0.5
-		var d = dir.rotated(t * cone_angle)
-		var b = bullet_scene.instantiate()
 		b.global_position = global_position
 		b.direction = d
 		b.behavior = b.BulletBehavior.PUSH_ORB
@@ -2667,19 +3680,19 @@ func _shoot_push_wave(dir: Vector2) -> void:
 
 ## VORTEX: Spawns a swirling ring of bullets that tighten inward toward the player
 func _shoot_vortex(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var count: int = _get_active_bullet_count()
+	var angle: float = 0.0
+	var b = bullet_scene.instantiate()
 	var sfx_vx = get_node_or_null("/root/SFXManager")
 	if sfx_vx:
 		sfx_vx.play("spell_b", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = maxi(_get_active_bullet_count(), 6)
-	var bspeed = (definition.bullet_speed if definition else 60.0) * 0.5
 	# Fire bullets in a wide circle that slowly home toward player
 	for i in range(count):
-		var angle = (TAU / count) * i
 		var spawn_offset = Vector2.from_angle(angle) * 30.0
-		var b = bullet_scene.instantiate()
 		b.global_position = global_position + spawn_offset
 		# Initial direction is tangential (perpendicular to radius) creating a swirl
 		b.direction = spawn_offset.normalized().rotated(PI * 0.5)
@@ -2694,11 +3707,13 @@ func _shoot_vortex(dir: Vector2) -> void:
 
 ## RING_PULSE: Multiple timed rings that expand outward with gaps to dodge through
 func _shoot_ring_pulse(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var angle: float = 0.0
+	var ring_count: int = 8
 	var sfx_rp = get_node_or_null("/root/SFXManager")
 	if sfx_rp:
 		sfx_rp.play("area_effect_a", -5.0, 0.1)
-	var bspeed = (definition.bullet_speed if definition else 60.0) * 0.7
-	var ring_count = 3  # 3 waves
 	var bullets_per_ring = maxi(_get_active_bullet_count(), 6)
 	# Leave a gap in each ring for the player to dodge through
 	var gap_size = 1  # 1 bullet-slot gap
@@ -2707,7 +3722,6 @@ func _shoot_ring_pulse(dir: Vector2) -> void:
 			func():
 				if not is_instance_valid(self) or hp <= 0:
 					return
-				var bc = _get_bullets_container()
 				if not bc:
 					return
 				# Rotate the gap position each wave so player must move
@@ -2715,7 +3729,6 @@ func _shoot_ring_pulse(dir: Vector2) -> void:
 				for i in range(bullets_per_ring):
 					if i >= gap_start and i < gap_start + gap_size:
 						continue  # gap slot
-					var angle = (TAU / bullets_per_ring) * i + wave * 0.3
 					_spawn_bullet(bc, Vector2.from_angle(angle), bspeed * (1.0 + wave * 0.15))
 				if sfx_rp:
 					sfx_rp.play("fire_b", -8.0, 0.1)
@@ -2723,31 +3736,31 @@ func _shoot_ring_pulse(dir: Vector2) -> void:
 
 ## ARTILLERY: Single high-damage lobbed bomb with huge AOE + bullet ring explosion
 func _shoot_artillery() -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var radius: int = 16
+	var sfx = get_node_or_null("/root/SFXManager")
+	var flight: float = 0.3
 	if not is_instance_valid(player):
 		return
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("bazooka", -3.0, 0.08)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var radius = (definition.bomb_aoe_radius if definition else 16.0) * 1.5
-	var flight = (definition.bomb_flight_time if definition else 0.8) * 1.5
 	# Single big bomb: large AOE, ring of sub-bullets, high damage
 	_spawn_lob_at(bc, player.global_position, ObjSpriteIndex.DARK_ORB, radius, flight, 8, 0, 3.0, 3.0)
 
 ## WHIP_LASH: Quick sweeping arc of bullets fired in rapid sequence
 func _shoot_whip_lash(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
+	var count: int = _get_active_bullet_count()
+	var angle: float = 0.0
 	if sfx:
 		sfx.play("blaster", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = maxi(_get_active_bullet_count(), 8)
-	var bspeed = (definition.bullet_speed if definition else 80.0) * 1.1
 	var sweep_arc = PI * 0.6  # 108 degree sweep
-	var start_angle = dir.angle() - sweep_arc * 0.5
 	for i in range(count):
 		get_tree().create_timer(i * 0.03).timeout.connect(
 			func():
@@ -2756,25 +3769,23 @@ func _shoot_whip_lash(dir: Vector2) -> void:
 				var bcc = _get_bullets_container()
 				if not bcc:
 					return
-				var t = float(i) / maxf(count - 1, 1)
-				var angle = start_angle + sweep_arc * t
 				_spawn_bullet(bcc, Vector2.from_angle(angle), bspeed)
 		)
 
 ## POISON_CLOUD: Lobbed bomb that creates a lingering poison zone on impact
 func _shoot_poison_cloud() -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var flight: float = 0.3
+	var sfx = get_node_or_null("/root/SFXManager")
+	var radius: int = 16
+	var bomb = bullet_scene.instantiate()
 	if not is_instance_valid(player):
 		return
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("scatter", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var radius = (definition.bomb_aoe_radius if definition else 16.0) * 1.2
-	var flight = definition.bomb_flight_time if definition else 0.8
 	# Lob a poison bomb — on landing, create a lingering cloud
-	var bomb = bullet_scene.instantiate()
 	bomb.global_position = global_position
 	bomb.direction = (player.global_position - global_position).normalized()
 	bomb.behavior = bomb.BulletBehavior.LOBBED
@@ -2795,18 +3806,17 @@ func _shoot_poison_cloud() -> void:
 
 ## DASH_STRIKE: Quick dash toward player, firing bouncing bullets behind
 func _shoot_dash_strike(dir: Vector2) -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
+	var count: int = _get_active_bullet_count()
+	var b = bullet_scene.instantiate()
 	if sfx:
 		sfx.play("dash", -4.0, 0.1)
 	# Fire a spread of bouncing bullets behind as we charge
-	var bc = _get_bullets_container()
 	if bc:
 		var back_dir = -dir
-		var count = maxi(_get_active_bullet_count(), 4)
-		var bspeed = (definition.bullet_speed if definition else 60.0) * 0.8
 		for i in range(count):
 			var spread = (float(i) / maxf(count - 1, 1) - 0.5) * PI * 0.4
-			var b = _spawn_bullet(bc, back_dir.rotated(spread), bspeed)
 			if b:
 				b.behavior = b.BulletBehavior.WALL_BOUNCE
 				b.bounce_count = 3
@@ -2819,38 +3829,36 @@ func _shoot_dash_strike(dir: Vector2) -> void:
 
 ## LANCE_THRUST: 3-4 bullets in a line with staggered delay — piercing attack
 func _shoot_lance_thrust(dir: Vector2) -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
+	var count: int = _get_active_bullet_count()
+	var b = bullet_scene.instantiate()
 	if sfx:
 		sfx.play("slash_a", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = clampi(_get_active_bullet_count(), 3, 4)
-	var bspeed = (definition.bullet_speed if definition else 80.0)
 	for i in range(count):
 		var delay = i * 0.05
 		get_tree().create_timer(delay).timeout.connect(func():
 			if is_instance_valid(self) and state != State.DEAD:
-				var b = _spawn_bullet(bc, dir, bspeed * (1.0 + i * 0.1))
 				if b:
 					b.lifetime = 2.5
 		)
 
 ## SHIELD_WALL: 3-5 barrier bullets in arc facing player — defensive screen
 func _shoot_shield_wall(dir: Vector2) -> void:
+	var b = bullet_scene.instantiate()
+	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
+	var count: int = _get_active_bullet_count()
+	var center: Vector2 = global_position
+	var offset: Vector2 = Vector2.ZERO
 	if sfx:
 		sfx.play("spell_a", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = clampi(_get_active_bullet_count(), 3, 5)
-	var perp = dir.rotated(PI * 0.5)
-	var center = global_position + dir * 12.0
 	var spacing = 8.0
 	for i in range(count):
-		var offset = perp * ((float(i) - (count - 1) * 0.5) * spacing)
-		var b = bullet_scene.instantiate()
 		b.global_position = center + offset
 		b.direction = Vector2.ZERO
 		b.behavior = b.BulletBehavior.BARRIER
@@ -2861,14 +3869,13 @@ func _shoot_shield_wall(dir: Vector2) -> void:
 
 ## CURSE_BOLT: Single slow homing projectile that applies random debuff
 func _shoot_curse_bolt(dir: Vector2) -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
+	var b = bullet_scene.instantiate()
 	if sfx:
 		sfx.play("mystical", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var bspeed = (definition.bullet_speed if definition else 80.0) * 0.4
-	var b = _spawn_bullet(bc, dir, bspeed)
 	if b:
 		b.behavior = b.BulletBehavior.HOMING_ENEMY
 		b.lifetime = 5.0
@@ -2880,17 +3887,20 @@ func _shoot_curse_bolt(dir: Vector2) -> void:
 
 ## SUMMON_WALL: Summon 2-3 weak minions in a line between self and player
 func _shoot_summon_wall(dir: Vector2) -> void:
+	var sfx = get_node_or_null("/root/SFXManager")
+	var minion = bullet_scene.instantiate()
+	var container = get_tree().get_first_node_in_group("bullets")
+	var spawn_pos: Vector2 = global_position
+	var dm = get_node_or_null("/root/DungeonManager")
+	var minion_def = definition
+	var gp = get_meta("grid_pos", Vector2i(-999, -999))
+	var count: int = _get_active_bullet_count()
 	if not definition:
 		return
-	var _container = get_parent()
-	if _container and _container.get_child_count() >= MAX_SUMMONED_ENEMIES:
-		return
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("summon", -4.0, 0.1)
 	# Auto-create minion def if needed
 	if not definition.summon_definition:
-		var minion_def = EnemyDefinition.new()
 		minion_def.enemy_name = "Minion"
 		minion_def.max_hp = maxi(1, definition.max_hp / 4)
 		minion_def.move_speed = definition.move_speed * 1.2
@@ -2906,97 +3916,91 @@ func _shoot_summon_wall(dir: Vector2) -> void:
 		minion_def.xp_value = 1
 		minion_def.score_value = 2
 		definition.summon_definition = minion_def
-	var enemy_scene = preload("res://scenes/enemy.tscn")
-	var container = get_parent()
-	var count = clampi(definition.summon_count, 2, 3)
 	var perp = dir.rotated(PI * 0.5)
 	var mid = global_position + dir * 20.0
 	for i in range(count):
-		var offset = perp * ((float(i) - (count - 1) * 0.5) * 12.0)
-		var spawn_pos = mid + offset
-		var minion = enemy_scene.instantiate()
 		minion.global_position = spawn_pos
 		minion.setup(definition.summon_definition.duplicate())
 		container.add_child(minion)
-		var gp = get_meta("grid_pos", Vector2i(-999, -999))
 		if gp != Vector2i(-999, -999):
 			minion.set_meta("grid_pos", gp)
-			var dm = get_tree().get_first_node_in_group("dungeon_manager") if is_inside_tree() else null
 			if dm and dm.room_states.has(gp):
 				dm.room_states[gp]["alive"] += 1
 				minion.tree_exited.connect(dm._on_enemy_died.bind(gp))
 
 ## LEAPING_SLAM: Jump to player position, AOE shockwave + bullet ring on land
 func _shoot_leaping_slam(dir: Vector2) -> void:
+	var angle: float = 0.0
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var sfx = get_node_or_null("/root/SFXManager")
+	var sfx2 = get_node_or_null("/root/SFXManager")
+	var orig_color: Color = definition.sprite_color if definition else Color.WHITE
+	var radius: int = 16
+	var tween = create_tween()
+	var target: Vector2 = player.global_position if is_instance_valid(player) else global_position
 	if not is_instance_valid(player):
 		return
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("dash", -4.0, 0.1)
-	var target = player.global_position
 	# Telegraph with landing marker
-	var radius = definition.slam_radius if definition else 24.0
 	_spawn_landing_marker(target, radius, 0.5)
 	# Brief invulnerability during jump
 	$CollisionShape2D.set_deferred("disabled", true)
 	$Sprite2D.modulate.a = 0.4
 	# Jump arc via tween
-	var tween = create_tween()
 	tween.tween_property(self, "global_position", target, 0.5).set_ease(Tween.EASE_IN_OUT)
 	tween.tween_callback(func():
 		if not is_instance_valid(self) or state == State.DEAD:
 			return
 		$CollisionShape2D.set_deferred("disabled", false)
-		var orig_color = definition.sprite_color if definition else Color.WHITE
 		$Sprite2D.modulate = orig_color
 		# AOE slam damage
 		_do_slam()
 		# Bullet ring on landing
-		var bc = _get_bullets_container()
 		if bc:
 			var ring_count = maxi(_get_active_bullet_count(), 8)
-			var bspeed = (definition.bullet_speed if definition else 80.0)
 			for i in range(ring_count):
-				var angle = TAU / ring_count * i
 				_spawn_bullet(bc, Vector2(cos(angle), sin(angle)), bspeed)
-		var sfx2 = get_node_or_null("/root/SFXManager")
 		if sfx2:
 			sfx2.play("boom_a", -2.0, 0.08)
 	)
 
 ## ARROW_VOLLEY: 3-5 lobbed arrows that rain down around player position
 func _shoot_arrow_volley() -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var flight: float = 0.3
+	var sfx = get_node_or_null("/root/SFXManager")
+	var pulse: float = 0.0
+	var center: Vector2 = global_position
+	var radius: int = 16
+	var _elapsed: float = 0.0
+	var count: int = _get_active_bullet_count()
+	var duration: float = 1.0
+	var offset: Vector2 = Vector2.ZERO
 	if not is_instance_valid(player):
 		return
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("scatter", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = clampi(_get_active_bullet_count(), 3, 5)
-	var radius = (definition.bomb_aoe_radius if definition else 16.0) * 0.5
-	var base_flight = (definition.bomb_flight_time if definition else 0.8) * 0.8
-	var center = player.global_position
 	for i in range(count):
-		var offset = Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0))
-		var flight = base_flight + randf_range(0.0, 0.3)
 		_spawn_lob_at(bc, center + offset, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 1.5)
 
 ## --- Lobbed Bomb Attacks ---
 
 ## Landing marker: blinking orange circle at target position
 class _LandingMarkerDraw extends Node2D:
-	var radius: float = 16.0
-	var duration: float = 0.6
 	var _elapsed: float = 0.0
+	var duration: float = 1.0
+	var radius: float = 12.0
 	func _process(delta: float) -> void:
 		_elapsed += delta
 		queue_redraw()
 		if _elapsed >= duration:
 			get_parent().queue_free()
 	func _draw() -> void:
-		var pulse = 0.08 + 0.07 * abs(sin(_elapsed * 8.0))
+		var pulse = 0.3 + 0.4 * abs(sin(_elapsed * 14.0))
 		# Subtle transparent fill
 		draw_circle(Vector2.ZERO, radius, Color(1.0, 0.3, 0.0, pulse * 0.4))
 		# Thin pulsing ring outline
@@ -3004,14 +4008,673 @@ class _LandingMarkerDraw extends Node2D:
 
 func _spawn_landing_marker(target_pos: Vector2, radius: float, duration: float) -> void:
 	var marker = Node2D.new()
+	var draw_node = _LandingMarkerDraw.new()
 	marker.global_position = target_pos
 	marker.z_index = 1  # above floor tiles, below enemies
-	var draw_node = _LandingMarkerDraw.new()
 	draw_node.radius = radius
 	draw_node.duration = duration
 	marker.add_child(draw_node)
 	if is_inside_tree():
 		get_tree().current_scene.add_child(marker)
+
+## --- Melee Telegraph System ---
+
+## Melee telegraph: red shape (arc/rect/circle) that pulses red during windup
+class _MeleeTelegraphDraw extends Node2D:
+	enum Shape { ARC, RECT, CIRCLE }
+	var shape: int = Shape.ARC
+	var angle_center: float = 0.0      # arc direction (radians)
+	var arc_span: float = PI * 0.66    # arc width (radians)
+	var rect_length: float = 80.0      # rect length for SPEAR_LUNGE
+	var rect_width: float = 20.0
+	var _elapsed: float = 0.0
+	var duration: float = 0.5
+	var radius: float = 24.0
+	func _process(delta: float) -> void:
+		_elapsed += delta
+		queue_redraw()
+		if _elapsed >= duration:
+			get_parent().queue_free()
+	func _draw() -> void:
+		# Pulse and ramp-up alpha as telegraph progresses (warning gets brighter)
+		var pulse = 0.3 + 0.4 * abs(sin(_elapsed * 14.0))
+		var alpha = clampf(_elapsed / duration, 0.0, 1.0) * pulse
+		var fill = Color(1.0, 0.15, 0.1, alpha * 0.35)
+		var edge = Color(1.0, 0.3, 0.2, alpha)
+		match shape:
+			Shape.ARC:
+				var start = angle_center - arc_span * 0.5
+				var end = angle_center + arc_span * 0.5
+				# Fan fill: draw polygon from center through arc
+				var pts: PackedVector2Array = PackedVector2Array()
+				var colors: PackedColorArray = PackedColorArray()
+				pts.append(Vector2.ZERO)
+				var steps = 16
+				for i in range(steps + 1):
+					var a = lerp(start, end, float(i) / steps)
+					pts.append(Vector2(cos(a), sin(a)) * radius)
+				for i in range(pts.size()):
+					colors.append(fill)
+				draw_polygon(pts, colors)
+				draw_arc(Vector2.ZERO, radius, start, end, 24, edge, 1.5, true)
+			Shape.RECT:
+				# Rectangle pointing along angle_center
+				var fwd = Vector2(cos(angle_center), sin(angle_center))
+				var side = Vector2(-fwd.y, fwd.x)
+				var p0 = -side * (rect_width * 0.5)
+				var p1 = fwd * rect_length - side * (rect_width * 0.5)
+				var p2 = fwd * rect_length + side * (rect_width * 0.5)
+				var p3 = side * (rect_width * 0.5)
+				var pts: PackedVector2Array = PackedVector2Array([p0, p1, p2, p3])
+				var colors: PackedColorArray = PackedColorArray([fill, fill, fill, fill])
+				draw_polygon(pts, colors)
+				draw_polyline(PackedVector2Array([p0, p1, p2, p3, p0]), edge, 1.5, true)
+			Shape.CIRCLE:
+				draw_circle(Vector2.ZERO, radius, fill)
+				draw_arc(Vector2.ZERO, radius, 0, TAU, 24, edge, 1.5, true)
+
+## Sweeping melee bar: a visible blade that rotates from start_angle to end_angle over duration.
+## Checks damage along its length each frame. Attached to enemy so it follows.
+class _MeleeSweepBar extends Node2D:
+	var length: float = 90.0
+	var duration: float = 0.3
+	var damage: int = 2
+	var push_force: float = 150.0
+	var start_angle: float = 0.0    # sweep start (radians, local)
+	var end_angle: float = PI       # sweep end
+	var hit_player: bool = false
+	var _elapsed: float = 0.0
+	var _player: CharacterBody2D = null
+	var _owner_enemy: Node2D = null
+	func _ready() -> void:
+		z_index = 2
+	func _process(delta: float) -> void:
+		_elapsed += delta
+		queue_redraw()
+		if _elapsed >= duration:
+			queue_free()
+			return
+		if hit_player or not is_instance_valid(_player) or not is_instance_valid(_owner_enemy):
+			return
+		var current_angle = lerp(start_angle, end_angle, clampf(_elapsed / maxf(duration, 0.001), 0.0, 1.0))
+		var bar_dir = Vector2(cos(current_angle), sin(current_angle))
+		var to_player = _player.global_position - _owner_enemy.global_position
+		var dist_to_player = to_player.length()
+		var angle_diff = absf(wrapf(to_player.angle() - current_angle, -PI, PI))
+		# Hit if player is anywhere within reach of the bar (distance check + angle check)
+		if dist_to_player > length + 6.0:
+			return
+		# Check angle: player must be within ~30 degrees of current bar angle
+		if angle_diff > 0.55:  # ~31 degrees tolerance — generous blade width
+			return
+		hit_player = true
+		if _player.has_method("take_damage"):
+			_player.take_damage(damage, _owner_enemy.global_position, true, false)
+		# Push player in the sweep direction (tangent of the arc)
+		var sweep_tangent = Vector2(-sin(current_angle), cos(current_angle))
+		if end_angle < start_angle:
+			sweep_tangent = -sweep_tangent
+		_player.velocity += sweep_tangent * push_force + bar_dir * push_force * 0.5
+	func _draw() -> void:
+		if not is_instance_valid(_owner_enemy):
+			return
+		var t = clampf(_elapsed / maxf(duration, 0.001), 0.0, 1.0)
+		var current_angle = lerp(start_angle, end_angle, t)
+		var bar_dir = Vector2(cos(current_angle), sin(current_angle))
+		var side = Vector2(-bar_dir.y, bar_dir.x) * 1.2
+		var tip = bar_dir * length
+		var base_l = -side
+		var base_r = side
+		var mid_l = tip * 0.7 - side * 0.6
+		var mid_r = tip * 0.7 + side * 0.6
+		var point = tip
+		var fill_c = Color(1.0, 0.8, 0.5, 0.85)
+		var edge_c = Color(1.0, 0.2, 0.1, 0.95)
+		var pts = PackedVector2Array([base_l, mid_l, point, mid_r, base_r])
+		var colors = PackedColorArray([fill_c, fill_c, fill_c, fill_c, fill_c])
+		# Pointed tip: triangle at end
+		# White-hot core with red edge
+		# Blade body (rect narrowing to point)
+		draw_polygon(pts, colors)
+		draw_polyline(PackedVector2Array([base_l, mid_l, point, mid_r, base_r, base_l]), edge_c, 0.8, true)
+
+## Spinning bar for whirlwind: continuously rotates, checking damage with cooldown + push.
+class _MeleeSpinBar extends Node2D:
+	var length: float = 90.0
+	var bar_width: float = 1.5      # thin sharp blade
+	var spin_speed: float = 12.0    # radians/sec (slower, more readable)
+	var damage: int = 2
+	var push_force: float = 150.0   # knockback on hit
+	var duration: float = 2.0
+	var hit_cooldown: float = 0.6
+	var _elapsed: float = 0.0
+	var _current_angle: float = 0.0
+	var _hit_cd: float = 0.0
+	var _player: CharacterBody2D = null
+	var _owner_enemy: Node2D = null
+	func _ready() -> void:
+		z_index = 2
+	func _process(delta: float) -> void:
+		_elapsed += delta
+		_current_angle += spin_speed * delta
+		_hit_cd -= delta
+		queue_redraw()
+		if _elapsed >= duration:
+			queue_free()
+			return
+		if _hit_cd > 0 or not is_instance_valid(_player) or not is_instance_valid(_owner_enemy):
+			return
+		var to_player = _player.global_position - _owner_enemy.global_position
+		var dist_to_player = to_player.length()
+		if dist_to_player > length + 6.0:
+			return
+		# Angle-based hit: player must be within ~31 degrees of bar angle
+		var player_angle = to_player.angle()
+		var angle_diff = absf(wrapf(player_angle - _current_angle, -PI, PI))
+		if angle_diff > 0.55:
+			return
+		_hit_cd = hit_cooldown
+		if _player.has_method("take_damage"):
+			_player.take_damage(damage, _owner_enemy.global_position, true, false)
+		# Push player in the spin tangent direction + outward
+		var spin_dir = Vector2(cos(_current_angle), sin(_current_angle))
+		var tangent = Vector2(-sin(_current_angle), cos(_current_angle))
+		_player.velocity += tangent * push_force + spin_dir * push_force * 0.3
+	func _draw() -> void:
+		if not is_instance_valid(_owner_enemy):
+			return
+		var bar_dir = Vector2(cos(_current_angle), sin(_current_angle))
+		var tip = bar_dir * length
+		var alpha = 0.85 if _hit_cd <= 0 else 0.3
+		# Pointed blade shape
+		var side = Vector2(-bar_dir.y, bar_dir.x) * bar_width
+		var base_l = -side
+		var base_r = side
+		var mid_l = tip * 0.7 - side
+		var mid_r = tip * 0.7 + side
+		var point = tip
+		var fill_c = Color(1.0, 0.6, 0.2, alpha)
+		var edge_c = Color(1.0, 0.15, 0.0, alpha)
+		var pts = PackedVector2Array([base_l, mid_l, point, mid_r, base_r])
+		var colors = PackedColorArray([fill_c, fill_c, fill_c, fill_c, fill_c])
+		draw_polygon(pts, colors)
+		draw_polyline(PackedVector2Array([base_l, mid_l, point, mid_r, base_r, base_l]), edge_c, 0.8, true)
+
+## Spawn a sweep bar that rotates from start_angle to end_angle, dealing damage if it hits player.
+func _spawn_sweep_bar(start_angle: float, end_angle: float, reach: float, dmg: int, sweep_time: float) -> void:
+	var bar = _MeleeSweepBar.new()
+	bar.length = reach
+	bar.start_angle = start_angle
+	bar.end_angle = end_angle
+	bar.duration = sweep_time
+	bar.damage = dmg
+	bar._player = player
+	bar._owner_enemy = self
+	add_child(bar)
+
+## Spawn a spinning bar on self for whirlwind.
+func _spawn_spin_bar(reach: float, dmg: int, spin_time: float, spin_spd: float, hit_cd: float) -> void:
+	var bar = _MeleeSpinBar.new()
+	bar.length = reach
+	bar.damage = dmg
+	bar.duration = spin_time
+	bar.spin_speed = spin_spd
+	bar.hit_cooldown = hit_cd
+	bar._player = player
+	bar._owner_enemy = self
+	bar._current_angle = randf() * TAU
+	add_child(bar)
+
+## Spawn a telegraph decal at origin_pos. Returns the container node (so it can be attached to enemy for following).
+func _spawn_melee_telegraph(origin_pos: Vector2, shape: int, duration: float, params: Dictionary = {}, follow: bool = false) -> Node2D:
+	var marker = Node2D.new()
+	marker.global_position = origin_pos
+	marker.z_index = 1
+	var draw_node = _MeleeTelegraphDraw.new()
+	draw_node.shape = shape
+	draw_node.duration = duration
+	if params.has("radius"): draw_node.radius = params["radius"]
+	if params.has("angle"): draw_node.angle_center = params["angle"]
+	if params.has("arc_span"): draw_node.arc_span = params["arc_span"]
+	if params.has("rect_length"): draw_node.rect_length = params["rect_length"]
+	if params.has("rect_width"): draw_node.rect_width = params["rect_width"]
+	marker.add_child(draw_node)
+	if is_inside_tree():
+		if follow:
+			add_child(marker)
+			marker.position = Vector2.ZERO
+		else:
+			get_tree().current_scene.add_child(marker)
+	return marker
+
+## Apply melee damage if player is within an arc hitbox in front of enemy.
+## angle_center in radians, arc_span in radians.
+func _do_melee_arc_damage(radius: float, angle_center: float, arc_span: float, damage: int) -> bool:
+	var to_player: Vector2 = (player.global_position - global_position) if is_instance_valid(player) else Vector2.ZERO
+	var vfx = get_node_or_null("/root/VFXManager")
+	if not is_instance_valid(player):
+		return false
+	var dist = to_player.length()
+	if dist > radius:
+		return false
+	var player_angle = to_player.angle()
+	var diff = wrapf(player_angle - angle_center, -PI, PI)
+	if absf(diff) > arc_span * 0.5:
+		return false
+	if player.has_method("take_damage"):
+		player.take_damage(damage, global_position, true, false)
+	if vfx:
+		vfx.shockwave(player.global_position, 12.0, Color(1.0, 0.2, 0.1, 0.6))
+		vfx.shake(2.0, 0.1)
+	return true
+
+## Apply damage if player is within a rectangle hitbox pointing in a direction.
+func _do_melee_rect_damage(dir: Vector2, length: float, width: float, damage: int) -> bool:
+	var to_player: Vector2 = (player.global_position - global_position) if is_instance_valid(player) else Vector2.ZERO
+	var vfx = get_node_or_null("/root/VFXManager")
+	if not is_instance_valid(player):
+		return false
+	var fwd = dir.normalized()
+	var side = Vector2(-fwd.y, fwd.x)
+	var along = to_player.dot(fwd)
+	var across = to_player.dot(side)
+	if along < 0 or along > length:
+		return false
+	if absf(across) > width * 0.5:
+		return false
+	if player.has_method("take_damage"):
+		player.take_damage(damage, global_position, true, false)
+	if vfx:
+		vfx.shockwave(player.global_position, 12.0, Color(1.0, 0.2, 0.1, 0.6))
+		vfx.shake(2.0, 0.1)
+	return true
+
+## Apply damage if player is within a circle around enemy (for whirlwind/ground pound).
+func _do_melee_circle_damage(radius: float, damage: int) -> bool:
+	var vfx = get_node_or_null("/root/VFXManager")
+	if not is_instance_valid(player):
+		return false
+	if global_position.distance_to(player.global_position) > radius:
+		return false
+	if player.has_method("take_damage"):
+		player.take_damage(damage, global_position, true, false)
+	if vfx:
+		vfx.shockwave(global_position, radius, Color(1.0, 0.2, 0.1, 0.5))
+		vfx.shake(3.0, 0.15)
+	return true
+
+## --- Melee Attack Implementations ---
+
+## SWORD_SLASH: Visible blade sweeps side-to-side. Brief windup -> blade sweeps.
+func _shoot_sword_slash(dir: Vector2) -> void:
+	var reach: float = definition.melee_range if definition else 12.0
+	var dmg: int = definition.attack_damage if definition else 2
+	var sfx = get_node_or_null("/root/SFXManager")
+	var sfx2 = get_node_or_null("/root/SFXManager")
+	var arc: float = PI / 3.0
+	if sfx:
+		sfx.play("swing", -6.0, 0.05)
+	var windup = 0.15  # brief pause before swing (no big telegraph)
+	velocity = Vector2.ZERO
+	get_tree().create_timer(windup).timeout.connect(
+		func():
+			if not is_instance_valid(self) or hp <= 0 or state == State.DEAD:
+				return
+			if sfx2:
+				sfx2.play("impact_a", -4.0, 0.1)
+			var strike_dir = Vector2.RIGHT
+			if is_instance_valid(player):
+				strike_dir = (player.global_position - global_position).normalized()
+			var start_a = strike_dir.angle() - arc * 0.5
+			var end_a = strike_dir.angle() + arc * 0.5
+			_spawn_sweep_bar(start_a, end_a, reach, dmg, 0.3)
+			charge_dir = strike_dir
+			charge_timer = 0.08
+			state = State.CHARGING
+	)
+
+## SPEAR_LUNGE: Telegraphed linear thrust. 0.5s rect warning -> tween forward through line.
+func _shoot_spear_lunge(dir: Vector2) -> void:
+	var dmg: int = definition.attack_damage if definition else 2
+	var sfx = get_node_or_null("/root/SFXManager")
+	var sfx2 = get_node_or_null("/root/SFXManager")
+	var tween = create_tween()
+	var telegraph_time: float = 0.3
+	if sfx:
+		sfx.play("woosh_b", -5.0, 0.1)
+	var length = 45.0
+	var width = 11.0
+	var telegraph = _spawn_melee_telegraph(global_position, _MeleeTelegraphDraw.Shape.RECT, telegraph_time,
+		{"rect_length": length, "rect_width": width, "angle": dir.angle()}, true)
+	velocity = Vector2.ZERO
+	get_tree().create_timer(telegraph_time).timeout.connect(
+		func():
+			if not is_instance_valid(self) or hp <= 0 or state == State.DEAD:
+				return
+			if sfx2:
+				sfx2.play("impact_b", -3.0, 0.12)
+			_do_melee_rect_damage(dir, length, width, dmg)
+			# Tween enemy forward along the thrust line fast
+			var start = global_position
+			var end_pt = start + dir * length
+			tween.tween_property(self, "global_position", end_pt, 0.15).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			# Recovery: 0.3s freeze
+			cooldown_timer = 0.3
+			state = State.COOLDOWN
+	)
+
+## CHARGE_BULL: 0.6s paw telegraph -> locked straight-line charge up to 200px -> wall stun.
+func _shoot_charge_bull(dir: Vector2) -> void:
+	var twn = create_tween()
+	var sfx = get_node_or_null("/root/SFXManager")
+	var sfx2 = get_node_or_null("/root/SFXManager")
+	var sp: Node2D = $Sprite2D
+	var telegraph_time: float = 0.3
+	if sfx:
+		sfx.play("shriek", -4.0, 0.08)
+	var max_dist = 110.0
+	_spawn_melee_telegraph(global_position, _MeleeTelegraphDraw.Shape.RECT, telegraph_time,
+		{"rect_length": max_dist, "rect_width": 16.0, "angle": dir.angle()}, true)
+	velocity = Vector2.ZERO
+	# Sprite shake during telegraph
+	var base_pos = sp.position
+	twn.set_loops(int(telegraph_time * 10))
+	twn.tween_property(sp, "position", base_pos + Vector2(1.5, 0), 0.05)
+	twn.tween_property(sp, "position", base_pos - Vector2(1.5, 0), 0.05)
+	# Lock direction now — bull doesn't track
+	var locked_dir = dir
+	get_tree().create_timer(telegraph_time).timeout.connect(
+		func():
+			if not is_instance_valid(self) or hp <= 0 or state == State.DEAD:
+				return
+			if sfx2:
+				sfx2.play("woosh_a", -3.0, 0.1)
+			set_meta("bull_charge", true)
+			set_meta("bull_charge_dmg_dealt", false)
+			charge_dir = locked_dir
+			charge_timer = max_dist / 100.0  # 100 px/s heavy charge
+			state = State.CHARGING
+	)
+
+## CLEAVE_COMBO: 3-hit chain with visible sweep bars. Left→right, right→left, wide smash.
+func _shoot_cleave_combo(dir: Vector2) -> void:
+	var base_dmg: int = definition.attack_damage if definition else 2
+	var reach: float = definition.melee_range if definition else 12.0
+	var arc = PI * 0.7
+	# Hit 1: left-to-right sweep bar (immediate) — wide side-to-side
+	_do_cleave_bar(dir, reach, arc, -1.2, 1.2, base_dmg, 0.25, 0.0)
+	# Hit 2: right-to-left sweep bar after 0.5s
+	_do_cleave_bar(dir, reach, arc, 1.2, -1.2, base_dmg, 0.25, 0.5)
+	# Hit 3: wide overhead sweep after 1.0s — even wider arc
+	_do_cleave_bar(dir, reach * 1.2, PI * 0.9, -1.5, 1.5, int(base_dmg * 1.5), 0.3, 1.0)
+	velocity = Vector2.ZERO
+	cooldown_timer = 1.6
+	state = State.COOLDOWN
+
+func _do_cleave_bar(base_dir: Vector2, reach: float, arc: float, start_off: float, end_off: float, dmg: int, telegraph_time: float, delay: float) -> void:
+	var sfx = get_node_or_null("/root/SFXManager")
+	var sfx2 = get_node_or_null("/root/SFXManager")
+	get_tree().create_timer(delay).timeout.connect(
+		func():
+			if not is_instance_valid(self) or hp <= 0 or state == State.DEAD:
+				return
+			var d = base_dir
+			if is_instance_valid(player):
+				d = (player.global_position - global_position).normalized()
+			var center_angle = d.angle() + (start_off + end_off) * 0.5
+			_spawn_melee_telegraph(global_position, _MeleeTelegraphDraw.Shape.ARC, telegraph_time,
+				{"radius": reach, "angle": center_angle, "arc_span": arc}, true)
+			if sfx:
+				sfx.play("woosh_b", -6.0, 0.1)
+			get_tree().create_timer(telegraph_time).timeout.connect(
+				func():
+					if not is_instance_valid(self) or hp <= 0 or state == State.DEAD:
+						return
+					if sfx2:
+						sfx2.play("swing", -4.0, 0.1)
+					# Spawn visible sweep bar
+					_spawn_sweep_bar(d.angle() + start_off, d.angle() + end_off, reach, dmg, 0.18)
+			)
+	)
+
+## WHIRLWIND: 0.4s crouch -> 2.0s bouncing spin, ricochets off walls, big contact damage.
+func _shoot_whirlwind(_dir: Vector2) -> void:
+	var radius: int = 16
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("shriek", -5.0, 0.08)
+	var telegraph_time = 0.4
+	_spawn_melee_telegraph(global_position, _MeleeTelegraphDraw.Shape.CIRCLE, telegraph_time,
+		{"radius": radius}, true)
+	velocity = Vector2.ZERO
+	get_tree().create_timer(telegraph_time).timeout.connect(
+		func():
+			if not is_instance_valid(self) or hp <= 0 or state == State.DEAD:
+				return
+			set_meta("whirlwind_active", true)
+			set_meta("whirlwind_radius", radius)
+			set_meta("whirlwind_time", 2.0)
+			set_meta("whirlwind_tick", 0.0)
+			set_meta("whirlwind_hit_cd", 0.0)
+			set_meta("whirlwind_dmg", definition.attack_damage if definition else 2)
+			# Initial bounce direction: toward player if visible, else random
+			var initial = Vector2.RIGHT.rotated(randf() * TAU)
+			if is_instance_valid(player):
+				initial = (player.global_position - global_position).normalized()
+			set_meta("whirlwind_velocity", initial * 140.0)
+			# Spawn visible spinning bar (slower, readable)
+			var ww_dmg = int((definition.attack_damage if definition else 2) * 1.5)
+			_spawn_spin_bar(radius, ww_dmg, 2.0, 12.0, 0.6)
+	)
+
+## GROUND_POUND: Jump up, slam down creating expanding shockwave ring.
+func _shoot_ground_pound(_dir: Vector2) -> void:
+	var base_dmg: int = definition.attack_damage if definition else 2
+	var twn = create_tween()
+	var sfx = get_node_or_null("/root/SFXManager")
+	var sfx2 = get_node_or_null("/root/SFXManager")
+	var vfx = get_node_or_null("/root/VFXManager")
+	var sp: Node2D = $Sprite2D
+	if sfx:
+		sfx.play("woosh_a", -5.0, 0.08)
+	velocity = Vector2.ZERO
+	var slam_pos = global_position
+	# Jump up animation (sprite rises then slams)
+	twn.tween_property(sp, "position:y", sp.position.y - 16.0, 0.3).set_ease(Tween.EASE_OUT)
+	twn.tween_property(sp, "position:y", sp.position.y, 0.15).set_ease(Tween.EASE_IN)
+	twn.tween_callback(func():
+		if not is_instance_valid(self) or hp <= 0 or state == State.DEAD:
+			return
+		if sfx2:
+			sfx2.play("impact_b", -2.0, 0.1)
+		if vfx:
+			vfx.shockwave(global_position, 24.0, Color(0.8, 0.4, 0.1, 0.6))
+			vfx.shake(3.0, 0.15)
+		# Expanding ring damage: 3 waves at increasing radii
+		for wave_i in range(3):
+			var wave_delay = wave_i * 0.15
+			var wave_radius = 12.0 + wave_i * 10.0
+			get_tree().create_timer(wave_delay).timeout.connect(func():
+				if not is_instance_valid(self) or not is_instance_valid(player):
+					return
+				# Draw expanding ring visual via helper
+				_spawn_melee_telegraph(global_position, _MeleeTelegraphDraw.Shape.CIRCLE, 0.2,
+					{"radius": wave_radius}, false)
+				# Damage check
+				if global_position.distance_to(player.global_position) < wave_radius + 6.0:
+					if player.has_method("take_damage"):
+						player.take_damage(base_dmg, global_position, true, false)
+					# Push outward from center
+					var push_dir = (player.global_position - global_position).normalized()
+					if push_dir == Vector2.ZERO:
+						push_dir = Vector2.RIGHT
+					player.velocity += push_dir * 180.0
+			)
+	)
+	cooldown_timer = 1.2
+	state = State.COOLDOWN
+
+## TAIL_WHIP: Fast 360° spin sweep — full circle, lighter damage but hard to dodge.
+func _shoot_tail_whip(dir: Vector2) -> void:
+	var base_dmg: int = definition.attack_damage if definition else 2
+	var twn = create_tween()
+	var sfx = get_node_or_null("/root/SFXManager")
+	var angle: float = 0.0
+	var sp: Node2D = $Sprite2D
+	if sfx:
+		sfx.play("swing", -5.0, 0.05)
+	velocity = Vector2.ZERO
+	var reach = 20.0
+	var strike_dir = dir
+	if is_instance_valid(player):
+		strike_dir = (player.global_position - global_position).normalized()
+	# Full 360° sweep — two bars sweeping opposite directions for visual fullness
+	_spawn_sweep_bar(angle, angle + PI * 2.0, reach, base_dmg, 0.4)
+	# Small sprite spin
+	twn.tween_property(sp, "rotation", TAU, 0.4).set_ease(Tween.EASE_IN_OUT)
+	twn.tween_property(sp, "rotation", 0.0, 0.01)
+	cooldown_timer = 0.8
+	state = State.COOLDOWN
+
+## SHIELD_BASH (melee): Short dash + wide frontal cone hit + heavy push.
+func _shoot_melee_shield_bash(dir: Vector2) -> void:
+	var base_dmg: int = definition.attack_damage if definition else 2
+	var twn = create_tween()
+	var sfx = get_node_or_null("/root/SFXManager")
+	var sfx2 = get_node_or_null("/root/SFXManager")
+	var vfx = get_node_or_null("/root/VFXManager")
+	var sp: CanvasItem = $Sprite2D
+	if sfx:
+		sfx.play("woosh_b", -4.0, 0.08)
+	velocity = Vector2.ZERO
+	var bash_dir = dir
+	if is_instance_valid(player):
+		bash_dir = (player.global_position - global_position).normalized()
+	# Brief telegraph: flash white
+	sp.modulate = Color(2.0, 2.0, 2.0)
+	twn.tween_property(sp, "modulate", definition.sprite_color if definition else Color.WHITE, 0.15)
+	# Short forward dash
+	charge_dir = bash_dir
+	charge_timer = 0.12
+	state = State.CHARGING
+	# After dash completes, do wide frontal cone damage + push
+	get_tree().create_timer(0.15).timeout.connect(func():
+		if not is_instance_valid(self) or hp <= 0 or state == State.DEAD:
+			return
+		if sfx2:
+			sfx2.play("impact_a", -3.0, 0.1)
+		# Wide sweep bar — 140° cone in front
+		_spawn_sweep_bar(bash_dir.angle() - 1.2, bash_dir.angle() + 1.2, 18.0, int(base_dmg * 1.3), 0.12)
+		if vfx:
+			vfx.shake(2.0, 0.1)
+		cooldown_timer = 1.0
+		state = State.COOLDOWN
+	)
+
+## GRAB_THROW: Reaches out, pulls player in, then throws them away.
+func _shoot_grab_throw(dir: Vector2) -> void:
+	var base_dmg: int = definition.attack_damage if definition else 2
+	var sfx2 = get_node_or_null("/root/SFXManager")
+	var vfx = get_node_or_null("/root/VFXManager")
+	var sfx = get_node_or_null("/root/SFXManager")
+	if not is_instance_valid(player):
+		return
+	if sfx:
+		sfx.play("shriek", -6.0, 0.08)
+	velocity = Vector2.ZERO
+	var grab_reach = 24.0
+	var to_player = player.global_position - global_position
+	if to_player.length() > grab_reach:
+		cooldown_timer = 0.3
+		state = State.COOLDOWN
+		return
+	# Telegraph: brief red flash
+	_spawn_melee_telegraph(global_position, _MeleeTelegraphDraw.Shape.CIRCLE, 0.2,
+		{"radius": grab_reach}, true)
+	get_tree().create_timer(0.2).timeout.connect(func():
+		if not is_instance_valid(self) or not is_instance_valid(player) or hp <= 0:
+			return
+		# Check if player is still in range
+		if global_position.distance_to(player.global_position) > grab_reach + 8.0:
+			return
+		# Phase 1: Pull player to enemy position
+		if sfx2:
+			sfx2.play("impact_a", -5.0, 0.1)
+		if player.has_method("take_damage"):
+			player.take_damage(base_dmg, global_position, true, false)
+		# Yank player toward us
+		var pull_dir = (global_position - player.global_position).normalized()
+		player.velocity = pull_dir * 200.0
+		# Phase 2: After brief hold, throw player away
+		get_tree().create_timer(0.25).timeout.connect(func():
+			if not is_instance_valid(self) or not is_instance_valid(player):
+				return
+			var sfx3 = get_node_or_null("/root/SFXManager")
+			if sfx3:
+				sfx3.play("woosh_a", -4.0, 0.1)
+			# Throw in opposite direction from enemy facing
+			var throw_dir = dir
+			if is_instance_valid(player):
+				throw_dir = (player.global_position - global_position).normalized()
+				if throw_dir == Vector2.ZERO:
+					throw_dir = dir
+			player.velocity = throw_dir * 350.0
+			if player.has_method("take_damage"):
+				player.take_damage(base_dmg, global_position, true, false)
+			if vfx:
+				vfx.shake(4.0, 0.15)
+		)
+	)
+	cooldown_timer = 1.5
+	state = State.COOLDOWN
+
+## STOMP_WAVE: Rhythmic stomps creating 3 expanding floor shockwaves in sequence.
+func _shoot_stomp_wave(_dir: Vector2) -> void:
+	var vfx = get_node_or_null("/root/VFXManager")
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("impact_b", -5.0, 0.08)
+	velocity = Vector2.ZERO
+	var base_dmg = maxi(1, int((definition.attack_damage if definition else 2) * 0.8))
+	# 3 stomps, each with an expanding ring
+	for stomp_i in range(3):
+		get_tree().create_timer(stomp_i * 0.5).timeout.connect(func():
+			if not is_instance_valid(self) or hp <= 0 or state == State.DEAD:
+				return
+			var sfx2 = get_node_or_null("/root/SFXManager")
+			if sfx2:
+				sfx2.play("impact_a", -4.0, 0.1)
+			# Sprite stomp: quick down-up
+			var sp = $Sprite2D
+			var twn = create_tween()
+			twn.tween_property(sp, "position:y", sp.position.y + 2.0, 0.05)
+			twn.tween_property(sp, "position:y", sp.position.y, 0.1)
+			if vfx:
+				vfx.shake(1.5, 0.08)
+			# Expanding ring: wave travels outward over 0.4s
+			var stomp_pos = global_position
+			for ring_i in range(4):
+				var ring_delay = ring_i * 0.08
+				var ring_radius = 8.0 + ring_i * 8.0
+				get_tree().create_timer(ring_delay).timeout.connect(func():
+					if not is_instance_valid(self) or not is_instance_valid(player):
+						return
+					# Visual ring via helper
+					_spawn_melee_telegraph(stomp_pos, _MeleeTelegraphDraw.Shape.CIRCLE, 0.15,
+						{"radius": ring_radius}, false)
+					# Damage if player is within this ring band
+					var pd = stomp_pos.distance_to(player.global_position)
+					if pd < ring_radius + 5.0 and pd > ring_radius - 8.0:
+						if player.has_method("take_damage"):
+							player.take_damage(base_dmg, stomp_pos, true, false)
+						var push = (player.global_position - stomp_pos).normalized()
+						if push == Vector2.ZERO:
+							push = Vector2.RIGHT
+						player.velocity += push * 100.0
+				)
+		)
+	cooldown_timer = 2.0
+	state = State.COOLDOWN
 
 func _spawn_lob_at(container: Node, target: Vector2, sprite_idx: int,
 		aoe_radius: float, flight_time: float, ring_count: int, cluster_count: int,
@@ -3039,88 +4702,90 @@ func _spawn_lob_at(container: Node, target: Vector2, sprite_idx: int,
 
 ## BOMB_TOSS: Single bomb at player position, explodes into bullet ring
 func _shoot_bomb_toss() -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var radius: int = 16
+	var sfx = get_node_or_null("/root/SFXManager")
+	var flight: float = 0.3
 	if not is_instance_valid(player):
 		return
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("bazooka", -5.0, 0.12)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var radius = definition.bomb_aoe_radius if definition else 16.0
-	var flight = definition.bomb_flight_time if definition else 0.6
 	_spawn_lob_at(bc, player.global_position, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0)
 
 ## CARPET_BOMB: 3-5 bombs in a line from enemy toward player
 func _shoot_carpet_bomb(dir: Vector2) -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var radius: int = 16
+	var sfx = get_node_or_null("/root/SFXManager")
+	var flight: float = 0.3
+	var count: int = _get_active_bullet_count()
+	var target: Vector2 = player.global_position if is_instance_valid(player) else global_position
 	if not is_instance_valid(player):
 		return
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("bazooka", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = clampi(_get_active_bullet_count(), 3, 5)
 	var dist_to_player = global_position.distance_to(player.global_position)
 	var step = maxf(dist_to_player / count, 10.0)
-	var radius = (definition.bomb_aoe_radius if definition else 16.0) * 0.9
-	var base_flight = (definition.bomb_flight_time if definition else 0.8)
 	for i in range(count):
-		var target = global_position + dir * step * (i + 1)
-		var flight = base_flight + i * 0.2  # stagger more so carpet rolls out slowly
 		_spawn_lob_at(bc, target, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 1.8)
 
 ## FIRE_RAIN: 2-4 bombs scattered randomly around player position
 func _shoot_fire_rain() -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var radius: int = 16
+	var sfx = get_node_or_null("/root/SFXManager")
+	var flight: float = 0.3
+	var count: int = _get_active_bullet_count()
+	var offset: Vector2 = Vector2.ZERO
 	if not is_instance_valid(player):
 		return
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("scatter", -5.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = clampi(_get_active_bullet_count(), 2, 4)
-	var radius = (definition.bomb_aoe_radius if definition else 16.0) * 0.7
 	var base_flight = (definition.bomb_flight_time if definition else 0.8)
 	var center = player.global_position
 	for i in range(count):
-		var offset = Vector2(randf_range(-28.0, 28.0), randf_range(-28.0, 28.0))
-		var flight = base_flight + randf_range(0.0, 0.4)
 		_spawn_lob_at(bc, center + offset, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 2.0)
 
 ## CLUSTER_BOMB: One big bomb that splits into 4 smaller bombs on impact
 func _shoot_cluster_bomb() -> void:
+	var bc = get_tree().get_first_node_in_group("bullets")
+	var radius: int = 16
+	var sfx = get_node_or_null("/root/SFXManager")
 	if not is_instance_valid(player):
 		return
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("bazooka", -4.0, 0.1)
-	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var radius = definition.bomb_aoe_radius if definition else 16.0
 	var flight = (definition.bomb_flight_time if definition else 0.8) * 1.2
 	_spawn_lob_at(bc, player.global_position, ObjSpriteIndex.DARK_ORB, radius, flight, 0, 4, -1.0, 2.5)
 
 ## MINE_DROP: 2-3 short-range lobs near self with bullet ring on landing
 func _shoot_mine_drop() -> void:
+	var count: int = _get_active_bullet_count()
+	var radius: int = 16
 	var sfx = get_node_or_null("/root/SFXManager")
+	var offset: Vector2 = Vector2.ZERO
 	if sfx:
 		sfx.play("ping", -6.0, 0.1)
 	var bc = _get_bullets_container()
 	if not bc:
 		return
-	var count = clampi(_get_active_bullet_count(), 2, 3)
-	var radius = (definition.bomb_aoe_radius if definition else 16.0) * 0.6
+	var target_base = player.global_position if is_instance_valid(player) else global_position
 	for i in range(count):
-		var offset = Vector2(randf_range(-12.0, 12.0), randf_range(-12.0, 12.0))
-		var target = global_position + offset
+		var target = target_base + offset
 		_spawn_lob_at(bc, target, ObjSpriteIndex.ENERGY_BALL, radius, 0.3, 6, 0)
 
 ## Fire death bullet pattern at death position
 func _fire_death_pattern() -> void:
+	var count: int = definition.bullet_count if definition else 8
+	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var pattern = definition.death_bullet_pattern
 	var pos = global_position
 	var bullets_container = _get_bullets_container()
@@ -3129,10 +4794,8 @@ func _fire_death_pattern() -> void:
 	match pattern:
 		EnemyDefinition.AttackType.BURST:
 			# Death explosion ring
-			var count = 12
-			var bspeed = definition.bullet_speed if definition else 70.0
 			for i in range(count):
-				var angle = (TAU / count) * i
+				var angle = TAU * float(i) / float(count)
 				var b = bullet_scene.instantiate()
 				b.global_position = pos
 				b.direction = Vector2.from_angle(angle)
@@ -3146,11 +4809,9 @@ func _fire_death_pattern() -> void:
 			_shoot_death_spiral_at(pos)
 		EnemyDefinition.AttackType.NOVA:
 			# Double ring
-			var bspeed = definition.bullet_speed if definition else 60.0
 			for ring in range(2):
-				var count = 10 + ring * 4
 				for i in range(count):
-					var angle = (TAU / count) * i + ring * 0.2
+					var angle = TAU * float(i) / float(count)
 					var b = bullet_scene.instantiate()
 					b.global_position = pos
 					b.direction = Vector2.from_angle(angle)
@@ -3163,7 +4824,7 @@ func _fire_death_pattern() -> void:
 		_:
 			# Fallback: simple burst
 			for i in range(8):
-				var angle = (TAU / 8.0) * i
+				var angle = TAU * float(i) / 8.0
 				var b = bullet_scene.instantiate()
 				b.global_position = pos
 				b.direction = Vector2.from_angle(angle)
@@ -3185,6 +4846,7 @@ func _has_line_of_sight() -> bool:
 
 ## Shared vision: for Mummy (check attached ally LOS) and Arch Mage (check any nearby ally LOS)
 func _has_line_of_sight_or_shared() -> bool:
+	var space = get_world_2d().direct_space_state
 	if _has_line_of_sight():
 		return true
 	if not definition:
@@ -3193,7 +4855,6 @@ func _has_line_of_sight_or_shared() -> bool:
 	# Mummy: raycast from attached ally to player
 	if atk == EnemyDefinition.AttackType.PUSH_WAVE:
 		if is_instance_valid(_attached_ally) and is_instance_valid(player):
-			var space = get_world_2d().direct_space_state
 			var q = PhysicsRayQueryParameters2D.create(_attached_ally.global_position, player.global_position, 16)
 			q.exclude = [_attached_ally.get_rid()]
 			return space.intersect_ray(q).is_empty()
@@ -3244,6 +4905,10 @@ func _notify_bodyguards_ally_hit() -> void:
 func _update_awareness_indicator() -> void:
 	if not _awareness_indicator:
 		return
+	# Ambush enemies never show awareness icons
+	if definition and definition.movement_pattern and definition.movement_pattern.move_type == MovementPattern.MoveType.AMBUSH:
+		_awareness_indicator.visible = false
+		return
 	if _awareness < 0.3:
 		_awareness_indicator.visible = false
 	elif _awareness < 0.7:
@@ -3257,6 +4922,7 @@ func _update_awareness_indicator() -> void:
 
 ## Called when awareness reaches ALERT threshold (≥ 0.7) — enter CHASE
 func _on_awareness_alert() -> void:
+	var tw = create_tween()
 	if state == State.CHASE or state == State.ATTACK or state == State.DEAD:
 		return
 	state = State.CHASE
@@ -3275,7 +4941,6 @@ func _on_awareness_alert() -> void:
 		_elite_taunt_done = true
 		var spr_t = $Sprite2D
 		var orig_scale = spr_t.scale
-		var tw = create_tween()
 		tw.tween_property(spr_t, "scale", orig_scale * 1.3, 0.15)
 		tw.tween_property(spr_t, "scale", orig_scale, 0.15)
 	# Aggro SFX based on kingdom
@@ -3290,6 +4955,7 @@ func _on_awareness_alert() -> void:
 
 ## Transition from CHASE to INVESTIGATE — move to player's last known position then continue in their direction
 func _begin_search() -> void:
+	var is_true_boss: bool = definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS
 	_chase_timer = 0.0
 	_awareness = 0.5
 	if _last_known_player_pos != Vector2.ZERO:
@@ -3301,7 +4967,6 @@ func _begin_search() -> void:
 	_investigate_phase = 0
 	_investigate_timer = 0.0
 	_investigate_look_timer = 0.0
-	var is_true_boss = definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS
 	if is_true_boss:
 		state = State.IDLE  # true bosses just reset (they never deaggro anyway)
 	else:
@@ -3368,7 +5033,11 @@ func _check_shared_vision_once() -> void:
 			_shared_vision_has_los = true
 			return
 
-func take_damage(amount: int, from_player: bool = true) -> void:
+func take_damage(amount: int, from_player: bool = true, dmg_type: int = 0) -> void:
+	var scene_root = get_tree().current_scene if is_inside_tree() else null
+	var sfx = get_node_or_null("/root/SFXManager")
+	var vfx = get_node_or_null("/root/VFXManager")
+	var tween = create_tween()
 	if state == State.DEAD:
 		return
 	if from_player:
@@ -3397,23 +5066,23 @@ func take_damage(amount: int, from_player: bool = true) -> void:
 			if not is_true_boss_td:
 				state = State.INVESTIGATE
 		# If already CHASE, stay in CHASE (don't de-aggro)
-	# Apply armor reduction (minimum 1 damage always gets through)
-	if armor > 0:
-		amount = maxi(1, amount - armor)
+	# FROZEN — take +50% damage
+	if has_meta("frozen") and get_meta("frozen"):
+		amount = int(ceil(amount * 1.5))
+	# Apply armor reduction with combat type multiplier
+	var my_armor_type: int = definition.armor_type if definition else 0
+	amount = CombatTypes.apply_combat_damage(amount, dmg_type, my_armor_type, armor, 1)
 	hp -= amount
 	_time_since_hit = 0.0
 	# Alert attached mummy bodyguards that this enemy was hit
 	_notify_bodyguards_ally_hit()
 	# Floating damage number
-	var scene_root = get_tree().current_scene if is_inside_tree() else null
 	if scene_root and amount > 0:
 		FloatingText.spawn_damage(scene_root, global_position, amount, Color(1.0, 1.0, 0.3))
 	var orig_color = definition.sprite_color if definition else Color.WHITE
 	$Sprite2D.modulate = Color.WHITE * 3
-	var tween = create_tween()
 	tween.tween_property($Sprite2D, "modulate", orig_color, 0.1)
 	# VFX: blood splatter on hit
-	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
 		var hit_dir = Vector2.UP  # default
 		var p = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
@@ -3421,7 +5090,6 @@ func take_damage(amount: int, from_player: bool = true) -> void:
 			hit_dir = (global_position - p.global_position).normalized()
 		vfx.blood_splatter(global_position, hit_dir, Color(0.7, 0.0, 0.0))
 	# SFX: hit sound
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("hit", -3.0)
 	_update_boss_hp_bar()
@@ -3431,16 +5099,17 @@ func take_damage(amount: int, from_player: bool = true) -> void:
 	_check_phase_transition()
 
 func apply_status(status_name: String, duration: float) -> void:
+	var sfx = get_node_or_null("/root/SFXManager")
+	var vfx = get_node_or_null("/root/VFXManager")
+	var sr = get_tree().current_scene if is_inside_tree() else null
 	# Status immunity check
 	if definition:
 		if definition.status_immunities.has(status_name):
-			var sr = get_tree().current_scene if is_inside_tree() else null
 			if sr:
 				FloatingText.spawn(sr, global_position + Vector2(0, -6), "IMMUNE", Color(0.8, 0.8, 0.8))
 			return
 		# Bosses auto-immune to hard CC
 		if definition.size_class >= 2 and status_name in ["STUNNED", "FEARED", "CONFUSED"]:
-			var sr = get_tree().current_scene if is_inside_tree() else null
 			if sr:
 				FloatingText.spawn(sr, global_position + Vector2(0, -6), "IMMUNE", Color(0.8, 0.8, 0.8))
 			return
@@ -3457,12 +5126,12 @@ func apply_status(status_name: String, duration: float) -> void:
 		"STUNNED": color = Color(1.0, 1.0, 0.4)
 		"FEARED": color = Color(0.9, 0.9, 0.5)
 		"CONFUSED": color = Color(0.6, 0.3, 0.8)
+		"WEAKENED": color = Color(0.6, 0.6, 0.6)
+		"STRENGTHENED": color = Color(1.0, 0.8, 0.3)
 	$Sprite2D.modulate = color
 	# VFX + SFX for status applied
-	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
 		vfx.status_puff(global_position, status_name)
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		match status_name:
 			"BURNING": sfx.play("burn", -4.0)
@@ -3472,13 +5141,24 @@ func apply_status(status_name: String, duration: float) -> void:
 			"STUNNED": sfx.play("impact_a", -4.0)
 			"FEARED": sfx.play("shriek", -6.0)
 			"CONFUSED": sfx.play("curse", -6.0)
-	# Slow enemies when slowed
+			"WEAKENED": sfx.play("curse", -6.0)
+			"STRENGTHENED": sfx.play("mystical", -4.0)
+	# Burning meta for fire spread checks
+	if status_name == "BURNING":
+		set_meta("burning", true)
+	# Weakened — deal 50% less damage
+	if status_name == "WEAKENED":
+		set_meta("weakened", true)
+	if status_name == "STRENGTHENED":
+		set_meta("strengthened", true)
+	# Slow enemies when slowed — heavy slowdown
 	if status_name == "SLOWED":
-		speed *= 0.3
-		shoot_interval *= 2.0
+		speed *= 0.15  # 85% speed reduction
+		shoot_interval *= 3.0  # attacks 3x slower
 	if status_name == "FROZEN":
-		speed *= 0.1
-		shoot_interval *= 3.0
+		speed = 0.0  # completely frozen in place
+		shoot_interval *= 99.0  # can't attack
+		set_meta("frozen", true)
 	# Stunned — can't move or attack
 	if status_name == "STUNNED":
 		speed = 0.0
@@ -3493,14 +5173,26 @@ func apply_status(status_name: String, duration: float) -> void:
 		set_meta("confused", true)
 		state = State.CHASE
 	# Damage over time for burning/poison
-	if status_name == "BURNING" or status_name == "POISONED":
-		var tick_dmg = maxi(1, _max_hp / 20)
+	if status_name == "POISONED":
+		var tick_dmg = maxi(1, int(_max_hp / 20.0))
 		var ticks = int(duration / 0.5)
 		for i in range(ticks):
 			get_tree().create_timer(0.5 * (i + 1)).timeout.connect(
 				func():
 					if is_instance_valid(self) and hp > 0:
 						take_damage(tick_dmg, false)
+			)
+	if status_name == "BURNING":
+		# Fire does 50% more DOT than poison and ticks faster (0.4s vs 0.5s)
+		var tick_dmg = maxi(1, int(_max_hp / 13.0))
+		var ticks = int(duration / 0.4)
+		for i in range(ticks):
+			get_tree().create_timer(0.4 * (i + 1)).timeout.connect(
+				func():
+					if is_instance_valid(self) and hp > 0:
+						take_damage(tick_dmg, false)
+						# Burning spreads to nearby enemies (24px radius)
+						_try_spread_fire(duration - 0.4 * (i + 1))
 			)
 	# Feared: periodic panic noise that alerts other enemies (chain reactions)
 	if status_name == "FEARED":
@@ -3536,9 +5228,13 @@ func apply_status(status_name: String, duration: float) -> void:
 				$Sprite2D.modulate = definition.sprite_color if definition else Color.WHITE
 				$Sprite2D.visible = true
 				$Sprite2D.rotation = 0.0
+				if status_name == "BURNING":
+					set_meta("burning", false)
 				if (status_name == "SLOWED" or status_name == "FROZEN") and definition:
 					speed = definition.move_speed
 					shoot_interval = definition.attack_speed
+				if status_name == "FROZEN":
+					set_meta("frozen", false)
 				if status_name == "STUNNED":
 					if definition:
 						speed = definition.move_speed
@@ -3558,9 +5254,30 @@ func apply_status(status_name: String, duration: float) -> void:
 					set_meta("confused", false)
 					_awareness = 0.3
 					_update_awareness_indicator()
+				if status_name == "WEAKENED":
+					set_meta("weakened", false)
+				if status_name == "STRENGTHENED":
+					set_meta("strengthened", false)
 	)
 
+func _try_spread_fire(remaining_duration: float) -> void:
+	if remaining_duration < 0.5 or not is_inside_tree():
+		return
+	var spread_radius = 40.0
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	for e in enemies:
+		if not is_instance_valid(e) or e == self:
+			continue
+		if global_position.distance_to(e.global_position) > spread_radius:
+			continue
+		# Only spread if they're not already burning
+		if e.has_meta("burning") and e.get_meta("burning"):
+			continue
+		if e.has_method("apply_status"):
+			e.apply_status("BURNING", remaining_duration * 0.5)
+
 func take_damage_from_front(amount: int, from_dir: Vector2) -> void:
+	var tween = create_tween()
 	# Shield enemies block frontal damage
 	if shield_hp > 0:
 		var facing = Vector2.LEFT if $Sprite2D.flip_h else Vector2.RIGHT
@@ -3573,7 +5290,6 @@ func take_damage_from_front(amount: int, from_dir: Vector2) -> void:
 			if sfx_sh:
 				sfx_sh.play("clack", -5.0, 0.12)
 			$Sprite2D.modulate = Color.CYAN
-			var tween = create_tween()
 			tween.tween_property($Sprite2D, "modulate", definition.sprite_color if definition else Color.WHITE, 0.1)
 			return
 	take_damage(amount)
@@ -3615,6 +5331,7 @@ func _check_hazard_at_position() -> void:
 				t.trigger_remote()
 
 func apply_throw(dir: Vector2, force: float, thrower_dmg: int) -> void:
+	var tween = create_tween()
 	if _is_boss_or_large and definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS:
 		return  # bosses immune to throw
 	var actual_force = force
@@ -3625,7 +5342,6 @@ func apply_throw(dir: Vector2, force: float, thrower_dmg: int) -> void:
 	_thrower_dmg = thrower_dmg
 	# White flash on grabbed enemy
 	$Sprite2D.modulate = Color.WHITE * 3
-	var tween = create_tween()
 	var orig = definition.sprite_color if definition else Color.WHITE
 	tween.tween_property($Sprite2D, "modulate", orig, 0.2)
 
@@ -3643,6 +5359,10 @@ func _check_phase_transition() -> void:
 		_on_phase_change(new_phase)
 
 func _on_phase_change(phase: int) -> void:
+	var dm = get_node_or_null("/root/DungeonManager")
+	var container = get_tree().get_first_node_in_group("bullets")
+	var minion = bullet_scene.instantiate()
+	var angle: float = 0.0
 	# Flash white to signal phase change
 	$Sprite2D.modulate = Color.WHITE * 4
 	var tween = create_tween()
@@ -3659,14 +5379,10 @@ func _on_phase_change(phase: int) -> void:
 	if definition.summon_on_phase_change and definition.summon_definition:
 		var spawn_count = definition.summon_phase_count
 		var bullet_container = _get_bullets_container()
-		var enemy_scene = load("res://scenes/enemy.tscn")
-		var container = get_parent()
 		if container and container.get_child_count() >= MAX_SUMMONED_ENEMIES:
 			spawn_count = 0
 		for i in range(spawn_count):
-			var angle = TAU * float(i) / float(spawn_count)
 			var offset = Vector2.RIGHT.rotated(angle) * 20.0
-			var minion = enemy_scene.instantiate()
 			minion.global_position = global_position + offset
 			var minion_def = definition.summon_definition.duplicate()
 			minion_def.max_hp = int(minion_def.max_hp * 0.5)  # minions are weaker
@@ -3678,7 +5394,6 @@ func _on_phase_change(phase: int) -> void:
 				minion.tree_exited.connect(func():
 					if not is_inside_tree():
 						return
-					var dm = get_tree().get_first_node_in_group("dungeon_manager")
 					if dm:
 						dm._on_enemy_died(gp_val)
 				)
@@ -3689,6 +5404,8 @@ func _on_phase_change(phase: int) -> void:
 
 ## Boss ground slam: AoE damage + destroy nearby obstacles
 func _do_ground_slam() -> void:
+	var sfx = get_node_or_null("/root/SFXManager")
+	var vfx = get_node_or_null("/root/VFXManager")
 	if not is_instance_valid(player):
 		return
 	# Brief pause
@@ -3707,11 +5424,9 @@ func _do_ground_slam() -> void:
 				var dmg = (definition.attack_damage if definition else 3) * 2
 				player.take_damage(dmg, global_position)
 		# VFX + SFX
-		var vfx = get_node_or_null("/root/VFXManager")
 		if vfx:
 			vfx.shockwave(global_position, slam_radius, Color(0.8, 0.4, 0.1, 0.7))
 			vfx.shake(3.0, 0.2)
-		var sfx = get_node_or_null("/root/SFXManager")
 		if sfx:
 			sfx.play("explode_b", -3.0, 0.1)
 		# Break nearby obstacles
@@ -3724,27 +5439,30 @@ func _do_ground_slam() -> void:
 ## Break decoration and wall tiles near this enemy (boss/elite pathfinding aid)
 ## Both bosses and elites smash through obstacles and walls, creating new floor + wall edges
 func _break_nearby_obstacles() -> void:
+	var is_boss: bool = definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS
+	var vfx = get_node_or_null("/root/VFXManager")
 	if not _dm:
 		return
-	var is_boss = definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS
 	var break_radius = 24.0 if is_boss else 18.0
 	var smash_tile_radius = 2 if is_boss else 1
 	var tile_size = 8
 
 	# Directly scan deco_layer cells near the enemy — avoids world↔tile conversion bugs
 	var broke_any = false
+	var broken_deco_tiles: Array[Vector2i] = []
 	for cell in _dm.deco_layer.get_used_cells():
 		var cell_world = Vector2(cell.x * tile_size + tile_size * 0.5, cell.y * tile_size + tile_size * 0.5)
 		if cell_world.distance_to(global_position) > break_radius:
 			continue
-		var atlas = _dm.deco_layer.get_cell_atlas_coords(cell)
 		# Break any solid deco (rows 0-3 = barrels, furniture, chairs, stone pots)
-		if atlas.y in [0, 1, 2, 3]:
+		# But skip walkable overrides (carpets, track tiles, etc.)
+		var atlas = _dm.deco_layer.get_cell_atlas_coords(cell)
+		if atlas.y in [0, 1, 2, 3] and atlas not in _dm.WALKABLE_DECO_OVERRIDES:
 			_dm.deco_layer.erase_cell(cell)
 			if _dm.nav:
 				_dm.nav.mark_walkable(cell)
 			broke_any = true
-			var vfx = get_node_or_null("/root/VFXManager")
+			broken_deco_tiles.append(cell)
 			if vfx:
 				vfx.death_burst(cell_world, Color(0.6, 0.4, 0.2), 0)
 
@@ -3760,11 +5478,12 @@ func _break_nearby_obstacles() -> void:
 				if src < 0:
 					continue
 				var atlas = _dm.deco_layer.get_cell_atlas_coords(t)
-				if atlas.y in [0, 1, 2, 3]:
+				if atlas.y in [0, 1, 2, 3] and atlas not in _dm.WALKABLE_DECO_OVERRIDES:
 					_dm.deco_layer.erase_cell(t)
 					if _dm.nav:
 						_dm.nav.mark_walkable(t)
 					broke_any = true
+					broken_deco_tiles.append(t)
 
 	# Smash walls + void → create new floor with wall edges
 	var center_tile = Vector2i(int(floor(global_position.x / tile_size)), int(floor(global_position.y / tile_size)))
@@ -3786,13 +5505,10 @@ func _break_nearby_obstacles() -> void:
 
 	if near_wall and _dm.has_method("smash_area"):
 		_dm.smash_area(global_position, smash_tile_radius)
-	elif broke_any:
-		if _dm.nav:
+	if broke_any:
+		if not near_wall and _dm.nav:
 			_dm.nav.invalidate()
-		# Directly rebuild collision — flush_deco_collisions() gates on _deco_dirty
-		# which isn't set here, causing ghost collisions
-		_dm._generate_wall_collisions()
-		_dm._generate_deco_collisions()
+		_dm._remove_collision_at_tiles(broken_deco_tiles)
 
 func _die() -> void:
 	if state == State.DEAD:
@@ -3847,6 +5563,8 @@ func _die() -> void:
 		if qm:
 			var kill_name = definition.quest_kill_name if definition.quest_kill_name != "" else definition.enemy_name
 			qm.on_enemy_killed(kill_name)
+			if definition.size_class >= EnemyDefinition.SizeClass.BOSS:
+				qm.on_boss_killed(kill_name)
 
 	# Floating text for XP/gold (with size class multiplier)
 	var xp_val = definition.xp_value if definition else 0
@@ -3887,6 +5605,8 @@ func _die() -> void:
 		var apple_chance = 0.12  # 12% apple
 		var hp_pot_chance = 0.06  # 6% red potion
 		var mp_pot_chance = 0.04  # 4% blue potion
+		var hp_pot = load("res://resources/items/loy/red_potion.tres") as EquipmentItem
+		var mp_pot = load("res://resources/items/loy/blue_potion.tres") as EquipmentItem
 		if is_elite:
 			apple_chance = 0.20
 			hp_pot_chance = 0.10
@@ -3896,24 +5616,32 @@ func _die() -> void:
 			if apple:
 				bag_items.append(apple.make_copy())
 		if randf() < hp_pot_chance:
-			var hp_pot = load("res://resources/items/loy/red_potion.tres") as EquipmentItem
 			if hp_pot:
 				bag_items.append(hp_pot.make_copy())
 		if randf() < mp_pot_chance:
-			var mp_pot = load("res://resources/items/loy/blue_potion.tres") as EquipmentItem
 			if mp_pot:
 				bag_items.append(mp_pot.make_copy())
+		var stam_pot_chance = 0.10
+		if is_elite:
+			stam_pot_chance = 0.20
+		if randf() < stam_pot_chance:
+			var stam_pot = load("res://resources/items/loy/green_potion.tres") as EquipmentItem
+			if stam_pot:
+				bag_items.append(stam_pot.make_copy())
 
 	# Boss guaranteed drops: potions + 2-3 equipment items
 	if is_boss:
 		var hp_pot = load("res://resources/items/loy/red_potion.tres") as EquipmentItem
 		var mp_pot = load("res://resources/items/loy/blue_potion.tres") as EquipmentItem
+		var boss_stam_pot = load("res://resources/items/loy/green_potion.tres") as EquipmentItem
 		if hp_pot:
 			for _j in range(randi_range(1, 2)):
 				bag_items.append(hp_pot.make_copy())
 		if mp_pot:
 			for _j in range(randi_range(1, 2)):
 				bag_items.append(mp_pot.make_copy())
+		if boss_stam_pot:
+			bag_items.append(boss_stam_pot.make_copy())
 		if drop_table:
 			# Bosses drop 2-3 guaranteed equipment items
 			var boss_roll_count = randi_range(2, 3)

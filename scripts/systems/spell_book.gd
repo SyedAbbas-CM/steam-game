@@ -11,6 +11,9 @@ signal spell_equipped(slot: int, spell: SpellDefinition)
 signal spell_unequipped(slot: int)
 signal spell_cast(slot: int, spell: SpellDefinition)
 
+# Spells granted by equipment (removed on unequip unless permanently learned)
+var equipment_spells: Array[String] = []
+
 func learn_spell(spell: SpellDefinition) -> void:
 	# Don't learn duplicates
 	for s in learned_spells:
@@ -110,15 +113,30 @@ func _cast_projectile(spell: SpellDefinition, player: CharacterBody2D, aim_dir: 
 		bullets_container = player.get_tree().current_scene
 
 	var count = maxi(1, spell.bullet_count)
-	var spread = 0.3 * (count - 1)  # total spread angle in radians
 
 	for i in range(count):
 		var angle_offset = 0.0
-		if count > 1:
-			angle_offset = (float(i) / float(count - 1) - 0.5) * spread
-		var dir = aim_dir.rotated(angle_offset)
 		var b = bullet_scene.instantiate()
 		b.global_position = player.global_position
+
+		match spell.bullet_behavior:
+			0:  # Straight — parallel offset, same direction
+				if count > 1:
+					var perp = aim_dir.rotated(PI / 2.0)
+					var spacing = 6.0
+					var lateral = (float(i) - (count - 1) / 2.0) * spacing
+					b.global_position += perp * lateral
+			1:  # Homing — small initial spread, then seek targets
+				if count > 1:
+					angle_offset = (float(i) / float(count - 1) - 0.5) * 0.3
+				b.homing_strength = 5.0
+			2:  # Spread — wide fan
+				if count > 1:
+					var total_spread = PI / 4.0 + (count - 2) * 0.1
+					total_spread = minf(total_spread, PI)
+					angle_offset = (float(i) / float(count - 1) - 0.5) * total_spread
+
+		var dir = aim_dir.rotated(angle_offset)
 		b.direction = dir
 		b.is_player_bullet = true
 		b.speed = 200.0
@@ -127,9 +145,21 @@ func _cast_projectile(spell: SpellDefinition, player: CharacterBody2D, aim_dir: 
 		# Set enchant type + distinct sprite based on effect
 		b.enchant_type = _effect_to_enchant(spell.effect_type)
 		b.bullet_sprite_index = _effect_to_sprite(spell.effect_type)
-		if spell.bullet_behavior == 1:  # homing
-			if b.has_method("set_homing"):
-				b.set_homing(true)
+		# Apply duration-based status effects via bullet meta
+		if spell.duration > 0:
+			match spell.effect_type:
+				SpellDefinition.EffectType.ICE_DAMAGE:
+					b.set_meta("apply_slowed", spell.duration)
+				SpellDefinition.EffectType.FIRE_DAMAGE:
+					b.set_meta("apply_burning", spell.duration)
+				SpellDefinition.EffectType.POISON_DAMAGE:
+					b.set_meta("apply_poison", spell.duration)
+				SpellDefinition.EffectType.LIGHTNING_DAMAGE:
+					b.set_meta("apply_stunned", minf(spell.duration, 2.0))
+				SpellDefinition.EffectType.HOLY_DAMAGE:
+					b.set_meta("apply_weakened", spell.duration)
+				SpellDefinition.EffectType.DARK_DAMAGE:
+					b.set_meta("apply_feared", spell.duration)
 		bullets_container.add_child(b)
 
 func _cast_nova(spell: SpellDefinition, player: CharacterBody2D) -> void:
@@ -147,13 +177,7 @@ func _cast_nova(spell: SpellDefinition, player: CharacterBody2D) -> void:
 				e.take_damage(spell.magnitude)
 			# Apply status based on effect type
 			if e.has_method("apply_status") and spell.duration > 0:
-				match spell.effect_type:
-					SpellDefinition.EffectType.ICE_DAMAGE:
-						e.apply_status("SLOWED", spell.duration)
-					SpellDefinition.EffectType.FIRE_DAMAGE:
-						e.apply_status("BURNING", spell.duration)
-					SpellDefinition.EffectType.POISON_DAMAGE:
-						e.apply_status("POISONED", spell.duration)
+				_apply_spell_status(e, spell)
 	# Visual flash + VFX
 	var color = _effect_flash_color(spell.effect_type)
 	player.sprite.modulate = color
@@ -205,6 +229,9 @@ func _cast_touch(spell: SpellDefinition, player: CharacterBody2D, aim_dir: Vecto
 			continue
 		if e.has_method("take_damage"):
 			e.take_damage(spell.magnitude)
+		# Apply status effects
+		if e.has_method("apply_status") and spell.duration > 0:
+			_apply_spell_status(e, spell)
 		# Knockback
 		e.velocity = to_enemy.normalized() * kb_force
 	# Visual
@@ -212,6 +239,60 @@ func _cast_touch(spell: SpellDefinition, player: CharacterBody2D, aim_dir: Vecto
 	player.sprite.modulate = color
 	var tween = player.create_tween()
 	tween.tween_property(player.sprite, "modulate", Color.WHITE, 0.2)
+
+## Learn a spell granted by an equipped item (temporary until unequipped)
+func learn_spell_from_equipment(spell_id: String) -> void:
+	if spell_id not in equipment_spells:
+		equipment_spells.append(spell_id)
+	var spell = _load_spell(spell_id)
+	if spell and not has_spell(spell_id):
+		learn_spell(spell)
+
+## Remove a spell granted by equipment (unless permanently learned via scroll)
+func unlearn_spell_from_equipment(spell_id: String) -> void:
+	equipment_spells.erase(spell_id)
+	if not is_permanently_learned(spell_id):
+		_remove_spell(spell_id)
+
+## Check if spell was learned permanently (via scroll, not equipment)
+func is_permanently_learned(spell_id: String) -> bool:
+	return has_spell(spell_id) and spell_id not in equipment_spells
+
+## Mark a spell as permanently learned (e.g. from scroll)
+func mark_permanently_learned(spell_id: String) -> void:
+	equipment_spells.erase(spell_id)
+
+## Load a SpellDefinition by id from resources/spells/
+func _load_spell(spell_id: String) -> SpellDefinition:
+	var path = "res://resources/spells/%s.tres" % spell_id
+	if ResourceLoader.exists(path):
+		return load(path) as SpellDefinition
+	return null
+
+## Remove a spell from learned list and unequip from all slots
+func _remove_spell(spell_id: String) -> void:
+	for i in range(learned_spells.size() - 1, -1, -1):
+		if learned_spells[i].id == spell_id:
+			learned_spells.remove_at(i)
+	for i in range(MAX_SPELL_SLOTS):
+		if spell_slots[i] and spell_slots[i].id == spell_id:
+			spell_slots[i] = null
+			spell_unequipped.emit(i)
+
+func _apply_spell_status(enemy: Node, spell: SpellDefinition) -> void:
+	match spell.effect_type:
+		SpellDefinition.EffectType.ICE_DAMAGE:
+			enemy.apply_status("SLOWED", spell.duration)
+		SpellDefinition.EffectType.FIRE_DAMAGE:
+			enemy.apply_status("BURNING", spell.duration)
+		SpellDefinition.EffectType.POISON_DAMAGE:
+			enemy.apply_status("POISONED", spell.duration)
+		SpellDefinition.EffectType.LIGHTNING_DAMAGE:
+			enemy.apply_status("STUNNED", minf(spell.duration, 2.0))
+		SpellDefinition.EffectType.HOLY_DAMAGE:
+			enemy.apply_status("WEAKENED", spell.duration)
+		SpellDefinition.EffectType.DARK_DAMAGE:
+			enemy.apply_status("FEARED", spell.duration)
 
 func _effect_to_enchant(effect: SpellDefinition.EffectType) -> int:
 	match effect:

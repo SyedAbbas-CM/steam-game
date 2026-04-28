@@ -11,10 +11,42 @@ var _tooltip_panel: PanelContainer
 var _tooltip_name: Label
 var _tooltip_desc: Label
 var _tooltip_stats: Label
+var _tooltip_req: Label
 var _stats_label: Label
-var _spells_label: Label
-var _spells_container: VBoxContainer
 var _close_btn: Button
+var _inv_scroll: ScrollContainer
+var _stat_alloc_container: VBoxContainer
+var _stat_points_label: Label
+var _quickslot_container: VBoxContainer
+var _quickslot_buttons: Array[Button] = []
+const QS_SIZE = 64
+const QS_ICON_SIZE = 44
+const QS_SLOTS = 6
+
+# Spell slots + drag
+var _spell_slot_buttons: Array[Button] = []
+var _spell_grid_buttons: Array[Button] = []
+var _spell_drag_active: bool = false
+var _spell_drag_idx: int = -1
+var _spell_drag_ghost: TextureRect = null
+var _spell_drag_start: Vector2 = Vector2.ZERO
+var _spell_drag_mouse_down: bool = false
+const SPELL_SLOT_KEYS = ["F", "G", "H", "J", "K", "L"]
+const SS_SIZE = 56
+const SS_ICON_SIZE = 36
+
+var _spell_grid: VBoxContainer
+var _spells_container: VBoxContainer
+var _spells_label: Label
+
+# Tab system
+var _current_tab: String = "items"
+var _items_content: VBoxContainer
+var _spells_content: VBoxContainer
+var _tab_items_btn: Button
+var _tab_spells_btn: Button
+var _spell_inv_grid: GridContainer
+const SPELL_INV_COLS = 8
 
 const SLOT_SIZE = 108
 const INV_COLS = 8
@@ -66,6 +98,7 @@ func setup(equip_mgr: EquipmentManager) -> void:
 	equipment_manager = equip_mgr
 	equipment_manager.inventory_changed.connect(_refresh)
 	equipment_manager.stats_changed.connect(_refresh)
+	equipment_manager.equip_failed.connect(_on_equip_failed)
 
 func _build_ui() -> void:
 	# Full-screen dark overlay — blocks game input when inventory is open
@@ -105,11 +138,21 @@ func _build_ui() -> void:
 	main_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	_root_panel.add_child(main_hbox)
 
-	# ===== LEFT: Inventory grid =====
+	# ===== LEFT: Spell slots column =====
+	var spell_panel = _build_spell_panel()
+	spell_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_hbox.add_child(spell_panel)
+
+	# ===== CENTER: Inventory grid =====
 	var inv_panel = _build_inventory_panel()
 	inv_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inv_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	main_hbox.add_child(inv_panel)
+
+	# ===== RIGHT-MID: Quickslots column =====
+	var qs_panel = _build_quickslot_panel()
+	qs_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_hbox.add_child(qs_panel)
 
 	# ===== RIGHT: Stats + Tooltip =====
 	var right_panel = _build_stats_panel()
@@ -151,10 +194,11 @@ func _build_inventory_panel() -> VBoxContainer:
 	vbox.add_child(sep)
 
 	# Scrollable grid area
-	var grid_scroll = ScrollContainer.new()
-	grid_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	grid_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_child(grid_scroll)
+	_inv_scroll = ScrollContainer.new()
+	_inv_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_inv_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(_inv_scroll)
+	var grid_scroll = _inv_scroll
 
 	var grid_center = CenterContainer.new()
 	grid_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -227,7 +271,344 @@ func _build_inventory_panel() -> VBoxContainer:
 	_tooltip_stats.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
 	tip_vbox.add_child(_tooltip_stats)
 
+	_tooltip_req = Label.new()
+	_tooltip_req.add_theme_font_size_override("font_size", 15)
+	_tooltip_req.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	tip_vbox.add_child(_tooltip_req)
+
 	return vbox
+
+func _build_spell_panel() -> VBoxContainer:
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	vbox.custom_minimum_size = Vector2(SS_SIZE + 8, 0)
+
+	var title = Label.new()
+	title.text = "SPELLS"
+	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(0.5, 0.6, 1.0))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	# 6 spell equip slots
+	_spell_slot_buttons.clear()
+	for i in range(6):
+		var btn = Button.new()
+		btn.custom_minimum_size = Vector2(SS_SIZE, SS_SIZE)
+		btn.focus_mode = Control.FOCUS_NONE
+		var sty = StyleBoxFlat.new()
+		sty.bg_color = Color(0.06, 0.06, 0.16, 0.85)
+		sty.border_color = Color(0.3, 0.25, 0.5)
+		sty.set_border_width_all(1)
+		sty.set_corner_radius_all(4)
+		btn.add_theme_stylebox_override("normal", sty)
+		var hover = sty.duplicate()
+		hover.bg_color = Color(0.12, 0.1, 0.25, 0.9)
+		hover.border_color = Color(0.6, 0.4, 0.8)
+		hover.set_border_width_all(2)
+		btn.add_theme_stylebox_override("hover", hover)
+		btn.pressed.connect(_on_spell_slot_clicked.bind(i))
+		vbox.add_child(btn)
+		_spell_slot_buttons.append(btn)
+
+	# Separator + learned spells grid
+	var sep = HSeparator.new()
+	sep.add_theme_constant_override("separation", 4)
+	vbox.add_child(sep)
+
+	var learned_title = Label.new()
+	learned_title.text = "LEARNED"
+	learned_title.add_theme_font_size_override("font_size", 14)
+	learned_title.add_theme_color_override("font_color", Color(0.5, 0.5, 0.7))
+	learned_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(learned_title)
+
+	var spell_scroll = ScrollContainer.new()
+	spell_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spell_scroll)
+
+	_spell_grid = VBoxContainer.new()
+	_spell_grid.add_theme_constant_override("separation", 2)
+	spell_scroll.add_child(_spell_grid)
+
+	return vbox
+
+func _refresh_spell_slots_inv() -> void:
+	var player = get_tree().get_first_node_in_group("player")
+	if not player or not player.get("spell_book"):
+		return
+	var sb: SpellBook = player.spell_book
+
+	# Refresh equipped spell slots
+	for i in range(6):
+		var btn = _spell_slot_buttons[i]
+		for child in btn.get_children():
+			child.queue_free()
+
+		var spell = sb.spell_slots[i] if i < sb.spell_slots.size() else null
+
+		if spell:
+			var color = _get_spell_color(spell)
+			var icon_rect = ColorRect.new()
+			icon_rect.color = color
+			icon_rect.size = Vector2(SS_ICON_SIZE, SS_ICON_SIZE)
+			icon_rect.position = Vector2((SS_SIZE - SS_ICON_SIZE) / 2, 1)
+			icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(icon_rect)
+
+			var name_lbl = Label.new()
+			var sname = spell.spell_name if spell.spell_name.length() <= 6 else spell.spell_name.substr(0, 5)
+			name_lbl.text = sname
+			name_lbl.add_theme_font_size_override("font_size", 9)
+			name_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 1.0))
+			name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			name_lbl.position = Vector2(0, SS_SIZE - 14)
+			name_lbl.size = Vector2(SS_SIZE, 12)
+			name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(name_lbl)
+		# Key label
+		var key_lbl = Label.new()
+		key_lbl.text = SPELL_SLOT_KEYS[i]
+		key_lbl.add_theme_font_size_override("font_size", 11)
+		key_lbl.add_theme_color_override("font_color", Color(0.4, 0.4, 0.6) if not spell else Color(0.7, 0.7, 0.9))
+		key_lbl.position = Vector2(2, 0)
+		key_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(key_lbl)
+
+	# Refresh learned spells grid
+	for child in _spell_grid.get_children():
+		child.queue_free()
+	_spell_grid_buttons.clear()
+
+	for j in range(sb.learned_spells.size()):
+		var spell = sb.learned_spells[j]
+		var btn = Button.new()
+		btn.custom_minimum_size = Vector2(SS_SIZE, SS_SIZE)
+		btn.focus_mode = Control.FOCUS_NONE
+		var sty = StyleBoxFlat.new()
+		sty.bg_color = Color(0.07, 0.07, 0.12, 0.85)
+		sty.border_color = Color(0.25, 0.25, 0.4)
+		sty.set_border_width_all(1)
+		sty.set_corner_radius_all(3)
+		btn.add_theme_stylebox_override("normal", sty)
+		var hover = sty.duplicate()
+		hover.bg_color = Color(0.12, 0.1, 0.22, 0.9)
+		hover.border_color = Color(0.5, 0.4, 0.8)
+		hover.set_border_width_all(2)
+		btn.add_theme_stylebox_override("hover", hover)
+
+		# Spell icon (colored rect)
+		var color = _get_spell_color(spell)
+		var icon_rect = ColorRect.new()
+		icon_rect.color = color
+		icon_rect.size = Vector2(SS_ICON_SIZE, SS_ICON_SIZE)
+		icon_rect.position = Vector2((SS_SIZE - SS_ICON_SIZE) / 2, 1)
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(icon_rect)
+
+		var name_lbl = Label.new()
+		var sname = spell.spell_name if spell.spell_name.length() <= 6 else spell.spell_name.substr(0, 5)
+		name_lbl.text = sname
+		name_lbl.add_theme_font_size_override("font_size", 9)
+		name_lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.9))
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.position = Vector2(0, SS_SIZE - 14)
+		name_lbl.size = Vector2(SS_SIZE, 12)
+		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(name_lbl)
+
+		btn.gui_input.connect(_on_spell_gui_input.bind(j))
+		_spell_grid.add_child(btn)
+		_spell_grid_buttons.append(btn)
+
+func _get_spell_color(spell: SpellDefinition) -> Color:
+	match spell.delivery:
+		0: return Color(0.8, 0.3, 0.2)  # PROJECTILE - red
+		1: return Color(0.3, 0.5, 1.0)  # NOVA - blue
+		2: return Color(0.3, 0.9, 0.4)  # SELF - green
+		3: return Color(0.9, 0.7, 0.2)  # TOUCH - yellow
+	return Color(0.6, 0.6, 0.6)
+
+func _on_spell_slot_clicked(slot_index: int) -> void:
+	# Unequip spell from slot
+	var player = get_tree().get_first_node_in_group("player")
+	if not player or not player.get("spell_book"):
+		return
+	player.spell_book.unequip_spell(slot_index)
+	_refresh_spell_slots_inv()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("click", -4.0)
+
+func _on_spell_gui_input(event: InputEvent, spell_idx: int) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_spell_drag_mouse_down = true
+			_spell_drag_idx = spell_idx
+			_spell_drag_start = event.global_position
+		else:
+			if _spell_drag_active:
+				_end_spell_drag(event.global_position)
+			_spell_drag_mouse_down = false
+			_spell_drag_active = false
+			_spell_drag_idx = -1
+	elif event is InputEventMouseMotion and _spell_drag_mouse_down and not _spell_drag_active:
+		if event.global_position.distance_to(_spell_drag_start) > DRAG_THRESHOLD:
+			_start_spell_drag(_spell_drag_idx)
+
+func _start_spell_drag(spell_idx: int) -> void:
+	var player = get_tree().get_first_node_in_group("player")
+	if not player or not player.get("spell_book"):
+		return
+	if spell_idx >= player.spell_book.learned_spells.size():
+		return
+	_spell_drag_active = true
+	var spell = player.spell_book.learned_spells[spell_idx]
+	_spell_drag_ghost = TextureRect.new()
+	# Use a colored rect as ghost
+	var img = Image.create(SS_ICON_SIZE, SS_ICON_SIZE, false, Image.FORMAT_RGBA8)
+	img.fill(_get_spell_color(spell))
+	_spell_drag_ghost.texture = ImageTexture.create_from_image(img)
+	_spell_drag_ghost.size = Vector2(SS_ICON_SIZE, SS_ICON_SIZE)
+	_spell_drag_ghost.modulate = Color(1, 1, 1, 0.7)
+	_spell_drag_ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_spell_drag_ghost.position = _spell_drag_start - Vector2(SS_ICON_SIZE / 2, SS_ICON_SIZE / 2)
+	add_child(_spell_drag_ghost)
+
+func _end_spell_drag(drop_pos: Vector2) -> void:
+	if _spell_drag_ghost:
+		_spell_drag_ghost.queue_free()
+		_spell_drag_ghost = null
+	var player = get_tree().get_first_node_in_group("player")
+	if not player or not player.get("spell_book"):
+		return
+	if _spell_drag_idx < 0 or _spell_drag_idx >= player.spell_book.learned_spells.size():
+		return
+	# Check if dropped on a spell slot
+	var slot = _get_spell_slot_at_pos(drop_pos)
+	if slot >= 0:
+		var spell = player.spell_book.learned_spells[_spell_drag_idx]
+		player.spell_book.equip_spell(spell, slot)
+		_refresh_spell_slots_inv()
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("click", -4.0)
+
+func _build_quickslot_panel() -> VBoxContainer:
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	vbox.custom_minimum_size = Vector2(QS_SIZE + 8, 0)
+
+	var title = Label.new()
+	title.text = "ITEMS"
+	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(0.7, 0.6, 0.4))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	_quickslot_container = VBoxContainer.new()
+	_quickslot_container.add_theme_constant_override("separation", 4)
+	vbox.add_child(_quickslot_container)
+
+	_quickslot_buttons.clear()
+	for i in range(QS_SLOTS):
+		var btn = Button.new()
+		btn.custom_minimum_size = Vector2(QS_SIZE, QS_SIZE)
+		btn.focus_mode = Control.FOCUS_NONE
+		var sty = StyleBoxFlat.new()
+		sty.bg_color = Color(0.08, 0.06, 0.14, 0.85)
+		sty.border_color = Color(0.4, 0.35, 0.25)
+		sty.set_border_width_all(1)
+		sty.set_corner_radius_all(4)
+		btn.add_theme_stylebox_override("normal", sty)
+		var hover = sty.duplicate()
+		hover.bg_color = Color(0.15, 0.12, 0.25, 0.9)
+		hover.border_color = Color(0.8, 0.6, 0.3)
+		hover.set_border_width_all(2)
+		btn.add_theme_stylebox_override("hover", hover)
+		btn.pressed.connect(_on_quickslot_pressed.bind(i))
+		_quickslot_container.add_child(btn)
+		_quickslot_buttons.append(btn)
+
+	return vbox
+
+func _refresh_quickslots() -> void:
+	var hud = _get_hud()
+	if not hud or not equipment_manager:
+		return
+	for i in range(QS_SLOTS):
+		var btn = _quickslot_buttons[i]
+		for child in btn.get_children():
+			child.queue_free()
+
+		var item_name = hud._quickbar_items[i] if i < hud._quickbar_items.size() else ""
+		if item_name == "":
+			var num_lbl = Label.new()
+			num_lbl.text = str(i + 1)
+			num_lbl.add_theme_font_size_override("font_size", 12)
+			num_lbl.add_theme_color_override("font_color", Color(0.3, 0.3, 0.35))
+			num_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			num_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			num_lbl.anchors_preset = Control.PRESET_FULL_RECT
+			num_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(num_lbl)
+			continue
+
+		var item: EquipmentItem = null
+		var count = 0
+		for j in range(equipment_manager.inventory.size()):
+			if equipment_manager.inventory[j].item_name == item_name:
+				if not item:
+					item = equipment_manager.inventory[j]
+				count += 1
+		if not item:
+			var ghost = Label.new()
+			ghost.text = item_name.substr(0, 5)
+			ghost.add_theme_font_size_override("font_size", 9)
+			ghost.add_theme_color_override("font_color", Color(0.35, 0.3, 0.3))
+			ghost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			ghost.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			ghost.anchors_preset = Control.PRESET_FULL_RECT
+			ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(ghost)
+			continue
+
+		var icon = TextureRect.new()
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.size = Vector2(QS_ICON_SIZE, QS_ICON_SIZE)
+		icon.position = Vector2((QS_SIZE - QS_ICON_SIZE) / 2, 1)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var tex = ItemIconHelper.get_icon_texture(item)
+		if tex:
+			icon.texture = tex
+		btn.add_child(icon)
+
+		var name_lbl = Label.new()
+		name_lbl.text = item_name.substr(0, 6) if item_name.length() > 6 else item_name
+		name_lbl.add_theme_font_size_override("font_size", 9)
+		name_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.position = Vector2(0, QS_SIZE - 14)
+		name_lbl.size = Vector2(QS_SIZE, 12)
+		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(name_lbl)
+
+		if count > 1:
+			var cnt_lbl = Label.new()
+			cnt_lbl.text = "x%d" % count
+			cnt_lbl.add_theme_font_size_override("font_size", 10)
+			cnt_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 0.6))
+			cnt_lbl.position = Vector2(QS_SIZE - 22, 0)
+			cnt_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(cnt_lbl)
+
+func _on_quickslot_pressed(slot_index: int) -> void:
+	# Use the quickslot item (same as HUD quickbar)
+	var hud = _get_hud()
+	if hud:
+		hud._on_quickbar_pressed(slot_index)
+		_refresh()
 
 func _build_stats_panel() -> VBoxContainer:
 	var vbox = VBoxContainer.new()
@@ -249,6 +630,21 @@ func _build_stats_panel() -> VBoxContainer:
 	_stats_label.add_theme_font_size_override("font_size", 18)
 	_stats_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 	vbox.add_child(_stats_label)
+
+	# Stat allocation section
+	var alloc_sep = HSeparator.new()
+	alloc_sep.add_theme_constant_override("separation", 4)
+	vbox.add_child(alloc_sep)
+
+	_stat_points_label = Label.new()
+	_stat_points_label.add_theme_font_size_override("font_size", 17)
+	_stat_points_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+	_stat_points_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(_stat_points_label)
+
+	_stat_alloc_container = VBoxContainer.new()
+	_stat_alloc_container.add_theme_constant_override("separation", 2)
+	vbox.add_child(_stat_alloc_container)
 
 	# Spells section
 	var spell_sep = HSeparator.new()
@@ -340,10 +736,17 @@ func _build_display_list() -> void:
 func _refresh() -> void:
 	if not equipment_manager or not _root_panel.visible:
 		return
+	# Preserve scroll position across refreshes
+	var saved_scroll = _inv_scroll.scroll_vertical if _inv_scroll else 0
 	_build_display_list()
 	_refresh_inv_grid()
 	_refresh_stats()
+	_refresh_quickslots()
+	_refresh_spell_slots_inv()
 	_refresh_spells()
+	# Restore scroll position after grid rebuild
+	if _inv_scroll:
+		_inv_scroll.scroll_vertical = saved_scroll
 
 func _refresh_inv_grid() -> void:
 	# Dynamically adjust slot count to fit all items (minimum INV_COLS slots)
@@ -411,9 +814,13 @@ func _refresh_inv_grid() -> void:
 				btn.add_child(eq_lbl)
 
 			# Stack count badge for consumables
-			if count > 1:
+			# Show stack count for consumables/materials, or ammo quantity
+			var show_count = count if count > 1 else 0
+			if item.slot_type == EquipmentItem.SlotType.AMMO and item.quantity > 0:
+				show_count = item.quantity
+			if show_count > 0:
 				var count_lbl = Label.new()
-				count_lbl.text = "x" + str(count)
+				count_lbl.text = "x" + str(show_count)
 				count_lbl.add_theme_font_size_override("font_size", 13)
 				count_lbl.add_theme_color_override("font_color", Color(1, 1, 0.6))
 				count_lbl.position = Vector2(SLOT_SIZE - 36, 2)
@@ -469,7 +876,95 @@ func _refresh_stats() -> void:
 	lines.append("XP Mult: %.0f%%" % (equipment_manager.get_xp_mult() * 100))
 	lines.append("Gold Mult: %.0f%%" % (equipment_manager.get_gold_mult() * 100))
 	lines.append("Pickup: %.0f" % equipment_manager.get_pickup_radius())
+	# Show active stat threshold passives
+	if equipment_manager.level_system:
+		var passives = StatThresholds.get_all_passives(equipment_manager.level_system.allocated)
+		var active_lines: Array[String] = []
+		var next_line = ""
+		for p in passives:
+			if p["active"]:
+				active_lines.append("  %s: %s" % [p["name"], p["desc"]])
+			elif next_line == "":
+				next_line = "%s %d/%d -> %s" % [p["category"].capitalize(), p["current"], p["threshold"], p["name"]]
+		if active_lines.size() > 0:
+			lines.append("--- Passives ---")
+			lines.append_array(active_lines)
+		if next_line != "":
+			lines.append("Next: " + next_line)
 	_stats_label.text = "\n".join(lines)
+	# Refresh stat allocation UI
+	_refresh_stat_allocation()
+
+const STAT_DESCRIPTIONS = {
+	"vitality": "+10 HP, +0.3 Regen, +1 Armor",
+	"power": "+1 ATK, +5 Bullet SPD, +0.1 Crit",
+	"agility": "+3 SPD, +1 Dodge, +15 Stamina",
+	"spirit": "+10 MP, +0.5 MP Regen, +3 CDR",
+	"fortune": "+3 Luck, +10% XP, +10% Gold",
+	"bulk": "+5 HP, +2 Pickup, +3 Tenacity",
+}
+
+func _refresh_stat_allocation() -> void:
+	if not _stat_alloc_container or not equipment_manager or not equipment_manager.level_system:
+		return
+	var ls = equipment_manager.level_system
+	ls.ensure_retroactive_points()
+	var alloc = ls.allocated
+	var free_pts = ls.unspent_stat_points
+
+	# Update points label
+	if free_pts > 0:
+		_stat_points_label.text = "Stat Points: %d" % free_pts
+		_stat_points_label.visible = true
+	else:
+		_stat_points_label.text = ""
+		_stat_points_label.visible = false
+
+	# Rebuild allocation rows
+	for child in _stat_alloc_container.get_children():
+		child.queue_free()
+
+	for cat in ["vitality", "power", "agility", "spirit", "fortune", "bulk"]:
+		var pts = alloc.get(cat, 0)
+		var row = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		_stat_alloc_container.add_child(row)
+
+		var name_lbl = Label.new()
+		name_lbl.text = "%s: %d" % [cat.capitalize(), pts]
+		name_lbl.add_theme_font_size_override("font_size", 16)
+		name_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.tooltip_text = STAT_DESCRIPTIONS.get(cat, "")
+		row.add_child(name_lbl)
+
+		if free_pts > 0:
+			var plus_btn = Button.new()
+			plus_btn.text = "+"
+			plus_btn.custom_minimum_size = Vector2(28, 28)
+			plus_btn.add_theme_font_size_override("font_size", 16)
+			plus_btn.focus_mode = Control.FOCUS_NONE
+			plus_btn.pressed.connect(_on_allocate_stat.bind(cat))
+			row.add_child(plus_btn)
+
+func _on_allocate_stat(category: String) -> void:
+	if not equipment_manager or not equipment_manager.level_system:
+		return
+	if equipment_manager.level_system.allocate_stat_point(category):
+		# Invalidate threshold cache
+		if equipment_manager.has_method("invalidate_threshold_cache"):
+			equipment_manager.invalidate_threshold_cache()
+		equipment_manager.stats_changed.emit()
+		_refresh()
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("click", -4.0)
+		# Update player HP/MP/stamina caps
+		var player = get_tree().get_first_node_in_group("player")
+		if player:
+			player.max_hp = equipment_manager.get_max_hp()
+			player.max_mp = equipment_manager.get_max_mp()
+			player.max_stamina = equipment_manager.get_max_stamina()
 
 const SPELL_KEY_NAMES = ["F", "G", "H", "J", "K", "L"]
 
@@ -624,12 +1119,21 @@ func _end_drag(drop_pos: Vector2) -> void:
 		_drop_item_to_world(inv_index)
 		return
 
-	# Check if dropped on a quickbar slot
-	var hud = _get_hud()
-	if hud:
-		var qb_slot = hud.get_quickbar_slot_at_pos(drop_pos)
+	# Check if dropped on an inventory quickslot
+	var qs_slot = _get_quickslot_at_pos(drop_pos)
+	if qs_slot >= 0:
+		var hud = _get_hud()
+		if hud:
+			hud.assign_to_quickbar(qs_slot, item.item_name)
+			_refresh_quickslots()
+			return
+
+	# Check if dropped on a HUD quickbar slot (fallback)
+	var hud2 = _get_hud()
+	if hud2:
+		var qb_slot = hud2.get_quickbar_slot_at_pos(drop_pos)
 		if qb_slot >= 0:
-			hud.assign_to_quickbar(qb_slot, item.item_name)
+			hud2.assign_to_quickbar(qb_slot, item.item_name)
 			return
 
 	# Check if dropped on another inventory slot (swap)
@@ -642,6 +1146,22 @@ func _get_inv_slot_at_pos(screen_pos: Vector2) -> int:
 		var btn = _inv_buttons[i]
 		var global_rect = Rect2(btn.global_position, btn.size)
 		if global_rect.has_point(screen_pos):
+			return i
+	return -1
+
+func _get_quickslot_at_pos(screen_pos: Vector2) -> int:
+	for i in range(_quickslot_buttons.size()):
+		var btn = _quickslot_buttons[i]
+		var rect = Rect2(btn.global_position, btn.size)
+		if rect.has_point(screen_pos):
+			return i
+	return -1
+
+func _get_spell_slot_at_pos(screen_pos: Vector2) -> int:
+	for i in range(_spell_slot_buttons.size()):
+		var btn = _spell_slot_buttons[i]
+		var rect = Rect2(btn.global_position, btn.size)
+		if rect.has_point(screen_pos):
 			return i
 	return -1
 
@@ -690,7 +1210,10 @@ func _show_item_tooltip(item: EquipmentItem) -> void:
 	if item.description != "":
 		_tooltip_desc.text += "\n" + item.description
 	if item.weapon_type != "":
+		var scaling = item.get_scaling_stat()
 		_tooltip_desc.text += "\nType: " + item.weapon_type
+		if scaling != "":
+			_tooltip_desc.text += "  (scales with " + scaling.capitalize() + ")"
 	if item.buy_price > 0:
 		_tooltip_desc.text += "\nValue: " + str(item.buy_price) + "g"
 	var stat_lines = []
@@ -712,15 +1235,64 @@ func _show_item_tooltip(item: EquipmentItem) -> void:
 		stat_lines.append("Ability: " + item.ability_id.replace("_", " ").capitalize())
 		stat_lines.append("  MP: %.0f  CD: %.1fs" % [item.ability_mp_cost, item.ability_cooldown])
 	_tooltip_stats.text = "\n".join(stat_lines)
+	# Show equipment requirements (unmet in red, met in dim green)
+	var req_text = ""
+	if EquipmentItem.is_equippable(item.slot_type):
+		var gm = get_node_or_null("/root/GameManager")
+		var pc = gm.selected_class if gm and gm.get("selected_class") else "warrior"
+		var player = get_tree().get_first_node_in_group("player")
+		var lvl = 1
+		var alloc = {}
+		if player and player.get("equipment_manager") and player.equipment_manager.level_system:
+			lvl = player.equipment_manager.level_system.level
+			alloc = player.equipment_manager.level_system.allocated
+		# Show all stat requirements (met or not)
+		var reqs = item.get_effective_stat_requirements()
+		if item.required_level > 0:
+			reqs["level"] = item.required_level
+		if reqs.size() > 0:
+			var lines: Array[String] = []
+			for stat_name in reqs:
+				var needed = reqs[stat_name] as int
+				if stat_name == "level":
+					var met = lvl >= needed
+					lines.append("%sRequires Level %d" % ["" if not met else "", needed])
+				else:
+					var have = alloc.get(stat_name, 0) as int
+					var met = have >= needed
+					if met:
+						lines.append("%s %d/%d" % [stat_name.capitalize(), have, needed])
+					else:
+						lines.append("%s %d/%d (need %d more)" % [stat_name.capitalize(), have, needed, needed - have])
+			req_text = "\n".join(lines)
+		# Color: red if any unmet, green if all met
+		var unmet = item.get_unmet_requirements(pc, lvl, alloc)
+		if unmet.size() > 0:
+			_tooltip_req.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+		else:
+			_tooltip_req.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
+	_tooltip_req.text = req_text
 
 func _hide_tooltip() -> void:
 	_tooltip_panel.visible = false
+
+func _on_equip_failed(_item: EquipmentItem) -> void:
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("error", -3.0)
+	var player = get_tree().get_first_node_in_group("player")
+	if player:
+		var ft = get_node_or_null("/root/FloatingText")
+		if ft:
+			ft.spawn(get_tree().current_scene, player.global_position + Vector2(0, -12), "Cannot equip!", Color(1, 0.3, 0.3))
 
 func _process(delta: float) -> void:
 	if _toggle_cooldown > 0:
 		_toggle_cooldown -= delta
 	if _drag_active and _drag_ghost:
 		_drag_ghost.position = get_viewport().get_mouse_position() - Vector2(ICON_SIZE / 2, ICON_SIZE / 2)
+	if _spell_drag_active and _spell_drag_ghost:
+		_spell_drag_ghost.position = get_viewport().get_mouse_position() - Vector2(SS_ICON_SIZE / 2, SS_ICON_SIZE / 2)
 
 func toggle() -> void:
 	if _toggle_cooldown > 0:
@@ -737,7 +1309,7 @@ func toggle() -> void:
 		_refresh()
 	else:
 		_cancel_drag()
-	# Hide/show HUD panels but keep quickbar visible for assignment
+	# Hide/show all HUD panels
 	var hud = _get_hud()
 	if hud:
 		hud.set_non_quickbar_visible(not opening)
@@ -746,6 +1318,12 @@ func is_open() -> bool:
 	return _root_panel.visible
 
 func _input(event: InputEvent) -> void:
+	# B/I/Tab open inventory from anywhere
+	if event is InputEventKey and event.pressed:
+		if event.keycode == KEY_I or event.keycode == KEY_TAB or event.keycode == KEY_B:
+			toggle()
+			get_viewport().set_input_as_handled()
+			return
 	if not is_open():
 		return
 	# Cancel drag on right-click or escape
@@ -767,9 +1345,6 @@ func _input(event: InputEvent) -> void:
 				_cancel_drag()
 			else:
 				toggle()
-			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_I or event.keycode == KEY_TAB:
-			toggle()
 			get_viewport().set_input_as_handled()
 
 func _drop_item_to_world(inv_index: int) -> void:

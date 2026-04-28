@@ -13,7 +13,7 @@ commands = [{
 "name": "Buy supplies",
 "script": [{
 "cmd": "openShop",
-"shop": "aria-inn"
+"shop": "haven-inn"
 }]
 }, {
 "name": "What's the news?",

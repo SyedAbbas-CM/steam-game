@@ -96,9 +96,11 @@ func _ready() -> void:
 	var t0 = Time.get_ticks_msec()
 	var player = $Player
 	# Scale visuals only — scaling CharacterBody2D breaks move_and_slide()
-	# chars.png sprites are 32x32 (already match tile size), lofi_char is 8x8 (needs 4x)
+	# Animated sprites (8x8) need 4x scale; static LoY chars.png (32x32) need 1x
 	var spr = player.get_node("Sprite2D")
-	if spr.texture is AtlasTexture:
+	if player._player_anim:
+		spr.scale = Vector2(4, 4)  # 8x8 animated sprite — scale up to 32px
+	elif spr.texture is AtlasTexture:
 		spr.scale = Vector2(1, 1)  # 32x32 atlas from chars.png — already tile-sized
 	else:
 		spr.scale = Vector2(4, 4)  # 8x8 lofi_char.png — scale up to 32px
@@ -372,6 +374,8 @@ func _async_init() -> void:
 	var qm = get_node_or_null("/root/QuestManager")
 	if qm and _current_zone:
 		qm.on_zone_entered(_current_zone.id)
+		# Spawn quest enemies for active kill quests on game load
+		check_quest_enemy_spawns(_current_zone.id)
 
 	# 3D first-person view (L key toggle)
 	var fpv = FirstPersonView.new()
@@ -616,6 +620,8 @@ func _switch_to_zone(zone: LoyZoneData) -> void:
 	var qm = get_node_or_null("/root/QuestManager")
 	if qm:
 		qm.on_zone_entered(zone.id)
+	# Spawn quest enemies if needed for active kill quests in this zone
+	check_quest_enemy_spawns(zone.id)
 	# Unload chunks outside new allowed zones (but keep chunks near player)
 	for key in _loaded_chunks.keys():
 		var near_player = abs(key.x - _last_chunk.x) <= LOAD_RADIUS and abs(key.y - _last_chunk.y) <= LOAD_RADIUS
@@ -966,6 +972,174 @@ func _spawn_overworld_enemy(enemy_scene: PackedScene, container: Node, enemy_def
 		enemy.set_meta("passive_until_hit", true)
 	container.add_child(enemy)
 
+## ── Quest Enemy Spawning ────────────────────────────────────────────────────
+
+func spawn_quest_enemies(zone_id: String, enemy_name: String, count: int, area: Dictionary = {}) -> void:
+	## Spawn a batch of enemies in a zone for quest purposes.
+	## area: optional {x, y, w, h} in zone-local LoY tiles. If empty, uses full zone.
+	var container = get_node_or_null("EnemyContainer")
+	if not container:
+		print("spawn_quest_enemies: No EnemyContainer")
+		return
+	var enemy_def = _get_cached_enemy_def(enemy_name)
+	if not enemy_def:
+		print("spawn_quest_enemies: Enemy '%s' not found" % enemy_name)
+		return
+	var enemy_scene = load("res://scenes/enemy.tscn") as PackedScene
+	if not enemy_scene:
+		return
+
+	# Find the zone data for the target zone
+	var zone: LoyZoneData = null
+	for z in zone_data:
+		if z.id == zone_id:
+			zone = z
+			break
+	if not zone:
+		print("spawn_quest_enemies: Zone '%s' not found" % zone_id)
+		return
+
+	var ox = zone.baked_offset.x
+	var oy = zone.baked_offset.y
+	var s = zone.baked_scale if zone.baked_scale > 0 else 1
+	var ts: int = 32
+	var half: int = ts / 2
+
+	# Use explicit area if provided, otherwise zone's full dims with margin
+	var zw: int = zone.width if zone.width > 0 else 25
+	var zh: int = zone.height if zone.height > 0 else 25
+	var spawn_x: int
+	var spawn_y: int
+	var spawn_w: int
+	var spawn_h: int
+	if area.has("x"):
+		spawn_x = int(area["x"])
+		spawn_y = int(area["y"])
+		spawn_w = maxi(1, int(area["w"]))
+		spawn_h = maxi(1, int(area["h"]))
+	else:
+		var margin: int = 3
+		spawn_x = margin
+		spawn_y = margin
+		spawn_w = maxi(1, zw - margin * 2)
+		spawn_h = maxi(1, zh - margin * 2)
+	print("spawn_quest_enemies: zone '%s' offset=(%d,%d) scale=%d dims=%dx%d spawn_area=(%d,%d,%d,%d)" % [zone_id, ox, oy, s, zw, zh, spawn_x, spawn_y, spawn_w, spawn_h])
+
+	var spawned = 0
+	for _i in range(count * 3):  # extra attempts since some may collide with walls
+		if spawned >= count:
+			break
+		var ex = spawn_x + randi() % maxi(1, spawn_w)
+		var ey = spawn_y + randi() % maxi(1, spawn_h)
+		# Convert zone-local LoY tile to world pixel position
+		var tile_x: int = ox + ex * s
+		var tile_y: int = oy + ey * s
+		var pos = Vector2(tile_x * ts + half, tile_y * ts + half)
+		var enemy = enemy_scene.instantiate()
+		enemy.global_position = pos
+		if enemy.has_method("setup"):
+			var ow_def = enemy_def.duplicate()
+			ow_def.move_speed = enemy_def.move_speed * 4.0
+			ow_def.aggro_range = enemy_def.aggro_range * 4.0
+			ow_def.preferred_distance = enemy_def.preferred_distance * 4.0
+			ow_def.bullet_speed = enemy_def.bullet_speed * 4.0
+			ow_def.charge_speed = enemy_def.charge_speed * 4.0
+			enemy.setup(ow_def)
+		var _enemy_spr = enemy.get_node_or_null("Sprite2D")
+		if _enemy_spr:
+			_enemy_spr.scale = Vector2(1, 1)
+		enemy.set_meta("zone_id", zone_id)
+		enemy.set_meta("spawn_pos", pos)
+		enemy.set_meta("leash_radius", float(maxi(spawn_w, spawn_h) * s * ts))
+		enemy.set_meta("behavior", "wander")
+		enemy.set_meta("hostile", true)
+		enemy.set_meta("quest_enemy", true)  # prevents despawning
+		enemy.set_meta("enemy_name", enemy_name)
+		container.add_child(enemy)
+		spawned += 1
+		if spawned <= 3:
+			print("  quest enemy #%d at %s" % [spawned, pos])
+
+	print("spawn_quest_enemies: Spawned %d x '%s' in zone '%s'" % [spawned, enemy_name, zone_id])
+
+func check_quest_enemy_spawns(zone_id: String) -> void:
+	## Called on zone enter. For each active kill quest targeting this zone,
+	## spawn enemies if none of that type are alive in the zone.
+	var qm = get_node_or_null("/root/QuestManager")
+	if not qm:
+		return
+	var container = get_node_or_null("EnemyContainer")
+	if not container:
+		return
+
+	# Collect alive quest enemy types per zone
+	var alive_types: Dictionary = {}  # enemy_name -> count
+	for child in container.get_children():
+		if child is CharacterBody2D and child.has_meta("quest_enemy") and child.has_meta("zone_id"):
+			if child.get_meta("zone_id") == zone_id:
+				var ename = ""
+				if "definition" in child and child.definition and child.definition.enemy_name != "":
+					ename = child.definition.enemy_name
+				elif child.has_meta("enemy_name"):
+					ename = child.get_meta("enemy_name")
+				if ename != "":
+					alive_types[ename] = alive_types.get(ename, 0) + 1
+
+	# Check active quests for kill events targeting enemies in this zone
+	for quest_id in qm.active_quests:
+		if not qm.active_quests[quest_id].get("active", false):
+			continue
+		if not qm.definitions.has(quest_id):
+			continue
+		var quest = qm.definitions[quest_id]
+		# Find kill events to determine enemy type
+		for event in quest.events:
+			if event.get("type") == "kill":
+				var enemy_name = str(event.get("param", ""))
+				if enemy_name == "" or enemy_name == "*":
+					continue  # wildcard kills don't spawn enemies
+				# Find the original spawnEnemies command to get the CORRECT spawn zone
+				var spawn_cmd: Dictionary = _find_spawn_cmd(quest.start_script, enemy_name)
+				if spawn_cmd.size() == 0:
+					continue  # no spawn command found, don't guess
+				# Only spawn if the spawn command's zone matches the zone we're entering
+				var spawn_zone = str(spawn_cmd.get("zone", ""))
+				if spawn_zone != zone_id:
+					continue  # this quest spawns in a different zone
+				var alive = alive_types.get(enemy_name, 0)
+				if alive > 0:
+					continue  # some still alive, don't respawn
+				var spawn_count = int(spawn_cmd.get("count", "10"))
+				# Subtract kills already made (quest property index 0 = kill counter)
+				var kills_so_far = qm.get_quest_value(quest_id, 0)
+				var remaining = maxi(0, spawn_count - kills_so_far)
+				if remaining <= 0:
+					continue  # all required kills done, no need to spawn more
+				var area: Dictionary = {}
+				if spawn_cmd.has("x"):
+					area = {"x": int(spawn_cmd.get("x", "0")), "y": int(spawn_cmd.get("y", "0")), "w": int(spawn_cmd.get("w", "8")), "h": int(spawn_cmd.get("h", "8"))}
+				print("check_quest_enemy_spawns: Spawning %d x '%s' for quest '%s' in zone '%s' (killed %d/%d)" % [remaining, enemy_name, quest_id, zone_id, kills_so_far, spawn_count])
+				spawn_quest_enemies(zone_id, enemy_name, remaining, area)
+
+func _cmd_is_spawn(cmd: Dictionary, enemy_name: String) -> bool:
+	return cmd.get("cmd", "") in ["spawn", "spawnEnemies"] and cmd.get("enemy", "") == enemy_name
+
+func _find_spawn_cmd(commands: Array, enemy_name: String) -> Dictionary:
+	## Recursively search quest script commands for a spawnEnemies command matching enemy_name
+	for cmd in commands:
+		if _cmd_is_spawn(cmd, enemy_name):
+			return cmd
+		for opt in cmd.get("options", []):
+			var found = _find_spawn_cmd(opt.get("script", []), enemy_name)
+			if found.size() > 0:
+				return found
+		var sub = cmd.get("script", [])
+		if sub.size() > 0:
+			var found = _find_spawn_cmd(sub, enemy_name)
+			if found.size() > 0:
+				return found
+	return {}
+
 ## ── Harvest Nodes ────────────────────────────────────────────────────────────
 
 const HARVEST_NODE_CONFIGS = {
@@ -1284,6 +1458,9 @@ func _despawn_far_enemies() -> void:
 	for child in container.get_children():
 		if not (child is CharacterBody2D):
 			continue
+		# Never despawn quest-spawned enemies
+		if child.has_meta("quest_enemy"):
+			continue
 		if child.global_position.distance_to(player_pos) > ZONE_DESPAWN_RADIUS:
 			child.queue_free()
 
@@ -1319,6 +1496,20 @@ func _spawn_test_arena_entrance() -> void:
 		sprite.region_rect = Rect2(5 * 32, 0, 32, 32)  # stairs tile at atlas (5,0)
 		sprite.z_index = 1
 		entrance.add_child(sprite)
+
+	# Test Arena 2 entrance (below Test Arena 1)
+	var entrance_pos_2 = spawn_px + Vector2(128, 64)
+	var nodes_2 = _add_entrance(entrance_pos_2, "TestCombo", 32, "Combo Arena")
+	if nodes_2.size() > 0:
+		var entrance_2 = nodes_2[0]
+		var sprite_2 = Sprite2D.new()
+		sprite_2.texture = load("res://assets/sprites/loy/maptiles.png")
+		sprite_2.region_enabled = true
+		sprite_2.region_rect = Rect2(5 * 32, 0, 32, 32)
+		sprite_2.z_index = 1
+		sprite_2.modulate = Color(0.4, 1.0, 0.4)  # green tint to distinguish
+		entrance_2.add_child(sprite_2)
+
 
 ## Safe zones where no enemies should spawn (towns, settlements, etc.)
 const SAFE_ZONES: Array = [
@@ -1409,8 +1600,19 @@ func _get_enemy_def_path(monster_name: String) -> String:
 		"Golden Skeleton": "res://resources/enemies/overworld/golden_skeleton.tres",
 		"Fairy": "res://resources/enemies/overworld/fairy.tres",
 		"Overworld Ghost": "res://resources/enemies/overworld/ow_ghost.tres",
+		"Scarecrow": "res://resources/enemies/basic/scarecrow.tres",
 	}
-	return name_map.get(monster_name, "")
+	if name_map.has(monster_name):
+		return name_map[monster_name]
+	# Fallback: search all enemy definitions by enemy_name
+	for dir_path in ["res://resources/enemies/basic/", "res://resources/enemies/loy/", "res://resources/enemies/custom/"]:
+		var snake = monster_name.to_lower().replace(" ", "_")
+		var guess = dir_path + snake + ".tres"
+		if ResourceLoader.exists(guess):
+			var def = load(guess) as EnemyDefinition
+			if def and def.enemy_name == monster_name:
+				return guess
+	return ""
 
 # Collisions and entrances are now generated per-chunk in _generate_chunk_collisions / _create_chunk_entrances
 
@@ -1534,9 +1736,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			_debug_clear_labels()
 		print("DEBUG: Tile labels = %s" % _debug_tile_labels_visible)
 
-	# Press B to start a battle in current zone (invasion)
-	if event is InputEventKey and event.pressed and event.keycode == KEY_B:
-		_try_start_battle()
 
 	# Territory panel is now accessed via DIPLOMACY button in WorldMapScreen (M key)
 
@@ -1588,11 +1787,9 @@ func _try_start_battle() -> void:
 	var zone_id := _current_zone.id
 	var zone_display := _current_zone.zone_name if _current_zone.zone_name != "" else zone_id
 	# Check if already owned (use zone ID for consistent key matching)
-	if gm.save_data and gm.save_data.has_meta("owned_territories"):
-		var owned: Array = gm.save_data.get_meta("owned_territories")
-		if zone_id in owned:
-			print("Already own %s" % zone_id)
-			return
+	if gm.save_data and zone_id in gm.save_data.owned_territories:
+		print("Already own %s" % zone_id)
+		return
 
 	# --- Player army: hired fighters only ---
 	var hired: Dictionary = {}
@@ -1642,14 +1839,21 @@ func _try_start_battle() -> void:
 	# --- Enemy army: use faction or bandit army builder ---
 	var fm = get_node_or_null("/root/FactionManager")
 	var enemy_army: Array = []
+	var army_source := "none"
 	if fm:
 		var zone_owner: String = fm.get_zone_owner(zone_id)
-		if zone_owner == "bandit":
-			enemy_army = fm.build_bandit_army(zone_id)
-		elif zone_owner != "" and zone_owner != "player" and fm.factions.has(zone_owner):
+		if zone_owner != "" and zone_owner != "player" and zone_owner != "bandit" and fm.factions.has(zone_owner):
 			enemy_army = fm.build_faction_army(zone_owner)
+			army_source = "faction:%s" % zone_owner
+		else:
+			# Unclaimed, bandit, or unknown faction → default to bandit army sized by zone difficulty
+			enemy_army = fm.build_bandit_army(zone_id)
+			army_source = "bandit(owner='%s')" % zone_owner
 	if enemy_army.is_empty():
-		enemy_army = _build_army_from_budget(40, false)
+		push_warning("Enemy army empty for zone %s — FactionManager missing or uninitialized" % zone_id)
+		enemy_army = _build_army_from_budget(80, false)
+		army_source = "FALLBACK_BUDGET"
+	_log_enemy_army(zone_id, army_source, enemy_army)
 
 	# --- Battle region from zone waypoints ---
 	var region_info := _get_battle_region_for_zone(_current_zone.id)
@@ -1685,6 +1889,19 @@ func _try_start_battle() -> void:
 		e_total += entry["count"]
 	print("Starting battle for %s — Player: %d units, Enemy: %d units (tier=%d, zones=%d), Region: %s" % [zone_id, p_total, e_total, enemy_tier, enemy_zone_count, str(region_info["battle_region"])])
 	gm.start_battle(config)
+
+func _log_enemy_army(zone_id: String, source: String, army: Array) -> void:
+	## Debug: print enemy army source + composition when a battle starts so we can
+	## verify the faction/bandit builder is actually being used (and not a fallback).
+	var total := 0
+	var parts := PackedStringArray()
+	for e in army:
+		var c: int = int(e.get("count", 0))
+		total += c
+		var t: int = int(e.get("type", 0))
+		var tname: String = BattleUnitSystem.UnitType.keys()[t] if t >= 0 and t < BattleUnitSystem.UnitType.size() else str(t)
+		parts.append("%s=%d" % [tname, c])
+	print("Battle start zone=%s source=%s total=%d [%s]" % [zone_id, source, total, ", ".join(parts)])
 
 func _build_army_from_budget(budget: int, is_player: bool) -> Array:
 	# Distribute budget across unit types using percentage allocation
@@ -1832,12 +2049,18 @@ func _on_territory_attack(zone_id: String) -> void:
 	# Enemy army from faction or bandit army builder
 	var owner: String = fm.get_zone_owner(zone_id)
 	var enemy_army: Array = []
-	if owner == "bandit":
-		enemy_army = fm.build_bandit_army(zone_id)
-	elif owner != "" and owner != "player" and fm.factions.has(owner):
+	var army_source := "none"
+	if owner != "" and owner != "player" and owner != "bandit" and fm.factions.has(owner):
 		enemy_army = fm.build_faction_army(owner)
+		army_source = "faction:%s" % owner
+	else:
+		enemy_army = fm.build_bandit_army(zone_id)
+		army_source = "bandit(owner='%s')" % owner
 	if enemy_army.is_empty():
-		enemy_army = _build_army_from_budget(40, false)
+		push_warning("Enemy army empty for zone %s (territory attack)" % zone_id)
+		enemy_army = _build_army_from_budget(80, false)
+		army_source = "FALLBACK_BUDGET"
+	_log_enemy_army(zone_id, army_source, enemy_army)
 
 	var enemy_tier: int = 1
 	var enemy_zone_count: int = 0
@@ -2117,6 +2340,8 @@ func _open_door(cell: Vector2i, area: Area2D) -> void:
 	area.queue_free()
 
 var _game_hud: GameHUD
+var _quest_world_marker: Node2D
+var _quest_world_marker_pos: Vector2 = Vector2.ZERO
 
 func _setup_game_hud(player_node: CharacterBody2D) -> void:
 	_game_hud = GameHUD.new()
@@ -2148,18 +2373,110 @@ func _update_quest_arrow() -> void:
 	var qm = get_node_or_null("/root/QuestManager")
 	if not qm:
 		_game_hud.clear_quest_objective()
+		_hide_world_marker()
 		return
 	var quest_id = qm.get_first_active_quest_id()
 	if quest_id == "":
 		_game_hud.clear_quest_objective()
+		_hide_world_marker()
 		return
 	var pos = qm.get_quest_objective_position(quest_id)
 	if pos == Vector2.ZERO:
 		_game_hud.clear_quest_objective()
+		_hide_world_marker()
 		return
+
+	# Try to snap to nearest dungeon entrance in target zone
 	var quest = qm.definitions.get(quest_id) as QuestDefinition
 	var label = quest.title if quest else ""
+	# For dungeon quests, use a larger search radius to ensure we find the entrance
+	var search_radius = 800.0 if (quest and quest.boss_dungeon != "") else 400.0
+	var entrance_pos = _find_nearest_entrance_near(pos, search_radius)
+	if entrance_pos != Vector2.ZERO:
+		pos = entrance_pos
+
+	# World marker at target + HUD arrow as off-screen fallback
 	_game_hud.set_quest_objective(pos, label)
+	_show_world_marker(pos, label)
+	print("QUEST MARKER: pos=%s label=%s quest=%s" % [pos, label, quest_id])
+
+func _find_nearest_entrance_near(target_pos: Vector2, max_dist: float = 400.0) -> Vector2:
+	## Find the closest dungeon entrance within max_dist of target_pos.
+	var best_dist := max_dist
+	var best_pos := Vector2.ZERO
+	for child in get_children():
+		if child is Area2D and child.has_meta("biome_name"):
+			var d = child.global_position.distance_to(target_pos)
+			if d < best_dist:
+				best_dist = d
+				best_pos = child.global_position
+	return best_pos
+
+func _show_world_marker(world_pos: Vector2, label_text: String) -> void:
+	_quest_world_marker_pos = world_pos
+	if not _quest_world_marker:
+		_quest_world_marker = _QuestWorldMarker.new()
+		add_child(_quest_world_marker)
+	_quest_world_marker.global_position = world_pos
+	_quest_world_marker.set_label(label_text)
+	_quest_world_marker.visible = true
+
+func _hide_world_marker() -> void:
+	_quest_world_marker_pos = Vector2.ZERO
+	if _quest_world_marker:
+		_quest_world_marker.visible = false
+
+class _QuestWorldMarker extends Node2D:
+	## In-world floating quest marker: bobbing diamond + label above target position.
+	var _elapsed: float = 0.0
+	var _label: Label
+	var _label_text: String = ""
+
+	func _ready() -> void:
+		z_index = 100
+		_label = Label.new()
+		var settings = LabelSettings.new()
+		settings.font_size = 8
+		settings.font_color = Color(1.0, 0.95, 0.6)
+		settings.outline_size = 2
+		settings.outline_color = Color(0, 0, 0)
+		_label.label_settings = settings
+		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_label.position = Vector2(-50, -42)
+		_label.size = Vector2(100, 16)
+		add_child(_label)
+
+	func set_label(text: String) -> void:
+		_label_text = text
+		if _label:
+			_label.text = text
+
+	func _process(delta: float) -> void:
+		_elapsed += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		# Bobbing offset
+		var bob = sin(_elapsed * 3.0) * 4.0
+		var y_off = -24.0 + bob
+
+		# Draw downward-pointing arrow/diamond (large, visible)
+		var pts = PackedVector2Array([
+			Vector2(0, y_off + 12),   # bottom point
+			Vector2(-8, y_off),       # left
+			Vector2(0, y_off - 10),   # top
+			Vector2(8, y_off),        # right
+		])
+		draw_colored_polygon(pts, Color(1.0, 0.85, 0.15, 0.95))
+		draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[3], pts[0]]),
+			Color(0.9, 0.6, 0.0), 1.5)
+
+		# Vertical line from diamond to ground
+		draw_line(Vector2(0, y_off + 12), Vector2(0, 4), Color(1.0, 0.85, 0.2, 0.6), 1.0)
+
+		# Pulsing glow circle at ground level
+		var pulse = 0.4 + 0.2 * sin(_elapsed * 4.0)
+		draw_circle(Vector2(0, 4), 8.0, Color(1.0, 0.85, 0.2, pulse))
 
 func _on_player_died() -> void:
 	var player_node = get_node_or_null("Player")

@@ -43,7 +43,6 @@ func _init() -> void:
 	var layer_names = ["Ground", "Paths", "Water", "Decorations", "Buildings", "Fences"]
 	var layers: Dictionary = {}
 	for layer_name in layer_names:
-		var layer = root.get_node_or_null(layer_name) as TileMapLayer
 		if layer:
 			layers[layer_name.to_lower()] = layer
 		else:

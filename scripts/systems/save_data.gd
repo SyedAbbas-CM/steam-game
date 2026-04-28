@@ -16,6 +16,7 @@ extends Resource
 @export var stat_allocations: Dictionary = {}  # "vitality" -> count
 @export var equipped_items: Dictionary = {}  # slot_type(int) -> item_path(String)
 @export var inventory_items: Array[String] = []  # array of item resource paths
+@export var inventory_quantities: Dictionary = {}  # inv_index(int) -> quantity(int) for ammo items
 @export var secondary_weapon_path: String = ""  # weapon swap secondary (mercenary/ranger)
 @export var quickbar_items: Array[String] = ["", "", "", "", "", ""]  # item_name per slot
 @export var learned_spells: Array[Dictionary] = []  # spell data as dicts
@@ -85,6 +86,7 @@ func wipe_character() -> void:
 	stat_allocations.clear()
 	equipped_items.clear()
 	inventory_items.clear()
+	inventory_quantities.clear()
 	secondary_weapon_path = ""
 	quickbar_items = ["", "", "", "", "", ""]
 	learned_spells.clear()

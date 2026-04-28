@@ -27,7 +27,7 @@ commands = [{
 "name": "Any quests?",
 "script": [{
 "cmd": "offerZoneQuests",
-"zone": "haven"
+"zone": "aria"
 }]
 }, {
 "name": "I see",
@@ -45,7 +45,7 @@ commands = [{
 "name": "Any quests?",
 "script": [{
 "cmd": "offerZoneQuests",
-"zone": "haven"
+"zone": "aria"
 }]
 }, {
 "name": "Farewell",
@@ -58,7 +58,7 @@ commands = [{
 "name": "Any quests?",
 "script": [{
 "cmd": "offerZoneQuests",
-"zone": "haven"
+"zone": "aria"
 }]
 }, {
 "name": "Farewell",

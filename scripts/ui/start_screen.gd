@@ -96,7 +96,6 @@ func _build_ui() -> void:
 	center.add_child(class_row)
 
 	for class_id in CLASS_DATA:
-		var data = CLASS_DATA[class_id]
 		var btn_vbox = _create_class_button(class_id, data)
 		class_row.add_child(btn_vbox)
 
@@ -136,12 +135,10 @@ func _create_class_button(class_id: String, data: Dictionary) -> VBoxContainer:
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 4)
 
-	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(200, 120)
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.pressed.connect(_on_class_selected.bind(class_id))
 
-	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.08, 0.14)
 	style.border_color = Color(0.3, 0.3, 0.4)
 	style.set_border_width_all(2)
@@ -194,7 +191,6 @@ func _create_class_button(class_id: String, data: Dictionary) -> VBoxContainer:
 func _on_class_selected(class_id: String) -> void:
 	_selected_class = class_id
 	_update_class_selection()
-	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("select_a", -4.0, 0.0)
 

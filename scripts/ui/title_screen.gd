@@ -119,6 +119,7 @@ func _build_slot_select() -> void:
 		slot_row.add_child(panel)
 
 func _build_slot_panel(slot: int) -> VBoxContainer:
+	var gm = get_node_or_null("/root/GameManager")
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
 	vbox.custom_minimum_size = Vector2(320, 0)
@@ -138,6 +139,7 @@ func _build_slot_panel(slot: int) -> VBoxContainer:
 
 	var inner = VBoxContainer.new()
 	inner.add_theme_constant_override("separation", 6)
+	var data = gm.load_slot_preview(slot) if gm else null
 
 	# Slot title
 	var slot_label = Label.new()
@@ -146,8 +148,6 @@ func _build_slot_panel(slot: int) -> VBoxContainer:
 	slot_label.add_theme_font_size_override("font_size", 22)
 	slot_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
 	inner.add_child(slot_label)
-
-	var data = SaveData.load_slot(slot)
 
 	if data:
 		# Show slot info
@@ -280,10 +280,10 @@ func _show_delete_confirm(slot: int) -> void:
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 20)
 	center.add_child(btn_row)
+	var gm = get_node_or_null("/root/GameManager")
 
 	var yes_btn = _make_btn("Delete", Color(0.6, 0.1, 0.1))
 	yes_btn.pressed.connect(func():
-		var gm = get_node_or_null("/root/GameManager")
 		if gm:
 			gm.delete_slot(slot)
 		overlay.queue_free()

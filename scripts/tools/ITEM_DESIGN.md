@@ -34,6 +34,10 @@ Ranger distance scaling: full damage at 50%+ range, half damage below 50%.
 Weapon flat_bonus IS the total damage. Simple, clean, no class multiplier confusion.
 Composite Bow is classified as short_bow (not bow).
 
+**Damage formula**: All class base_damage = 0, PlayerStats.attack_damage = 0.
+Weapon flat_bonus IS the total damage. Simple, clean, no class multiplier confusion.
+Composite Bow is classified as short_bow (not bow).
+
 ## Tier System (internal, not shown in-game)
 
 | Tier | Damage Range | Drop Location | Examples |

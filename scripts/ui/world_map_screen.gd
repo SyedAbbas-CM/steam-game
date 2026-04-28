@@ -223,12 +223,6 @@ func _build_side_panel(map_x: float, map_y: float) -> void:
 
 # --- Camera ---
 
-func _world_to_screen(wp: Vector2) -> Vector2:
-	return (wp - _cam_offset) * _cam_zoom + Vector2(MAP_W / 2.0, MAP_H / 2.0)
-
-func _screen_to_world(sp: Vector2) -> Vector2:
-	return (sp - Vector2(MAP_W / 2.0, MAP_H / 2.0)) / _cam_zoom + _cam_offset
-
 func _force_directed_relax() -> void:
 	## Run force-directed relaxation to separate overlapping nodes and reduce edge crossings.
 	## Nodes repel each other; connected nodes attract to an ideal distance.
@@ -244,6 +238,10 @@ func _force_directed_relax() -> void:
 	const MAX_MOVE := 25.0      # max displacement per iteration
 	const DAMPING := 0.92
 
+	var positions: Dictionary = {}
+	for zid in ids:
+		positions[zid] = _graph_nodes[zid]["pos"]
+
 	var velocities: Dictionary = {}
 	for zid in ids:
 		velocities[zid] = Vector2.ZERO
@@ -258,34 +256,34 @@ func _force_directed_relax() -> void:
 			for j in range(i + 1, count):
 				var a: String = ids[i]
 				var b: String = ids[j]
-				var pa: Vector2 = _graph_nodes[a]["pos"]
-				var pb: Vector2 = _graph_nodes[b]["pos"]
-				var delta := pa - pb
+				var pa: Vector2 = positions[a]
+				var pb: Vector2 = positions[b]
+				var delta := pb - pa
 				var dist := delta.length()
 				if dist < 1.0:
 					delta = Vector2(randf_range(-1, 1), randf_range(-1, 1))
 					dist = 1.0
 				var force := REPULSION / (dist * dist)
 				var f := delta.normalized() * force
-				forces[a] += f
-				forces[b] -= f
+				forces[a] -= f
+				forces[b] += f
 
 		# Attraction along edges
 		for edge in _graph_edges:
-			var a: String = edge[0]
-			var b: String = edge[1]
-			if not forces.has(a) or not forces.has(b):
+			var ea: String = edge[0]
+			var eb: String = edge[1]
+			if not forces.has(ea) or not forces.has(eb):
 				continue
-			var pa: Vector2 = _graph_nodes[a]["pos"]
-			var pb: Vector2 = _graph_nodes[b]["pos"]
-			var delta := pb - pa
-			var dist := delta.length()
-			if dist < 1.0:
+			var epa: Vector2 = positions[ea]
+			var epb: Vector2 = positions[eb]
+			var edelta := epb - epa
+			var edist := edelta.length()
+			if edist < 1.0:
 				continue
-			var displacement := dist - IDEAL_DIST
-			var f := delta.normalized() * displacement * ATTRACTION
-			forces[a] += f
-			forces[b] -= f
+			var displacement := edist - IDEAL_DIST
+			var ef := edelta.normalized() * displacement * ATTRACTION
+			forces[ea] += ef
+			forces[eb] -= ef
 
 		# Apply forces with velocity damping
 		for zid in ids:
@@ -300,6 +298,22 @@ func _zoom_at(screen_pos: Vector2, new_zoom: float) -> void:
 	_cam_zoom = clampf(new_zoom, ZOOM_MIN, ZOOM_MAX)
 	var new_w := _screen_to_world(screen_pos)
 	_cam_offset += old_w - new_w
+
+# --- Camera helpers ---
+
+func _world_to_screen(world_pos: Vector2) -> Vector2:
+	## Convert graph world position to screen pixel position within the map area.
+	var center = Vector2(MAP_W / 2.0, MAP_H / 2.0)
+	return (world_pos - _cam_offset) * _cam_zoom + center
+
+func _screen_to_world(screen_pos: Vector2) -> Vector2:
+	## Convert screen pixel position to graph world position.
+	var center := Vector2(MAP_W / 2.0, MAP_H / 2.0)
+	return (screen_pos - center) / _cam_zoom + _cam_offset
+
+func _center_on_zone(zone_id: String) -> void:
+	if _graph_nodes.has(zone_id):
+		_cam_offset = _graph_nodes[zone_id]["pos"]
 
 # --- Drawing ---
 
@@ -354,11 +368,10 @@ func _draw_graph(canvas: Control) -> void:
 		canvas.draw_arc(pos, r + 1, 0, TAU, 32, bc, maxf(1.5 * _cam_zoom, 1.0))
 
 		if show_lbl:
+			var zd = _zone_data_map.get(zid, null)
 			var dn: String = zid
-			if _zone_data_map.has(zid):
-				var zd: LoyZoneData = _zone_data_map[zid]
-				if zd.zone_name != "":
-					dn = zd.zone_name
+			if zd and zd.zone_name != "":
+				dn = zd.zone_name
 			if dn.length() > 14:
 				dn = dn.substr(0, 13) + "."
 			var tw := font.get_string_size(dn, HORIZONTAL_ALIGNMENT_LEFT, -1, sf).x
@@ -374,6 +387,7 @@ func _draw_graph(canvas: Control) -> void:
 # --- Input ---
 
 func _on_graph_input(event: InputEvent, canvas: Control) -> void:
+	var sfx = get_node_or_null("/root/SFXManager")
 	# Mac trackpad scroll (two-finger) → pan
 	if event is InputEventPanGesture:
 		_cam_offset += Vector2(event.delta.x, event.delta.y) * 40.0 / _cam_zoom
@@ -424,7 +438,6 @@ func _on_graph_input(event: InputEvent, canvas: Control) -> void:
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
 				if _hovered_zone != "":
-					var sfx = get_node_or_null("/root/SFXManager")
 					if sfx:
 						sfx.play("click", -5.0)
 					_selected_zone = _hovered_zone
@@ -471,12 +484,13 @@ func toggle() -> void:
 		if lbl:
 			lbl.visible = opening
 
-	var sfx = get_node_or_null("/root/SFXManager")
 	if opening:
+		var sfx = get_node_or_null("/root/SFXManager")
 		if sfx:
 			sfx.play("paper", -5.0)
 		_refresh_map()
 	else:
+		var sfx = get_node_or_null("/root/SFXManager")
 		if sfx:
 			sfx.play("close", -5.0)
 		_selected_zone = ""
@@ -489,6 +503,9 @@ func is_open() -> bool:
 # --- Refresh ---
 
 func _refresh_map() -> void:
+	var cnt := 0
+	var fm = get_node_or_null("/root/FactionManager")
+	var pairs: Dictionary = {}
 	_zone_data_map.clear()
 	_graph_nodes.clear()
 	_graph_edges.clear()
@@ -511,7 +528,7 @@ func _refresh_map() -> void:
 	var offsets: Dictionary = {}
 
 	for zid in _zone_data_map:
-		var zd: LoyZoneData = _zone_data_map[zid]
+		var zd = _zone_data_map[zid]
 		if zd.baked_offset == Vector2i(-99999, -99999):
 			continue
 		var s: int = maxi(zd.baked_scale, 1)
@@ -528,24 +545,21 @@ func _refresh_map() -> void:
 	rng.x = maxf(rng.x, 1.0)
 	rng.y = maxf(rng.y, 1.0)
 
-	var fm = get_node_or_null("/root/FactionManager")
-
 	for zid in offsets:
 		var raw: Vector2 = offsets[zid]
 		var nx := (raw.x - min_v.x) / rng.x * WORLD_SPREAD
 		var ny := (raw.y - min_v.y) / rng.y * WORLD_SPREAD * (float(MAP_H) / float(MAP_W))
-		var col := Color(0.35, 0.35, 0.4, 0.8)
+		var col := Color(0.4, 0.4, 0.5, 0.8)
 		if fm:
-			var owner: String = fm.get_zone_owner(zid)
-			if owner == "player":
+			var zone_owner: String = fm.get_zone_owner(zid) if fm.has_method("get_zone_owner") else ""
+			if zone_owner == "player":
 				col = Color(0.2, 0.75, 0.3, 0.9)
-			elif owner != "":
-				col = fm.get_owner_color(owner)
+			elif zone_owner != "":
+				col = fm.get_owner_color(zone_owner)
 				col.a = 0.85
 		_graph_nodes[zid] = {"pos": Vector2(nx, ny), "color": col}
 
 	# Edges
-	var pairs: Dictionary = {}
 	if fm:
 		for zid in _graph_nodes:
 			for nb in fm.get_zone_neighbors(zid):
@@ -567,7 +581,6 @@ func _refresh_map() -> void:
 		_selected_zone = _player_zone
 	else:
 		var avg := Vector2.ZERO
-		var cnt := 0
 		for zid in _graph_nodes:
 			avg += _graph_nodes[zid]["pos"]
 			cnt += 1
@@ -585,6 +598,7 @@ func _refresh_map() -> void:
 # --- Zone info (top of side panel) ---
 
 func _update_zone_info() -> void:
+	var fm = get_node_or_null("/root/FactionManager")
 	# Clear
 	for c in _zone_info_box.get_children():
 		c.queue_free()
@@ -598,8 +612,8 @@ func _update_zone_info() -> void:
 		_zone_info_box.add_child(lbl)
 		return
 
-	var zd: LoyZoneData = _zone_data_map[_selected_zone]
-	var dn := zd.zone_name if zd.zone_name != "" else _selected_zone
+	var zd = _zone_data_map[_selected_zone]
+	var dn: String = zd.zone_name if zd.zone_name != "" else _selected_zone
 
 	# Name
 	var name_lbl := Label.new()
@@ -613,7 +627,7 @@ func _update_zone_info() -> void:
 	_zone_info_box.add_child(name_lbl)
 
 	# Description
-	var desc := zd.description if zd.description != "" else "A region in the world."
+	var desc: String = zd.description if zd.description != "" else "A region in the world."
 	var desc_lbl := Label.new()
 	desc_lbl.text = desc
 	desc_lbl.add_theme_font_size_override("font_size", 11)
@@ -623,17 +637,16 @@ func _update_zone_info() -> void:
 	_zone_info_box.add_child(desc_lbl)
 
 	# Owner
-	var fm = get_node_or_null("/root/FactionManager")
-	var owner := ""
+	var zone_owner := ""
 	if fm:
-		owner = fm.get_zone_owner(_selected_zone)
+		zone_owner = fm.get_zone_owner(_selected_zone)
 	var owner_lbl := Label.new()
-	if owner == "player":
+	if zone_owner == "player":
 		owner_lbl.text = "Owner: You"
 		owner_lbl.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))
-	elif owner != "":
-		owner_lbl.text = "Owner: %s" % (fm.get_owner_display_name(owner) if fm else owner)
-		owner_lbl.add_theme_color_override("font_color", fm.get_owner_color(owner) if fm else Color(0.8, 0.5, 0.3))
+	elif zone_owner != "":
+		owner_lbl.text = "Owner: %s" % (fm.get_owner_display_name(zone_owner) if fm else zone_owner)
+		owner_lbl.add_theme_color_override("font_color", fm.get_owner_color(zone_owner) if fm else Color(0.8, 0.5, 0.3))
 	else:
 		owner_lbl.text = "Unclaimed"
 		owner_lbl.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45))
@@ -641,8 +654,8 @@ func _update_zone_info() -> void:
 	_zone_info_box.add_child(owner_lbl)
 
 	# Army strength
-	if fm and owner != "" and owner != "player" and fm.factions.has(owner):
-		var fac: Dictionary = fm.factions[owner]
+	if fm and zone_owner != "" and zone_owner != "player" and fm.factions.has(zone_owner):
+		var fac = fm.factions[zone_owner]
 		var tier: int = fac.get("tier", 1)
 		var army_size: int = fac.get("army_size", 40)
 		var tl: String = ["Weak", "Moderate", "Strong"][clampi(tier - 1, 0, 2)]
@@ -679,15 +692,15 @@ func _update_buttons() -> void:
 	var can_diplomacy := false
 
 	if _selected_zone != "" and fm:
-		var owner: String = fm.get_zone_owner(_selected_zone)
 		# Can attack: enemy faction zone adjacent to player territory
-		if owner != "" and owner != "player":
+		var zone_owner_2: String = fm.get_zone_owner(_selected_zone)
+		if zone_owner_2 != "" and zone_owner_2 != "player":
 			for pz in fm.get_player_zones():
 				if _selected_zone in fm.get_zone_neighbors(pz):
 					can_attack = true
 					break
 			# Can diplomacy: any faction-owned zone
-			if fm.factions.has(owner):
+			if fm.factions.has(zone_owner_2):
 				can_diplomacy = true
 
 	_engage_btn.visible = can_attack
@@ -710,19 +723,19 @@ func _update_buttons() -> void:
 # --- Territory list (always visible) ---
 
 func _refresh_territory_list() -> void:
+	var fm = get_node_or_null("/root/FactionManager")
 	for c in _territory_list.get_children():
 		c.queue_free()
-	var fm = get_node_or_null("/root/FactionManager")
 	if not fm:
 		return
 
 	# Group by owner, player first
 	var grouped: Dictionary = {}  # owner -> [zone_ids]
 	for zid in _zone_data_map:
-		var owner: String = fm.get_zone_owner(zid)
-		if not grouped.has(owner):
-			grouped[owner] = []
-		grouped[owner].append(zid)
+		var zo: String = fm.get_zone_owner(zid)
+		if not grouped.has(zo):
+			grouped[zo] = []
+		grouped[zo].append(zid)
 
 	# Player zones
 	if grouped.has("player"):
@@ -741,7 +754,7 @@ func _refresh_territory_list() -> void:
 func _add_terr_row(zid: String, owner: String, fm) -> void:
 	var zname := zid
 	if _zone_data_map.has(zid):
-		var zd: LoyZoneData = _zone_data_map[zid]
+		var zd = _zone_data_map[zid]
 		if zd.zone_name != "":
 			zname = zd.zone_name
 
@@ -786,9 +799,9 @@ func _on_terr_row_clicked(zid: String) -> void:
 # --- Faction list (always visible) ---
 
 func _refresh_faction_list() -> void:
+	var fm = get_node_or_null("/root/FactionManager")
 	for c in _faction_box.get_children():
 		c.queue_free()
-	var fm = get_node_or_null("/root/FactionManager")
 	if not fm:
 		return
 	for fid in fm.factions:
@@ -824,17 +837,17 @@ func _on_engage_pressed() -> void:
 	_start_battle(_selected_zone)
 
 func _on_diplomacy_pressed() -> void:
+	var fm = get_node_or_null("/root/FactionManager")
 	# TODO: Open diplomacy/relationship popup for the selected faction
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("click", -5.0)
-	var fm = get_node_or_null("/root/FactionManager")
 	if not fm:
 		return
-	var owner: String = fm.get_zone_owner(_selected_zone)
-	if owner == "" or owner == "player":
+	var zone_owner_d: String = fm.get_zone_owner(_selected_zone)
+	if zone_owner_d == "" or zone_owner_d == "player":
 		return
-	print("Diplomacy: opening relations with %s (placeholder)" % owner)
+	print("Diplomacy: opening relations with %s (placeholder)" % zone_owner_d)
 	# Placeholder — will be expanded into a Spore-like diplomacy popup
 
 func _start_battle(zone_id: String) -> void:
@@ -845,7 +858,7 @@ func _start_battle(zone_id: String) -> void:
 
 	var zone_name := zone_id
 	if _zone_data_map.has(zone_id):
-		var zd: LoyZoneData = _zone_data_map[zone_id]
+		var zd = _zone_data_map[zone_id]
 		if zd.zone_name != "":
 			zone_name = zd.zone_name
 
@@ -860,12 +873,26 @@ func _start_battle(zone_id: String) -> void:
 
 	var owner: String = fm.get_zone_owner(zone_id)
 	var enemy_army: Array = []
-	if owner == "bandit":
-		enemy_army = fm.build_bandit_army(zone_id)
-	elif owner != "" and owner != "player" and fm.factions.has(owner):
+	var army_source := "none"
+	if owner != "" and owner != "player" and owner != "bandit" and fm.factions.has(owner):
 		enemy_army = fm.build_faction_army(owner)
+		army_source = "faction:%s" % owner
+	else:
+		enemy_army = fm.build_bandit_army(zone_id)
+		army_source = "bandit(owner='%s')" % owner
 	if enemy_army.is_empty():
-		enemy_army = _build_fallback_enemy_army(60)
+		push_warning("Enemy army empty for zone %s (world map)" % zone_id)
+		enemy_army = _build_fallback_enemy_army(80)
+		army_source = "FALLBACK_BUDGET"
+	var _total := 0
+	var _parts := PackedStringArray()
+	for _e in enemy_army:
+		var _c: int = int(_e.get("count", 0))
+		_total += _c
+		var _t: int = int(_e.get("type", 0))
+		var _tname: String = BattleUnitSystem.UnitType.keys()[_t] if _t >= 0 and _t < BattleUnitSystem.UnitType.size() else str(_t)
+		_parts.append("%s=%d" % [_tname, _c])
+	print("Battle start zone=%s source=%s total=%d [%s]" % [zone_id, army_source, _total, ", ".join(_parts)])
 
 	var tile_x := 276
 	var tile_y := -1

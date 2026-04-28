@@ -1,7 +1,7 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=4 uid="uid://dee48uccfy248"]
 
 [ext_resource type="TileSet" uid="uid://bs1jq6cp22rvi" path="res://assets/tilesets/environment_tileset.tres" id="1_tileset"]
-[ext_resource type="Script" path="res://scripts/tools/sample_rooms.gd" id="2_script"]
+[ext_resource type="Script" uid="uid://b61ag21c20nln" path="res://scripts/tools/sample_rooms.gd" id="2_script"]
 
 [node name="SampleRooms" type="Node2D"]
 script = ExtResource("2_script")
@@ -16,7 +16,7 @@ z_index = 1
 
 [node name="Decorations" type="TileMapLayer" parent="."]
 tile_set = ExtResource("1_tileset")
-z_index = 2
+z_index = 0
 
 [node name="Doors" type="TileMapLayer" parent="."]
 tile_set = ExtResource("1_tileset")

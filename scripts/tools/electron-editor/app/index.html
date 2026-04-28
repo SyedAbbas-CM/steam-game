@@ -96,6 +96,10 @@ canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; }
     <button onclick="placeSpawnMode()" id="btn-spawn" style="font-size:10px;background:#0e4a5c;border-color:#22d3ee;color:#22d3ee">Spawn</button>
     <button onclick="toggleAreaMode()" id="btn-area" style="font-size:10px;background:#4a1d0e;border-color:#ef4444;color:#ef4444">Region</button>
     <button onclick="placeWaypointMode()" id="btn-waypoint" style="font-size:10px;background:#3b0764;border-color:#c084fc;color:#c084fc">Waypoint</button>
+    <button onclick="toggleAreaMode()" id="btn-area" style="font-size:10px;background:#4a1d0e;border-color:#ef4444;color:#ef4444">Region</button>
+    <button onclick="placeWaypointMode()" id="btn-waypoint" style="font-size:10px;background:#3b0764;border-color:#c084fc;color:#c084fc">Waypoint</button>
+    <button onclick="toggleAreaMode()" id="btn-area" style="font-size:10px;background:#4a1d0e;border-color:#ef4444;color:#ef4444">Region</button>
+    <button onclick="placeWaypointMode()" id="btn-waypoint" style="font-size:10px;background:#3b0764;border-color:#c084fc;color:#c084fc">Waypoint</button>
     <div class="sep"></div>
     <button onclick="exportChangeset()" style="background:#166534;border-color:#4ade80;color:#4ade80">Export Diff</button>
     <button onclick="exportFullMap()" style="background:#7c2d12;border-color:#fb923c;color:#fb923c">Export Full Map</button>
@@ -180,6 +184,14 @@ canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; }
         <option value="npc_patrol">NPC Patrol</option>
     </select>
     <div style="font-size:9px;color:#888">Press Enter to confirm, Esc to cancel</div>
+</div>
+<div id="waypoint-name-popup" style="position:fixed;z-index:50;display:none;background:#0d1b2a;border:2px solid #c084fc;border-radius:6px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,0.5)">
+    <input id="waypoint-name-input" placeholder="Waypoint name..." style="background:#0a1628;border:1px solid #1a4a8a;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:12px;width:200px;outline:none">
+    <div style="font-size:9px;color:#888;margin-top:4px">Press Enter to confirm, Esc to cancel</div>
+</div>
+<div id="waypoint-name-popup" style="position:fixed;z-index:50;display:none;background:#0d1b2a;border:2px solid #c084fc;border-radius:6px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,0.5)">
+    <input id="waypoint-name-input" placeholder="Waypoint name..." style="background:#0a1628;border:1px solid #1a4a8a;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:12px;width:200px;outline:none">
+    <div style="font-size:9px;color:#888;margin-top:4px">Press Enter to confirm, Esc to cancel</div>
 </div>
 <div id="waypoint-name-popup" style="position:fixed;z-index:50;display:none;background:#0d1b2a;border:2px solid #c084fc;border-radius:6px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,0.5)">
     <input id="waypoint-name-input" placeholder="Waypoint name..." style="background:#0a1628;border:1px solid #1a4a8a;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:12px;width:200px;outline:none">
@@ -476,6 +488,48 @@ async function init() {
         if (e.key === 'Escape') {
             pendingArea = null;
             document.getElementById('area-name-popup').style.display = 'none';
+        }
+    });
+
+    // Waypoint naming popup handler
+    document.getElementById('waypoint-name-input').addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Enter' && _pendingWaypointPos) {
+            const name = e.target.value.trim();
+            if (name) {
+                waypoints.push({ name, x: _pendingWaypointPos.x, y: _pendingWaypointPos.y });
+                saveAnnotations();
+                showToast(`Waypoint "${name}" placed at (${_pendingWaypointPos.x}, ${_pendingWaypointPos.y})`);
+                render();
+            }
+            _pendingWaypointPos = null;
+            document.getElementById('waypoint-name-popup').style.display = 'none';
+            e.target.value = '';
+        }
+        if (e.key === 'Escape') {
+            _pendingWaypointPos = null;
+            document.getElementById('waypoint-name-popup').style.display = 'none';
+        }
+    });
+
+    // Waypoint naming popup handler
+    document.getElementById('waypoint-name-input').addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Enter' && _pendingWaypointPos) {
+            const name = e.target.value.trim();
+            if (name) {
+                waypoints.push({ name, x: _pendingWaypointPos.x, y: _pendingWaypointPos.y });
+                saveAnnotations();
+                showToast(`Waypoint "${name}" placed at (${_pendingWaypointPos.x}, ${_pendingWaypointPos.y})`);
+                render();
+            }
+            _pendingWaypointPos = null;
+            document.getElementById('waypoint-name-popup').style.display = 'none';
+            e.target.value = '';
+        }
+        if (e.key === 'Escape') {
+            _pendingWaypointPos = null;
+            document.getElementById('waypoint-name-popup').style.display = 'none';
         }
     });
 
@@ -937,6 +991,80 @@ canvas.addEventListener('pointerdown', e => {
         }
     }
 
+    // Waypoint placement mode
+    if (placingWaypoint) {
+        const {wx, wy} = screenToWorld(e);
+        _pendingWaypointPos = { x: Math.floor(wx), y: Math.floor(wy) };
+        const popup = document.getElementById('waypoint-name-popup');
+        popup.style.display = 'block';
+        popup.style.left = e.clientX + 'px';
+        popup.style.top = e.clientY + 'px';
+        document.getElementById('waypoint-name-input').focus();
+        placingWaypoint = false;
+        document.getElementById('btn-waypoint').classList.remove('active');
+        return;
+    }
+
+    // Waypoint drag — click near existing waypoint in pan mode
+    if (waypoints.length && mode === 'pan') {
+        const {wx, wy} = screenToWorld(e);
+        const wpIdx = findWaypointAt(wx, wy);
+        if (wpIdx >= 0) {
+            draggingWaypoint = wpIdx;
+            _wpClickStart = { x: e.clientX, y: e.clientY };
+            canvas.setPointerCapture(e.pointerId);
+            return;
+        }
+    }
+
+    // Waypoint placement mode
+    if (placingWaypoint) {
+        const {wx, wy} = screenToWorld(e);
+        _pendingWaypointPos = { x: Math.floor(wx), y: Math.floor(wy) };
+        const popup = document.getElementById('waypoint-name-popup');
+        popup.style.display = 'block';
+        popup.style.left = e.clientX + 'px';
+        popup.style.top = e.clientY + 'px';
+        document.getElementById('waypoint-name-input').focus();
+        placingWaypoint = false;
+        document.getElementById('btn-waypoint').classList.remove('active');
+        return;
+    }
+
+    // Waypoint drag — click near existing waypoint in pan mode
+    if (waypoints.length && mode === 'pan') {
+        const {wx, wy} = screenToWorld(e);
+        const wpIdx = findWaypointAt(wx, wy);
+        if (wpIdx >= 0) {
+            draggingWaypoint = wpIdx;
+            _wpClickStart = { x: e.clientX, y: e.clientY };
+            canvas.setPointerCapture(e.pointerId);
+            return;
+        }
+    }
+
+    // Area creation works in ANY mode when toggled on
+    if (areaCreationMode) {
+        const {wx, wy} = screenToWorld(e);
+        const tx = Math.floor(wx), ty = Math.floor(wy);
+        areaDrawStart = { wx: tx, wy: ty };
+        boxCurrent = { wx: tx, wy: ty };
+        isPainting = true;
+        canvas.setPointerCapture(e.pointerId);
+        return;
+    }
+
+    // Area creation works in ANY mode when toggled on
+    if (areaCreationMode) {
+        const {wx, wy} = screenToWorld(e);
+        const tx = Math.floor(wx), ty = Math.floor(wy);
+        areaDrawStart = { wx: tx, wy: ty };
+        boxCurrent = { wx: tx, wy: ty };
+        isPainting = true;
+        canvas.setPointerCapture(e.pointerId);
+        return;
+    }
+
     // Area creation works in ANY mode when toggled on
     if (areaCreationMode) {
         const {wx, wy} = screenToWorld(e);
@@ -1003,6 +1131,18 @@ canvas.addEventListener('pointermove', e => {
         render();
         return;
     }
+    if (draggingWaypoint !== null) {
+        waypoints[draggingWaypoint].x = Math.floor(wx);
+        waypoints[draggingWaypoint].y = Math.floor(wy);
+        render();
+        return;
+    }
+    if (draggingWaypoint !== null) {
+        waypoints[draggingWaypoint].x = Math.floor(wx);
+        waypoints[draggingWaypoint].y = Math.floor(wy);
+        render();
+        return;
+    }
     if (draggingSpawn) {
         playerSpawn = { x: Math.floor(wx), y: Math.floor(wy) };
         render();
@@ -1024,6 +1164,12 @@ canvas.addEventListener('pointermove', e => {
         }
         render();
         return;
+    } else if (areaCreationMode && isPainting && areaDrawStart) {
+        boxCurrent = { wx: Math.floor(wx), wy: Math.floor(wy) };
+        render();
+    } else if (areaCreationMode && isPainting && areaDrawStart) {
+        boxCurrent = { wx: Math.floor(wx), wy: Math.floor(wy) };
+        render();
     } else if (areaCreationMode && isPainting && areaDrawStart) {
         boxCurrent = { wx: Math.floor(wx), wy: Math.floor(wy) };
         render();
@@ -1095,6 +1241,86 @@ canvas.addEventListener('pointerup', e => {
                 deleteWaypoint(idx);
             }
         }
+        render();
+        return;
+    }
+    // Waypoint drag end / click
+    if (draggingWaypoint !== null) {
+        const idx = draggingWaypoint;
+        const didMove = _wpClickStart && (Math.abs(e.clientX - _wpClickStart.x) > 4 || Math.abs(e.clientY - _wpClickStart.y) > 4);
+        draggingWaypoint = null;
+        _wpClickStart = null;
+        canvas.releasePointerCapture(e.pointerId);
+        if (didMove) {
+            saveAnnotations();
+            showToast(`Waypoint "${waypoints[idx].name}" moved`);
+        } else {
+            // Click — offer to delete
+            const wp = waypoints[idx];
+            if (confirm(`Waypoint: "${wp.name}" (${wp.x}, ${wp.y})\n\nDelete this waypoint?`)) {
+                deleteWaypoint(idx);
+            }
+        }
+        render();
+        return;
+    }
+    // Waypoint drag end / click
+    if (draggingWaypoint !== null) {
+        const idx = draggingWaypoint;
+        const didMove = _wpClickStart && (Math.abs(e.clientX - _wpClickStart.x) > 4 || Math.abs(e.clientY - _wpClickStart.y) > 4);
+        draggingWaypoint = null;
+        _wpClickStart = null;
+        canvas.releasePointerCapture(e.pointerId);
+        if (didMove) {
+            saveAnnotations();
+            showToast(`Waypoint "${waypoints[idx].name}" moved`);
+        } else {
+            // Click — offer to delete
+            const wp = waypoints[idx];
+            if (confirm(`Waypoint: "${wp.name}" (${wp.x}, ${wp.y})\n\nDelete this waypoint?`)) {
+                deleteWaypoint(idx);
+            }
+        }
+        render();
+        return;
+    }
+    // Area creation finalize — works in any mode
+    if (areaCreationMode && areaDrawStart && boxCurrent) {
+        isPainting = false;
+        canvas.releasePointerCapture(e.pointerId);
+        const x1 = Math.min(areaDrawStart.wx, boxCurrent.wx);
+        const y1 = Math.min(areaDrawStart.wy, boxCurrent.wy);
+        const x2 = Math.max(areaDrawStart.wx, boxCurrent.wx);
+        const y2 = Math.max(areaDrawStart.wy, boxCurrent.wy);
+        if (x2 - x1 > 2 && y2 - y1 > 2) {
+            pendingArea = { x1, y1, x2, y2 };
+            const popup = document.getElementById('area-name-popup');
+            popup.style.display = 'block';
+            popup.style.left = e.clientX + 'px';
+            popup.style.top = e.clientY + 'px';
+            document.getElementById('area-name-input').focus();
+        }
+        areaDrawStart = null; boxCurrent = null;
+        render();
+        return;
+    }
+    // Area creation finalize — works in any mode
+    if (areaCreationMode && areaDrawStart && boxCurrent) {
+        isPainting = false;
+        canvas.releasePointerCapture(e.pointerId);
+        const x1 = Math.min(areaDrawStart.wx, boxCurrent.wx);
+        const y1 = Math.min(areaDrawStart.wy, boxCurrent.wy);
+        const x2 = Math.max(areaDrawStart.wx, boxCurrent.wx);
+        const y2 = Math.max(areaDrawStart.wy, boxCurrent.wy);
+        if (x2 - x1 > 2 && y2 - y1 > 2) {
+            pendingArea = { x1, y1, x2, y2 };
+            const popup = document.getElementById('area-name-popup');
+            popup.style.display = 'block';
+            popup.style.left = e.clientX + 'px';
+            popup.style.top = e.clientY + 'px';
+            document.getElementById('area-name-input').focus();
+        }
+        areaDrawStart = null; boxCurrent = null;
         render();
         return;
     }
@@ -2130,6 +2356,14 @@ let waypoints = []; // [{name, x, y}, ...]
 let placingWaypoint = false;
 let draggingWaypoint = null; // index into waypoints array
 let _wpClickStart = null;
+let waypoints = []; // [{name, x, y}, ...]
+let placingWaypoint = false;
+let draggingWaypoint = null; // index into waypoints array
+let _wpClickStart = null;
+let waypoints = []; // [{name, x, y}, ...]
+let placingWaypoint = false;
+let draggingWaypoint = null; // index into waypoints array
+let _wpClickStart = null;
 
 function drawNpcSprite(npc, px, py, size) {
     const tile = npc.tile || npc.portrait || 0;
@@ -2253,6 +2487,72 @@ function drawPlayerSpawn() {
     ctx.strokeText('SPAWN', px, py - r - 2/zoom);
     ctx.fillText('SPAWN', px, py - r - 2/zoom);
     ctx.restore();
+}
+
+function drawWaypoints() {
+    if (!waypoints.length) return;
+    for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i];
+        const px = (wp.x + 0.5) * TILE_PX;
+        const py = (wp.y + 0.5) * TILE_PX;
+        const r = Math.max(5/zoom, 9/zoom);
+        ctx.save();
+        ctx.shadowColor = '#c084fc';
+        ctx.shadowBlur = 6/zoom;
+        // Circle marker
+        ctx.fillStyle = '#7c3aed';
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#e9d5ff';
+        ctx.lineWidth = 1.5/zoom;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        // Label
+        const fs = Math.max(5/zoom, 9/zoom);
+        ctx.font = `bold ${fs}px sans-serif`;
+        ctx.fillStyle = '#e9d5ff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2.5/zoom;
+        ctx.strokeText(wp.name, px, py - r - 2/zoom);
+        ctx.fillText(wp.name, px, py - r - 2/zoom);
+        ctx.restore();
+    }
+}
+
+function drawWaypoints() {
+    if (!waypoints.length) return;
+    for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i];
+        const px = (wp.x + 0.5) * TILE_PX;
+        const py = (wp.y + 0.5) * TILE_PX;
+        const r = Math.max(5/zoom, 9/zoom);
+        ctx.save();
+        ctx.shadowColor = '#c084fc';
+        ctx.shadowBlur = 6/zoom;
+        // Circle marker
+        ctx.fillStyle = '#7c3aed';
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#e9d5ff';
+        ctx.lineWidth = 1.5/zoom;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        // Label
+        const fs = Math.max(5/zoom, 9/zoom);
+        ctx.font = `bold ${fs}px sans-serif`;
+        ctx.fillStyle = '#e9d5ff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2.5/zoom;
+        ctx.strokeText(wp.name, px, py - r - 2/zoom);
+        ctx.fillText(wp.name, px, py - r - 2/zoom);
+        ctx.restore();
+    }
 }
 
 function drawWaypoints() {
@@ -2910,6 +3210,42 @@ function updateBaselineInfo() {
     }
 }
 
+function resetBaseline() {
+    _snapshotBaseline();
+    showToast('Baseline set to current state. Next diff export will only include new changes.');
+}
+
+function updateBaselineInfo() {
+    const el = document.getElementById('baseline-info');
+    if (!el) return;
+    if (baseline && baseline.timestamp) {
+        const d = new Date(baseline.timestamp);
+        el.textContent = `Baseline: ${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+        el.style.color = '#4ade80';
+    } else {
+        el.textContent = 'No baseline (diff = all edits)';
+        el.style.color = '#e94560';
+    }
+}
+
+function resetBaseline() {
+    _snapshotBaseline();
+    showToast('Baseline set to current state. Next diff export will only include new changes.');
+}
+
+function updateBaselineInfo() {
+    const el = document.getElementById('baseline-info');
+    if (!el) return;
+    if (baseline && baseline.timestamp) {
+        const d = new Date(baseline.timestamp);
+        el.textContent = `Baseline: ${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+        el.style.color = '#4ade80';
+    } else {
+        el.textContent = 'No baseline (diff = all edits)';
+        el.style.color = '#e94560';
+    }
+}
+
 function _snapshotBaseline() {
     // Deep-copy current state as the new baseline
     baseline = {
@@ -3176,6 +3512,496 @@ function exportFullMap() {
         const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
         _snapshotBaseline();
         showToast(`Full map exported: ${totalTiles.toLocaleString()} tiles (${sizeMB} MB). Baseline updated.`);
+    }, 50);
+}
+
+function exportFullMap() {
+    if (!terrainReady) { showToast('Terrain not loaded yet', true); return; }
+    const author = document.getElementById('author-name').value || 'Anonymous';
+    showToast('Building full map export... this may take a moment');
+
+    // Use setTimeout so the toast renders before the heavy work
+    setTimeout(() => {
+        const fullMap = {
+            version: 2,
+            type: 'full_map',
+            author,
+            timestamp: new Date().toISOString(),
+            layer_paints: { ground: [], paths: [], buildings: [], objects: [], decor: [] },
+        };
+
+        // 1. Collect all world tile coordinates that have any data
+        //    Sources: terrainGround, terrainOverlay, and all layerPaints
+        const allKeys = new Set();
+
+        // Base terrain keys
+        for (const key in terrainGround) allKeys.add(key);
+        for (const key in terrainOverlay) allKeys.add(key);
+
+        // Paint layer keys
+        for (const layerDef of PAINT_LAYERS) {
+            for (const key in layerPaints[layerDef.id]) allKeys.add(key);
+        }
+
+        // 2. For each tile, resolve final state per layer
+        let groundCount = 0, upperCount = 0;
+
+        for (const key of allKeys) {
+            const [tx, ty] = key.split(',').map(Number);
+
+            // Ground layer: paint override > overlay > base
+            const groundPaint = layerPaints.ground[key];
+            let groundTile;
+            if (groundPaint !== undefined) {
+                groundTile = groundPaint;
+            } else {
+                // Base terrain: overlay on top of ground
+                const overlay = terrainOverlay ? terrainOverlay[key] : undefined;
+                const base = terrainGround ? terrainGround[key] : undefined;
+                if (overlay !== undefined && overlay >= 0) {
+                    // Overlay replaces ground visually
+                    groundTile = overlay;
+                } else if (base !== undefined) {
+                    groundTile = base;
+                } else {
+                    groundTile = -1;
+                }
+            }
+            if (groundTile !== undefined && groundTile >= 0) {
+                fullMap.layer_paints.ground.push([tx, ty, groundTile]);
+                groundCount++;
+            }
+
+            // Upper layers: just emit paint data as-is
+            for (let li = 1; li < PAINT_LAYERS.length; li++) {
+                const lid = PAINT_LAYERS[li].id;
+                const v = layerPaints[lid][key];
+                if (v !== undefined && v >= 0) {
+                    fullMap.layer_paints[lid].push([tx, ty, v]);
+                    upperCount++;
+                }
+            }
+        }
+
+        // Remove empty layers
+        for (const lid in fullMap.layer_paints) {
+            if (fullMap.layer_paints[lid].length === 0) delete fullMap.layer_paints[lid];
+        }
+
+        // 3. Include all other metadata
+        if (Object.keys(npcMoves).length) fullMap.npc_moves = npcMoves;
+        const fmEnemySpawns = customAreas.filter(a => a.type === 'enemy_spawn').map(a => ({name: a.name, x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2}));
+        const fmOtherAreas = customAreas.filter(a => a.type !== 'enemy_spawn');
+        if (fmOtherAreas.length) fullMap.custom_areas = fmOtherAreas;
+        if (fmEnemySpawns.length) fullMap.enemy_spawns = fmEnemySpawns;
+        if (Object.keys(zoneOverrides).length) fullMap.zone_overrides = zoneOverrides;
+        if (Object.keys(npcDialogueOverrides).length) fullMap.npc_dialogue = npcDialogueOverrides;
+        if (playerSpawn) fullMap.player_spawn = playerSpawn;
+
+        // Zone/NPC data for reference
+        const zoneData = {};
+        for (const z of zones) {
+            const zd = zonesMap[z.id];
+            if (!zd) continue;
+            zoneData[z.id] = {
+                zone_name: z.zone_name,
+                baked_offset: z.baked_offset,
+                baked_scale: z.baked_scale,
+                width: z.width, height: z.height,
+                tileset: z.tileset,
+                npcs: (zd.npcs || []).map((npc, idx) => {
+                    const pos = getNpcPos(z.id, idx, npc);
+                    return { name: npc.name || npc.id, type: npc.type, x: pos.x, y: pos.y, tile: npc.tile || 0 };
+                }),
+            };
+        }
+        fullMap.zones = zoneData;
+
+        // Annotations and ideas
+        const anns = {};
+        for (const [zid, a] of Object.entries(annotations)) {
+            if (a.length) anns[zid] = a;
+        }
+        if (Object.keys(anns).length) fullMap.annotations = anns;
+        const ideaKeys = ['npcs','dungeons','quests','general'];
+        const ideas = {};
+        for (const key of ideaKeys) {
+            if (savedIdeas[key] && savedIdeas[key].trim()) ideas[key] = savedIdeas[key].trim();
+        }
+        if (Object.keys(ideas).length) fullMap.ideas = ideas;
+
+        const totalTiles = groundCount + upperCount;
+        const blob = new Blob([JSON.stringify(fullMap)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `fullmap_${author.replace(/\s+/g,'_')}_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+        _snapshotBaseline();
+        showToast(`Full map exported: ${totalTiles.toLocaleString()} tiles (${sizeMB} MB). Baseline updated.`);
+    }, 50);
+}
+
+function exportFullMap() {
+    if (!terrainReady) { showToast('Terrain not loaded yet', true); return; }
+    const author = document.getElementById('author-name').value || 'Anonymous';
+    showToast('Building full map export... this may take a moment');
+
+    setTimeout(() => {
+        const fullMap = {
+            version: 2,
+            type: 'full_map',
+            author,
+            timestamp: new Date().toISOString(),
+            layer_paints: { ground: [], paths: [], buildings: [], objects: [], decor: [] },
+        };
+
+        // Collect all world tile coordinates from all sources
+        const allKeys = new Set();
+        for (const key in terrainGround) allKeys.add(key);
+        for (const key in terrainOverlay) allKeys.add(key);
+        for (const layerDef of PAINT_LAYERS) {
+            for (const key in layerPaints[layerDef.id]) allKeys.add(key);
+        }
+
+        let groundCount = 0, upperCount = 0;
+
+        for (const key of allKeys) {
+            const [tx, ty] = key.split(',').map(Number);
+
+            // Ground: paint override > overlay > base terrain
+            const groundPaint = layerPaints.ground[key];
+            let groundTile;
+            if (groundPaint !== undefined) {
+                groundTile = groundPaint;
+            } else {
+                const overlay = terrainOverlay ? terrainOverlay[key] : undefined;
+                const base = terrainGround ? terrainGround[key] : undefined;
+                if (overlay !== undefined && overlay >= 0) {
+                    groundTile = overlay;
+                } else if (base !== undefined) {
+                    groundTile = base;
+                } else {
+                    groundTile = -1;
+                }
+            }
+            if (groundTile !== undefined && groundTile >= 0) {
+                fullMap.layer_paints.ground.push([tx, ty, groundTile]);
+                groundCount++;
+            }
+
+            // Upper layers: emit paint data
+            for (let li = 1; li < PAINT_LAYERS.length; li++) {
+                const lid = PAINT_LAYERS[li].id;
+                const v = layerPaints[lid][key];
+                if (v !== undefined && v >= 0) {
+                    fullMap.layer_paints[lid].push([tx, ty, v]);
+                    upperCount++;
+                }
+            }
+        }
+
+        // Remove empty layers
+        for (const lid in fullMap.layer_paints) {
+            if (fullMap.layer_paints[lid].length === 0) delete fullMap.layer_paints[lid];
+        }
+
+        // Include all metadata
+        if (Object.keys(npcMoves).length) fullMap.npc_moves = npcMoves;
+        const fmEnemySpawns = customAreas.filter(a => a.type === 'enemy_spawn').map(a => ({name: a.name, x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2}));
+        const fmOtherAreas = customAreas.filter(a => a.type !== 'enemy_spawn');
+        if (fmOtherAreas.length) fullMap.custom_areas = fmOtherAreas;
+        if (fmEnemySpawns.length) fullMap.enemy_spawns = fmEnemySpawns;
+        if (Object.keys(zoneOverrides).length) fullMap.zone_overrides = zoneOverrides;
+        if (Object.keys(npcDialogueOverrides).length) fullMap.npc_dialogue = npcDialogueOverrides;
+        if (playerSpawn) fullMap.player_spawn = playerSpawn;
+        if (waypoints.length) fullMap.waypoints = waypoints;
+
+        // Zone + NPC data
+        const zoneData = {};
+        for (const z of zones) {
+            const zd = zonesMap[z.id];
+            if (!zd) continue;
+            zoneData[z.id] = {
+                zone_name: z.zone_name,
+                baked_offset: z.baked_offset,
+                baked_scale: z.baked_scale,
+                width: z.width, height: z.height,
+                tileset: z.tileset,
+                npcs: (zd.npcs || []).map((npc, idx) => {
+                    const pos = getNpcPos(z.id, idx, npc);
+                    return { name: npc.name || npc.id, type: npc.type, x: pos.x, y: pos.y, tile: npc.tile || 0 };
+                }),
+            };
+        }
+        fullMap.zones = zoneData;
+
+        // Annotations and ideas
+        const anns = {};
+        for (const [zid, a] of Object.entries(annotations)) {
+            if (a.length) anns[zid] = a;
+        }
+        if (Object.keys(anns).length) fullMap.annotations = anns;
+        const ideas = {};
+        for (const key of ['npcs','dungeons','quests','general']) {
+            if (savedIdeas[key] && savedIdeas[key].trim()) ideas[key] = savedIdeas[key].trim();
+        }
+        if (Object.keys(ideas).length) fullMap.ideas = ideas;
+
+        const totalTiles = groundCount + upperCount;
+        const blob = new Blob([JSON.stringify(fullMap)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `fullmap_${author.replace(/\s+/g,'_')}_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+        _snapshotBaseline();
+        showToast(`Full map exported: ${totalTiles.toLocaleString()} tiles (${sizeMB} MB). Baseline updated.`);
+    }, 50);
+}
+
+function exportFullMap() {
+    if (!terrainReady) { showToast('Terrain not loaded yet', true); return; }
+    const author = document.getElementById('author-name').value || 'Anonymous';
+    showToast('Building full map export... this may take a moment');
+
+    // Use setTimeout so the toast renders before the heavy work
+    setTimeout(() => {
+        const fullMap = {
+            version: 2,
+            type: 'full_map',
+            author,
+            timestamp: new Date().toISOString(),
+            layer_paints: { ground: [], paths: [], buildings: [], objects: [], decor: [] },
+        };
+
+        // 1. Collect all world tile coordinates that have any data
+        //    Sources: terrainGround, terrainOverlay, and all layerPaints
+        const allKeys = new Set();
+
+        // Base terrain keys
+        for (const key in terrainGround) allKeys.add(key);
+        for (const key in terrainOverlay) allKeys.add(key);
+
+        // Paint layer keys
+        for (const layerDef of PAINT_LAYERS) {
+            for (const key in layerPaints[layerDef.id]) allKeys.add(key);
+        }
+
+        // 2. For each tile, resolve final state per layer
+        let groundCount = 0, upperCount = 0;
+
+        for (const key of allKeys) {
+            const [tx, ty] = key.split(',').map(Number);
+
+            // Ground layer: paint override > overlay > base
+            const groundPaint = layerPaints.ground[key];
+            let groundTile;
+            if (groundPaint !== undefined) {
+                groundTile = groundPaint;
+            } else {
+                // Base terrain: overlay on top of ground
+                const overlay = terrainOverlay ? terrainOverlay[key] : undefined;
+                const base = terrainGround ? terrainGround[key] : undefined;
+                if (overlay !== undefined && overlay >= 0) {
+                    // Overlay replaces ground visually
+                    groundTile = overlay;
+                } else if (base !== undefined) {
+                    groundTile = base;
+                } else {
+                    groundTile = -1;
+                }
+            }
+            if (groundTile !== undefined && groundTile >= 0) {
+                fullMap.layer_paints.ground.push([tx, ty, groundTile]);
+                groundCount++;
+            }
+
+            // Upper layers: just emit paint data as-is
+            for (let li = 1; li < PAINT_LAYERS.length; li++) {
+                const lid = PAINT_LAYERS[li].id;
+                const v = layerPaints[lid][key];
+                if (v !== undefined && v >= 0) {
+                    fullMap.layer_paints[lid].push([tx, ty, v]);
+                    upperCount++;
+                }
+            }
+        }
+
+        // Remove empty layers
+        for (const lid in fullMap.layer_paints) {
+            if (fullMap.layer_paints[lid].length === 0) delete fullMap.layer_paints[lid];
+        }
+
+        // 3. Include all other metadata
+        if (Object.keys(npcMoves).length) fullMap.npc_moves = npcMoves;
+        if (customAreas.length) fullMap.custom_areas = customAreas;
+        if (Object.keys(zoneOverrides).length) fullMap.zone_overrides = zoneOverrides;
+        if (Object.keys(npcDialogueOverrides).length) fullMap.npc_dialogue = npcDialogueOverrides;
+        if (playerSpawn) fullMap.player_spawn = playerSpawn;
+
+        // Zone/NPC data for reference
+        const zoneData = {};
+        for (const z of zones) {
+            const zd = zonesMap[z.id];
+            if (!zd) continue;
+            zoneData[z.id] = {
+                zone_name: z.zone_name,
+                baked_offset: z.baked_offset,
+                baked_scale: z.baked_scale,
+                width: z.width, height: z.height,
+                tileset: z.tileset,
+                npcs: (zd.npcs || []).map((npc, idx) => {
+                    const pos = getNpcPos(z.id, idx, npc);
+                    return { name: npc.name || npc.id, type: npc.type, x: pos.x, y: pos.y, tile: npc.tile || 0 };
+                }),
+            };
+        }
+        fullMap.zones = zoneData;
+
+        // Annotations and ideas
+        const anns = {};
+        for (const [zid, a] of Object.entries(annotations)) {
+            if (a.length) anns[zid] = a;
+        }
+        if (Object.keys(anns).length) fullMap.annotations = anns;
+        const ideaKeys = ['npcs','dungeons','quests','general'];
+        const ideas = {};
+        for (const key of ideaKeys) {
+            if (savedIdeas[key] && savedIdeas[key].trim()) ideas[key] = savedIdeas[key].trim();
+        }
+        if (Object.keys(ideas).length) fullMap.ideas = ideas;
+
+        const totalTiles = groundCount + upperCount;
+        const blob = new Blob([JSON.stringify(fullMap)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `fullmap_${author.replace(/\s+/g,'_')}_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+        showToast(`Full map exported: ${totalTiles.toLocaleString()} tiles (${sizeMB} MB)`);
+    }, 50);
+}
+
+function exportFullMap() {
+    if (!terrainReady) { showToast('Terrain not loaded yet', true); return; }
+    const author = document.getElementById('author-name').value || 'Anonymous';
+    showToast('Building full map export... this may take a moment');
+
+    setTimeout(() => {
+        const fullMap = {
+            version: 2,
+            type: 'full_map',
+            author,
+            timestamp: new Date().toISOString(),
+            layer_paints: { ground: [], paths: [], buildings: [], objects: [], decor: [] },
+        };
+
+        // Collect all world tile coordinates from all sources
+        const allKeys = new Set();
+        for (const key in terrainGround) allKeys.add(key);
+        for (const key in terrainOverlay) allKeys.add(key);
+        for (const layerDef of PAINT_LAYERS) {
+            for (const key in layerPaints[layerDef.id]) allKeys.add(key);
+        }
+
+        let groundCount = 0, upperCount = 0;
+
+        for (const key of allKeys) {
+            const [tx, ty] = key.split(',').map(Number);
+
+            // Ground: paint override > overlay > base terrain
+            const groundPaint = layerPaints.ground[key];
+            let groundTile;
+            if (groundPaint !== undefined) {
+                groundTile = groundPaint;
+            } else {
+                const overlay = terrainOverlay ? terrainOverlay[key] : undefined;
+                const base = terrainGround ? terrainGround[key] : undefined;
+                if (overlay !== undefined && overlay >= 0) {
+                    groundTile = overlay;
+                } else if (base !== undefined) {
+                    groundTile = base;
+                } else {
+                    groundTile = -1;
+                }
+            }
+            if (groundTile !== undefined && groundTile >= 0) {
+                fullMap.layer_paints.ground.push([tx, ty, groundTile]);
+                groundCount++;
+            }
+
+            // Upper layers: emit paint data
+            for (let li = 1; li < PAINT_LAYERS.length; li++) {
+                const lid = PAINT_LAYERS[li].id;
+                const v = layerPaints[lid][key];
+                if (v !== undefined && v >= 0) {
+                    fullMap.layer_paints[lid].push([tx, ty, v]);
+                    upperCount++;
+                }
+            }
+        }
+
+        // Remove empty layers
+        for (const lid in fullMap.layer_paints) {
+            if (fullMap.layer_paints[lid].length === 0) delete fullMap.layer_paints[lid];
+        }
+
+        // Include all metadata
+        if (Object.keys(npcMoves).length) fullMap.npc_moves = npcMoves;
+        if (customAreas.length) fullMap.custom_areas = customAreas;
+        if (Object.keys(zoneOverrides).length) fullMap.zone_overrides = zoneOverrides;
+        if (Object.keys(npcDialogueOverrides).length) fullMap.npc_dialogue = npcDialogueOverrides;
+        if (playerSpawn) fullMap.player_spawn = playerSpawn;
+        if (waypoints.length) fullMap.waypoints = waypoints;
+
+        // Zone + NPC data
+        const zoneData = {};
+        for (const z of zones) {
+            const zd = zonesMap[z.id];
+            if (!zd) continue;
+            zoneData[z.id] = {
+                zone_name: z.zone_name,
+                baked_offset: z.baked_offset,
+                baked_scale: z.baked_scale,
+                width: z.width, height: z.height,
+                tileset: z.tileset,
+                npcs: (zd.npcs || []).map((npc, idx) => {
+                    const pos = getNpcPos(z.id, idx, npc);
+                    return { name: npc.name || npc.id, type: npc.type, x: pos.x, y: pos.y, tile: npc.tile || 0 };
+                }),
+            };
+        }
+        fullMap.zones = zoneData;
+
+        // Annotations and ideas
+        const anns = {};
+        for (const [zid, a] of Object.entries(annotations)) {
+            if (a.length) anns[zid] = a;
+        }
+        if (Object.keys(anns).length) fullMap.annotations = anns;
+        const ideas = {};
+        for (const key of ['npcs','dungeons','quests','general']) {
+            if (savedIdeas[key] && savedIdeas[key].trim()) ideas[key] = savedIdeas[key].trim();
+        }
+        if (Object.keys(ideas).length) fullMap.ideas = ideas;
+
+        const totalTiles = groundCount + upperCount;
+        const blob = new Blob([JSON.stringify(fullMap)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `fullmap_${author.replace(/\s+/g,'_')}_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+        showToast(`Full map exported: ${totalTiles.toLocaleString()} tiles (${sizeMB} MB)`);
     }, 50);
 }
 

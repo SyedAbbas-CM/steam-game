@@ -31,7 +31,6 @@ func _import_all() -> void:
 		var content = file.get_as_text()
 		file.close()
 
-		var quest = _parse_quest(content, qf)
 		if quest:
 			var out_path = OUTPUT_DIR + qf + ".tres"
 			var err = ResourceSaver.save(quest, out_path)
@@ -119,7 +118,6 @@ func _parse_quest(content: String, filename: String) -> QuestDefinition:
 
 func _parse_commands(content: String) -> Array:
 	var commands: Array = []
-	var pos = 0
 
 	while pos < content.length():
 		# Skip whitespace
@@ -149,15 +147,12 @@ func _parse_commands(content: String) -> Array:
 		var tag_name = content.substr(pos, tag_name_end - pos)
 
 		# Find end of opening tag
-		var tag_end = content.find(">", tag_name_end)
 		if tag_end < 0:
 			break
 		var full_tag = content.substr(tag_start, tag_end - tag_start + 1)
-		var self_closing = full_tag.ends_with("/>")
 
 		match tag_name:
 			"showDialog":
-				var cmd: Dictionary = {
 					"cmd": "showDialog",
 					"name": _get_attr(full_tag, "name"),
 					"portrait": _get_attr_int(full_tag, "portrait", 0),
@@ -168,7 +163,6 @@ func _parse_commands(content: String) -> Array:
 					# Parse options inside showDialog
 					var dialog_close = _find_matching_close(content, tag_end + 1, "showDialog")
 					if dialog_close >= 0:
-						var inner = content.substr(tag_end + 1, dialog_close - tag_end - 1)
 						cmd["options"] = _parse_options(inner)
 						pos = dialog_close + 13  # len("</showDialog>")
 					else:
@@ -188,7 +182,6 @@ func _parse_commands(content: String) -> Array:
 				if not self_closing:
 					var if_close = _find_matching_close(content, tag_end + 1, tag_name)
 					if if_close >= 0:
-						var inner = content.substr(tag_end + 1, if_close - tag_end - 1)
 						cmd["script"] = _parse_commands(inner)
 						pos = if_close + tag_name.length() + 3
 					else:
@@ -263,7 +256,6 @@ func _parse_commands(content: String) -> Array:
 
 func _parse_options(content: String) -> Array:
 	var options: Array = []
-	var pos = 0
 
 	while true:
 		var opt_start = content.find("<option", pos)

@@ -13,9 +13,11 @@ const BLINK_INTERVAL = 0.15
 
 var _blink_count: int = 0
 var _floor_atlas: Vector2i  # original floor tile to restore during blink
+var abs_pos: Vector2i
 
 func _ready() -> void:
 	super._ready()
+	abs_pos = origin + tile_pos
 
 func get_damage() -> int:
 	return 0
@@ -25,8 +27,7 @@ func trigger_remote() -> void:
 		return
 	_triggered = true
 	set_physics_process(false)
-	var abs_pos = origin + tile_pos
-	var atlas = floor_layer.get_cell_atlas_coords(abs_pos)
+	var atlas = floor_layer.get_cell_atlas_coords(abs_pos) if floor_layer else Vector2i(-1, -1)
 	_floor_atlas = atlas if atlas != Vector2i(-1, -1) else Vector2i(5, 0)
 	_start_blink()
 
@@ -39,7 +40,6 @@ func _physics_process(_delta: float) -> void:
 			_triggered = true
 			set_physics_process(false)
 			# Remember the original floor tile for blinking
-			var abs_pos = origin + tile_pos
 			var atlas = floor_layer.get_cell_atlas_coords(abs_pos)
 			_floor_atlas = atlas if atlas != Vector2i(-1, -1) else Vector2i(5, 0)
 			_start_blink()
@@ -56,7 +56,6 @@ func _start_blink() -> void:
 
 func _on_blink_tick(timer: Timer) -> void:
 	_blink_count += 1
-	var abs_pos = origin + tile_pos
 	if _blink_count % 2 == 1:
 		# Show cracked/warning look: erase floor, show red-tinted deco
 		floor_layer.erase_cell(abs_pos)
@@ -74,7 +73,6 @@ func _on_blink_tick(timer: Timer) -> void:
 func _collapse() -> void:
 	_play_sfx("boom_b", -4.0, 0.1)
 
-	var abs_pos = origin + tile_pos
 	deco_layer.erase_cell(abs_pos)
 	floor_layer.erase_cell(abs_pos)
 
@@ -90,7 +88,7 @@ func _collapse() -> void:
 		if max_hp and max_hp > 0:
 			var collapse_damage = int(max_hp * 0.4)
 			if player.has_method("take_damage"):
-				player.take_damage(collapse_damage)
+				player.take_damage(collapse_damage, Vector2.INF, false, false, CombatTypes.DamageType.TRUE)
 
 	if has_liquid and liquid_tiles.size() > 0:
 		var liq_tile = liquid_tiles[randi() % liquid_tiles.size()]

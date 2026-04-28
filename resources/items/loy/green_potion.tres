@@ -4,11 +4,11 @@
 
 [resource]
 script = ExtResource("1")
-item_name = "Green Potion"
+item_name = "Stamina Potion"
 loy_tile_index = 85
-description = "Regenerates some magical charge (+12C)"
+description = "A vial of green liquid (+40 Stamina)"
 slot_type = 10
 rarity = 0
-buy_price = 400
-sell_value = 100
-heal_mp = 12
+buy_price = 15
+sell_value = 4
+use_effect = "restore_stamina_partial"

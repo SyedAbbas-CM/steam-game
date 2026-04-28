@@ -93,6 +93,7 @@ static func _paint_throne_room(dm, origin: Vector2i, mask: Array,
 	var h = mask.size()
 	var cx = zx + zw / 2
 	var color = _random_carpet_color()
+	var gold_tiles: Array = [DecoTiles.DECO_GOLD, DecoTiles.DECO_GOLD_LARGE]
 
 	var carpet_left = maxi(cx - 3, zx + 1)
 	var carpet_right = mini(cx + 3, zx + zw - 2)
@@ -119,7 +120,6 @@ static func _paint_throne_room(dm, origin: Vector2i, mask: Array,
 	_place_brazier(dm, origin, mask, w, h, cx - 4, throne_y + 1, placed)
 	_place_brazier(dm, origin, mask, w, h, cx + 4, throne_y + 1, placed)
 
-	var gold_tiles: Array = [DecoTiles.DECO_GOLD, DecoTiles.DECO_GOLD_LARGE, DecoTiles.DECO_GOLD_VERY_LARGE]
 	_scatter_items(dm, origin, mask, w, h, zx, zy + 3, zw, zh - 4, gold_tiles, randi_range(2, 5), placed)
 
 # =========================================================================
@@ -131,7 +131,8 @@ static func _paint_chapel(dm, origin: Vector2i, mask: Array,
 	var h = mask.size()
 	var cx = zx + zw / 2
 	var color = _random_carpet_color()
-	var mirror = _mirrored()
+	var left_x = zx + 2
+	var right_x = zx + zw - 2
 
 	_paint_carpet(dm, origin, mask, w, h, cx - 1, zy + 1, cx + 1, zy + zh - 2, color)
 
@@ -146,8 +147,6 @@ static func _paint_chapel(dm, origin: Vector2i, mask: Array,
 		var py = altar_y + 3 + row_i * 2
 		if py >= zy + zh - 2:
 			break
-		var left_x = cx - 3 if not mirror else cx - 4
-		var right_x = cx + 3 if not mirror else cx + 4
 		_place(dm, origin, mask, w, h, left_x, py, DecoTiles.DECO_CHAIR_RIGHT, placed)
 		_place(dm, origin, mask, w, h, left_x + 1, py, DecoTiles.DECO_BENCH, placed)
 		_place(dm, origin, mask, w, h, right_x - 1, py, DecoTiles.DECO_BENCH, placed)
@@ -371,12 +370,12 @@ static func _paint_treasure_vault(dm, origin: Vector2i, mask: Array,
 # =========================================================================
 static func _paint_barracks(dm, origin: Vector2i, mask: Array,
 		zx: int, zy: int, zw: int, zh: int, placed: Dictionary) -> void:
+	var mirror = _mirrored()
 	var w = mask[0].size()
 	var h = mask.size()
-	var mirror = _mirrored()
+	var cx = zx + zw / 2
 	var color = _random_carpet_color()
 
-	var cx = zx + zw / 2
 	_paint_carpet(dm, origin, mask, w, h, cx - 1, zy + 1, cx + 1, zy + zh - 2, color)
 
 	var num_beds = randi_range(3, mini(6, (zh - 3) / 2))

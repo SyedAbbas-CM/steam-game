@@ -47,7 +47,7 @@ func _build_ui() -> void:
 
 	# Position in bottom-right, above where the BAG button will be
 	# Panel width: GRID_COLS * SLOT_SIZE + margins = ~200px
-	var panel_w = GRID_COLS * SLOT_SIZE + PANEL_MARGIN * 2 + 16
+	var panel_w = GRID_COLS * SLOT_SIZE + PANEL_MARGIN * 2 + 20
 	_panel.position = Vector2(1920 - panel_w - 14, 1080 - 14)  # will adjust y after content
 	_panel.size = Vector2(panel_w, 0)  # auto-height
 

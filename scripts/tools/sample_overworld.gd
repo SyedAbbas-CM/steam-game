@@ -10,8 +10,13 @@ extends Node2D
 @onready var decorations: TileMapLayer = $Decorations
 @onready var buildings: TileMapLayer = $Buildings
 @onready var fences: TileMapLayer = $Fences
+@export var auto_generate_in_editor: bool = false
 
 func _ready() -> void:
+	if not Engine.is_editor_hint():
+		return
+	if not auto_generate_in_editor:
+		return
 	if ground and ground.get_used_cells().size() == 0:
 		_generate_samples()
 		print("Sample overworld generated! Save (Ctrl+S) to bake.")

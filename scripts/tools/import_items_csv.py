@@ -109,6 +109,10 @@ def build_tres(row, modifiers):
         lines.append(f'weapon_range = {row["weapon_range"]}')
     if row.get('weapon_type'):
         lines.append(f'weapon_type = "{row["weapon_type"]}"')
+    if row.get('weapon_type'):
+        lines.append(f'weapon_type = "{row["weapon_type"]}"')
+    if row.get('weapon_type'):
+        lines.append(f'weapon_type = "{row["weapon_type"]}"')
     if row.get('ability_id'):
         lines.append(f'ability_id = "{row["ability_id"]}"')
     if row.get('heal_hp'):

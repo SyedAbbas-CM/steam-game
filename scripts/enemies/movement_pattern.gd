@@ -38,6 +38,22 @@ enum MoveType {
 @export var dash_cooldown: float = 3.0
 
 @export_group("Kite")
+
+@export_group("Swoop")
+
+@export_group("Teleport")
+
+@export_group("Mirror")
+
+@export_group("Intercept")
+
+@export_group("Elastic")
+
+@export_group("Edge Skater")
+
+@export_group("Bait & Punish")
+
+@export_group("Kite")
 @export var kite_distance: float = 60.0      ## ideal distance to maintain from player
 
 @export_group("Swoop")

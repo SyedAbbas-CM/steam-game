@@ -38,7 +38,6 @@ func _physics_process(delta: float) -> void:
 		if _damage_tick >= DAMAGE_INTERVAL:
 			_damage_tick -= DAMAGE_INTERVAL
 			var damage = get_damage()
-
 			var player = _find_player()
 			if player:
 				_try_flame_hit(player, damage)
@@ -69,9 +68,9 @@ func _try_flame_hit(target: Node2D, damage: int) -> void:
 		if target.has_method("take_damage"):
 			var is_enemy = target.is_in_group("enemy")
 			if is_enemy:
-				target.take_damage(actual_damage, false)  # trap damage — don't reveal player
+				target.take_damage(actual_damage, false, CombatTypes.DamageType.TRUE)
 			else:
-				target.take_damage(actual_damage)
+				target.take_damage(actual_damage, Vector2.INF, false, false, CombatTypes.DamageType.TRUE)
 		if target.is_in_group("player") and "status_manager" in target and target.status_manager:
 			target.status_manager.apply_status("BURNING", 2.0)
 

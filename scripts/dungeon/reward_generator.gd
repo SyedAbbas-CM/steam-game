@@ -3,9 +3,10 @@ extends RefCounted
 
 static func generate_treasure_rewards(floor_num: int) -> Array[Dictionary]:
 	var rewards: Array[Dictionary] = []
+	var gold_amount = 10 + floor_num * 5
+	var potion_count = 2 + floor_num / 2
 
 	# Option 1: Gold
-	var gold_amount = 10 + floor_num * 5
 	rewards.append({
 		"type": "gold",
 		"name": str(gold_amount) + " Gold",
@@ -25,7 +26,6 @@ static func generate_treasure_rewards(floor_num: int) -> Array[Dictionary]:
 	})
 
 	# Option 3: HP Potions
-	var potion_count = 2 + floor_num / 3
 	rewards.append({
 		"type": "hp_potion",
 		"name": str(potion_count) + " HP Potions",

@@ -30,4 +30,4 @@ buy_price = 1176
 sell_value = 294
 bullet_sprite_index = 224
 weapon_range = 4.0
-weapon_type = "staff"
+weapon_type = "wand"

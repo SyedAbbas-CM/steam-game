@@ -32,35 +32,7 @@ start_script = [{
 }]
 events = [{
 "type": "kill",
-"param": "Skeleton",
-"script": [{
-"cmd": "increment",
-"index": "0"
-}]
-}, {
-"type": "kill",
-"param": "Ghost",
-"script": [{
-"cmd": "increment",
-"index": "0"
-}]
-}, {
-"type": "kill",
-"param": "Ghoul",
-"script": [{
-"cmd": "increment",
-"index": "0"
-}]
-}, {
-"type": "kill",
-"param": "Skeleton Archer",
-"script": [{
-"cmd": "increment",
-"index": "0"
-}]
-}, {
-"type": "kill",
-"param": "Zombie",
+"param": "*",
 "script": [{
 "cmd": "increment",
 "index": "0"

@@ -8,7 +8,6 @@ const OUT_DIR = "res://resources/quests/"
 
 func _init() -> void:
 	print("=== Generating The Hollow Tide quest chain ===")
-	var quests = _build_quests()
 	for q in quests:
 		_save_quest(q)
 	print("Done — %d quests written to %s" % [quests.size(), OUT_DIR])
@@ -66,7 +65,6 @@ func _opt(label: String, script: Array = []) -> Dictionary:
 	return {"name": label, "script": script}
 
 func _start_q(id: String = "") -> Dictionary:
-	var d: Dictionary = {"cmd": "startQuest"}
 	if id != "":
 		d["id"] = id
 	return d
@@ -97,7 +95,6 @@ func _if_val(attr: String, compare: int, op: String, script: Array) -> Dictionar
 
 func _if_not(attr: String, compare: int, op: String, script: Array) -> Dictionary:
 	return {"cmd": "ifNot", "attribute": attr, "compare": str(compare), "operation": op, "script": script}
-
 
 # =========================================================================
 func _build_quests() -> Array:

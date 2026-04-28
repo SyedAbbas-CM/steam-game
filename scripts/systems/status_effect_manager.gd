@@ -5,6 +5,12 @@ var active_effects: Array[StatusEffect] = []
 var _player: CharacterBody2D
 var _buffs: Dictionary = {}  # "damage" -> {mult, timer}, "speed" -> {mult, timer}
 
+# CONFUSED: randomized direction, changes every tick
+var confused_direction: Vector2 = Vector2.ZERO
+
+# FEARED: source position to flee from
+var fear_source_pos: Vector2 = Vector2.INF
+
 func setup(player: CharacterBody2D) -> void:
 	_player = player
 
@@ -27,18 +33,28 @@ func get_buff_value(buff_name: String) -> float:
 func get_all_buffs() -> Dictionary:
 	return _buffs
 
-func apply_effect(type: StatusEffect.Type, duration: float, strength: float) -> void:
-	# Tenacity reduces negative status duration
-	var em = _player.get_node_or_null("EquipmentManager") if _player else null
-	if em:
-		var tenacity = em.get_tenacity()
-		if tenacity > 0.0:
-			duration *= (1.0 - tenacity / 100.0)
+func apply_effect(type: StatusEffect.Type, duration: float, strength: float, source: Vector2 = Vector2.INF) -> void:
+	# Tenacity reduces negative status duration (not for buffs like STRENGTHENED)
+	if type != StatusEffect.Type.STRENGTHENED:
+		var em = _player.get_node_or_null("EquipmentManager") if _player else null
+		if em:
+			var tenacity = em.get_tenacity()
+			if tenacity > 0.0:
+				duration *= (1.0 - tenacity / 100.0)
 	for e in active_effects:
 		if e.type == type:
 			e.duration = maxf(e.duration, duration)
+			if type == StatusEffect.Type.FEARED and source != Vector2.INF:
+				e.source_pos = source
+				fear_source_pos = source
 			return
-	active_effects.append(StatusEffect.create(type, duration, strength))
+	var effect = StatusEffect.create(type, duration, strength)
+	if type == StatusEffect.Type.FEARED and source != Vector2.INF:
+		effect.source_pos = source
+		fear_source_pos = source
+	if type == StatusEffect.Type.CONFUSED:
+		confused_direction = Vector2.from_angle(randf() * TAU)
+	active_effects.append(effect)
 	_update_tint()
 
 func remove_all_of_type(type: StatusEffect.Type) -> void:
@@ -51,16 +67,64 @@ func remove_all_of_type(type: StatusEffect.Type) -> void:
 		_update_tint()
 
 func remove_all_negative() -> void:
-	# Remove all negative status effects (BURNING, POISONED, SLOWED)
 	var had_effects := active_effects.size() > 0
-	active_effects.clear()
+	var kept: Array[StatusEffect] = []
+	for e in active_effects:
+		if e.type == StatusEffect.Type.STRENGTHENED:
+			kept.append(e)
+	active_effects = kept
 	if had_effects:
 		_update_tint()
 
+# --- Query helpers ---
+
+func is_stunned() -> bool:
+	for e in active_effects:
+		if e.type == StatusEffect.Type.STUNNED:
+			return true
+	return false
+
+func is_frozen() -> bool:
+	for e in active_effects:
+		if e.type == StatusEffect.Type.FROZEN:
+			return true
+	return false
+
+func is_confused() -> bool:
+	for e in active_effects:
+		if e.type == StatusEffect.Type.CONFUSED:
+			return true
+	return false
+
+func is_feared() -> bool:
+	for e in active_effects:
+		if e.type == StatusEffect.Type.FEARED:
+			return true
+	return false
+
 func get_speed_multiplier() -> float:
 	for e in active_effects:
+		if e.type == StatusEffect.Type.STUNNED or e.type == StatusEffect.Type.FROZEN:
+			return 0.0
 		if e.type == StatusEffect.Type.SLOWED:
 			return e.strength
+		if e.type == StatusEffect.Type.FEARED:
+			return 1.5  # faster flee
+	return 1.0
+
+func get_damage_multiplier() -> float:
+	var mult := 1.0
+	for e in active_effects:
+		if e.type == StatusEffect.Type.WEAKENED:
+			mult *= 0.5
+		elif e.type == StatusEffect.Type.STRENGTHENED:
+			mult *= 1.5
+	return mult
+
+func get_incoming_damage_multiplier() -> float:
+	for e in active_effects:
+		if e.type == StatusEffect.Type.FROZEN:
+			return 1.5  # +50% damage taken while frozen
 	return 1.0
 
 func _process(delta: float) -> void:
@@ -93,8 +157,12 @@ func _process(delta: float) -> void:
 		_update_tint()
 
 func _apply_tick(effect: StatusEffect) -> void:
-	if _player and _player.has_method("take_damage"):
-		_player.take_damage(int(effect.strength))
+	match effect.type:
+		StatusEffect.Type.BURNING, StatusEffect.Type.POISONED:
+			if _player and _player.has_method("take_damage"):
+				_player.take_damage(int(effect.strength), Vector2.INF, false, false, CombatTypes.DamageType.TRUE)
+		StatusEffect.Type.CONFUSED:
+			confused_direction = Vector2.from_angle(randf() * TAU)
 
 func _update_tint() -> void:
 	if not _player:
@@ -105,6 +173,15 @@ func _update_tint() -> void:
 	if active_effects.is_empty():
 		sprite.modulate = Color.WHITE
 		return
+	# Priority order: STUNNED > FROZEN > BURNING > POISONED > FEARED > CONFUSED > SLOWED > WEAKENED > STRENGTHENED
+	for e in active_effects:
+		match e.type:
+			StatusEffect.Type.STUNNED:
+				sprite.modulate = Color(1.0, 1.0, 0.4)
+				return
+			StatusEffect.Type.FROZEN:
+				sprite.modulate = Color(0.5, 0.9, 1.0)
+				return
 	for e in active_effects:
 		match e.type:
 			StatusEffect.Type.BURNING:
@@ -113,6 +190,18 @@ func _update_tint() -> void:
 			StatusEffect.Type.POISONED:
 				sprite.modulate = Color(0.5, 1.0, 0.3)
 				return
+			StatusEffect.Type.FEARED:
+				sprite.modulate = Color(0.6, 0.2, 0.8)
+				return
+			StatusEffect.Type.CONFUSED:
+				sprite.modulate = Color(0.8, 0.4, 1.0)
+				return
 			StatusEffect.Type.SLOWED:
 				sprite.modulate = Color(0.4, 0.6, 1.0)
+				return
+			StatusEffect.Type.WEAKENED:
+				sprite.modulate = Color(0.6, 0.6, 0.6)
+				return
+			StatusEffect.Type.STRENGTHENED:
+				sprite.modulate = Color(1.0, 0.8, 0.3)
 				return

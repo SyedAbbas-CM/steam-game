@@ -119,7 +119,7 @@ func _ready() -> void:
 
 	# Unit rows
 	for type_name in ["infantry", "archer", "heavy_infantry", "cavalry", "mage", "heavy_cavalry"]:
-		var row := _create_hire_row(type_name)
+		var row = _create_hire_row(type_name)
 		vbox.add_child(row)
 
 	# Separator
@@ -231,7 +231,7 @@ func _get_hired_fighters() -> Dictionary:
 	return {}
 
 func _get_total_hired() -> int:
-	var hired := _get_hired_fighters()
+	var hired = _get_hired_fighters()
 	var total := 0
 	for type_name in hired:
 		total += int(hired[type_name])
@@ -249,8 +249,8 @@ func _refresh() -> void:
 
 	var total := _get_total_hired()
 	_total_label.text = "Hired: %d / %d" % [total, MAX_HIRED]
+	var hired = _get_hired_fighters()
 
-	var hired := _get_hired_fighters()
 	for type_name in _rows:
 		var count: int = int(hired.get(type_name, 0))
 		_rows[type_name]["count_label"].text = "x%d" % count
@@ -272,6 +272,9 @@ func _on_hire(type_name: String) -> void:
 		return
 	var hired := _get_hired_fighters()
 	hired[type_name] = int(hired.get(type_name, 0)) + 1
+	if gm.save_data:
+		gm.save_data.army_state["hired_fighters"] = hired
+		gm.save_data.save_to_slot()
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("buy", -4.0)
@@ -288,6 +291,9 @@ func _on_dismiss(type_name: String) -> void:
 	var gm = get_node_or_null("/root/GameManager")
 	if gm:
 		gm.add_gold(refund)
+		if gm.save_data:
+			gm.save_data.army_state["hired_fighters"] = hired
+			gm.save_data.save_to_slot()
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("sell", -4.0)

@@ -272,7 +272,43 @@ func _build_action_buttons() -> void:
 	_btn_quest.pressed.connect(_on_log_pressed)
 	panel.add_child(_btn_quest)
 
+	# Debug gold button — gives 20k gold for testing
+	var dbg_btn := Button.new()
+	dbg_btn.text = "+20k G"
+	dbg_btn.size = Vector2(100, 36)
+	dbg_btn.position = Vector2(1920 - 120 - MARGIN, 1080 - 260 - MARGIN)
+	dbg_btn.focus_mode = Control.FOCUS_NONE
+	dbg_btn.add_theme_font_size_override("font_size", 14)
+	var dbg_style := StyleBoxFlat.new()
+	dbg_style.bg_color = Color(0.25, 0.2, 0.05, 0.9)
+	dbg_style.border_color = Color(1.0, 0.8, 0.2)
+	dbg_style.set_border_width_all(2)
+	dbg_style.set_corner_radius_all(4)
+	dbg_btn.add_theme_stylebox_override("normal", dbg_style)
+	dbg_btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	dbg_btn.pressed.connect(_on_debug_gold_pressed)
+	panel.add_child(dbg_btn)
+
 	# Map button removed — world map now only accessible from War Table
+
+func _on_debug_gold_pressed() -> void:
+	var gm = get_node_or_null("/root/GameManager")
+	if gm and gm.save_data:
+		gm.save_data.gold += 20000
+		gm.save_data.save_to_slot()
+		set_gold(gm.save_data.gold)
+		flash_text("+20,000 Gold (DEBUG)", Color(1.0, 0.85, 0.2), 2.0)
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("buy", -4.0)
+		print("DEBUG: Added 20000 gold (total: %d)" % gm.save_data.gold)
+
+func _unhandled_input(event: InputEvent) -> void:
+	# Debug: press G to grant 20k gold
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_G:
+			_on_debug_gold_pressed()
+			get_viewport().set_input_as_handled()
 
 func _create_icon_button(sheet: Texture2D, sprite_index: int, label_text: String, tile_size: int = 32) -> Button:
 	var btn = Button.new()
@@ -572,9 +608,9 @@ func flash_text(text: String, color: Color = Color.RED, duration: float = 1.5) -
 	tween.tween_callback(_flash_label.queue_free)
 
 func set_non_quickbar_visible(vis: bool) -> void:
-	## Hide vitals/info/action buttons but keep quickbar + spell slots visible
+	## Hide/show all HUD elements when inventory opens
 	for child in get_children():
-		if child is Control and child.name != "Quickbar" and child.name != "SpellSlots":
+		if child is Control:
 			child.visible = vis
 
 # --- Signal handlers ---
@@ -661,7 +697,7 @@ func _update_xp(current: int, needed: int) -> void:
 	_xp_bar_fill.size.x = BAR_WIDTH * ratio
 
 func _update_level(level: int) -> void:
-	var power = _player.equipment_manager.get_power_level() if _player and _player.equipment_manager else level * 10
+	var power = _player.level_system.get_power_level() if _player and _player.level_system else level * 10
 	_level_label.text = "Lv.%d  PL:%d" % [level, power]
 
 # --- Quickbar ---
@@ -683,9 +719,9 @@ func _build_quickbar() -> void:
 	add_child(_quickbar_panel)
 
 	# BAG button is at y = 1080 - 220 - MARGIN = 846
-	# Stack 6 slots above it
+	# Stack 6 slots above it, offset up to avoid overlap with BAG/LOG
 	var base_x = 1920 - 94 - MARGIN
-	var bag_top_y = 1080 - 220 - MARGIN
+	var bag_top_y = 1080 - 220 - MARGIN - 100
 	_quickbar_slots.clear()
 
 	for i in range(QUICKBAR_SLOTS):
@@ -723,7 +759,7 @@ func _build_spell_slots() -> void:
 
 	# Stack 6 slots on the LEFT side, matching quickbar positioning on right
 	var base_x = MARGIN
-	var bag_top_y = 1080 - 220 - MARGIN
+	var bag_top_y = 1080 - 220 - MARGIN - 100
 	_spell_slots.clear()
 
 	for i in range(SPELL_SLOTS):

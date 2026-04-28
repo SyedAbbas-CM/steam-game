@@ -25,4 +25,4 @@ buy_price = 313
 sell_value = 78
 bullet_sprite_index = 144
 weapon_range = 2.0
-weapon_type = "spear"
+weapon_type = "halberd"

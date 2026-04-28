@@ -55,16 +55,16 @@ func _get_price_range(base_difficulty: int) -> Vector2i:
 	for tier in PRICE_TIERS:
 		if tier <= base_difficulty and tier >= best_tier:
 			best_tier = tier
-	var range_arr = PRICE_TIERS[best_tier]
+	var range_arr: Array = PRICE_TIERS[best_tier]
 	return Vector2i(range_arr[0], range_arr[1])
 
 func _filter_by_price(items: Array, price_range: Vector2i) -> Array:
 	var filtered: Array = []
 	for item in items:
-		var ei = item as EquipmentItem
+		var ei := item as EquipmentItem
 		if not ei:
 			continue
-		var price = ei.buy_price if ei.buy_price > 0 else 15
+		var price := ei.buy_price if ei.buy_price > 0 else 15
 		if price >= price_range.x and price <= price_range.y:
 			filtered.append(ei)
 	# Always return at least the original list if filter is too aggressive
@@ -84,7 +84,7 @@ func _filter_by_damage_cap(items: Array, cap: int) -> Array:
 		return items
 	var filtered: Array = []
 	for item in items:
-		var ei = item as EquipmentItem
+		var ei := item as EquipmentItem
 		if not ei:
 			continue
 		var dominated = false
@@ -101,7 +101,7 @@ func _filter_by_damage_cap(items: Array, cap: int) -> Array:
 func _filter_equipment_only(items: Array) -> Array:
 	var filtered: Array = []
 	for item in items:
-		var ei = item as EquipmentItem
+		var ei := item as EquipmentItem
 		if not ei:
 			continue
 		# Only weapons, armor, accessories — not consumables/materials
@@ -112,10 +112,10 @@ func _filter_equipment_only(items: Array) -> Array:
 	return filtered
 
 func get_random_items(count: int, floor_num: int, base_difficulty: int = 0) -> Array[EquipmentItem]:
-	var result: Array[EquipmentItem] = []
 	if _all_items.size() == 0:
-		return result
+		return []
 
+	var result: Array[EquipmentItem] = []
 	var price_range = _get_price_range(base_difficulty)
 	var dmg_cap = _get_damage_cap(base_difficulty)
 	var effective = floor_num + base_difficulty
@@ -130,7 +130,7 @@ func get_random_items(count: int, floor_num: int, base_difficulty: int = 0) -> A
 		else:
 			target_rarity = 0
 
-		var pool = _items_by_rarity.get(target_rarity, []) as Array
+		var pool: Array = _items_by_rarity.get(target_rarity, [])
 		if pool.size() == 0:
 			pool = _all_items
 		# Filter pool by area price tier and damage cap
@@ -142,10 +142,10 @@ func get_random_items(count: int, floor_num: int, base_difficulty: int = 0) -> A
 
 func get_random_equipment(count: int, floor_num: int, base_difficulty: int = 0) -> Array[EquipmentItem]:
 	"""Like get_random_items but only returns equipment (no consumables/materials)."""
-	var result: Array[EquipmentItem] = []
 	if _all_items.size() == 0:
-		return result
+		return []
 
+	var result: Array[EquipmentItem] = []
 	var price_range = _get_price_range(base_difficulty)
 	var dmg_cap = _get_damage_cap(base_difficulty)
 	var effective = floor_num + base_difficulty
@@ -160,7 +160,7 @@ func get_random_equipment(count: int, floor_num: int, base_difficulty: int = 0) 
 		else:
 			target_rarity = 0
 
-		var pool = _items_by_rarity.get(target_rarity, []) as Array
+		var pool: Array = _items_by_rarity.get(target_rarity, [])
 		if pool.size() == 0:
 			pool = _all_items
 		pool = _filter_by_price(pool, price_range)
@@ -172,11 +172,11 @@ func get_random_equipment(count: int, floor_num: int, base_difficulty: int = 0) 
 
 func get_boss_items(count: int, floor_num: int, base_difficulty: int = 0) -> Array[EquipmentItem]:
 	"""Boss drops: higher rarity, equipment only, can reach 1-2 tiers above current area."""
-	var result: Array[EquipmentItem] = []
 	if _all_items.size() == 0:
-		return result
+		return []
 
 	# Boss loot extends price range upward by 80% (can drop next-tier gear)
+	var result: Array[EquipmentItem] = []
 	var price_range = _get_price_range(base_difficulty)
 	price_range.y = int(price_range.y * 1.8)
 	var dmg_cap = _get_damage_cap(base_difficulty)
@@ -193,7 +193,7 @@ func get_boss_items(count: int, floor_num: int, base_difficulty: int = 0) -> Arr
 		else:
 			target_rarity = 0
 
-		var pool = _items_by_rarity.get(target_rarity, []) as Array
+		var pool: Array = _items_by_rarity.get(target_rarity, [])
 		if pool.size() == 0:
 			pool = _all_items
 		pool = _filter_by_price(pool, price_range)

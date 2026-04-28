@@ -223,8 +223,8 @@ func _select_item(inv_index: int) -> void:
 		var sep = HSeparator.new()
 		_enchant_options.add_child(sep)
 
-		var rarity_names = ["Common", "Uncommon", "Rare"]
 		var upgrade_cost = 200 if item.rarity == 0 else 1000
+		var rarity_names = ["Common", "Uncommon", "Rare"]
 
 		var hbox = HBoxContainer.new()
 		hbox.add_theme_constant_override("separation", 6)
@@ -263,13 +263,13 @@ func _apply_enchant(inv_index: int, etype: ItemEnchantment.EnchantType, tier: in
 		return
 	if inv_index >= _equipment_manager.inventory.size():
 		return
+	var item = _equipment_manager.inventory[inv_index]
 
 	if not gm.spend_gold(cost):
 		_status_label.text = "Not enough gold!"
 		_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 		return
 
-	var item = _equipment_manager.inventory[inv_index]
 	item.enchantment = ItemEnchantment.create(etype, tier)
 	_equipment_manager.stats_changed.emit()
 

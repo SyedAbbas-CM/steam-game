@@ -22,7 +22,6 @@ func _import_all() -> void:
 		if fname.ends_with(".xml"):
 			var content = FileAccess.get_file_as_string(SCRIPTS_DIR + fname)
 			if content != "":
-				var commands = _parse_script(content)
 				var res = NpcScriptData.new()
 				res.commands = commands
 				var out_name = fname.get_basename()
@@ -38,7 +37,6 @@ func _import_all() -> void:
 
 func _parse_script(content: String) -> Array:
 	# Strip <script> wrapper
-	var inner = content
 	var script_start = content.find("<script>")
 	var script_end = content.find("</script>")
 	if script_start >= 0 and script_end >= 0:
@@ -48,7 +46,6 @@ func _parse_script(content: String) -> Array:
 
 func _parse_commands(content: String) -> Array:
 	var commands: Array = []
-	var pos = 0
 
 	while pos < content.length():
 		while pos < content.length() and content[pos] in [" ", "\t", "\n", "\r"]:
@@ -75,11 +72,9 @@ func _parse_commands(content: String) -> Array:
 		if tag_end < 0:
 			break
 		var full_tag = content.substr(tag_start, tag_end - tag_start + 1)
-		var self_closing = full_tag.ends_with("/>")
 
 		match tag_name:
 			"showDialog":
-				var cmd: Dictionary = {
 					"cmd": "showDialog",
 					"name": _get_attr(full_tag, "name"),
 					"portrait": _get_attr_int(full_tag, "portrait", 0),
@@ -89,7 +84,6 @@ func _parse_commands(content: String) -> Array:
 				if not self_closing:
 					var dialog_close = _find_close(content, tag_end + 1, "showDialog")
 					if dialog_close >= 0:
-						var inner = content.substr(tag_end + 1, dialog_close - tag_end - 1)
 						cmd["options"] = _parse_options(inner)
 						pos = dialog_close + 13
 					else:
@@ -109,7 +103,6 @@ func _parse_commands(content: String) -> Array:
 				if not self_closing:
 					var close = _find_close(content, tag_end + 1, tag_name)
 					if close >= 0:
-						var inner = content.substr(tag_end + 1, close - tag_end - 1)
 						cmd["script"] = _parse_commands(inner)
 						pos = close + tag_name.length() + 3
 					else:
@@ -146,7 +139,6 @@ func _parse_commands(content: String) -> Array:
 
 func _parse_options(content: String) -> Array:
 	var options: Array = []
-	var pos = 0
 	while true:
 		var opt_start = content.find("<option", pos)
 		if opt_start < 0:

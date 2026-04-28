@@ -57,14 +57,37 @@ func update_pattern_for_weapon() -> void:
 			pattern = MeteorPattern.new()
 		"flail":
 			pattern = BoomerangPattern.new()
-		"spear":
+		"spear", "javelin", "halberd":
 			pattern = TridentPattern.new()
-		"throwing":
+		"throwing", "sling":
 			pattern = ScatterPattern.new()
 		"bow":
 			pattern = ParallelPattern.new()
 		"crossbow":
 			pattern = RailgunPattern.new()
+		"wand":
+			pattern = BurstPattern.new()
+		"tome":
+			var nova = NovaPattern.new()
+			nova.inner_count = 4
+			nova.outer_count = 4
+			pattern = nova
+		"greatsword":
+			var p = SpreadPattern.new()
+			p.cooldown_override = 0.8
+			pattern = p
+		"great_axe":
+			var p = ShotgunPattern.new()
+			p.cooldown_override = 0.7
+			pattern = p
+		"whip":
+			pattern = WavePattern.new()
+		"scythe":
+			pattern = CrossPattern.new()
+		"claws":
+			var p = GatlingPattern.new()
+			p.cooldown_override = 0.3
+			pattern = p
 		_:
 			pattern = SpreadPattern.new()
 	_pattern_cache[wtype] = pattern
@@ -101,13 +124,13 @@ func try_shoot(origin: Vector2, aim_direction: Vector2) -> void:
 		if weapon:
 			match weapon.slot_type:
 				EquipmentItem.SlotType.WEAPON_MELEE:
-					sfx.play("swing", -6.0, 0.1)
+					sfx.play("swing", -9.0, 0.1)
 				EquipmentItem.SlotType.WEAPON_RANGED:
-					sfx.play("shoot_a", -6.0, 0.1)
+					sfx.play("shoot_a", -9.0, 0.1)
 				EquipmentItem.SlotType.WEAPON_MAGIC:
-					sfx.play("spell_a", -6.0, 0.1)
+					sfx.play("spell_a", -9.0, 0.1)
 				_:
-					sfx.play("shoot_a", -6.0, 0.1)
+					sfx.play("shoot_a", -9.0, 0.1)
 
 	for data in fire_data:
 		if data["delay"] > 0.0:
@@ -135,6 +158,9 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	var p = get_parent()
 	if p and p.get("status_effects") and p.status_effects.has_method("get_buff_multiplier"):
 		base_damage = int(base_damage * p.status_effects.get_buff_multiplier("damage"))
+	# WEAKENED/STRENGTHENED damage multiplier
+	if p and p.get("status_effects") and p.status_effects.has_method("get_damage_multiplier"):
+		base_damage = int(base_damage * p.status_effects.get_damage_multiplier())
 	# Per-bullet damage split from pattern (e.g. shotgun pellets share total damage)
 	if data.has("damage_mult"):
 		base_damage = maxi(1, int(base_damage * data["damage_mult"]))
@@ -219,4 +245,54 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 			"Malorian Crook":
 				bullet.set_meta("apply_feared", 2.0)
 
+	# Arrow/throwing ammo effects (ranged weapons + throwing/javelin melee)
+	var uses_ammo = weapon and (weapon.slot_type == EquipmentItem.SlotType.WEAPON_RANGED or weapon.weapon_type in ["throwing", "javelin"])
+	if uses_ammo:
+		var ammo = equipment_manager.get_equipped_ammo()
+		if ammo and ammo.quantity > 0 and ammo.arrow_effect != "":
+			_apply_arrow_effects(bullet, ammo)
+			equipment_manager.consume_ammo()
+
 	container.add_child(bullet)
+
+func _apply_arrow_effects(bullet, ammo: EquipmentItem) -> void:
+	# Arrows add +50% bonus damage on top of weapon base
+	bullet.damage = int(ceil(bullet.damage * 1.5))
+	match ammo.arrow_effect:
+		"fire":
+			bullet.set_meta("apply_burning", 5.0)
+			bullet.set_meta("fire_arrow_spread", true)
+			bullet.modulate = Color(1.0, 0.6, 0.2)
+		"freeze":
+			bullet.set_meta("apply_frozen", 3.0)  # 3s full freeze
+			bullet.modulate = Color(0.5, 0.9, 1.0)
+		"explosion":
+			bullet.set_meta("fireball_aoe", true)
+			bullet.set_meta("fireball_aoe_radius", 48.0)  # 6 tiles in dungeon
+			bullet.set_meta("fireball_aoe_dmg_pct", 1.2)  # 120% weapon damage AoE
+			bullet.modulate = Color(1.0, 0.4, 0.1)
+		"poison":
+			bullet.set_meta("apply_poison", 6.0)  # 6s poison, stackable
+			bullet.set_meta("poison_stackable", true)
+			bullet.modulate = Color(0.4, 1.0, 0.3)
+		"lightning":
+			bullet.set_meta("chain_lightning_arrow", true)  # custom chain, not enchant
+			bullet.modulate = Color(0.8, 0.8, 1.0)
+		"slow":
+			bullet.set_meta("apply_slowed", 5.0)  # 5s heavy slow
+			bullet.modulate = Color(0.4, 0.6, 1.0)
+		"throwing_knife":
+			bullet.damage = int(ceil(bullet.damage * 0.87))  # 1.5 * 0.87 ≈ 1.3x total
+			bullet.pierce_count += 1
+		"javelin":
+			bullet.damage = int(ceil(bullet.damage * 1.2))  # 1.5 * 1.2 ≈ 1.8x total
+			bullet.pierce_count += 3
+		"poison_knife":
+			bullet.set_meta("apply_poison", 5.0)
+			bullet.set_meta("poison_stackable", true)
+			bullet.modulate = Color(0.4, 1.0, 0.3)
+		"explosive_javelin":
+			bullet.set_meta("fireball_aoe", true)
+			bullet.set_meta("fireball_aoe_radius", 40.0)
+			bullet.set_meta("fireball_aoe_dmg_pct", 1.0)
+			bullet.modulate = Color(1.0, 0.4, 0.1)

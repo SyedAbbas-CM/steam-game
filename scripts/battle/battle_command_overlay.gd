@@ -38,12 +38,15 @@ var _hold_button: Button
 var _follow_button: Button
 var _scatter_button: Button
 var _defensive_button: Button
+var _split_button: Button
+var _attack_button: Button
 
 # Box/individual selection
 var _selected_units: PackedInt32Array = PackedInt32Array()
 var _drag_start: Vector2 = Vector2.ZERO
 var _dragging: bool = false
 var _drag_rect: Rect2 = Rect2()
+var _last_click_unit: int = -1
 var _selection_draw: Control
 var _last_click_time: float = 0.0
 var _last_click_pos: Vector2 = Vector2.ZERO
@@ -166,6 +169,24 @@ func _build_ui() -> void:
 	_defensive_button.pressed.connect(_on_instant_command.bind(BattleCommander.CommandType.DEFENSIVE))
 	cmd_row2.add_child(_defensive_button)
 
+	# Row 3: SPLIT + ATTACK
+	var cmd_row3 := HBoxContainer.new()
+	vbox.add_child(cmd_row3)
+
+	_split_button = Button.new()
+	_split_button.text = "SPLIT"
+	_split_button.add_theme_font_size_override("font_size", 13)
+	_split_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_split_button.pressed.connect(_on_split_selection)
+	cmd_row3.add_child(_split_button)
+
+	_attack_button = Button.new()
+	_attack_button.text = "ATTACK"
+	_attack_button.add_theme_font_size_override("font_size", 13)
+	_attack_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_attack_button.pressed.connect(_on_instant_command.bind(BattleCommander.CommandType.ATTACK))
+	cmd_row3.add_child(_attack_button)
+
 	# --- FORMATIONS section ---
 	var form_sep := HSeparator.new()
 	vbox.add_child(form_sep)
@@ -247,22 +268,22 @@ func hide_overlay() -> void:
 	_clear_banners()
 
 func _refresh_group_list() -> void:
+	var player_groups = _commander.get_player_groups() if _commander else []
 	for child in _group_list.get_children():
 		child.queue_free()
 	_group_buttons.clear()
 
-	var player_groups := _commander.get_faction_groups(BattleUnitSystem.Faction.BLUE)
 	for g in player_groups:
-		var alive_count := _units.get_group_alive_count(g.id)
+		var alive_count = g.alive_count if "alive_count" in g else g.unit_count
 		if alive_count == 0:
 			continue
+		var type_name = g.type_name if "type_name" in g else str(g.unit_type)
+		var cmd_name = _get_command_display(g.command) if "command" in g else ""
 
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 2)
 
 		var btn := Button.new()
-		var type_name: String = BattleUnitSystem.UnitType.keys()[g.unit_type] if g.unit_type >= 0 else "Custom"
-		var cmd_name := _get_command_display(g.command)
 		btn.text = "%s (%d) %s" % [type_name.capitalize(), alive_count, cmd_name]
 		btn.add_theme_font_size_override("font_size", 13)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -306,7 +327,7 @@ func _on_group_selected(group_id: int) -> void:
 			focus_group.emit(center.x, center.y)
 
 func _on_disband_group(group_id: int) -> void:
-	var grp = _commander.get_group(group_id)
+	var grp = _commander.get_group(group_id) if _commander else null
 	if grp and grp.permanent:
 		_instruction_label.text = "Can't disband unit type groups"
 		return
@@ -321,6 +342,62 @@ func _on_disband_group(group_id: int) -> void:
 	_instruction_label.text = "Group disbanded — units returned"
 	_refresh_group_list()
 	_update_banners()
+
+func _on_split_selection() -> void:
+	## Split selected units out of their current group into a new custom group.
+	## Works with both box-selected loose units AND a selected group (splits the whole group).
+	var units_to_split := PackedInt32Array()
+	if _selected_units.size() > 0:
+		# Loose selection (from box drag) — use those exact unit indices
+		for idx in _selected_units:
+			if idx < _units.count and _units.alive[idx] == 1 and _units.faction[idx] == BattleUnitSystem.Faction.BLUE:
+				units_to_split.append(idx)
+	elif _selected_group_id >= 0:
+		_instruction_label.text = "Box-select a subset first, then SPLIT"
+		return
+	else:
+		_instruction_label.text = "Select units first (box-drag)"
+		return
+
+	if units_to_split.size() < 2:
+		_instruction_label.text = "Need 2+ units to split"
+		return
+
+	# Figure out what unit type dominates the selection for naming
+	var type_counts: Dictionary = {}
+	for idx in units_to_split:
+		var ut := _units.unit_type[idx]
+		type_counts[ut] = type_counts.get(ut, 0) + 1
+	var dominant_type := -1
+	var best_count := 0
+	for ut in type_counts:
+		if type_counts[ut] > best_count:
+			best_count = type_counts[ut]
+			dominant_type = ut
+
+	# Determine if all units come from the same source group
+	var source_groups: Dictionary = {}
+	for idx in units_to_split:
+		var gid := _units.group_id[idx]
+		source_groups[gid] = source_groups.get(gid, 0) + 1
+
+	# Create a new non-permanent group
+	var type_keys := BattleUnitSystem.UnitType.keys()
+	var type_name: String = type_keys[dominant_type] if dominant_type >= 0 and dominant_type < type_keys.size() else "Mixed"
+	var new_group := _commander.create_group("Split_%s" % type_name, BattleUnitSystem.Faction.BLUE, dominant_type if type_counts.size() == 1 else -1, BattleUnitSystem.FormationType.LINE, false)
+
+	# Reassign selected units to the new group
+	for idx in units_to_split:
+		_units.group_id[idx] = new_group.id
+	new_group.initial_size = units_to_split.size()
+
+	# Select the new group
+	_selected_group_id = new_group.id
+	_selected_units.clear()
+	_instruction_label.text = "Split %d units → %s (group %d)" % [units_to_split.size(), new_group.name, new_group.id]
+	_refresh_group_list()
+	_update_banners()
+	print("Player split %d units into new group '%s' (id=%d)" % [units_to_split.size(), new_group.name, new_group.id])
 
 func _on_select_all() -> void:
 	## Select ALL alive blue units as a loose selection
@@ -343,7 +420,7 @@ func _on_instant_command(cmd: int) -> void:
 		command_issued.emit(_selected_group_id, cmd, 0.0, 0.0)
 	elif not _selected_units.is_empty():
 		_issue_command_to_selection(cmd, Vector2.ZERO)
-	var cmd_name := _get_command_display(cmd).trim_prefix("[").trim_suffix("]")
+	var cmd_name := _get_command_display(cmd)
 	_instruction_label.text = "%s issued!" % cmd_name
 	_highlight_active_command(cmd)
 	_refresh_group_list()
@@ -352,7 +429,7 @@ func _on_formation_change(formation_type: int) -> void:
 	if _selected_group_id < 0:
 		_instruction_label.text = "Select a group first!"
 		return
-	var grp = _commander.get_group(_selected_group_id)
+	var grp = _commander.get_group(_selected_group_id) if _commander else null
 	if grp:
 		grp.formation_type = formation_type
 		var fm_keys := BattleUnitSystem.FormationType.keys()
@@ -384,7 +461,8 @@ func _update_banners() -> void:
 		if alive_count == 0:
 			continue
 		var center := _units.get_group_center(g.id)
-		var marker := _create_banner(g, center, g.id == _selected_group_id)
+		var selected: bool = (g.id == _selected_group_id)
+		var marker := _create_banner(g, center, selected, false)
 		_banner_parent.add_child(marker)
 		_banner_markers.append(marker)
 	var enemy_groups := _commander.get_faction_groups(BattleUnitSystem.Faction.RED)
@@ -522,7 +600,7 @@ func _input(event: InputEvent) -> void:
 	# --- RIGHT-CLICK: command (ATK MOVE or MOVE with shift) ---
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 		if has_selection and not _is_on_panel(event.position):
-			var world_pos := _screen_to_world(event.position, camera, viewport)
+			var world_pos := _screen_to_world(event.position, camera)
 			var cmd := BattleCommander.CommandType.MOVE if event.shift_pressed else BattleCommander.CommandType.ATTACK
 			_issue_command_to_selection(cmd, world_pos)
 			get_viewport().set_input_as_handled()
@@ -531,7 +609,7 @@ func _input(event: InputEvent) -> void:
 	# --- CTRL+LEFT-CLICK: add clicked unit to currently selected group ---
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and event.ctrl_pressed:
 		if _selected_group_id >= 0 and not _is_on_panel(event.position):
-			var world_pos := _screen_to_world(event.position, camera, viewport)
+			var world_pos := _screen_to_world(event.position, camera)
 			var clicked := _find_unit_at(world_pos, camera)
 			if clicked >= 0:
 				_units.group_id[clicked] = _selected_group_id
@@ -558,7 +636,7 @@ func _input(event: InputEvent) -> void:
 				_finish_box_selection(camera, viewport)
 			elif _drag_start != Vector2.ZERO:
 				# Single click — always try to select, never command
-				var world_pos := _screen_to_world(event.position, camera, viewport)
+				var world_pos := _screen_to_world(event.position, camera)
 				var clicking_unit := _find_unit_at(world_pos, camera)
 				if clicking_unit >= 0:
 					var now := Time.get_ticks_msec() / 1000.0
@@ -569,7 +647,13 @@ func _input(event: InputEvent) -> void:
 						_try_select_unit_at(event.position, camera, viewport)
 						_last_click_time = now
 						_last_click_pos = event.position
-				# Clicking empty space does nothing — no accidental commands
+				else:
+					# Clicking empty space → deselect
+					_selected_group_id = -1
+					_selected_units.clear()
+					_instruction_label.text = "Select a group above"
+					_refresh_group_list()
+					_update_banners()
 			_dragging = false
 			_drag_rect = Rect2()
 			_drag_start = Vector2.ZERO
@@ -616,9 +700,8 @@ func _try_select_unit_at(screen_pos: Vector2, camera: Camera2D, viewport: Viewpo
 			_refresh_group_list()
 	# If nothing found: do nothing — keep current selection
 
-func _select_nearby_same_type(unit_idx: int) -> void:
-	## Double-click: select all nearby units of the same type within 300px.
-	## Does NOT reassign group_id — just selects them as loose selection.
+func _select_nearby_same_type(unit_idx: int, camera: Camera2D = null, viewport: Viewport = null) -> void:
+	## Double-click: select all nearby units of the same type within 300px
 	var ux := _units.x[unit_idx]
 	var uy := _units.y[unit_idx]
 	var utype := _units.unit_type[unit_idx]
@@ -634,21 +717,11 @@ func _select_nearby_same_type(unit_idx: int) -> void:
 		if dx * dx + dy * dy <= radius * radius:
 			nearby.append(i)
 	if nearby.size() > 0:
-		# Check if they all share one group
-		var common_gid := _units.group_id[nearby[0]]
-		var all_same := common_gid >= 0
+		var grp := _commander.create_group("custom_%d" % randi(), BattleUnitSystem.Faction.BLUE, utype)
 		for idx in nearby:
-			if _units.group_id[idx] != common_gid:
-				all_same = false
-				break
-		if all_same and _commander.get_group(common_gid):
-			# All in same group — just select that group
-			_selected_group_id = common_gid
-			_selected_units.clear()
-		else:
-			# Mixed groups — store as loose selection (preserve original group_ids)
-			_selected_units = nearby
-			_selected_group_id = -1
+			_units.group_id[idx] = grp.id
+		_selected_group_id = grp.id
+		_selected_units.clear()
 		var type_name: String = BattleUnitSystem.UnitType.keys()[utype].capitalize()
 		_instruction_label.text = "%d %s selected nearby" % [nearby.size(), type_name]
 		_refresh_group_list()
@@ -717,7 +790,9 @@ func _finish_box_selection(camera: Camera2D, viewport: Viewport) -> void:
 		_update_banners()
 	# If nothing selected in box: keep current selection
 
-func _screen_to_world(screen_pos: Vector2, camera: Camera2D, viewport: Viewport) -> Vector2:
+func _screen_to_world(screen_pos: Vector2, camera: Camera2D, viewport: Viewport = null) -> Vector2:
+	if not viewport:
+		viewport = get_viewport()
 	var viewport_size := viewport.get_visible_rect().size
 	var cam_pos := camera.global_position
 	var zoom := camera.zoom

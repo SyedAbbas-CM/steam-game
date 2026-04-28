@@ -33,7 +33,6 @@ func _run() -> void:
 			shop_end += 7
 
 		var block = xml.substr(shop_start, shop_end - shop_start)
-		var shop = _parse_shop(block)
 		if shop and shop.id != "":
 			ResourceSaver.save(shop, out_dir + shop.id + ".tres")
 			count += 1

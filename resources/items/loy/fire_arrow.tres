@@ -1,20 +1,16 @@
-[gd_resource type="Resource" script_class="EquipmentItem" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
-[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
-
-[sub_resource type="Resource" id="mod_0"]
-script = ExtResource("2")
-stat = 2
-flat_bonus = 3.0
 
 [resource]
 script = ExtResource("1")
 item_name = "Fire Arrow"
 loy_tile_index = 110
-description = "A flaming arrow"
-slot_type = 11
-modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
+description = "Flaming arrows that ignite enemies on hit (25 shots)"
+slot_type = 12
 rarity = 0
 buy_price = 84
 sell_value = 21
+quantity = 25
+max_quantity = 25
+arrow_effect = "fire"

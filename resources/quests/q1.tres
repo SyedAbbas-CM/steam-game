@@ -6,8 +6,11 @@
 script = ExtResource("1_8mohw")
 id = "q1"
 title = "Them Bones"
+summary = "The Elder has asked you to cull 20 Skeletons that have risen near the graveyard outside of town."
 level = 1
 location = "haven"
+target_location = "barrows"
+target_location = "barrows"
 properties = [{
 "index": 0,
 "name": "Skeletons Killed",
@@ -16,27 +19,36 @@ properties = [{
 start_script = [{
 "cmd": "showDialog",
 "name": "Elder",
+"portrait": 147,
+"text": "Adventurer, we have a problem. The graveyard outside town is overrun with Skeletons — they've been rising faster than we can deal with. There's a bounty of 500 gold for anyone who can cull 20 of them.",
 "options": [{
-"name": "Oh yes?",
+"name": "I'll take care of it",
 "script": [{
 "cmd": "showDialog",
 "name": "Elder",
+"portrait": 147,
+"text": "Good. Head to the graveyard area and put those bones back in the ground. Return to me when you've dealt with 20 of them.",
 "options": [{
-"name": "Sure",
+"name": "On my way",
 "script": [{
+"cmd": "spawnEnemies",
+"zone": "barrows",
+"enemy": "Skeleton",
+"count": "20",
+"x": "2",
+"y": "3",
+"w": "16",
+"h": "22"
+}, {
 "cmd": "startQuest",
 "id": "q1"
 }]
-}, {
-"name": "Nay!",
-"script": []
-}],
-"portrait": 147,
-"text": "We're having a real problem with the skeletons round here"
 }]
-}],
-"portrait": 147,
-"text": "There's a large payment for only 20 kills! Will you take the quest?"
+}]
+}, {
+"name": "Not interested",
+"script": []
+}]
 }]
 events = [{
 "param": "Skeleton",
@@ -55,12 +67,12 @@ events = [{
 "script": [{
 "cmd": "showDialog",
 "name": "Elder",
-"options": [{
-"name": "Yes Sir!",
-"script": []
-}],
 "portrait": 147,
-"text": "Still hunting Skeletons? Thank you hero!"
+"text": "Still hunting Skeletons? Keep at it — the graveyard won't clear itself.",
+"options": [{
+"name": "On it",
+"script": []
+}]
 }]
 }, {
 "attribute": "session-q1-0",
@@ -77,12 +89,12 @@ events = [{
 }, {
 "cmd": "showDialog",
 "name": "Elder",
-"options": [{
-"name": "Thanks",
-"script": []
-}],
 "portrait": 147,
-"text": "Thank you hero, I am very impressed. Here is your reward of 500 gold"
+"text": "Twenty Skeletons down. Well done, adventurer. The graveyard should be quieter now. Here's your reward — 500 gold, as promised. Come back if you're looking for more work.",
+"options": [{
+"name": "Thank you, Elder",
+"script": []
+}]
 }, {
 "cmd": "completeQuest"
 }]

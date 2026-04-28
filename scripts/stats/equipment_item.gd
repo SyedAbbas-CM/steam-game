@@ -13,7 +13,8 @@ enum SlotType {
 	RING,           # 8 - rings, bands, amulets
 	CLOAK,          # 9 - cloaks, capes
 	CONSUMABLE,     # 10 - potions, food
-	MATERIAL,       # 11 - crafting, arrows, misc
+	MATERIAL,       # 11 - crafting, misc
+	AMMO,           # 12 - arrows with limited quantity
 }
 
 # Helpers
@@ -46,10 +47,23 @@ var source_path: String = ""
 @export var ability_mp_cost: float = 0.0
 @export var ability_cooldown: float = 5.0
 
+@export_group("Spell")
+@export var grants_spell: String = ""  # spell_id granted while this item is equipped
+
 @export_group("Consumable")
 @export var heal_hp: int = 0
 @export var heal_mp: int = 0
 @export var use_effect: String = ""  # special effect: "town_portal", etc.
+
+@export_group("Requirements")
+@export var required_level: int = 0
+@export var required_classes: Array[String] = []
+@export var required_stats: Dictionary = {}
+
+@export_group("Ammo")
+@export var quantity: int = 0  # current ammo count (0 = not ammo / infinite)
+@export var max_quantity: int = 0  # max stack size
+@export var arrow_effect: String = ""  # "fire", "freeze", "explosion", "poison", "lightning", "slow"
 
 ## Create a copy that remembers its original .tres path for save/load
 func make_copy() -> EquipmentItem:
@@ -66,7 +80,58 @@ func get_weapon_type() -> String:
 		SlotType.WEAPON_MAGIC: return "staff"
 	return ""
 
+func get_scaling_stat() -> String:
+	match weapon_type:
+		"sword", "axe", "hammer", "club", "flail", "spear", "dagger", "halberd", "greatsword", "great_axe", "scythe":
+			return "power"
+		"bow", "short_bow", "crossbow", "throwing", "javelin", "sling", "whip", "claws":
+			return "agility"
+		"staff", "wand", "tome":
+			return "spirit"
+	return ""
+
 func get_display_name() -> String:
 	if enchantment:
 		return enchantment.get_prefix() + " " + item_name
 	return item_name
+
+## Auto-generate stat requirements based on rarity + weapon scaling stat
+## Common (0): no req. Uncommon (1): 3. Rare (2): 7. Epic/Legendary (3+): 12.
+
+func get_effective_stat_requirements() -> Dictionary:
+	# Explicit required_stats always take priority
+	if required_stats.size() > 0:
+		return required_stats
+	# Auto-generate from rarity + weapon scaling stat
+	var scaling = get_scaling_stat()
+	if scaling == "" or rarity <= 0:
+		return {}
+	var needed := 0
+	match rarity:
+		1: needed = 3
+		2: needed = 7
+		_: needed = 12  # rarity 3+
+	return {scaling: needed}
+
+func can_equip(_player_class: String, player_level: int, allocated: Dictionary) -> bool:
+	if required_level > 0 and player_level < required_level:
+		return false
+	var reqs = get_effective_stat_requirements()
+	for stat_name in reqs:
+		var needed = reqs[stat_name] as int
+		var have = allocated.get(stat_name, 0) as int
+		if have < needed:
+			return false
+	return true
+
+func get_unmet_requirements(_player_class: String, player_level: int, allocated: Dictionary) -> Array[String]:
+	var unmet: Array[String] = []
+	if required_level > 0 and player_level < required_level:
+		unmet.append("Requires Level %d" % required_level)
+	var reqs = get_effective_stat_requirements()
+	for stat_name in reqs:
+		var needed = reqs[stat_name] as int
+		var have = allocated.get(stat_name, 0) as int
+		if have < needed:
+			unmet.append("Requires %d %s (%d)" % [needed, stat_name.capitalize(), have])
+	return unmet

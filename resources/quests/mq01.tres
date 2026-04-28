@@ -6,59 +6,119 @@
 script = ExtResource("1_gen")
 id = "mq01"
 title = "Waking in Ash"
-summary = "The healer says the brand on your arm matches symbols found on dead livestock at the farm. Travel there to investigate."
-level = 1
+summary = "The Elder says the brand on your arm matches symbols found on dead livestock at the farm. Travel to Hollow Fields, cleanse 10 corrupted Scarecrows, then report back."
+level = 2
 location = "haven"
 target_location = "duskfarm"
+prerequisite = "q1"
+properties = [{
+"index": 0,
+"name": "Scarecrows Cleansed",
+"type": "number"
+}]
 start_script = [{
 "cmd": "showDialog",
-"name": "Healer Maren",
+"name": "Elder",
+"portrait": 147,
+"text": "You handled those skeletons well. But the crypts weren't the only place stirring. The farm south of here — Hollow Fields — reports dead livestock branded with the same symbols we found below the graveyard.",
 "options": [{
-"name": "What happened to me?",
+"name": "What's happening there?",
 "script": [{
 "cmd": "showDialog",
-"name": "Healer Maren",
+"name": "Elder",
+"portrait": 147,
+"text": "The Scarecrows in the fields have started moving at night. Ten of them are corrupted — pulsing with dark ichor. I need someone to go there and destroy them all before the blight spreads further.",
 "options": [{
-"name": "I'll go look.",
+"name": "I'll deal with them",
 "script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "Good. Travel south to Hollow Fields and cleanse all ten corrupted Scarecrows. Return to me when it's done.",
+"options": [{
+"name": "On my way",
+"script": [{
+"cmd": "spawnEnemies",
+"zone": "duskfarm",
+"enemy": "Scarecrow",
+"count": "10",
+"x": "5",
+"y": "5",
+"w": "15",
+"h": "15"
+}, {
 "cmd": "startQuest"
 }]
-}, {
-"name": "Not my problem.",
-"script": []
-}],
-"portrait": 160,
-"text": "Found you face-down in the ash outside town. That brand on your arm... I've seen those symbols before. On the dead livestock at the farm south of here."
 }]
-}],
-"portrait": 160,
-"text": "You're awake. Don't move too fast — whatever marked you nearly killed you."
+}]
+}, {
+"name": "Not right now",
+"script": []
+}]
+}]
+}]
 }]
 events = [{
 "param": "duskfarm",
 "script": [{
 "cmd": "showDialog",
 "name": "",
+"portrait": 0,
+"text": "The stench of decay hangs over the fields. Twisted livestock lie in the dirt, branded with dark symbols. Corrupted Scarecrows twitch and lurch among the crops.",
 "options": [{
-"name": "Examine the ichor",
+"name": "Time to fight",
+"script": []
+}]
+}],
+"type": "zone_enter"
+}, {
+"param": "Scarecrow",
+"script": [{
+"cmd": "increment",
+"index": "0"
+}],
+"type": "kill"
+}, {
+"param": "haven",
+"script": [{
+"attribute": "session-mq01-0",
+"cmd": "if",
+"compare": "10",
+"operation": "lt",
 "script": [{
 "cmd": "showDialog",
-"name": "",
+"name": "Elder",
+"portrait": 147,
+"text": "The corruption at the farm must be dealt with. Cleanse all ten Scarecrows and return to me.",
 "options": [{
-"name": "Continue",
+"name": "On my way",
+"script": []
+}]
+}]
+}, {
+"attribute": "session-mq01-0",
+"cmd": "if",
+"compare": "9",
+"operation": "gt",
 "script": [{
+"cmd": "getItem",
+"count": "300",
+"name": "Gold"
+}, {
 "cmd": "getExp",
-"value": "100"
+"value": "200"
+}, {
+"cmd": "showDialog",
+"name": "Elder",
+"portrait": 147,
+"text": "All ten Scarecrows cleansed. Good. But this is only the beginning — the ichor runs deeper. Take this gold, rest, and come see me when you're ready. The crypts below the graveyard grow restless.",
+"options": [{
+"name": "Thank you, Elder",
+"script": []
+}]
 }, {
 "cmd": "completeQuest"
 }]
 }],
-"portrait": 0,
-"text": "The ichor leads toward the dungeon entrance at the edge of the farm. Something down there is the source."
-}]
-}],
-"portrait": 0,
-"text": "The stench hits you before you see it. Cattle lie twisted in the dirt, their hides branded with the same symbol that burns on your arm. Black ichor seeps from the marks into the soil."
-}],
-"type": "zone_enter"
+"type": "quest"
 }]

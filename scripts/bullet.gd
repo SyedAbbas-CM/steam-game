@@ -64,7 +64,6 @@ var _lob_aoe_radius: float = 16.0
 var _lob_ring_count: int = 0
 var _lob_cluster_count: int = 0
 var _lob_shadow: Sprite2D = null
-var _lob_is_bomb: bool = false  # true = enemy bomb, uses smaller sprite
 # BARRIER / PULL / PUSH
 var barrier_hp: int = 3                      # hits barrier can absorb
 var _force_radius: float = 40.0             # pull/push effect radius
@@ -160,14 +159,19 @@ func _ready() -> void:
 		else:
 			sprite.scale = Vector2(0.6, 0.6)
 	sprite.modulate = tint
-	# Bombs use smaller base sprite (the arc height_factor will still scale them up during flight)
-	if _lob_is_bomb:
-		sprite.scale *= 0.5
 	_base_sprite_scale = sprite.scale
 
 	# Rotate sprite to face travel direction
 	# Sprites in lofi_obj.png point downward (PI/2), offset so they aim at target
 	sprite.rotation = direction.angle() - PI / 2.0
+
+	# Auto-destroy
+	var timer = Timer.new()
+	timer.wait_time = lifetime
+	timer.one_shot = true
+	timer.timeout.connect(_on_bullet_expire)
+	add_child(timer)
+	timer.start()
 
 	if hits_all:
 		collision_layer = 8  # enemy bullet layer only (won't trigger traps on layer 4)
@@ -178,6 +182,9 @@ func _ready() -> void:
 	else:
 		collision_layer = 8
 		collision_mask = 1 | 16  # player + walls
+
+	body_entered.connect(_on_body_entered)
+	area_entered.connect(_on_area_entered)
 
 	# BARRIER: stationary, blocks player bullets by adding layer 4 to its mask
 	if behavior == BulletBehavior.BARRIER:
@@ -199,15 +206,15 @@ func _ready() -> void:
 		_lob_shadow.texture = sprite.texture
 		_lob_shadow.region_enabled = sprite.region_enabled
 		_lob_shadow.region_rect = sprite.region_rect
-		_lob_shadow.scale = _base_sprite_scale * 0.6
+		_lob_shadow.scale = sprite.scale * 0.6
 		_lob_shadow.modulate = Color(0, 0, 0, 0.3)
-		_lob_shadow.z_index = 0  # above floor, below enemies
+		_lob_shadow.z_index = 1  # above floor (0) but below walls (2)
 		if get_parent():
 			get_parent().add_child.call_deferred(_lob_shadow)
 		# Bomb trail VFX: orange sparks falling during flight arc
 		var trail = CPUParticles2D.new()
 		trail.emitting = true
-		trail.amount = 5
+		trail.amount = 8
 		trail.lifetime = 0.4
 		trail.speed_scale = 1.5
 		trail.direction = Vector2(0, 1)  # sparks fall downward
@@ -222,17 +229,6 @@ func _ready() -> void:
 		trail.color_ramp.set_color(0, Color(1.0, 0.7, 0.2, 0.9))
 		trail.color_ramp.set_color(1, Color(1.0, 0.3, 0.0, 0.0))
 		add_child(trail)
-
-	# Auto-destroy — must be AFTER behavior-specific lifetime overrides
-	var timer = Timer.new()
-	timer.wait_time = lifetime
-	timer.one_shot = true
-	timer.timeout.connect(_on_bullet_expire)
-	add_child(timer)
-	timer.start()
-
-	body_entered.connect(_on_body_entered)
-	area_entered.connect(_on_area_entered)
 
 func _physics_process(delta: float) -> void:
 	if not is_inside_tree():
@@ -399,9 +395,6 @@ func _physics_process(delta: float) -> void:
 		s.rotation = direction.angle() - PI / 2.0
 
 func _on_body_entered(body: Node2D) -> void:
-	# Lobbed bullets fly over walls — ignore all collisions until landing
-	if behavior == BulletBehavior.LOBBED:
-		return
 	# Wall collision
 	if body is StaticBody2D and body.collision_layer & 16:
 		if behavior == BulletBehavior.WALL_BOUNCE and bounce_count > 0:
@@ -516,17 +509,6 @@ func _on_area_entered(area: Node2D) -> void:
 				enemy.apply_status("BURNING", get_meta("apply_burning"))
 			if has_meta("apply_poison") and enemy.has_method("apply_status"):
 				enemy.apply_status("POISONED", get_meta("apply_poison"))
-			# Spell staff on-hit effects
-			if has_meta("apply_slowed") and enemy.has_method("apply_status"):
-				enemy.apply_status("SLOWED", get_meta("apply_slowed"))
-			if has_meta("apply_frozen") and enemy.has_method("apply_status"):
-				enemy.apply_status("FROZEN", get_meta("apply_frozen"))
-			if has_meta("apply_stunned") and enemy.has_method("apply_status"):
-				enemy.apply_status("STUNNED", get_meta("apply_stunned"))
-			if has_meta("apply_confused") and enemy.has_method("apply_status"):
-				enemy.apply_status("CONFUSED", get_meta("apply_confused"))
-			if has_meta("apply_feared") and enemy.has_method("apply_status"):
-				enemy.apply_status("FEARED", get_meta("apply_feared"))
 			# Longshot paralyze — brief stun
 			if has_meta("longshot_paralyze") and enemy.has_method("apply_status"):
 				var stun_min = get_meta("longshot_stun_min") if has_meta("longshot_stun_min") else 1.0
@@ -554,9 +536,6 @@ func _on_area_entered(area: Node2D) -> void:
 		# Poison on hit from enemy bullets
 		if poison_on_hit and player.has_method("apply_status"):
 			player.apply_status("POISONED", 4.0)
-		# Generic status on hit (e.g. curse bolt)
-		if has_meta("apply_status") and has_meta("status_duration") and player.has_method("apply_status"):
-			player.apply_status(get_meta("apply_status"), get_meta("status_duration"))
 		if not hits_all:
 			_spent = true
 			queue_free()
@@ -700,17 +679,6 @@ func _lob_land() -> void:
 			if is_instance_valid(e) and e.global_position.distance_to(global_position) < _lob_aoe_radius:
 				if e.has_method("take_damage"):
 					e.take_damage(damage)
-	# Poison cloud: lingering AOE zone that poisons players who stay in it
-	if has_meta("poison_cloud") and is_inside_tree():
-		var cloud_dur = get_meta("poison_cloud_duration", 4.0)
-		var cloud_rad = get_meta("poison_cloud_radius", 16.0)
-		var cloud = _PoisonCloudZone.new()
-		cloud.global_position = global_position
-		cloud.cloud_radius = cloud_rad
-		cloud.cloud_duration = cloud_dur
-		cloud.cloud_damage = damage
-		get_tree().current_scene.add_child(cloud)
-
 	# Optional bullet ring on impact
 	var container = get_parent()
 	if _lob_ring_count > 0 and container:
@@ -846,61 +814,3 @@ func _fireball_explode() -> void:
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("boom_b", 0.0)
-
-## Lingering poison cloud zone — damages and poisons players who stand in it
-class _PoisonCloudZone extends Node2D:
-	var cloud_radius: float = 16.0
-	var cloud_duration: float = 4.0
-	var cloud_damage: int = 1
-	var _elapsed: float = 0.0
-	var _tick_timer: float = 0.0
-	var _particles: CPUParticles2D
-
-	func _ready() -> void:
-		z_index = 1
-		# Green poison particles
-		_particles = CPUParticles2D.new()
-		_particles.amount = 20
-		_particles.lifetime = 0.8
-		_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-		_particles.emission_sphere_radius = cloud_radius * 0.7
-		_particles.direction = Vector2(0, -1)
-		_particles.spread = 180.0
-		_particles.gravity = Vector2(0, -10)
-		_particles.initial_velocity_min = 3.0
-		_particles.initial_velocity_max = 8.0
-		_particles.scale_amount_min = 0.5
-		_particles.scale_amount_max = 1.5
-		var grad = Gradient.new()
-		grad.set_color(0, Color(0.2, 0.8, 0.1, 0.6))
-		grad.set_color(1, Color(0.1, 0.5, 0.0, 0.0))
-		_particles.color_ramp = grad
-		_particles.color = Color(0.3, 0.9, 0.2, 0.5)
-		add_child(_particles)
-
-	func _process(delta: float) -> void:
-		_elapsed += delta
-		_tick_timer += delta
-		if _elapsed >= cloud_duration:
-			_particles.emitting = false
-			# Fade out then free
-			var tw = create_tween()
-			tw.tween_property(self, "modulate:a", 0.0, 0.5)
-			tw.tween_callback(queue_free)
-			set_process(false)
-			return
-		# Damage tick every 0.5s
-		if _tick_timer >= 0.5:
-			_tick_timer -= 0.5
-			var p = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
-			if p and is_instance_valid(p):
-				if p.global_position.distance_to(global_position) < cloud_radius:
-					if p.has_method("take_damage"):
-						p.take_damage(cloud_damage, global_position)
-					if "status_manager" in p and p.status_manager:
-						p.status_manager.apply_status("POISONED", 3.0)
-		queue_redraw()
-
-	func _draw() -> void:
-		var alpha = 0.15 * (1.0 - _elapsed / cloud_duration)
-		draw_circle(Vector2.ZERO, cloud_radius, Color(0.2, 0.7, 0.1, alpha))

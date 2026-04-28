@@ -37,8 +37,8 @@ static func decorate_room(dm, origin: Vector2i, mask: Array,
 
 	# Paint each zone with its assigned blueprint
 	for i in range(zones.size()):
-		var zone = zones[i]
 		if i < blueprints.size():
+			var zone = zones[i]
 			RoomBlueprints.paint_blueprint(blueprints[i], dm, origin, mask,
 				zone.x, zone.y, zone.w, zone.h, placed)
 
@@ -138,9 +138,9 @@ static func _split_three(ix: int, iy: int, iw: int, ih: int, gap: int) -> Array:
 		]
 	else:
 		var top_h = (ih * 2 / 3) - gap
+		var left_w = (iw - gap) / 2
 		var bot_y = iy + top_h + gap
 		var bot_h = ih - top_h - gap
-		var left_w = (iw - gap) / 2
 		return [
 			{"x": ix, "y": iy, "w": iw, "h": top_h},
 			{"x": ix, "y": bot_y, "w": left_w, "h": bot_h},
@@ -151,8 +151,8 @@ static func _split_four(ix: int, iy: int, iw: int, ih: int, gap: int) -> Array:
 	var half_w = (iw - gap) / 2
 	var half_h = (ih - gap) / 2
 	var right_x = ix + half_w + gap
-	var bot_y = iy + half_h + gap
 	var right_w = iw - half_w - gap
+	var bot_y = iy + half_h + gap
 	var bot_h = ih - half_h - gap
 	return [
 		{"x": ix, "y": iy, "w": half_w, "h": half_h},
@@ -218,8 +218,8 @@ static func _paint_scatter_candles(dm, origin: Vector2i, mask: Array,
 		w: int, h: int, placed: Dictionary, count: int) -> void:
 	for _i in range(count):
 		for _attempt in range(15):
-			var x = randi_range(3, w - 4)
-			var y = randi_range(3, h - 4)
+			var x = randi_range(1, w - 2)
+			var y = randi_range(1, h - 2)
 			if x >= 0 and x < w and y >= 0 and y < h and mask[y][x] and not placed.has(Vector2i(x, y)):
 				var abs_pos = origin + Vector2i(x, y)
 				if dm.deco_layer.get_cell_source_id(abs_pos) == -1:

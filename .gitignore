@@ -2,6 +2,18 @@
 .godot/
 /android/
 
+# OS junk
+.DS_Store
+
+# Editor metadata
+.obsidian/
+
+# OS junk
+.DS_Store
+
+# Editor metadata
+.obsidian/
+
 # Large overworld text scenes (game uses .scn binary versions)
 scenes/overworld/overworld.tscn
 scenes/overworld/overworld2.tscn

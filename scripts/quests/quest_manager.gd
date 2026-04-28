@@ -24,12 +24,19 @@ var _script_queue: Array = []
 var _waiting_for_dialogue: bool = false
 var _pending_option_scripts: Array = []  # scripts for each dialogue option
 var _zone_script_running: bool = false  # re-entry guard for on_zone_entered
+var _zone_script_stuck_time: float = 0.0  # safety timer for stuck guard
 
 func _ready() -> void:
 	_load_quest_definitions()
 	_load_npc_scripts()
 	_load_item_cache()
 	_load_state()
+
+func _process(delta: float) -> void:
+	if _zone_script_running:
+		_zone_script_stuck_time += delta
+	else:
+		_zone_script_stuck_time = 0.0
 
 func _load_quest_definitions() -> void:
 	for path in ResourceRegistry.quests():
@@ -182,8 +189,10 @@ func on_enemy_killed(enemy_name: String) -> void:
 			continue
 		var quest = definitions[quest_id]
 		for event in quest.events:
-			if event.get("type") == "kill" and event.get("param") == enemy_name:
-				await _execute_script(event.get("script", []), quest_id)
+			if event.get("type") == "kill":
+				var param = event.get("param", "")
+				if param == enemy_name or param == "*":
+					await _execute_script(event.get("script", []), quest_id)
 
 func on_boss_killed(boss_name: String) -> void:
 	for quest_id in active_quests:
@@ -213,7 +222,13 @@ func check_zone_quests(zone_id: String) -> void:
 	## Run "quest" type event scripts for active quests in this zone.
 	## Called from NPC interaction / offerZoneQuests, NOT automatically on zone entry.
 	if _zone_script_running:
-		return
+		# Safety: if stuck for > 5s, force reset
+		if _zone_script_stuck_time > 5.0:
+			_zone_script_running = false
+			_waiting_for_dialogue = false
+			print("QuestManager: force-reset _zone_script_running (was stuck)")
+		else:
+			return
 	_zone_script_running = true
 	for quest_id in active_quests:
 		if not active_quests[quest_id].get("active", false):
@@ -361,7 +376,7 @@ func _execute_script(commands: Array, context_quest_id: String) -> void:
 				if item_name == "Gold":
 					var gm = get_node_or_null("/root/GameManager")
 					if gm:
-						gm.add_gold(count)
+						gm.add_gold(count, true)
 				else:
 					var added = _add_item_to_inventory(item_name, count)
 					if added > 0:
@@ -388,7 +403,7 @@ func _execute_script(commands: Array, context_quest_id: String) -> void:
 				var amount = int(cmd.get("count", "0"))
 				var gm = get_node_or_null("/root/GameManager")
 				if gm:
-					gm.add_gold(amount)
+					gm.add_gold(amount, true)
 
 			"moveToMap":
 				var _map = cmd.get("map", "")
@@ -396,8 +411,21 @@ func _execute_script(commands: Array, context_quest_id: String) -> void:
 				var _y = int(cmd.get("y", "0"))
 				# TODO: teleport player
 
-			"spawn":
-				pass  # TODO: spawn enemy
+			"spawn", "spawnEnemies":
+				var zone = cmd.get("zone", current_zone)
+				var enemy_name = cmd.get("enemy", "")
+				var count = int(cmd.get("count", "1"))
+				# Optional spawn area in zone-local LoY tiles
+				var area: Dictionary = {}
+				if cmd.has("x"):
+					area = {"x": int(cmd.get("x", "0")), "y": int(cmd.get("y", "0")), "w": int(cmd.get("w", "8")), "h": int(cmd.get("h", "8"))}
+				print("QuestManager: spawnEnemies cmd — zone='%s' enemy='%s' count=%d area=%s" % [zone, enemy_name, count, str(area)])
+				if enemy_name != "" and zone != "" and count > 0:
+					var overworld = get_tree().get_first_node_in_group("overworld")
+					if overworld and overworld.has_method("spawn_quest_enemies"):
+						overworld.spawn_quest_enemies(zone, enemy_name, count, area)
+					else:
+						print("QuestManager: spawnEnemies FAILED — overworld=%s" % [str(overworld)])
 
 			"offerZoneQuests":
 				var zone = cmd.get("zone", current_zone)
@@ -406,14 +434,11 @@ func _execute_script(commands: Array, context_quest_id: String) -> void:
 			"openShop":
 				var sid = cmd.get("shop", "")
 				if sid != "":
-					var shop_ui: ShopUI = null
-					for child in get_tree().root.get_children():
-						for sub in child.get_children():
-							if sub is ShopUI:
-								shop_ui = sub
-								break
+					var shop_ui = get_tree().get_first_node_in_group("shop_ui") as ShopUI
 					if shop_ui:
 						shop_ui.open_shop(sid)
+					else:
+						print("QuestManager: ShopUI not found in scene tree")
 
 		i += 1
 
@@ -502,6 +527,18 @@ func set_zone_data(zones: Array) -> void:
 				if z.id not in _enemy_zone_map[etype]:
 					_enemy_zone_map[etype].append(z.id)
 
+func _find_spawn_zone(cmd: Dictionary, enemy_name: String) -> String:
+	## Recursively search a quest script command tree for a spawnEnemies matching enemy_name,
+	## and return the zone it targets.
+	if cmd.get("cmd", "") in ["spawn", "spawnEnemies"] and cmd.get("enemy", "") == enemy_name:
+		return str(cmd.get("zone", ""))
+	for opt in cmd.get("options", []):
+		for sub_cmd in opt.get("script", []):
+			var result = _find_spawn_zone(sub_cmd, enemy_name)
+			if result != "":
+				return result
+	return ""
+
 func _zone_center_world_pos(zone: LoyZoneData) -> Vector2:
 	if zone.baked_offset == Vector2i(-99999, -99999):
 		return Vector2.ZERO
@@ -514,43 +551,115 @@ func _zone_center_world_pos(zone: LoyZoneData) -> Vector2:
 
 func get_quest_objective_position(quest_id: String) -> Vector2:
 	## Returns world position of the current objective for the given quest.
-	## Returns Vector2.ZERO if no position can be resolved.
+	## Progress-aware: points to action zone when work remains, turn-in zone when done.
 	if not definitions.has(quest_id):
 		return Vector2.ZERO
 	var quest = definitions[quest_id] as QuestDefinition
 
-	# Check kill events — find zone where target spawns
-	for event in quest.events:
-		var etype = event.get("type", "")
-		if etype == "kill":
-			var enemy_name = event.get("param", "")
-			if _enemy_zone_map.has(enemy_name):
-				var zone_ids = _enemy_zone_map[enemy_name]
-				# Prefer the quest's own location zone if it has spawns
-				if quest.location in zone_ids and _zone_lookup.has(quest.location):
-					return _zone_center_world_pos(_zone_lookup[quest.location])
-				# Otherwise use first zone
-				for zid in zone_ids:
-					if _zone_lookup.has(zid):
-						return _zone_center_world_pos(_zone_lookup[zid])
+	# Step 1: Check if all objectives are complete → point to turn-in (quest location)
+	var all_done = _are_quest_objectives_complete(quest_id, quest)
+	if all_done:
+		var turnin = quest.location
+		if turnin != "" and _zone_lookup.has(turnin):
+			return _zone_center_world_pos(_zone_lookup[turnin])
 
-	# Check zone/quest events — point to the zone
-	for event in quest.events:
-		var etype = event.get("type", "")
-		if etype == "quest":
-			var zone_id = event.get("param", "")
-			if _zone_lookup.has(zone_id):
-				return _zone_center_world_pos(_zone_lookup[zone_id])
+	# Step 2: Point to where the player needs to go to make progress
+	# Priority: target_location > spawn zone from quest script > zone_enter zone
 
-	# Fallback: target_location
+	# Try target_location first (most quests set this to the action zone)
 	if quest.target_location != "" and _zone_lookup.has(quest.target_location):
 		return _zone_center_world_pos(_zone_lookup[quest.target_location])
+
+	# Try spawn zone from quest's spawnEnemies commands
+	for cmd in quest.start_script:
+		var spawn_zone = _find_any_spawn_zone(cmd)
+		if spawn_zone != "" and _zone_lookup.has(spawn_zone):
+			return _zone_center_world_pos(_zone_lookup[spawn_zone])
+
+	# Try zone_enter events
+	for event in quest.events:
+		if event.get("type") == "zone_enter":
+			var zone_id = event.get("param", "")
+			if zone_id != "" and _zone_lookup.has(zone_id):
+				return _zone_center_world_pos(_zone_lookup[zone_id])
 
 	# Fallback: quest location
 	if quest.location != "" and _zone_lookup.has(quest.location):
 		return _zone_center_world_pos(_zone_lookup[quest.location])
 
 	return Vector2.ZERO
+
+func _are_quest_objectives_complete(quest_id: String, quest: QuestDefinition) -> bool:
+	## Check if all numbered properties have met their targets based on quest events.
+	## Looks at the "quest" type event's if-conditions to determine completion thresholds.
+	for event in quest.events:
+		if event.get("type") != "quest":
+			continue
+		# The quest turn-in event typically has nested if-checks
+		# Look for the completion branch (the one with completeQuest)
+		var thresholds = _extract_completion_thresholds(event.get("script", []), quest_id)
+		if thresholds.size() == 0:
+			continue
+		for idx in thresholds:
+			var current = get_quest_value(quest_id, idx)
+			if current < thresholds[idx]:
+				return false
+		return true
+	return false
+
+func _extract_completion_thresholds(script: Array, quest_id: String) -> Dictionary:
+	## Scan a quest script for if-conditions that gate a completeQuest command.
+	## Returns {property_index: required_value} for each condition.
+	var result := {}
+	for cmd in script:
+		if cmd.get("cmd") == "if":
+			var attr = cmd.get("attribute", "")
+			var op = cmd.get("operation", "")
+			var compare = int(cmd.get("compare", "0"))
+			var sub_script = cmd.get("script", [])
+			# Check if this branch contains completeQuest
+			if _script_contains_complete(sub_script):
+				# Extract property index from attribute (session-questid-index)
+				if attr.begins_with("session-"):
+					var parts = attr.split("-")
+					if parts.size() >= 3:
+						var idx = int(parts[2])
+						# "gt" compare means value must be > compare, so threshold = compare + 1
+						if op == "gt":
+							result[idx] = compare + 1
+						elif op == "gte":
+							result[idx] = compare
+						elif op == "eq":
+							result[idx] = compare
+				# Recurse into sub_script for additional conditions
+				var sub_thresholds = _extract_completion_thresholds(sub_script, quest_id)
+				result.merge(sub_thresholds)
+	return result
+
+func _script_contains_complete(script: Array) -> bool:
+	for cmd in script:
+		if cmd.get("cmd") == "completeQuest":
+			return true
+		for opt in cmd.get("options", []):
+			for sub in opt.get("script", []):
+				if sub.get("cmd") == "completeQuest":
+					return true
+				if _script_contains_complete(sub.get("script", [])):
+					return true
+		if _script_contains_complete(cmd.get("script", [])):
+			return true
+	return false
+
+func _find_any_spawn_zone(cmd: Dictionary) -> String:
+	## Recursively find ANY spawnEnemies zone in a quest script command tree.
+	if cmd.get("cmd", "") in ["spawn", "spawnEnemies"]:
+		return str(cmd.get("zone", ""))
+	for opt in cmd.get("options", []):
+		for sub_cmd in opt.get("script", []):
+			var result = _find_any_spawn_zone(sub_cmd)
+			if result != "":
+				return result
+	return ""
 
 func get_first_active_quest_id() -> String:
 	for quest_id in active_quests:

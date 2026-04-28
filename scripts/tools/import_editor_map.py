@@ -445,6 +445,10 @@ def import_diff(json_path, no_rebuild=False):
         print(f"  Removed {clutter_removed} old baked clutter")
 
 
+
+
+
+
     # Apply tile paints
     modified_chunks = set()
     total_placed = 0
