@@ -356,6 +356,15 @@ func get_equipped_weapon() -> EquipmentItem:
 func get_equipped_ammo() -> EquipmentItem:
 	return equipped.get(EquipmentItem.SlotType.AMMO, null)
 
+func consume_ammo(count: int = 1) -> void:
+	var ammo = get_equipped_ammo()
+	if not ammo:
+		return
+	ammo.quantity -= count
+	if ammo.quantity <= 0:
+		equipped.erase(EquipmentItem.SlotType.AMMO)
+	inventory_changed.emit()
+
 func get_equipped_items() -> Array:
 	var items: Array = []
 	for item in equipped.values():

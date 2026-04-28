@@ -156,7 +156,6 @@ func _fire_electric_pulse() -> void:
 		b.lifetime = 2.0
 		b.is_player_bullet = false
 		b.hits_all = false  # only hits player, not enemies
-		b.combat_damage_type = CombatTypes.DamageType.TRUE
-		# Stun player on hit (paralysis)
+			# Stun player on hit (paralysis)
 		b.set_meta("apply_stunned_player", 1.0)
 		get_tree().current_scene.add_child(b)

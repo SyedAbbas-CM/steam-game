@@ -2446,8 +2446,7 @@ func _check_contact_damage() -> void:
 	if player.has_method("take_damage"):
 		if _is_boss_or_large:
 			player.set_meta("_hit_from_elite", true)
-		var contact_dmg_type: int = definition.damage_type if definition else 0
-		player.take_damage(maxi(player_dmg, 1), global_position, true, false, contact_dmg_type)
+		player.take_damage(maxi(player_dmg, 1), global_position, true, false)
 
 	# Thorns: reflect damage to enemy on contact
 	var thorns_em = player.get_node_or_null("EquipmentManager")
@@ -2710,7 +2709,7 @@ func _start_beam(dir: Vector2) -> void:
 func _shoot_single(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
-	var spread: float = definition.spread_angle if definition else 0.3
+	var spread: float = 0.3
 	var count: int = _get_active_bullet_count()
 	if not bullets_container:
 		return
@@ -2802,9 +2801,7 @@ func _apply_enemy_bullet_props(bullet, spd: float) -> void:
 		if definition.bullet_status_effect != "":
 			bullet.set_meta("apply_status", definition.bullet_status_effect)
 			bullet.set_meta("status_duration", definition.bullet_status_duration)
-		# Set combat damage type from definition
-		bullet.combat_damage_type = definition.damage_type
-		# Apply attack modifier (composable bullet properties)
+			# Apply attack modifier (composable bullet properties)
 		_apply_attack_modifier(bullet)
 
 var _last_fire_sfx_frame: int = 0
@@ -3107,7 +3104,7 @@ func _shoot_meteor_shower(_dir: Vector2) -> void:
 func _shoot_boomerang(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
-	var spread: float = definition.spread_angle if definition else 0.3
+	var spread: float = 0.3
 	var count: int = _get_active_bullet_count()
 	var t: float = Time.get_ticks_msec() / 1000.0
 	var b = bullet_scene.instantiate()
@@ -3215,7 +3212,7 @@ func _shoot_seeking_mines() -> void:
 func _shoot_detonator(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
-	var spread: float = definition.spread_angle if definition else 0.3
+	var spread: float = 0.3
 	var count: int = _get_active_bullet_count()
 	var b = bullet_scene.instantiate()
 	var sfx_dt = get_node_or_null("/root/SFXManager")
@@ -3237,7 +3234,7 @@ func _shoot_detonator(dir: Vector2) -> void:
 func _shoot_splitter(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
-	var spread: float = definition.spread_angle if definition else 0.3
+	var spread: float = 0.3
 	var dist_to_player: float = global_position.distance_to(player.global_position) if is_instance_valid(player) else 999.0
 	var count: int = _get_active_bullet_count()
 	var b = bullet_scene.instantiate()
@@ -3263,7 +3260,7 @@ func _shoot_splitter(dir: Vector2) -> void:
 func _shoot_sine_barrage(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
-	var spread: float = definition.spread_angle if definition else 0.3
+	var spread: float = 0.3
 	var count: int = _get_active_bullet_count()
 	var b = bullet_scene.instantiate()
 	var sfx_sb = get_node_or_null("/root/SFXManager")
@@ -3408,7 +3405,7 @@ func _shoot_orbit_launch(dir: Vector2) -> void:
 func _shoot_wall_bounce(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
-	var spread: float = definition.spread_angle if definition else 0.3
+	var spread: float = 0.3
 	var count: int = _get_active_bullet_count()
 	var t: float = Time.get_ticks_msec() / 1000.0
 	var b = bullet_scene.instantiate()
@@ -4307,7 +4304,7 @@ func _do_melee_circle_damage(radius: float, damage: int) -> bool:
 
 ## SWORD_SLASH: Visible blade sweeps side-to-side. Brief windup -> blade sweeps.
 func _shoot_sword_slash(dir: Vector2) -> void:
-	var reach: float = definition.melee_range if definition else 12.0
+	var reach: float = 12.0
 	var dmg: int = definition.attack_damage if definition else 2
 	var sfx = get_node_or_null("/root/SFXManager")
 	var sfx2 = get_node_or_null("/root/SFXManager")
@@ -4399,7 +4396,7 @@ func _shoot_charge_bull(dir: Vector2) -> void:
 ## CLEAVE_COMBO: 3-hit chain with visible sweep bars. Left→right, right→left, wide smash.
 func _shoot_cleave_combo(dir: Vector2) -> void:
 	var base_dmg: int = definition.attack_damage if definition else 2
-	var reach: float = definition.melee_range if definition else 12.0
+	var reach: float = 12.0
 	var arc = PI * 0.7
 	# Hit 1: left-to-right sweep bar (immediate) — wide side-to-side
 	_do_cleave_bar(dir, reach, arc, -1.2, 1.2, base_dmg, 0.25, 0.0)
@@ -5360,8 +5357,6 @@ func _check_phase_transition() -> void:
 
 func _on_phase_change(phase: int) -> void:
 	var dm = get_node_or_null("/root/DungeonManager")
-	var container = get_tree().get_first_node_in_group("bullets")
-	var minion = bullet_scene.instantiate()
 	var angle: float = 0.0
 	# Flash white to signal phase change
 	$Sprite2D.modulate = Color.WHITE * 4
@@ -5378,11 +5373,15 @@ func _on_phase_change(phase: int) -> void:
 	# Spawn minions on phase change
 	if definition.summon_on_phase_change and definition.summon_definition:
 		var spawn_count = definition.summon_phase_count
-		var bullet_container = _get_bullets_container()
+		var container = get_tree().get_first_node_in_group("enemies") if is_inside_tree() else null
+		if not container:
+			container = get_parent()
 		if container and container.get_child_count() >= MAX_SUMMONED_ENEMIES:
 			spawn_count = 0
+		var enemy_scene = preload("res://scenes/enemy.tscn")
 		for i in range(spawn_count):
-			var offset = Vector2.RIGHT.rotated(angle) * 20.0
+			var minion = enemy_scene.instantiate()
+			var offset = Vector2.RIGHT.rotated(angle + TAU * i / maxi(spawn_count, 1)) * 20.0
 			minion.global_position = global_position + offset
 			var minion_def = definition.summon_definition.duplicate()
 			minion_def.max_hp = int(minion_def.max_hp * 0.5)  # minions are weaker

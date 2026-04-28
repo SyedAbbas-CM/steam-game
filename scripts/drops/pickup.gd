@@ -8,17 +8,28 @@ var _collected: bool = false
 
 func _process(delta: float) -> void:
 	_age += delta
-	if _age < 0.5 or _collected:
+	if _age < 0.3 or _collected:
 		return
-	# After 0.5s, auto-collect if player is nearby (magnet pulled it close)
 	var player = get_tree().get_first_node_in_group("player")
-	if player:
-		var dist = global_position.distance_to(player.global_position)
-		var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
-		var threshold = 40.0 if in_ow else 10.0
-		if dist < threshold:
-			_collected = true
-			_on_body_entered(player)
+	if not player:
+		return
+	var dist = global_position.distance_to(player.global_position)
+	# Get pickup radius from player's equipment manager
+	var pickup_radius := 48.0
+	if "equipment_manager" in player and player.equipment_manager:
+		pickup_radius = player.equipment_manager.get_pickup_radius()
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	if in_ow:
+		pickup_radius *= 4.0  # scale for overworld 32px tiles
+	# Magnet: pull toward player when within pickup radius
+	if dist < pickup_radius and dist > 4.0:
+		var dir = (player.global_position - global_position).normalized()
+		var speed = 120.0 if in_ow else 60.0
+		global_position += dir * speed * delta
+	# Auto-collect when very close
+	if dist < (12.0 if in_ow else 4.0):
+		_collected = true
+		_on_body_entered(player)
 
 func _ready() -> void:
 	collision_layer = 0

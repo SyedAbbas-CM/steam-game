@@ -1068,8 +1068,8 @@ func _paint_room(grid_pos: Vector2i, room_data: RoomData, theme_row: int, is_sta
 				if stair_cx > 0 and stair_cx < w and mask[cy][stair_cx]:
 					deco_layer.set_cell(origin + Vector2i(stair_cx, cy), 0, stairs_up)
 
-	# Biome-driven liquid flows
-	if current_biome and current_biome.liquid_type != "" and current_biome.hazard_intensity > 0:
+	# Biome-driven liquid flows (skip for test dungeons — they shouldn't have liquids)
+	if current_biome and current_biome.liquid_type != "" and current_biome.hazard_intensity > 0 and not _is_test_dungeon():
 		# Use directional flow for combat rooms, pool fill for shrines/others
 		var liquid_mask = []
 		if room_data.type == RoomData.RoomType.COMBAT and room_data.connections.size() > 0:
@@ -2272,9 +2272,10 @@ func _paint_corridor(from_grid: Vector2i, to_grid: Vector2i, direction: String, 
 			wall_layer.set_cell(Vector2i(x, mid_y - wall_offset), 0, wall_tile)
 			wall_layer.set_cell(Vector2i(x, mid_y + wall_offset), 0, wall_tile)
 			if corridor_liquid.size() > 0:
-				liquid_layer.set_cell(Vector2i(x, mid_y - 1), 0, corridor_liquid[randi() % corridor_liquid.size()])
-				liquid_layer.set_cell(Vector2i(x, mid_y + 1), 0, corridor_liquid[randi() % corridor_liquid.size()])
-				deco_layer.set_cell(Vector2i(x, mid_y), 0, SPIDER_WEB_FULL)
+				liquid_layer.set_cell(Vector2i(x, mid_y - (half_w + 1)), 0, corridor_liquid[randi() % corridor_liquid.size()])
+				liquid_layer.set_cell(Vector2i(x, mid_y + (half_w + 1)), 0, corridor_liquid[randi() % corridor_liquid.size()])
+				deco_layer.set_cell(Vector2i(x, mid_y - half_w), 0, SPIDER_WEB_FULL)
+				deco_layer.set_cell(Vector2i(x, mid_y + half_w), 0, SPIDER_WEB_FULL)
 
 		# Open walls at room exits
 		_open_exit_wall(from_origin, from_exit, from_room.floor_mask, from_room.shape_width, from_room.shape_height, floor_tile, half_w)
@@ -2313,9 +2314,10 @@ func _paint_corridor(from_grid: Vector2i, to_grid: Vector2i, direction: String, 
 			wall_layer.set_cell(Vector2i(mid_x - wall_offset, y), 0, wall_tile)
 			wall_layer.set_cell(Vector2i(mid_x + wall_offset, y), 0, wall_tile)
 			if corridor_liquid.size() > 0:
-				liquid_layer.set_cell(Vector2i(mid_x - 1, y), 0, corridor_liquid[randi() % corridor_liquid.size()])
-				liquid_layer.set_cell(Vector2i(mid_x + 1, y), 0, corridor_liquid[randi() % corridor_liquid.size()])
-				deco_layer.set_cell(Vector2i(mid_x, y), 0, SPIDER_WEB_FULL)
+				liquid_layer.set_cell(Vector2i(mid_x - (half_w + 1), y), 0, corridor_liquid[randi() % corridor_liquid.size()])
+				liquid_layer.set_cell(Vector2i(mid_x + (half_w + 1), y), 0, corridor_liquid[randi() % corridor_liquid.size()])
+				deco_layer.set_cell(Vector2i(mid_x - half_w, y), 0, SPIDER_WEB_FULL)
+				deco_layer.set_cell(Vector2i(mid_x + half_w, y), 0, SPIDER_WEB_FULL)
 
 		_open_exit_wall(from_origin, from_exit, from_room.floor_mask, from_room.shape_width, from_room.shape_height, floor_tile, half_w)
 		_open_exit_wall(to_origin, to_exit, to_room.floor_mask, to_room.shape_width, to_room.shape_height, floor_tile, half_w)
@@ -2358,6 +2360,8 @@ func _open_exit_wall(origin: Vector2i, exit_point: Vector2i, mask: Array, w: int
 
 func _get_corridor_liquid(from_grid: Vector2i, to_grid: Vector2i) -> Array:
 	# Returns liquid tile array if both rooms have liquid, else empty
+	if _is_test_dungeon():
+		return []
 	if not current_biome or current_biome.liquid_type == "":
 		return []
 	var from_state = room_states.get(from_grid, {})

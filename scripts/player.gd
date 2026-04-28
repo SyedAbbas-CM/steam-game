@@ -1204,7 +1204,7 @@ func use_mp(cost: float) -> bool:
 	mp_changed.emit(mp)
 	return true
 
-func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: bool = false, is_backstab: bool = false) -> void:
+func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: bool = false, is_backstab: bool = false, _damage_type: int = 0) -> void:
 	if invincible:
 		return
 
@@ -2090,7 +2090,7 @@ func _use_spell_slot(index: int) -> void:
 	if spell.id == "mana_surge" and stamina < 30.0:
 		return
 	use_mp(spell.mp_cost)
-	var cdr = clampf(equipment_manager.get_cooldown_reduction(), 0.0, 50.0)
+	var cdr = clampf(equipment_manager.get_total_cooldown_reduction(), 0.0, 50.0)
 	spell_book.slot_cooldowns[index] = spell.cooldown * (1.0 - cdr / 100.0)
 
 	if _player_anim:

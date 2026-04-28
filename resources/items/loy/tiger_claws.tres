@@ -1,16 +1,30 @@
-[gd_resource type="Resource" script_class="EquipmentItem" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+
+[sub_resource type="Resource" id="mod_0"]
+script = ExtResource("2")
+stat = 2
+flat_bonus = 2.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 3
+flat_bonus = 0.15
 
 [resource]
 script = ExtResource("1")
 item_name = "Tiger Claws"
 loy_tile_index = 291
 description = "Razor-sharp claws inspired by the great tiger"
-slot_type = 2
+slot_type = 0
 rarity = 1
 buy_price = 200
 sell_value = 50
-damage_bonus = 5
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
+bullet_sprite_index = 240
+weapon_range = 1.2
 attack_speed_bonus = 0.12
 weapon_type = "claws"
