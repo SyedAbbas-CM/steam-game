@@ -33,6 +33,22 @@ func get_buff_value(buff_name: String) -> float:
 func get_all_buffs() -> Dictionary:
 	return _buffs
 
+## Convenience wrapper: apply status by name string (e.g. "BURNING", "POISONED")
+func apply_status(status_name: String, duration: float, strength: float = 1.0) -> void:
+	var type_map := {
+		"BURNING": StatusEffect.Type.BURNING,
+		"SLOWED": StatusEffect.Type.SLOWED,
+		"POISONED": StatusEffect.Type.POISONED,
+		"STUNNED": StatusEffect.Type.STUNNED,
+		"FROZEN": StatusEffect.Type.FROZEN,
+		"CONFUSED": StatusEffect.Type.CONFUSED,
+		"FEARED": StatusEffect.Type.FEARED,
+		"WEAKENED": StatusEffect.Type.WEAKENED,
+		"STRENGTHENED": StatusEffect.Type.STRENGTHENED,
+	}
+	if type_map.has(status_name):
+		apply_effect(type_map[status_name], duration, strength)
+
 func apply_effect(type: StatusEffect.Type, duration: float, strength: float, source: Vector2 = Vector2.INF) -> void:
 	# Tenacity reduces negative status duration (not for buffs like STRENGTHENED)
 	if type != StatusEffect.Type.STRENGTHENED:

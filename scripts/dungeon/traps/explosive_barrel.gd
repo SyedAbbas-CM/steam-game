@@ -260,13 +260,12 @@ func _explode() -> void:
 	_play_sfx("boom_b", 0.0, 0.1)
 
 	# Damage all bodies in radius (player AND enemies)
-	var _StatusEffect = load("res://scripts/status_effect.gd")
 	for body in _get_bodies_in_radius(explosion_radius):
 		if body.is_in_group("player"):
 			if body.has_method("take_damage"):
-				body.take_damage(damage, Vector2.INF, false, false, CombatTypes.DamageType.TRUE)
-			if _StatusEffect and body.has_method("apply_status"):
-				body.apply_status(_StatusEffect.Type.BURNING, 1.0, 3.0)
+				body.take_damage(damage, Vector2.INF, false, false)
+			if "status_effects" in body and body.status_effects:
+				body.status_effects.apply_effect(StatusEffect.Type.BURNING, 3.0, 1.0)
 		elif body.is_in_group("enemy"):
 			var enemy_dmg := damage * 2  # 2x to enemies
 			if body.has_method("take_damage"):

@@ -4354,7 +4354,8 @@ func _shoot_spear_lunge(dir: Vector2) -> void:
 			# Tween enemy forward along the thrust line fast
 			var start = global_position
 			var end_pt = start + dir * length
-			tween.tween_property(self, "global_position", end_pt, 0.15).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			var lunge_tween = create_tween()
+			lunge_tween.tween_property(self, "global_position", end_pt, 0.15).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 			# Recovery: 0.3s freeze
 			cooldown_timer = 0.3
 			state = State.COOLDOWN

@@ -10,7 +10,6 @@ var game_hud: GameHUD
 var companion_scene: PackedScene
 
 func _ready() -> void:
-	var fpv = null
 	var player = get_tree().get_first_node_in_group("player")
 	var t_start = Time.get_ticks_msec()
 	print("TIMING: dungeon_scene _ready START")
@@ -49,7 +48,7 @@ func _ready() -> void:
 	add_child(quest_log)
 
 	# 3D first-person view
-	fpv = FirstPersonView.new()
+	var fpv = FirstPersonView.new()
 	fpv.name = "FirstPersonView"
 	fpv.visible = false
 	add_child(fpv)

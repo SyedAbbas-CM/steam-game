@@ -56,8 +56,8 @@ func _physics_process(delta: float) -> void:
 			if player and cloud_pos.distance_to(player.global_position) <= CLOUD_RADIUS:
 				if player.has_method("take_damage"):
 					player.take_damage(damage, Vector2.INF, false, false, CombatTypes.DamageType.TRUE)
-				if "status_manager" in player and player.status_manager:
-					player.status_manager.apply_status("POISONED", POISON_STATUS_DURATION)
+				if "status_effects" in player and player.status_effects:
+					player.status_effects.apply_status("POISONED", POISON_STATUS_DURATION)
 
 			# Damage enemies (2x) + 15% confusion chance per tick
 			for enemy in get_tree().get_nodes_in_group("enemy"):

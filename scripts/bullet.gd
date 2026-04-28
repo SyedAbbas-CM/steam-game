@@ -534,8 +534,8 @@ func _on_area_entered(area: Node2D) -> void:
 		if player.has_method("take_damage"):
 			player.take_damage(damage, global_position)
 		# Poison on hit from enemy bullets
-		if poison_on_hit and player.has_method("apply_status"):
-			player.apply_status("POISONED", 4.0)
+		if poison_on_hit and "status_effects" in player and player.status_effects:
+			player.status_effects.apply_status("POISONED", 4.0)
 		if not hits_all:
 			_spent = true
 			queue_free()

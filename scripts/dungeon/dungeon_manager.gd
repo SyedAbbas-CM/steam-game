@@ -3371,7 +3371,7 @@ func _get_weakest_enemy(loy_pool: Array, biome_pool: Array) -> EnemyDefinition:
 	var weakest: EnemyDefinition = null
 	# Check loy_pool first (level monster_pool)
 	for entry in loy_pool:
-		var def = _load_enemy_by_name(str(entry.get("name", ""))) if entry is Dictionary else entry as EnemyDefinition
+		var def = _load_enemy_by_name(str(entry.get("type", entry.get("name", "")))) if entry is Dictionary else entry as EnemyDefinition
 		if def and (not weakest or def.max_hp < weakest.max_hp):
 			weakest = def
 	# Fallback to biome pool
@@ -3391,12 +3391,14 @@ func _pick_weighted_enemy(pool: Array) -> EnemyDefinition:
 	for entry in pool:
 		cumulative += int(entry.get("chance", 1))
 		if roll < cumulative:
-			var def = _load_enemy_by_name(str(entry.get("name", "")))
+			var monster_name = str(entry.get("type", entry.get("name", "")))
+			var def = _load_enemy_by_name(monster_name)
 			if def:
 				return def
 
 	if pool.size() > 0:
-		var def = _load_enemy_by_name(str(pool[0].get("name", "")))
+		var monster_name = str(pool[0].get("type", pool[0].get("name", "")))
+		var def = _load_enemy_by_name(monster_name)
 		if def:
 			return def
 

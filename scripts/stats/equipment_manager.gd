@@ -356,14 +356,26 @@ func get_equipped_weapon() -> EquipmentItem:
 func get_equipped_ammo() -> EquipmentItem:
 	return equipped.get(EquipmentItem.SlotType.AMMO, null)
 
-func consume_ammo(count: int = 1) -> void:
+func consume_ammo() -> bool:
 	var ammo = get_equipped_ammo()
-	if not ammo:
-		return
-	ammo.quantity -= count
+	if not ammo or ammo.quantity <= 0:
+		return false
+	ammo.quantity -= 1
 	if ammo.quantity <= 0:
+		# Unequip and remove from inventory
 		equipped.erase(EquipmentItem.SlotType.AMMO)
+		for i in range(inventory.size() - 1, -1, -1):
+			if inventory[i] == ammo:
+				inventory.remove_at(i)
+				break
+		# Show floating text
+		var player = get_tree().get_first_node_in_group("player")
+		if player:
+			var sr = get_tree().current_scene
+			if sr:
+				FloatingText.spawn(sr, player.global_position + Vector2(0, -8), "Out of arrows!", Color(1.0, 0.6, 0.2))
 	inventory_changed.emit()
+	return true
 
 func get_equipped_items() -> Array:
 	var items: Array = []
@@ -490,7 +502,15 @@ func get_stat(stat_type: StatModifier.StatType) -> float:
 			total *= mult
 	return total
 
-func get_damage() -> int: return int(round(get_stat(StatModifier.StatType.ATTACK_DAMAGE)))
+func get_damage() -> int:
+	var base = get_stat(StatModifier.StatType.ATTACK_DAMAGE)
+	var weapon = get_equipped_weapon()
+	if weapon and weapon.weapon_type != "" and level_system:
+		var scaling_stat = weapon.get_scaling_stat()
+		if scaling_stat != "":
+			var points = level_system.allocated.get(scaling_stat, 0)
+			base *= (1.0 + points * 0.08)
+	return maxi(1, int(base))
 func get_attack_speed() -> float: return get_stat(StatModifier.StatType.ATTACK_SPEED)
 func get_bullet_speed() -> float: return get_stat(StatModifier.StatType.BULLET_SPEED)
 func get_bullet_count() -> int: return maxi(1, int(round(get_stat(StatModifier.StatType.BULLET_COUNT))))

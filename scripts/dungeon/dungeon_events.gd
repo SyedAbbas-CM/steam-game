@@ -800,7 +800,7 @@ func _use_elder_npc(_elder: Area2D) -> void:
 
 	var qm = get_node_or_null("/root/QuestManager")
 	if qm:
-		qm.show_dialogue_requested.emit("Elder", dialogue, [])
+		qm.show_dialogue_requested.emit("Elder", 147, dialogue, [])
 
 # ── Trap Lever ────────────────────────────────────────────
 

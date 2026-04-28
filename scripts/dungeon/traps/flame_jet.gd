@@ -71,8 +71,8 @@ func _try_flame_hit(target: Node2D, damage: int) -> void:
 				target.take_damage(actual_damage, false, CombatTypes.DamageType.TRUE)
 			else:
 				target.take_damage(actual_damage, Vector2.INF, false, false, CombatTypes.DamageType.TRUE)
-		if target.is_in_group("player") and "status_manager" in target and target.status_manager:
-			target.status_manager.apply_status("BURNING", 2.0)
+		if target.is_in_group("player") and "status_effects" in target and target.status_effects:
+			target.status_effects.apply_status("BURNING", 2.0)
 
 func _start_burst() -> void:
 	_is_bursting = true
