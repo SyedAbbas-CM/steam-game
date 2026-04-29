@@ -58,6 +58,7 @@ var _player_anim: PlayerAnimator
 
 # Dash system
 var _is_dashing: bool = false
+var _pushed_velocity: Vector2 = Vector2.ZERO  # external push from enemy collisions
 var _dash_timer: float = 0.0
 var _dash_cooldown: float = 0.0
 var _dash_direction: Vector2 = Vector2.ZERO
@@ -923,6 +924,9 @@ func _physics_process(delta: float) -> void:
 	var target_velocity = direction * equipment_manager.get_move_speed() * speed_mult
 	var accel = equipment_manager.get_acceleration()
 	velocity = velocity.lerp(target_velocity, accel * delta * 10.0)
+	# Apply external push (from enemy contact knockback)
+	velocity += _pushed_velocity
+	_pushed_velocity = _pushed_velocity.move_toward(Vector2.ZERO, delta * 400.0)
 	move_and_slide()
 	# Sync 3D first-person camera
 	if fps_mode and _first_person_view:

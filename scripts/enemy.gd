@@ -844,7 +844,10 @@ func _physics_process(delta: float) -> void:
 							player.take_damage(maxi(bdmg, 1), global_position, true, false)
 						# Push player in charge direction
 						var push_str = 250.0 if _is_bull else 150.0
-						player.velocity += charge_dir * push_str
+						if "_pushed_velocity" in player:
+							player._pushed_velocity = charge_dir * push_str
+						else:
+							player.velocity += charge_dir * push_str
 						set_meta(_charge_hit_key, true)
 						var sfx_ch = get_node_or_null("/root/SFXManager")
 						if sfx_ch:
@@ -2512,13 +2515,18 @@ func _check_contact_damage() -> void:
 		push_dir = Vector2.RIGHT.rotated(randf() * TAU)
 
 	var is_heavy = definition and definition.size_class >= 1  # LARGE or BOSS
+	# Push player using _pushed_velocity so it persists through player's movement lerp
 	if is_heavy:
-		# Heavy enemies: immovable, push player via velocity only
+		# Heavy enemies: immovable, push player hard
 		if definition.size_class >= 2:  # BOSS
-			if player is CharacterBody2D:
+			if "_pushed_velocity" in player:
+				player._pushed_velocity = -push_dir * 400.0
+			else:
 				player.velocity = -push_dir * 400.0
 		else:  # LARGE/elite
-			if player is CharacterBody2D:
+			if "_pushed_velocity" in player:
+				player._pushed_velocity = -push_dir * 200.0
+			else:
 				player.velocity = -push_dir * 200.0
 	else:
 		# Check if movement makes this enemy unstoppable (swoop, bait punish, etc.)
@@ -2539,13 +2547,18 @@ func _check_contact_damage() -> void:
 		var kb_mult = 1.0 - clampf(kb_resist, 0.0, 1.0)
 
 		if _unstoppable:
-			# Unstoppable: heavy push on player via velocity
-			if player is CharacterBody2D:
+			# Unstoppable: heavy push on player
+			if "_pushed_velocity" in player:
+				player._pushed_velocity = -push_dir * 180.0
+			elif player is CharacterBody2D:
 				player.velocity = -push_dir * 180.0
 		else:
 			velocity = push_dir * 60.0 / weight_mult * kb_mult
+			_pushed_velocity = push_dir * 40.0 / weight_mult * kb_mult
 			_knockback_timer = 0.1
-			if player is CharacterBody2D:
+			if "_pushed_velocity" in player:
+				player._pushed_velocity = -push_dir * 100.0 * weight_mult
+			elif player is CharacterBody2D:
 				player.velocity = -push_dir * 100.0 * weight_mult
 
 	# Poise check: heavy enemies can stagger the player

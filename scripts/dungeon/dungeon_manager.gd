@@ -2377,24 +2377,16 @@ func _paint_corridor(from_grid: Vector2i, to_grid: Vector2i, direction: String, 
 	var floor_tile = Vector2i(5, theme_row)
 	var wall_tile = Vector2i(4, theme_row)
 
-	# Corridor width: minimum 3 tiles (half_w=1), randomly wider
+	# Corridor width: 3 tiles (half_w=1) default, 5 tiles (half_w=2) for elite
 	var is_elite_corridor = (
 		from_room.type in [RoomData.RoomType.BOSS, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE]
 		or to_room.type in [RoomData.RoomType.BOSS, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE]
 	)
 	var half_w: int
 	if is_elite_corridor:
-		# Elite/boss: always at least 5 wide, sometimes 7
-		half_w = 2 if randf() < 0.65 else 3
+		half_w = 2  # 5 tiles wide for elite/boss corridors
 	else:
-		# Normal: 3 (40%), 5 (35%), 7 (25%)
-		var w_roll = randf()
-		if w_roll < 0.40:
-			half_w = 1
-		elif w_roll < 0.75:
-			half_w = 2
-		else:
-			half_w = 3
+		half_w = 1  # 3 tiles wide (standard)
 
 	# Calculate absolute exit positions
 	var from_exit_local: Vector2i
@@ -2448,6 +2440,12 @@ func _paint_corridor(from_grid: Vector2i, to_grid: Vector2i, direction: String, 
 	# Open walls at room exits
 	_open_exit_wall(from_origin, from_exit_local, from_room.floor_mask, from_room.shape_width, from_room.shape_height, floor_tile, half_w)
 	_open_exit_wall(to_origin, to_exit_local, to_room.floor_mask, to_room.shape_width, to_room.shape_height, floor_tile, half_w)
+
+	# Paint pillars along corridor walls
+	if corridor_data.has("pillar_tiles"):
+		for pillar_pos in corridor_data["pillar_tiles"]:
+			if floor_layer.get_cell_source_id(pillar_pos) >= 0 and deco_layer.get_cell_source_id(pillar_pos) == -1:
+				deco_layer.set_cell(pillar_pos, 1, DECO_PILLARS[randi() % DECO_PILLARS.size()])
 
 	# Store corridor data for trap/enemy placement
 	corridor_data["position"] = Vector2(corridor_data["midpoint"].x * TILE_SIZE + 4, corridor_data["midpoint"].y * TILE_SIZE + 4)

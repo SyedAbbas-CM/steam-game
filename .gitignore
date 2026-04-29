@@ -1,40 +1,28 @@
-# Godot 4+ specific ignores
+# Godot project state
 .godot/
 /android/
 
-# OS junk
+# Local editor / machine junk
 .DS_Store
-
-# Editor metadata
 .obsidian/
 
-# OS junk
-.DS_Store
+# Local recovery / scratch output
+/recovery/
+/~/
 
-# Editor metadata
-.obsidian/
-
-# Large overworld text scenes (game uses .scn binary versions)
-scenes/overworld/overworld.tscn
-scenes/overworld/overworld2.tscn
-scenes/overworld/overworld_loy_original.tscn
-
-# Node/Electron tool artifacts
-node_modules/
-dist/
+# Build and packaging output
+/builds/
 *.exe
 *.dmg
 
-# Build exports
-builds/
+# Tooling artifacts
+node_modules/
+dist/
 
-# Local workflow artifacts generated per machine
-docs/workflow/local/
+# Large local-only scenes kept out of git
+/scenes/overworld/overworld.tscn
+/scenes/overworld/overworld2.tscn
+/scenes/overworld/overworld_loy_original.tscn
 
-# OS junk
-.DS_Store
-
-# Editor metadata
-.obsidian/
-~/
-
+# Local workflow notes
+/docs/workflow/local/
