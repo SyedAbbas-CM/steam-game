@@ -35,10 +35,6 @@ const SPELL_SLOT_KEYS = ["F", "G", "H", "J", "K", "L"]
 const SS_SIZE = 56
 const SS_ICON_SIZE = 36
 
-var _spell_grid: VBoxContainer
-var _spells_container: VBoxContainer
-var _spells_label: Label
-
 # Tab system
 var _current_tab: String = "items"
 var _items_content: VBoxContainer
@@ -130,7 +126,7 @@ func _build_ui() -> void:
 	_root_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	add_child(_root_panel)
 
-	# Main horizontal layout: [Inventory | Stats]
+	# Main horizontal layout: [Center (tabs) | Quickslots | Stats]
 	var main_hbox = HBoxContainer.new()
 	main_hbox.add_theme_constant_override("separation", 24)
 	main_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -138,23 +134,46 @@ func _build_ui() -> void:
 	main_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	_root_panel.add_child(main_hbox)
 
-	# ===== LEFT: Spell slots column =====
-	var spell_panel = _build_spell_panel()
-	spell_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	main_hbox.add_child(spell_panel)
+	# ===== CENTER: Tabbed content (Items / Spells) =====
+	var center_vbox = VBoxContainer.new()
+	center_vbox.add_theme_constant_override("separation", 6)
+	center_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_hbox.add_child(center_vbox)
 
-	# ===== CENTER: Inventory grid =====
-	var inv_panel = _build_inventory_panel()
-	inv_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inv_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	main_hbox.add_child(inv_panel)
+	# Tab bar
+	var tab_bar = HBoxContainer.new()
+	tab_bar.add_theme_constant_override("separation", 8)
+	tab_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	center_vbox.add_child(tab_bar)
+
+	_tab_items_btn = _create_tab_button("ITEMS", true)
+	_tab_items_btn.pressed.connect(_switch_tab.bind("items"))
+	tab_bar.add_child(_tab_items_btn)
+
+	_tab_spells_btn = _create_tab_button("SPELLS", false)
+	_tab_spells_btn.pressed.connect(_switch_tab.bind("spells"))
+	tab_bar.add_child(_tab_spells_btn)
+
+	# Items tab content
+	_items_content = _build_inventory_panel()
+	_items_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_items_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center_vbox.add_child(_items_content)
+
+	# Spells tab content
+	_spells_content = _build_spells_tab()
+	_spells_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_spells_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_spells_content.visible = false
+	center_vbox.add_child(_spells_content)
 
 	# ===== RIGHT-MID: Quickslots column =====
 	var qs_panel = _build_quickslot_panel()
 	qs_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	main_hbox.add_child(qs_panel)
 
-	# ===== RIGHT: Stats + Tooltip =====
+	# ===== RIGHT: Stats =====
 	var right_panel = _build_stats_panel()
 	right_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	main_hbox.add_child(right_panel)
@@ -177,6 +196,62 @@ func _build_ui() -> void:
 	_close_btn.offset_bottom = 44
 	_close_btn.pressed.connect(toggle)
 	add_child(_close_btn)
+
+func _create_tab_button(text: String, active: bool) -> Button:
+	var btn = Button.new()
+	btn.text = text
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.custom_minimum_size = Vector2(120, 36)
+	btn.add_theme_font_size_override("font_size", 20)
+	var sty = StyleBoxFlat.new()
+	sty.set_corner_radius_all(4)
+	sty.content_margin_left = 16
+	sty.content_margin_right = 16
+	sty.content_margin_top = 4
+	sty.content_margin_bottom = 4
+	if active:
+		sty.bg_color = Color(0.15, 0.12, 0.25)
+		sty.border_color = Color(0.6, 0.5, 0.2)
+		sty.set_border_width_all(2)
+		btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
+	else:
+		sty.bg_color = Color(0.08, 0.07, 0.12)
+		sty.border_color = Color(0.3, 0.3, 0.4)
+		sty.set_border_width_all(1)
+		btn.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))
+	btn.add_theme_stylebox_override("normal", sty)
+	var hover = sty.duplicate()
+	hover.bg_color = Color(0.18, 0.15, 0.28)
+	hover.border_color = Color(0.7, 0.6, 0.3)
+	hover.set_border_width_all(2)
+	btn.add_theme_stylebox_override("hover", hover)
+	return btn
+
+func _switch_tab(tab_name: String) -> void:
+	_current_tab = tab_name
+	_items_content.visible = tab_name == "items"
+	_spells_content.visible = tab_name == "spells"
+	_update_tab_style(_tab_items_btn, tab_name == "items")
+	_update_tab_style(_tab_spells_btn, tab_name == "spells")
+	if tab_name == "spells":
+		_refresh_spells_tab()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("click", -4.0)
+
+func _update_tab_style(btn: Button, active: bool) -> void:
+	var sty = btn.get_theme_stylebox("normal") as StyleBoxFlat
+	if sty:
+		if active:
+			sty.bg_color = Color(0.15, 0.12, 0.25)
+			sty.border_color = Color(0.6, 0.5, 0.2)
+			sty.set_border_width_all(2)
+			btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
+		else:
+			sty.bg_color = Color(0.08, 0.07, 0.12)
+			sty.border_color = Color(0.3, 0.3, 0.4)
+			sty.set_border_width_all(1)
+			btn.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))
 
 func _build_inventory_panel() -> VBoxContainer:
 	var vbox = VBoxContainer.new()
@@ -278,23 +353,27 @@ func _build_inventory_panel() -> VBoxContainer:
 
 	return vbox
 
-func _build_spell_panel() -> VBoxContainer:
+func _build_spells_tab() -> VBoxContainer:
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	vbox.custom_minimum_size = Vector2(SS_SIZE + 8, 0)
+	vbox.add_theme_constant_override("separation", 10)
 
-	var title = Label.new()
-	title.text = "SPELLS"
-	title.add_theme_font_size_override("font_size", 16)
-	title.add_theme_color_override("font_color", Color(0.5, 0.6, 1.0))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
+	# Spell equip slots — horizontal row at top
+	var slots_label = Label.new()
+	slots_label.text = "EQUIPPED SPELLS  (click to unequip)"
+	slots_label.add_theme_font_size_override("font_size", 18)
+	slots_label.add_theme_color_override("font_color", Color(0.6, 0.7, 1.0))
+	slots_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(slots_label)
 
-	# 6 spell equip slots
+	var slots_hbox = HBoxContainer.new()
+	slots_hbox.add_theme_constant_override("separation", 8)
+	slots_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(slots_hbox)
+
 	_spell_slot_buttons.clear()
 	for i in range(6):
 		var btn = Button.new()
-		btn.custom_minimum_size = Vector2(SS_SIZE, SS_SIZE)
+		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
 		btn.focus_mode = Control.FOCUS_NONE
 		var sty = StyleBoxFlat.new()
 		sty.bg_color = Color(0.06, 0.06, 0.16, 0.85)
@@ -308,38 +387,45 @@ func _build_spell_panel() -> VBoxContainer:
 		hover.set_border_width_all(2)
 		btn.add_theme_stylebox_override("hover", hover)
 		btn.pressed.connect(_on_spell_slot_clicked.bind(i))
-		vbox.add_child(btn)
+		slots_hbox.add_child(btn)
 		_spell_slot_buttons.append(btn)
 
-	# Separator + learned spells grid
 	var sep = HSeparator.new()
-	sep.add_theme_constant_override("separation", 4)
+	sep.add_theme_constant_override("separation", 6)
 	vbox.add_child(sep)
 
-	var learned_title = Label.new()
-	learned_title.text = "LEARNED"
-	learned_title.add_theme_font_size_override("font_size", 14)
-	learned_title.add_theme_color_override("font_color", Color(0.5, 0.5, 0.7))
-	learned_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(learned_title)
+	var learned_label = Label.new()
+	learned_label.text = "LEARNED SPELLS  (drag to equip)"
+	learned_label.add_theme_font_size_override("font_size", 16)
+	learned_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.7))
+	learned_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(learned_label)
 
+	# Scrollable grid of learned spells (same size as item inventory)
 	var spell_scroll = ScrollContainer.new()
 	spell_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	spell_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(spell_scroll)
 
-	_spell_grid = VBoxContainer.new()
-	_spell_grid.add_theme_constant_override("separation", 2)
-	spell_scroll.add_child(_spell_grid)
+	var grid_center = CenterContainer.new()
+	grid_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spell_scroll.add_child(grid_center)
+
+	_spell_inv_grid = GridContainer.new()
+	_spell_inv_grid.columns = SPELL_INV_COLS
+	_spell_inv_grid.add_theme_constant_override("h_separation", 4)
+	_spell_inv_grid.add_theme_constant_override("v_separation", 4)
+	grid_center.add_child(_spell_inv_grid)
 
 	return vbox
 
-func _refresh_spell_slots_inv() -> void:
+func _refresh_spells_tab() -> void:
 	var player = get_tree().get_first_node_in_group("player")
 	if not player or not player.get("spell_book"):
 		return
 	var sb: SpellBook = player.spell_book
 
-	# Refresh equipped spell slots
+	# Refresh equipped spell slots (top row)
 	for i in range(6):
 		var btn = _spell_slot_buttons[i]
 		for child in btn.get_children():
@@ -351,39 +437,46 @@ func _refresh_spell_slots_inv() -> void:
 			var color = _get_spell_color(spell)
 			var icon_rect = ColorRect.new()
 			icon_rect.color = color
-			icon_rect.size = Vector2(SS_ICON_SIZE, SS_ICON_SIZE)
-			icon_rect.position = Vector2((SS_SIZE - SS_ICON_SIZE) / 2, 1)
+			icon_rect.size = Vector2(ICON_SIZE, ICON_SIZE)
+			icon_rect.position = Vector2((SLOT_SIZE - ICON_SIZE) / 2, 2)
 			icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			btn.add_child(icon_rect)
 
 			var name_lbl = Label.new()
-			var sname = spell.spell_name if spell.spell_name.length() <= 6 else spell.spell_name.substr(0, 5)
-			name_lbl.text = sname
-			name_lbl.add_theme_font_size_override("font_size", 9)
+			name_lbl.text = spell.spell_name.substr(0, 8) if spell.spell_name.length() > 8 else spell.spell_name
+			name_lbl.add_theme_font_size_override("font_size", 12)
 			name_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 1.0))
 			name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			name_lbl.position = Vector2(0, SS_SIZE - 14)
-			name_lbl.size = Vector2(SS_SIZE, 12)
+			name_lbl.position = Vector2(0, SLOT_SIZE - 20)
+			name_lbl.size = Vector2(SLOT_SIZE, 18)
 			name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			btn.add_child(name_lbl)
-		# Key label
+
+			var mp_lbl = Label.new()
+			mp_lbl.text = "MP:%.0f" % spell.mp_cost
+			mp_lbl.add_theme_font_size_override("font_size", 10)
+			mp_lbl.add_theme_color_override("font_color", Color(0.4, 0.6, 1.0))
+			mp_lbl.position = Vector2(SLOT_SIZE - 42, 2)
+			mp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(mp_lbl)
+
 		var key_lbl = Label.new()
 		key_lbl.text = SPELL_SLOT_KEYS[i]
-		key_lbl.add_theme_font_size_override("font_size", 11)
+		key_lbl.add_theme_font_size_override("font_size", 14)
 		key_lbl.add_theme_color_override("font_color", Color(0.4, 0.4, 0.6) if not spell else Color(0.7, 0.7, 0.9))
-		key_lbl.position = Vector2(2, 0)
+		key_lbl.position = Vector2(4, 2)
 		key_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn.add_child(key_lbl)
 
-	# Refresh learned spells grid
-	for child in _spell_grid.get_children():
+	# Refresh learned spells grid (big inventory-style)
+	for child in _spell_inv_grid.get_children():
 		child.queue_free()
 	_spell_grid_buttons.clear()
 
 	for j in range(sb.learned_spells.size()):
 		var spell = sb.learned_spells[j]
 		var btn = Button.new()
-		btn.custom_minimum_size = Vector2(SS_SIZE, SS_SIZE)
+		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
 		btn.focus_mode = Control.FOCUS_NONE
 		var sty = StyleBoxFlat.new()
 		sty.bg_color = Color(0.07, 0.07, 0.12, 0.85)
@@ -397,28 +490,55 @@ func _refresh_spell_slots_inv() -> void:
 		hover.set_border_width_all(2)
 		btn.add_theme_stylebox_override("hover", hover)
 
-		# Spell icon (colored rect)
+		# Check if equipped — highlight
+		var equipped_slot = -1
+		for si in range(6):
+			if sb.spell_slots[si] and sb.spell_slots[si].id == spell.id:
+				equipped_slot = si
+				break
+		if equipped_slot >= 0:
+			sty.bg_color = Color(0.08, 0.08, 0.22, 0.9)
+			sty.border_color = Color(0.4, 0.3, 0.8)
+			sty.set_border_width_all(2)
+
 		var color = _get_spell_color(spell)
 		var icon_rect = ColorRect.new()
 		icon_rect.color = color
-		icon_rect.size = Vector2(SS_ICON_SIZE, SS_ICON_SIZE)
-		icon_rect.position = Vector2((SS_SIZE - SS_ICON_SIZE) / 2, 1)
+		icon_rect.size = Vector2(ICON_SIZE, ICON_SIZE)
+		icon_rect.position = Vector2((SLOT_SIZE - ICON_SIZE) / 2, 2)
 		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn.add_child(icon_rect)
 
 		var name_lbl = Label.new()
-		var sname = spell.spell_name if spell.spell_name.length() <= 6 else spell.spell_name.substr(0, 5)
-		name_lbl.text = sname
-		name_lbl.add_theme_font_size_override("font_size", 9)
-		name_lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.9))
+		name_lbl.text = spell.spell_name.substr(0, 8) if spell.spell_name.length() > 8 else spell.spell_name
+		name_lbl.add_theme_font_size_override("font_size", 12)
+		var name_color = Color(0.5, 1.0, 0.5) if equipped_slot >= 0 else Color(0.75, 0.75, 0.9)
+		name_lbl.add_theme_color_override("font_color", name_color)
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_lbl.position = Vector2(0, SS_SIZE - 14)
-		name_lbl.size = Vector2(SS_SIZE, 12)
+		name_lbl.position = Vector2(0, SLOT_SIZE - 20)
+		name_lbl.size = Vector2(SLOT_SIZE, 18)
 		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn.add_child(name_lbl)
 
+		if equipped_slot >= 0:
+			var eq_lbl = Label.new()
+			eq_lbl.text = "[%s]" % SPELL_SLOT_KEYS[equipped_slot]
+			eq_lbl.add_theme_font_size_override("font_size", 11)
+			eq_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
+			eq_lbl.position = Vector2(2, 0)
+			eq_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(eq_lbl)
+
+		var mp_lbl = Label.new()
+		mp_lbl.text = "MP:%.0f" % spell.mp_cost
+		mp_lbl.add_theme_font_size_override("font_size", 10)
+		mp_lbl.add_theme_color_override("font_color", Color(0.4, 0.6, 1.0))
+		mp_lbl.position = Vector2(SLOT_SIZE - 42, 2)
+		mp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(mp_lbl)
+
 		btn.gui_input.connect(_on_spell_gui_input.bind(j))
-		_spell_grid.add_child(btn)
+		_spell_inv_grid.add_child(btn)
 		_spell_grid_buttons.append(btn)
 
 func _get_spell_color(spell: SpellDefinition) -> Color:
@@ -435,7 +555,7 @@ func _on_spell_slot_clicked(slot_index: int) -> void:
 	if not player or not player.get("spell_book"):
 		return
 	player.spell_book.unequip_spell(slot_index)
-	_refresh_spell_slots_inv()
+	_refresh_spells_tab()
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("click", -4.0)
@@ -489,7 +609,7 @@ func _end_spell_drag(drop_pos: Vector2) -> void:
 	if slot >= 0:
 		var spell = player.spell_book.learned_spells[_spell_drag_idx]
 		player.spell_book.equip_spell(spell, slot)
-		_refresh_spell_slots_inv()
+		_refresh_spells_tab()
 		var sfx = get_node_or_null("/root/SFXManager")
 		if sfx:
 			sfx.play("click", -4.0)
@@ -646,34 +766,6 @@ func _build_stats_panel() -> VBoxContainer:
 	_stat_alloc_container.add_theme_constant_override("separation", 2)
 	vbox.add_child(_stat_alloc_container)
 
-	# Spells section
-	var spell_sep = HSeparator.new()
-	spell_sep.add_theme_constant_override("separation", 8)
-	vbox.add_child(spell_sep)
-
-	var spell_title = Label.new()
-	spell_title.text = "SPELLS"
-	spell_title.add_theme_font_size_override("font_size", 20)
-	spell_title.add_theme_color_override("font_color", Color(0.6, 0.7, 1.0))
-	spell_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(spell_title)
-
-	# Scrollable spell list with equip buttons
-	var spell_scroll = ScrollContainer.new()
-	spell_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	spell_scroll.custom_minimum_size.y = 150
-	vbox.add_child(spell_scroll)
-
-	_spells_container = VBoxContainer.new()
-	_spells_container.add_theme_constant_override("separation", 4)
-	spell_scroll.add_child(_spells_container)
-
-	_spells_label = Label.new()
-	_spells_label.add_theme_font_size_override("font_size", 15)
-	_spells_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.9))
-	_spells_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_spells_container.add_child(_spells_label)
-
 	return vbox
 
 func _create_inv_slot(index: int) -> Button:
@@ -742,8 +834,8 @@ func _refresh() -> void:
 	_refresh_inv_grid()
 	_refresh_stats()
 	_refresh_quickslots()
-	_refresh_spell_slots_inv()
-	_refresh_spells()
+	if _current_tab == "spells":
+		_refresh_spells_tab()
 	# Restore scroll position after grid rebuild
 	if _inv_scroll:
 		_inv_scroll.scroll_vertical = saved_scroll
@@ -966,85 +1058,6 @@ func _on_allocate_stat(category: String) -> void:
 			player.max_mp = equipment_manager.get_max_mp()
 			player.max_stamina = equipment_manager.get_max_stamina()
 
-const SPELL_KEY_NAMES = ["F", "G", "H", "J", "K", "L"]
-
-func _refresh_spells() -> void:
-	if not _spells_container:
-		return
-	# Clear old spell rows (keep _spells_label)
-	for child in _spells_container.get_children():
-		if child != _spells_label:
-			child.queue_free()
-
-	var player = get_tree().get_first_node_in_group("player")
-	if not player or not player.get("spell_book"):
-		_spells_label.text = "No spells learned"
-		return
-	var sb = player.spell_book as SpellBook
-	if not sb or sb.learned_spells.is_empty():
-		_spells_label.text = "No spells learned"
-		return
-
-	_spells_label.text = ""  # Clear default text
-
-	var ls = player.get_node_or_null("LevelSystem") as LevelSystem
-	var spirit = 0
-	if ls:
-		spirit = ls.allocated.get("spirit", 0)
-	var max_slots = sb.get_max_slots(1, spirit)
-
-	for spell in sb.learned_spells:
-		var row = HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-
-		# Spell name + info
-		var info = VBoxContainer.new()
-		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var name_lbl = Label.new()
-		# Find current slot
-		var cur_slot = -1
-		for i in range(SpellBook.MAX_SPELL_SLOTS):
-			if sb.spell_slots[i] and sb.spell_slots[i].id == spell.id:
-				cur_slot = i
-				break
-		var slot_str = " [%s]" % SPELL_KEY_NAMES[cur_slot] if cur_slot >= 0 else ""
-		name_lbl.text = spell.spell_name + slot_str
-		name_lbl.add_theme_font_size_override("font_size", 14)
-		name_lbl.add_theme_color_override("font_color", Color(0.9, 0.85, 1.0) if cur_slot >= 0 else Color(0.7, 0.7, 0.8))
-		info.add_child(name_lbl)
-
-		var desc_lbl = Label.new()
-		desc_lbl.text = "MP:%.0f CD:%.1fs" % [spell.mp_cost, spell.cooldown]
-		desc_lbl.add_theme_font_size_override("font_size", 11)
-		desc_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))
-		info.add_child(desc_lbl)
-		row.add_child(info)
-
-		# Slot assignment buttons
-		for si in range(max_slots):
-			var btn = Button.new()
-			btn.text = SPELL_KEY_NAMES[si]
-			btn.add_theme_font_size_override("font_size", 11)
-			btn.custom_minimum_size = Vector2(28, 28)
-			btn.focus_mode = Control.FOCUS_NONE
-			if cur_slot == si:
-				btn.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
-			btn.pressed.connect(_on_spell_slot_assign.bind(spell, si))
-			row.add_child(btn)
-
-		_spells_container.add_child(row)
-
-func _on_spell_slot_assign(spell: SpellDefinition, slot: int) -> void:
-	var player = get_tree().get_first_node_in_group("player")
-	if not player or not player.get("spell_book"):
-		return
-	var sb = player.spell_book as SpellBook
-	sb.equip_spell(spell, slot)
-	_refresh_spells()
-	var sfx = get_node_or_null("/root/SFXManager")
-	if sfx:
-		sfx.play("select_a", -4.0)
-
 # ---- Drag & Drop ----
 func _on_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
@@ -1197,6 +1210,7 @@ func _on_inv_hovered(index: int) -> void:
 	_show_item_tooltip(_display_list[index]["item"] as EquipmentItem)
 
 func _show_item_tooltip(item: EquipmentItem) -> void:
+	var saved_scroll = _inv_scroll.scroll_vertical if _inv_scroll else 0
 	_tooltip_panel.visible = true
 	var tier = ChestUI._get_item_tier(item)
 	var power = ChestUI._get_item_power(item)
@@ -1272,9 +1286,16 @@ func _show_item_tooltip(item: EquipmentItem) -> void:
 		else:
 			_tooltip_req.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
 	_tooltip_req.text = req_text
+	if _inv_scroll:
+		_inv_scroll.scroll_vertical = saved_scroll
 
 func _hide_tooltip() -> void:
-	_tooltip_panel.visible = false
+	if _inv_scroll:
+		var saved_scroll = _inv_scroll.scroll_vertical
+		_tooltip_panel.visible = false
+		_inv_scroll.scroll_vertical = saved_scroll
+	else:
+		_tooltip_panel.visible = false
 
 func _on_equip_failed(_item: EquipmentItem) -> void:
 	var sfx = get_node_or_null("/root/SFXManager")

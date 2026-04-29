@@ -195,8 +195,13 @@ func setup(def: EnemyDefinition) -> void:
 	if _is_boss_or_large and def.attack_slots.size() == 0:
 		_assign_random_attack_pool(def)
 
-	# Auto-assign movement pattern if none set (skip test/move enemies that already have one)
-	if not def.movement_pattern:
+	# Auto-assign the new movement system for regular enemies.
+	# Keep explicit authored test-arena movement resources intact.
+	var _movement_path := def.resource_path
+	var _is_test_movement_enemy := _movement_path.find("/resources/enemies/test/") != -1
+	if not _is_test_movement_enemy:
+		_assign_random_movement(def)
+	elif not def.movement_pattern:
 		_assign_random_movement(def)
 
 	# Awareness indicator (? or !) above sprite

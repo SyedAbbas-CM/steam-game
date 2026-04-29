@@ -49,7 +49,7 @@ func _on_blink_tick(timer: Timer) -> void:
 	if _blink_count % 2 == 1:
 		deco_layer.erase_cell(abs_pos)
 	else:
-		deco_layer.set_cell(abs_pos, 0, trap_atlas)
+		deco_layer.set_cell(abs_pos, trap_source_id, trap_atlas)
 	_play_sfx("click", -10.0 + _blink_count * 1.5, 0.05)
 	if _blink_count >= BLINK_TOTAL:
 		timer.stop()

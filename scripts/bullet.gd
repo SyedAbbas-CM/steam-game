@@ -63,6 +63,7 @@ var _lob_height: float = 1.2
 var _lob_aoe_radius: float = 16.0
 var _lob_ring_count: int = 0
 var _lob_cluster_count: int = 0
+var _lob_is_bomb: bool = false
 var _lob_shadow: Sprite2D = null
 # BARRIER / PULL / PUSH
 var barrier_hp: int = 3                      # hits barrier can absorb
@@ -668,6 +669,10 @@ func _lob_land() -> void:
 	if vfx:
 		vfx.shockwave(global_position, _lob_aoe_radius, Color(1.0, 0.6, 0.1, 0.7))
 		vfx.shake(1.5, 0.12)
+	if has_meta("poison_cloud") and bool(get_meta("poison_cloud")):
+		var cloud_duration = float(get_meta("poison_cloud_duration", 4.0))
+		var cloud_radius = float(get_meta("poison_cloud_radius", _lob_aoe_radius))
+		_spawn_poison_cloud(global_position, cloud_radius, cloud_duration)
 	# AOE damage
 	if not is_player_bullet:
 		var p = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
@@ -709,6 +714,58 @@ func _lob_land() -> void:
 			sub.lifetime = 1.0
 			container.add_child(sub)
 	queue_free()
+
+func _spawn_poison_cloud(pos: Vector2, radius: float, duration: float) -> void:
+	var scene_root = get_tree().current_scene if is_inside_tree() else get_parent()
+	if not scene_root:
+		return
+
+	var cloud := Node2D.new()
+	cloud.global_position = pos
+
+	var hazard := HazardArea.new()
+	hazard.damage = 1
+	hazard.interval = 0.5
+	hazard.status_effect_type = StatusEffect.Type.POISONED
+	hazard.status_duration = 4.0
+	hazard.status_strength = 1.0
+
+	var shape := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = radius
+	shape.shape = circle
+	hazard.add_child(shape)
+	cloud.add_child(hazard)
+
+	var particles := CPUParticles2D.new()
+	particles.emitting = true
+	particles.amount = 20
+	particles.lifetime = 1.5
+	particles.one_shot = false
+	particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	particles.emission_sphere_radius = radius
+	particles.direction = Vector2.UP
+	particles.spread = 180.0
+	particles.gravity = Vector2.ZERO
+	particles.initial_velocity_min = 2.0
+	particles.initial_velocity_max = 5.0
+	particles.scale_amount_min = 1.0
+	particles.scale_amount_max = 3.0
+	particles.color = Color(0.2, 0.8, 0.2, 0.4)
+	cloud.add_child(particles)
+
+	scene_root.add_child(cloud)
+
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.status_puff(pos, "POISONED")
+
+	var timer := Timer.new()
+	timer.one_shot = true
+	timer.wait_time = duration
+	timer.timeout.connect(cloud.queue_free)
+	cloud.add_child(timer)
+	timer.start()
 
 ## Visual ring indicator for pull/push orbs showing their effect radius
 class _ForceRingDraw extends Node2D:

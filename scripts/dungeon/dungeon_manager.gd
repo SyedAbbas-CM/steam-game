@@ -669,23 +669,23 @@ func _generate_floor(floor_num: int) -> void:
 	t1 = Time.get_ticks_msec()
 	var start = map["start"]
 	for grid_pos in run_state.floor_map:
-		var dist_to_start = abs(grid_pos.x - start.x) + abs(grid_pos.y - start.y)
-		var room_data = run_state.floor_map[grid_pos] as RoomData
-		match room_data.type:
+			var dist_to_start = abs(grid_pos.x - start.x) + abs(grid_pos.y - start.y)
+			var room_data = run_state.floor_map[grid_pos] as RoomData
+			match room_data.type:
 				RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS:
 					if dist_to_start > 0 and dist_to_start <= 2:
 						room_states[grid_pos]["spawned"] = true
 						_spawn_room_enemies(grid_pos, room_data)
 						# Activate traps in pre-spawned rooms
-					for child in hazard_container.get_children():
-						if child.has_method("activate"):
-							var trap_match = false
-							if "room_grid_positions" in child and child.room_grid_positions.size() > 0:
-								trap_match = grid_pos in child.room_grid_positions
-							elif "room_grid_pos" in child:
-								trap_match = child.room_grid_pos == grid_pos
-							if trap_match:
-								child.activate()
+						for child in hazard_container.get_children():
+							if child.has_method("activate"):
+								var trap_match = false
+								if "room_grid_positions" in child and child.room_grid_positions.size() > 0:
+									trap_match = grid_pos in child.room_grid_positions
+								elif "room_grid_pos" in child:
+									trap_match = child.room_grid_pos == grid_pos
+								if trap_match:
+									child.activate()
 	print("TIMING: spawn nearby enemies took %d ms" % (Time.get_ticks_msec() - t1))
 	print("TIMING: TOTAL _generate_floor took %d ms" % (Time.get_ticks_msec() - t0))
 
@@ -1450,14 +1450,15 @@ func _paint_advanced_traps(origin: Vector2i, mask: Array, w: int, h: int, room_d
 
 		match trap_type:
 			"arrow":
-				# Use spike trap tile with red modulate for arrow traps
-				var trap_tile_atlas = Vector2i(13, theme_row)
-				deco_layer.set_cell(origin + pos, 0, trap_tile_atlas)
+				# Use the neutral dungeon-features pressure plate instead of the old red theme tile.
+				var trap_tile_atlas = Vector2i(1, 4)
+				deco_layer.set_cell(origin + pos, 1, trap_tile_atlas)
 				var trap = _ArrowTrapScript.new()
 				trap.tile_pos = pos
 				trap.origin = origin
 				trap.deco_layer = deco_layer
 				trap.trap_atlas = trap_tile_atlas
+				trap.trap_source_id = 1
 				trap.floor_number = floor_num
 				trap.room_grid_pos = grid_pos
 				trap.position = world_pos
@@ -1495,13 +1496,15 @@ func _paint_advanced_traps(origin: Vector2i, mask: Array, w: int, h: int, room_d
 					hazard_container.add_child(trap)
 
 			"poison_gas":
-				var gas_atlas = Vector2i(4, 19)
-				deco_layer.set_cell(origin + pos, 0, gas_atlas)
+				# Source 1 row 8 contains the visible trap sprites; acid_trap is the closest green gas marker.
+				var gas_atlas = Vector2i(7, 8)
+				deco_layer.set_cell(origin + pos, 1, gas_atlas)
 				var trap = _PoisonGasScript.new()
 				trap.tile_pos = pos
 				trap.origin = origin
 				trap.deco_layer = deco_layer
 				trap.trap_atlas = gas_atlas
+				trap.trap_source_id = 1
 				trap.floor_number = floor_num
 				trap.room_grid_pos = grid_pos
 				trap.position = world_pos
@@ -1613,13 +1616,14 @@ func _paint_showcase_trap(origin: Vector2i, mask: Array, w: int, h: int, room_da
 			trap.position = world_pos
 			hazard_container.add_child(trap)
 		"arrow":
-			var arrow_tile = Vector2i(13, theme_row)
-			deco_layer.set_cell(origin + pos, 0, arrow_tile)
+			var arrow_tile = Vector2i(1, 4)
+			deco_layer.set_cell(origin + pos, 1, arrow_tile)
 			var trap = _ArrowTrapScript.new()
 			trap.tile_pos = pos
 			trap.origin = origin
 			trap.deco_layer = deco_layer
 			trap.trap_atlas = arrow_tile
+			trap.trap_source_id = 1
 			trap.floor_number = floor_num
 			trap.room_grid_pos = grid_pos
 			trap.position = world_pos
@@ -1639,13 +1643,14 @@ func _paint_showcase_trap(origin: Vector2i, mask: Array, w: int, h: int, room_da
 			trap.position = world_pos
 			hazard_container.add_child(trap)
 		"poison_gas":
-			var gas_atlas = Vector2i(4, 19)
-			deco_layer.set_cell(origin + pos, 0, gas_atlas)
+			var gas_atlas = Vector2i(7, 8)
+			deco_layer.set_cell(origin + pos, 1, gas_atlas)
 			var trap = _PoisonGasScript.new()
 			trap.tile_pos = pos
 			trap.origin = origin
 			trap.deco_layer = deco_layer
 			trap.trap_atlas = gas_atlas
+			trap.trap_source_id = 1
 			trap.floor_number = floor_num
 			trap.room_grid_pos = grid_pos
 			trap.position = world_pos
@@ -1830,9 +1835,7 @@ func _generate_room_edge_rails(origin: Vector2i, mask: Array, w: int, h: int) ->
 	return track
 
 func _spawn_cross_room_rail_traps(theme_row: int) -> void:
-	# Check level gate and has_rail_traps flag
-	if current_level and not current_level.has_rail_traps:
-		return
+	# Rail traps are now a system-level feature again; don't suppress them behind stale level metadata.
 	var eff_level = _get_effective_level()
 	if eff_level < TRAP_LEVEL_GATES.get("rail_trap", 4):
 		return
@@ -2639,7 +2642,7 @@ func _create_room_trigger(grid_pos: Vector2i, room_data: RoomData) -> void:
 		(room_data.shape_width * TILE_SIZE) * 0.5,
 		(room_data.shape_height * TILE_SIZE) * 0.5
 	)
-	trigger.position = center
+	trigger.position = Vector2(_grid_to_tile_origin(grid_pos) * TILE_SIZE) + center
 
 	var shape = CollisionShape2D.new()
 	var rect = RectangleShape2D.new()
@@ -2734,15 +2737,15 @@ func _prespawn_adjacent_rooms(grid_pos: Vector2i) -> void:
 				neighbor_state["spawned"] = true
 				_spawn_room_enemies(neighbor_pos, neighbor_data)
 				# Activate traps in pre-spawned rooms
-		for child in hazard_container.get_children():
-			if child.has_method("activate"):
-				var trap_match = false
-				if "room_grid_positions" in child and child.room_grid_positions.size() > 0:
-					trap_match = neighbor_pos in child.room_grid_positions
-				elif "room_grid_pos" in child:
-					trap_match = child.room_grid_pos == neighbor_pos
-				if trap_match:
-					child.activate()
+				for child in hazard_container.get_children():
+					if child.has_method("activate"):
+						var trap_match = false
+						if "room_grid_positions" in child and child.room_grid_positions.size() > 0:
+							trap_match = neighbor_pos in child.room_grid_positions
+						elif "room_grid_pos" in child:
+							trap_match = child.room_grid_pos == neighbor_pos
+						if trap_match:
+							child.activate()
 
 func _visit_room(grid_pos: Vector2i) -> void:
 	var state = room_states.get(grid_pos)
@@ -3827,10 +3830,13 @@ func _paint_ambient_lighting(origin: Vector2i, mask: Array, w: int, h: int, room
 
 func _paint_carpet_section(origin: Vector2i, mask: Array, w: int, h: int, left: int, top: int, right: int, bot: int, color: String) -> void:
 	## Paint carpet on FLOOR LAYER (source 1) so it renders under furniture on deco layer.
-	## Wide sections → horizontal tiles, tall sections → vertical tiles.
+	## Use connector tiles for the interior fill and orient strips only on the outer edges.
+	## This avoids giant solid-looking blocks when the recovered carpet layout gets simplified.
 	var section_w = right - left + 1
 	var section_h = bot - top + 1
 	var use_horizontal = section_w >= section_h
+	var fill_tile = CARPET_CONNECTOR[color]
+	var edge_tile = CARPET_HORIZONTAL[color] if use_horizontal else CARPET_VERTICAL[color]
 	for y in range(top, bot + 1):
 		for x in range(left, right + 1):
 			if x < 0 or x >= w or y < 0 or y >= h:
@@ -3838,10 +3844,14 @@ func _paint_carpet_section(origin: Vector2i, mask: Array, w: int, h: int, left: 
 			if not mask[y][x] or not _is_interior(mask, x, y, w, h):
 				continue
 			var abs_pos = origin + Vector2i(x, y)
+			var atlas = fill_tile
 			if use_horizontal:
-				floor_layer.set_cell(abs_pos, 1, CARPET_HORIZONTAL[color])
+				if y == top or y == bot:
+					atlas = edge_tile
 			else:
-				floor_layer.set_cell(abs_pos, 1, CARPET_VERTICAL[color])
+				if x == left or x == right:
+					atlas = edge_tile
+			floor_layer.set_cell(abs_pos, 1, atlas)
 
 func _is_interior(mask: Array, x: int, y: int, w: int, h: int) -> bool:
 	# A floor tile with all 4 cardinal neighbors also being floor

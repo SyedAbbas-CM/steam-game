@@ -69,7 +69,7 @@ func on_floor_changed() -> void:
 		child.queue_free()
 
 func on_floor_ready(start_grid: Vector2i) -> void:
-	_spawn_elder_npc(start_grid)
+	pass
 
 # ── Event 1: Horde Rush ───────────────────────────────────
 
