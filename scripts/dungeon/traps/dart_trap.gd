@@ -39,6 +39,11 @@ func _start_blink() -> void:
 	timer.start()
 
 func _on_blink_tick(timer: Timer) -> void:
+	if not _has_deco_layer():
+		timer.stop()
+		timer.queue_free()
+		queue_free()
+		return
 	_blink_count += 1
 	var abs_pos = origin + tile_pos
 	if _blink_count % 2 == 1:
@@ -52,7 +57,8 @@ func _on_blink_tick(timer: Timer) -> void:
 
 func _fire() -> void:
 	_play_sfx("arrow", -3.0, 0.2)
-	deco_layer.erase_cell(origin + tile_pos)
+	if _has_deco_layer():
+		deco_layer.erase_cell(origin + tile_pos)
 
 	if not is_inside_tree():
 		queue_free()

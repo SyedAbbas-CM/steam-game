@@ -13,6 +13,7 @@ var encounter_type: EncounterType = EncounterType.STANDARD
 @export var enemy_damage_mult: float = 1.0
 @export var difficulty_tier: int = 1
 var cleared: bool = false
+var deferred_spawn: bool = false  # true = enemies only spawn when player enters (AMBUSH/GAUNTLET/ARENA)
 
 # Grid position on the floor map
 var grid_pos: Vector2i = Vector2i.ZERO

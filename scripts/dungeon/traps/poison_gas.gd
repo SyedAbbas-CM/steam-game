@@ -81,7 +81,8 @@ func _physics_process(delta: float) -> void:
 
 func _spawn_cloud() -> void:
 	_play_sfx("gas", -3.0, 0.1)
-	deco_layer.erase_cell(origin + tile_pos)
+	if _has_deco_layer():
+		deco_layer.erase_cell(origin + tile_pos)
 
 	# Create cloud visual with CPUParticles2D
 	_cloud = Node2D.new()

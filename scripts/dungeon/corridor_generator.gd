@@ -1,0 +1,430 @@
+class_name CorridorGenerator
+extends RefCounted
+
+enum CorridorType { STRAIGHT, ZIGZAG, L_BEND, WINDING, WIDE_CHAMBER, ALCOVE }
+enum LengthClass { SHORT, LONG }
+
+# Generate corridor tile data between two exit points.
+# Returns: { "type": CorridorType, "floor_tiles": Array[Vector2i], "wall_tiles": Array[Vector2i],
+#            "alcove_tiles": Array[Vector2i], "trap_positions": Array[Dictionary],
+#            "midpoint": Vector2i, "direction": String, "length_class": LengthClass }
+static func generate_corridor(
+	from_exit: Vector2i, to_exit: Vector2i,
+	direction: String, half_w: int, floor_number: int
+) -> Dictionary:
+	# 50/50 short vs long
+	var length_class = LengthClass.SHORT if randf() < 0.5 else LengthClass.LONG
+	var corridor_type = _roll_corridor_type(floor_number, length_class)
+	var result: Dictionary
+
+	match corridor_type:
+		CorridorType.STRAIGHT:
+			result = _gen_straight(from_exit, to_exit, direction, half_w, length_class)
+		CorridorType.ZIGZAG:
+			result = _gen_zigzag(from_exit, to_exit, direction, half_w, length_class)
+		CorridorType.L_BEND:
+			result = _gen_l_bend(from_exit, to_exit, direction, half_w, length_class)
+		CorridorType.WINDING:
+			result = _gen_winding(from_exit, to_exit, direction, half_w, length_class)
+		CorridorType.WIDE_CHAMBER:
+			result = _gen_wide_chamber(from_exit, to_exit, direction, half_w, length_class)
+		CorridorType.ALCOVE:
+			result = _gen_alcove(from_exit, to_exit, direction, half_w, length_class)
+		_:
+			result = _gen_straight(from_exit, to_exit, direction, half_w, length_class)
+
+	result["type"] = corridor_type
+	result["direction"] = direction
+	result["length_class"] = length_class
+	var lc_name = "LONG" if length_class == LengthClass.LONG else "SHORT"
+	print("  Corridor %s: %s %s w=%d (%d floor tiles)" % [direction, lc_name, CorridorType.keys()[corridor_type], half_w * 2 + 1, result["floor_tiles"].size()])
+	return result
+
+static func _roll_corridor_type(floor_number: int, length_class: LengthClass) -> CorridorType:
+	var roll = randf()
+	if length_class == LengthClass.SHORT:
+		# Short corridors: mostly straight or simple bends
+		if roll < 0.45:
+			return CorridorType.STRAIGHT
+		elif roll < 0.70:
+			return CorridorType.L_BEND
+		elif roll < 0.85:
+			return CorridorType.ZIGZAG
+		else:
+			return CorridorType.WIDE_CHAMBER
+	else:
+		# Long corridors: winding, zigzag, alcove — never straight
+		if floor_number <= 1:
+			if roll < 0.35:
+				return CorridorType.ZIGZAG
+			elif roll < 0.65:
+				return CorridorType.WINDING
+			else:
+				return CorridorType.L_BEND
+		else:
+			if roll < 0.25:
+				return CorridorType.ZIGZAG
+			elif roll < 0.45:
+				return CorridorType.WINDING
+			elif roll < 0.65:
+				return CorridorType.ALCOVE
+			elif roll < 0.85:
+				return CorridorType.WIDE_CHAMBER
+			else:
+				return CorridorType.L_BEND
+
+# --- Shared helpers ---
+
+static func _empty_result() -> Dictionary:
+	return {
+		"floor_tiles": [] as Array[Vector2i],
+		"wall_tiles": [] as Array[Vector2i],
+		"alcove_tiles": [] as Array[Vector2i],
+		"trap_positions": [] as Array[Dictionary],
+		"midpoint": Vector2i.ZERO,
+	}
+
+# Paint a straight segment from A to B with proper width.
+# Auto-detects primary axis from displacement — if dx >= dy, iterates X (east-style);
+# otherwise iterates Y (south-style). This ensures correct width on ALL segments.
+static func _segment_tiles(from_pt: Vector2i, to_pt: Vector2i, _seg_dir_hint: String, half_w: int) -> Dictionary:
+	var floor_tiles: Array[Vector2i] = []
+	var wall_tiles: Array[Vector2i] = []
+	var wall_offset = half_w + 1
+
+	# Auto-detect: use the axis with more displacement as the iteration axis
+	var abs_dx = absi(to_pt.x - from_pt.x)
+	var abs_dy = absi(to_pt.y - from_pt.y)
+	var use_horizontal = abs_dx >= abs_dy
+
+	if use_horizontal:
+		var start_x = mini(from_pt.x, to_pt.x)
+		var end_x = maxi(from_pt.x, to_pt.x)
+		var length = end_x - start_x
+		if length == 0:
+			# Degenerate: just a column
+			for dy in range(-half_w, half_w + 1):
+				floor_tiles.append(Vector2i(from_pt.x, from_pt.y + dy))
+			wall_tiles.append(Vector2i(from_pt.x, from_pt.y - wall_offset))
+			wall_tiles.append(Vector2i(from_pt.x, from_pt.y + wall_offset))
+		else:
+			for x in range(start_x, end_x + 1):
+				var t = float(x - start_x) / float(length)
+				var mid_y = int(lerp(float(from_pt.y), float(to_pt.y), t))
+				for dy in range(-half_w, half_w + 1):
+					floor_tiles.append(Vector2i(x, mid_y + dy))
+				wall_tiles.append(Vector2i(x, mid_y - wall_offset))
+				wall_tiles.append(Vector2i(x, mid_y + wall_offset))
+	else:  # south / vertical
+		var start_y = mini(from_pt.y, to_pt.y)
+		var end_y = maxi(from_pt.y, to_pt.y)
+		var length = end_y - start_y
+		if length == 0:
+			for dx in range(-half_w, half_w + 1):
+				floor_tiles.append(Vector2i(from_pt.x + dx, from_pt.y))
+			wall_tiles.append(Vector2i(from_pt.x - wall_offset, from_pt.y))
+			wall_tiles.append(Vector2i(from_pt.x + wall_offset, from_pt.y))
+		else:
+			for y in range(start_y, end_y + 1):
+				var t = float(y - start_y) / float(length)
+				var mid_x = int(lerp(float(from_pt.x), float(to_pt.x), t))
+				for dx in range(-half_w, half_w + 1):
+					floor_tiles.append(Vector2i(mid_x + dx, y))
+				wall_tiles.append(Vector2i(mid_x - wall_offset, y))
+				wall_tiles.append(Vector2i(mid_x + wall_offset, y))
+
+	return { "floor": floor_tiles, "wall": wall_tiles }
+
+# Connect two points with an L-shaped path (horizontal then vertical or vice versa)
+static func _l_segment_tiles(from_pt: Vector2i, to_pt: Vector2i, horizontal_first: bool, half_w: int) -> Dictionary:
+	var floor_tiles: Array[Vector2i] = []
+	var wall_tiles: Array[Vector2i] = []
+	var corner: Vector2i
+
+	if horizontal_first:
+		corner = Vector2i(to_pt.x, from_pt.y)
+		var seg1 = _segment_tiles(from_pt, corner, "east", half_w)
+		var seg2 = _segment_tiles(corner, to_pt, "south", half_w)
+		floor_tiles.append_array(seg1["floor"])
+		floor_tiles.append_array(seg2["floor"])
+		wall_tiles.append_array(seg1["wall"])
+		wall_tiles.append_array(seg2["wall"])
+	else:
+		corner = Vector2i(from_pt.x, to_pt.y)
+		var seg1 = _segment_tiles(from_pt, corner, "south", half_w)
+		var seg2 = _segment_tiles(corner, to_pt, "east", half_w)
+		floor_tiles.append_array(seg1["floor"])
+		floor_tiles.append_array(seg2["floor"])
+		wall_tiles.append_array(seg1["wall"])
+		wall_tiles.append_array(seg2["wall"])
+
+	return { "floor": floor_tiles, "wall": wall_tiles }
+
+static func _merge_segment(result: Dictionary, seg: Dictionary) -> void:
+	for t in seg["floor"]:
+		result["floor_tiles"].append(t)
+	for t in seg["wall"]:
+		result["wall_tiles"].append(t)
+
+static func _midpoint(a: Vector2i, b: Vector2i) -> Vector2i:
+	return Vector2i((a.x + b.x) / 2, (a.y + b.y) / 2)
+
+static func _add_trap_pos(result: Dictionary, pos: Vector2i, direction: String, tile_size: int = 8) -> void:
+	result["trap_positions"].append({
+		"position": Vector2(pos.x * tile_size + 4, pos.y * tile_size + 4),
+		"direction": direction,
+	})
+
+# Perpendicular offset: for east corridors offset Y, for south offset X
+static func _perp_offset(pt: Vector2i, direction: String, amount: int) -> Vector2i:
+	if direction == "east":
+		return Vector2i(pt.x, pt.y + amount)
+	else:
+		return Vector2i(pt.x + amount, pt.y)
+
+# --- Corridor Type Generators ---
+
+static func _gen_straight(from_exit: Vector2i, to_exit: Vector2i, direction: String, half_w: int, _lc: int) -> Dictionary:
+	var result = _empty_result()
+	var seg = _segment_tiles(from_exit, to_exit, direction, half_w)
+	_merge_segment(result, seg)
+	result["midpoint"] = _midpoint(from_exit, to_exit)
+	_add_trap_pos(result, result["midpoint"], direction)
+	# Add extra trap positions along corridor length for longer traps
+	_add_trap_pos(result, _midpoint(from_exit, result["midpoint"]), direction)
+	_add_trap_pos(result, _midpoint(result["midpoint"], to_exit), direction)
+	return result
+
+static func _gen_zigzag(from_exit: Vector2i, to_exit: Vector2i, direction: String, half_w: int, length_class: int) -> Dictionary:
+	var result = _empty_result()
+
+	# SHORT: 1 bend point, small offset
+	# LONG: 2-3 bend points, larger offsets — zigzags back and forth
+	var num_bends = 1 if length_class == LengthClass.SHORT else randi_range(2, 3)
+	var max_offset = 4 if length_class == LengthClass.SHORT else randi_range(6, 10)
+
+	var points: Array[Vector2i] = [from_exit]
+	var sign = 1 if randf() > 0.5 else -1
+
+	for b in range(num_bends):
+		var t = float(b + 1) / float(num_bends + 1)
+		var base = Vector2i(
+			int(lerp(float(from_exit.x), float(to_exit.x), t)),
+			int(lerp(float(from_exit.y), float(to_exit.y), t))
+		)
+		var offset = randi_range(maxi(3, max_offset / 2), max_offset) * sign
+		points.append(_perp_offset(base, direction, offset))
+		sign *= -1  # Alternate sides
+
+	points.append(to_exit)
+
+	# Connect each pair of points
+	for i in range(points.size() - 1):
+		var seg = _segment_tiles(points[i], points[i + 1], direction, half_w)
+		_merge_segment(result, seg)
+
+	result["midpoint"] = points[points.size() / 2]
+	for i in range(1, points.size() - 1):
+		_add_trap_pos(result, points[i], direction)
+	_add_trap_pos(result, _midpoint(from_exit, points[1]), direction)
+	return result
+
+static func _gen_l_bend(from_exit: Vector2i, to_exit: Vector2i, direction: String, half_w: int, length_class: int) -> Dictionary:
+	var result = _empty_result()
+
+	if length_class == LengthClass.SHORT:
+		# Simple 90-degree turn
+		var horizontal_first = randf() > 0.5
+		var seg = _l_segment_tiles(from_exit, to_exit, horizontal_first, half_w)
+		_merge_segment(result, seg)
+		var corner = Vector2i(to_exit.x, from_exit.y) if horizontal_first else Vector2i(from_exit.x, to_exit.y)
+		result["midpoint"] = corner
+		_add_trap_pos(result, corner, direction)
+		_add_trap_pos(result, _midpoint(from_exit, corner), direction)
+	else:
+		# LONG L-bend: detour perpendicular AWAY from target first, then come back
+		var detour_dist = randi_range(6, 12)
+		var detour_sign = 1 if randf() > 0.5 else -1
+		var detour_amount = detour_dist * detour_sign
+
+		# Go perpendicular first, then along main axis, then perpendicular back
+		var waypoint1 = _perp_offset(from_exit, direction, detour_amount)
+		var waypoint2: Vector2i
+		if direction == "east":
+			waypoint2 = Vector2i(to_exit.x, waypoint1.y)
+		else:
+			waypoint2 = Vector2i(waypoint1.x, to_exit.y)
+
+		# Segment 1: from_exit → waypoint1 (perpendicular)
+		var perp_dir = "south" if direction == "east" else "east"
+		var seg1 = _segment_tiles(from_exit, waypoint1, perp_dir, half_w)
+		_merge_segment(result, seg1)
+		# Segment 2: waypoint1 → waypoint2 (along main axis)
+		var seg2 = _segment_tiles(waypoint1, waypoint2, direction, half_w)
+		_merge_segment(result, seg2)
+		# Segment 3: waypoint2 → to_exit (perpendicular back)
+		var seg3 = _segment_tiles(waypoint2, to_exit, perp_dir, half_w)
+		_merge_segment(result, seg3)
+
+		result["midpoint"] = _midpoint(waypoint1, waypoint2)
+		_add_trap_pos(result, waypoint1, direction)
+		_add_trap_pos(result, result["midpoint"], direction)
+		_add_trap_pos(result, waypoint2, direction)
+		_add_trap_pos(result, _midpoint(waypoint1, result["midpoint"]), direction)
+
+	return result
+
+static func _gen_winding(from_exit: Vector2i, to_exit: Vector2i, direction: String, half_w: int, length_class: int) -> Dictionary:
+	var result = _empty_result()
+
+	# SHORT: 2-3 small wobbles (±2-3 tiles)
+	# LONG: 4-6 larger wobbles (±4-8 tiles) — feels like a cave passage
+	var num_points: int
+	var max_wobble: int
+	if length_class == LengthClass.SHORT:
+		num_points = randi_range(2, 3)
+		max_wobble = randi_range(2, 4)
+	else:
+		num_points = randi_range(4, 6)
+		max_wobble = randi_range(5, 9)
+
+	var points: Array[Vector2i] = [from_exit]
+	var prev_offset = 0
+
+	for i in range(1, num_points + 1):
+		var t = float(i) / float(num_points + 1)
+		var base = Vector2i(
+			int(lerp(float(from_exit.x), float(to_exit.x), t)),
+			int(lerp(float(from_exit.y), float(to_exit.y), t))
+		)
+		# Offset alternating or random, avoiding same direction twice in a row
+		var offset = randi_range(2, max_wobble)
+		if prev_offset > 0:
+			offset = -offset
+		elif prev_offset < 0:
+			offset = absi(offset)
+		else:
+			offset = offset * (1 if randf() > 0.5 else -1)
+		prev_offset = offset
+		points.append(_perp_offset(base, direction, offset))
+
+	points.append(to_exit)
+
+	for i in range(points.size() - 1):
+		var seg = _segment_tiles(points[i], points[i + 1], direction, half_w)
+		_merge_segment(result, seg)
+
+	result["midpoint"] = points[points.size() / 2]
+	for i in range(1, points.size() - 1):
+		_add_trap_pos(result, points[i], direction)
+	return result
+
+static func _gen_wide_chamber(from_exit: Vector2i, to_exit: Vector2i, direction: String, half_w: int, length_class: int) -> Dictionary:
+	var result = _empty_result()
+
+	# Base corridor (winding for LONG, straight for SHORT)
+	if length_class == LengthClass.LONG:
+		var winding = _gen_winding(from_exit, to_exit, direction, half_w, LengthClass.SHORT)
+		_merge_segment(result, {"floor": winding["floor_tiles"], "wall": winding["wall_tiles"]})
+		result["midpoint"] = winding["midpoint"]
+	else:
+		var seg = _segment_tiles(from_exit, to_exit, direction, half_w)
+		_merge_segment(result, seg)
+		result["midpoint"] = _midpoint(from_exit, to_exit)
+
+	# Add chamber at midpoint — size scales: SHORT=7x7, LONG=9x9 or 11x11
+	var mid = result["midpoint"]
+	var chamber_hw = 3 if length_class == LengthClass.SHORT else randi_range(4, 5)
+
+	for dy in range(-chamber_hw, chamber_hw + 1):
+		for dx in range(-chamber_hw, chamber_hw + 1):
+			result["floor_tiles"].append(Vector2i(mid.x + dx, mid.y + dy))
+	# Walls around chamber perimeter
+	for dx in range(-chamber_hw - 1, chamber_hw + 2):
+		result["wall_tiles"].append(Vector2i(mid.x + dx, mid.y - chamber_hw - 1))
+		result["wall_tiles"].append(Vector2i(mid.x + dx, mid.y + chamber_hw + 1))
+	for dy in range(-chamber_hw, chamber_hw + 1):
+		result["wall_tiles"].append(Vector2i(mid.x - chamber_hw - 1, mid.y + dy))
+		result["wall_tiles"].append(Vector2i(mid.x + chamber_hw + 1, mid.y + dy))
+
+	_add_trap_pos(result, _midpoint(from_exit, mid), direction)
+	_add_trap_pos(result, mid, direction)
+	_add_trap_pos(result, _midpoint(mid, to_exit), direction)
+	# Extra traps for LONG
+	if length_class == LengthClass.LONG:
+		_add_trap_pos(result, _midpoint(from_exit, _midpoint(from_exit, mid)), direction)
+		_add_trap_pos(result, _midpoint(to_exit, _midpoint(mid, to_exit)), direction)
+	return result
+
+static func _gen_alcove(from_exit: Vector2i, to_exit: Vector2i, direction: String, half_w: int, length_class: int) -> Dictionary:
+	var result = _empty_result()
+
+	# Base corridor
+	if length_class == LengthClass.LONG:
+		# LONG alcove: zigzag base with alcoves branching off the bends
+		var zigzag = _gen_zigzag(from_exit, to_exit, direction, half_w, LengthClass.SHORT)
+		_merge_segment(result, {"floor": zigzag["floor_tiles"], "wall": zigzag["wall_tiles"]})
+		result["midpoint"] = zigzag["midpoint"]
+	else:
+		var seg = _segment_tiles(from_exit, to_exit, direction, half_w)
+		_merge_segment(result, seg)
+		result["midpoint"] = _midpoint(from_exit, to_exit)
+
+	# SHORT: 1-2 alcoves, depth 3-5
+	# LONG: 2-4 alcoves, depth 4-8
+	var num_alcoves = randi_range(1, 2) if length_class == LengthClass.SHORT else randi_range(2, 4)
+	var min_depth = 3 if length_class == LengthClass.SHORT else 4
+	var max_depth = 5 if length_class == LengthClass.SHORT else 8
+
+	for a in range(num_alcoves):
+		var t = randf_range(0.15, 0.85)
+		var alcove_root = Vector2i(
+			int(lerp(float(from_exit.x), float(to_exit.x), t)),
+			int(lerp(float(from_exit.y), float(to_exit.y), t))
+		)
+		var depth = randi_range(min_depth, max_depth)
+		var alcove_side = 1 if randf() > 0.5 else -1
+		var alcove_hw = 1  # Alcoves always 3 tiles wide
+
+		# Branch perpendicular
+		for d in range(1, depth + 1):
+			for w in range(-alcove_hw, alcove_hw + 1):
+				var tile: Vector2i
+				if direction == "east":
+					tile = Vector2i(alcove_root.x + w, alcove_root.y + alcove_side * (half_w + 1 + d))
+				else:
+					tile = Vector2i(alcove_root.x + alcove_side * (half_w + 1 + d), alcove_root.y + w)
+				result["alcove_tiles"].append(tile)
+
+		# End wall
+		var end_d = depth + 1
+		for w in range(-alcove_hw - 1, alcove_hw + 2):
+			var wall_tile: Vector2i
+			if direction == "east":
+				wall_tile = Vector2i(alcove_root.x + w, alcove_root.y + alcove_side * (half_w + 1 + end_d))
+			else:
+				wall_tile = Vector2i(alcove_root.x + alcove_side * (half_w + 1 + end_d), alcove_root.y + w)
+			result["wall_tiles"].append(wall_tile)
+		# Side walls
+		for d in range(1, depth + 1):
+			for side in [-(alcove_hw + 1), alcove_hw + 1]:
+				var side_wall: Vector2i
+				if direction == "east":
+					side_wall = Vector2i(alcove_root.x + side, alcove_root.y + alcove_side * (half_w + 1 + d))
+				else:
+					side_wall = Vector2i(alcove_root.x + alcove_side * (half_w + 1 + d), alcove_root.y + side)
+				result["wall_tiles"].append(side_wall)
+
+		# Trap inside alcove
+		var trap_d = depth / 2 + 1
+		var trap_tile: Vector2i
+		if direction == "east":
+			trap_tile = Vector2i(alcove_root.x, alcove_root.y + alcove_side * (half_w + 1 + trap_d))
+		else:
+			trap_tile = Vector2i(alcove_root.x + alcove_side * (half_w + 1 + trap_d), alcove_root.y)
+		_add_trap_pos(result, trap_tile, direction)
+
+	# Main corridor traps
+	_add_trap_pos(result, result["midpoint"], direction)
+	_add_trap_pos(result, _midpoint(from_exit, result["midpoint"]), direction)
+	return result

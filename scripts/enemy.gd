@@ -105,6 +105,8 @@ var pickup_scene: PackedScene
 var _contact_cooldown: float = 0.0  # prevents rapid contact damage ticks
 var _knockback_timer: float = 0.0  # prevents movement override during knockback
 var _weight: float = 1.0  # mass for collision momentum damage
+var _contact_bounce: float = 0.0  # brief bounce-back after touching player
+var _pushed_velocity: Vector2 = Vector2.ZERO  # external push (from player collisions)
 
 @export var drop_table: DropTable
 
@@ -179,7 +181,7 @@ func setup(def: EnemyDefinition) -> void:
 	# Ghost enemies phase through walls
 	if def.ignores_terrain:
 		$Sprite2D.modulate.a = 0.7
-		collision_mask = 1  # ghosts phase through walls but still collide with player
+		collision_mask = 1  # ghosts phase through walls but collide with player
 
 	# Boss/Large HP bar
 	_is_boss_or_large = def.size_class >= EnemyDefinition.SizeClass.LARGE
@@ -702,22 +704,16 @@ func _physics_process(delta: float) -> void:
 		_contact_cooldown -= delta
 		return
 
-	# Continuous overlap resolution: if still overlapping player, push apart directly
-	var _overlap_player = player if is_instance_valid(player) else null
-	if _overlap_player and state != State.DEAD:
-		var _sep_dist = global_position.distance_to(_overlap_player.global_position)
-		# Bosses need larger separation to prevent sticking
-		var _min_sep = 6.0 * scale.x
-		if definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS:
-			_min_sep = 18.0 * scale.x
-		elif definition and definition.size_class >= EnemyDefinition.SizeClass.LARGE:
-			_min_sep = 12.0 * scale.x
-		if _sep_dist < _min_sep:
-			var _sep_dir = (global_position - _overlap_player.global_position).normalized()
-			if _sep_dir == Vector2.ZERO:
-				_sep_dir = Vector2.RIGHT.rotated(randf() * TAU)
-			# Teleport apart — velocity-based separation doesn't work for overlapping CharacterBody2D
-			global_position += _sep_dir * (_min_sep - _sep_dist + 2.0)
+	# Contact bounce: skip movement AI during bounce-back but still check damage
+	if _contact_bounce > 0:
+		_contact_bounce -= delta
+		velocity += _pushed_velocity
+		_pushed_velocity = _pushed_velocity.move_toward(Vector2.ZERO, delta * 600.0)
+		move_and_slide()
+		_contact_cooldown -= delta
+		if _contact_cooldown <= 0:
+			_check_contact_damage()
+		return
 
 	# Passive-until-hit: don't aggro until damaged
 	var is_passive = has_meta("passive_until_hit") and get_meta("passive_until_hit")
@@ -833,19 +829,31 @@ func _physics_process(delta: float) -> void:
 			if _is_bull:
 				charge_spd = 100.0  # slow heavy charge
 			velocity = charge_dir * charge_spd
-			# CHARGE_BULL: damage on contact during charge
-			if _is_bull and is_instance_valid(player):
-				if not get_meta("bull_charge_dmg_dealt") and global_position.distance_to(player.global_position) < 20.0:
-					if player.has_method("take_damage"):
-						var bdmg = int((definition.attack_damage if definition else 2) * 2.0)
-						player.take_damage(bdmg, global_position, true, false)
-					# Strong push in charge direction
-					player.velocity += charge_dir * 250.0
-					set_meta("bull_charge_dmg_dealt", true)
-					var vfx_b = get_node_or_null("/root/VFXManager")
-					if vfx_b:
-						vfx_b.shockwave(player.global_position, 16.0, Color(1.0, 0.2, 0.1, 0.7))
-						vfx_b.shake(4.0, 0.2)
+			# Damage on contact during ANY charge/lunge
+			if is_instance_valid(player):
+				var _charge_hit_key = "_charge_dmg_dealt"
+				var _already_hit = has_meta(_charge_hit_key) and get_meta(_charge_hit_key)
+				var _charge_range = 10.0 * scale.x
+				if _is_bull:
+					_charge_range = 20.0
+				if not _already_hit and global_position.distance_to(player.global_position) < _charge_range:
+					if not ("_is_dashing" in player and player._is_dashing):
+						if player.has_method("take_damage"):
+							var charge_mult = 2.0 if _is_bull else 1.5
+							var bdmg = int((definition.attack_damage if definition else 2) * charge_mult)
+							player.take_damage(maxi(bdmg, 1), global_position, true, false)
+						# Push player in charge direction
+						var push_str = 250.0 if _is_bull else 150.0
+						player.velocity += charge_dir * push_str
+						set_meta(_charge_hit_key, true)
+						var sfx_ch = get_node_or_null("/root/SFXManager")
+						if sfx_ch:
+							sfx_ch.play("impact_b", -5.0, 0.1)
+						if _is_bull:
+							var vfx_b = get_node_or_null("/root/VFXManager")
+							if vfx_b:
+								vfx_b.shockwave(player.global_position, 16.0, Color(1.0, 0.2, 0.1, 0.7))
+								vfx_b.shake(4.0, 0.2)
 			# CHARGE_BULL: wall collision stun — check slide collisions
 			if _is_bull and get_slide_collision_count() > 0:
 				charge_timer = 0
@@ -869,6 +877,7 @@ func _physics_process(delta: float) -> void:
 				velocity = Vector2.ZERO
 				cooldown_timer = shoot_interval
 				state = State.COOLDOWN
+				set_meta("_charge_dmg_dealt", false)
 				if _is_bull:
 					set_meta("bull_charge", false)
 		State.STEALTHED:
@@ -994,11 +1003,35 @@ func _physics_process(delta: float) -> void:
 		_beam_angle += (definition.beam_sweep_speed if definition else 1.5) * delta
 		_shoot_single(Vector2.RIGHT.rotated(_beam_angle))
 
+	# Apply external push (from player collision)
+	velocity += _pushed_velocity
+	_pushed_velocity = _pushed_velocity.move_toward(Vector2.ZERO, delta * 600.0)
+
 	_maybe_leave_trail(delta)
 	if has_meta("_wall_bounce_handled"):
 		remove_meta("_wall_bounce_handled")
 	else:
 		move_and_slide()
+
+	# Bounce-back on player contact to prevent sticking
+	if _contact_bounce <= 0:
+		for si in range(get_slide_collision_count()):
+			var col = get_slide_collision(si)
+			if col.get_collider() == player:
+				var bounce_dir = col.get_normal()  # points away from player
+				# Stronger bounce when player is dashing/sprinting
+				var bounce_str := 0.4
+				var bounce_time := 0.15
+				if is_instance_valid(player):
+					if "_is_dashing" in player and player._is_dashing:
+						bounce_str = 2.0
+						bounce_time = 0.3
+					elif "_is_sprinting" in player and player._is_sprinting:
+						bounce_str = 1.0
+						bounce_time = 0.2
+				velocity = bounce_dir * speed * bounce_str
+				_contact_bounce = bounce_time
+				break
 
 	# Update enemy animation state
 	if _enemy_anim:
@@ -1723,6 +1756,11 @@ func _do_legacy_movement(dir: Vector2, dist: float, delta: float) -> void:
 			velocity = move_dir * eff_speed
 		elif atk_type_m == EnemyDefinition.AttackType.STRAFE_RUN:
 			velocity = _steer_around_walls((strafe + approach).normalized()) * eff_speed * 1.2
+			var _contact_dist := 8.0
+			if is_boss:
+				_contact_dist = 14.0
+			elif _is_boss_or_large:
+				_contact_dist = 10.0
 			if _melee_dodge_timer <= 0:
 				_melee_dodge_timer = randf_range(0.6, 1.5)
 				_melee_dodge_dir = -_melee_dodge_dir
@@ -1730,14 +1768,14 @@ func _do_legacy_movement(dir: Vector2, dist: float, delta: float) -> void:
 				if dist > 30:
 					velocity = _steer_around_walls(weave) * eff_speed * 1.2
 					_melee_flank_timer += delta
-				elif dist > 12:
+				elif dist > _contact_dist:
 					if _melee_dodge_timer > 0:
 						var dodge_dir = dir.rotated(PI * 0.5 * _melee_dodge_dir)
 						velocity = _steer_around_walls(dodge_dir) * eff_speed * 1.4
 					else:
 						velocity = move_dir * eff_speed * 1.5
 				else:
-					velocity = move_dir * eff_speed * 1.5
+					velocity = dir.rotated(PI * 0.5 * _melee_dodge_dir) * eff_speed * 0.8
 				if _melee_dodge_timer <= 0:
 					_melee_dodge_timer = randf_range(0.5, 1.2)
 					_melee_dodge_dir = -_melee_dodge_dir
@@ -2420,21 +2458,15 @@ func _check_contact_damage() -> void:
 	if state == State.DEAD or not is_instance_valid(player):
 		return
 	var dist = global_position.distance_to(player.global_position)
-	# Check physics collisions from move_and_slide first
-	var touching_player = false
-	for i in range(get_slide_collision_count()):
-		var col = get_slide_collision(i)
-		if col.get_collider() == player:
-			touching_player = true
-			break
-	# Also check distance as fallback
-	if not touching_player:
-		var in_ow = is_inside_tree() and get_tree().current_scene and get_tree().current_scene.name == "Overworld"
-		var contact_range = 8.0 * scale.x * (4.0 if in_ow else 1.0)
-		if dist > contact_range:
-			return
+	var in_ow = is_inside_tree() and get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var contact_range = 8.0 * scale.x * (4.0 if in_ow else 1.0)
+	if dist > contact_range:
+		return
+	# Player dashing — invincible, no contact damage
+	if "_is_dashing" in player and player._is_dashing:
+		return
 
-	_contact_cooldown = 0.5  # half second between contact hits
+	_contact_cooldown = 0.4  # ticks ~2.5x per second on contact
 	var sfx_ct = get_node_or_null("/root/SFXManager")
 	if sfx_ct:
 		sfx_ct.play("impact_b", -5.0, 0.15)
@@ -2481,15 +2513,13 @@ func _check_contact_damage() -> void:
 
 	var is_heavy = definition and definition.size_class >= 1  # LARGE or BOSS
 	if is_heavy:
-		# Heavy enemies: immovable, but push player harder
+		# Heavy enemies: immovable, push player via velocity only
 		if definition.size_class >= 2:  # BOSS
 			if player is CharacterBody2D:
-				player.velocity = -push_dir * 600.0
-				player.global_position -= push_dir * 16.0
+				player.velocity = -push_dir * 400.0
 		else:  # LARGE/elite
 			if player is CharacterBody2D:
-				player.velocity = -push_dir * 300.0
-				player.global_position -= push_dir * 8.0
+				player.velocity = -push_dir * 200.0
 	else:
 		# Check if movement makes this enemy unstoppable (swoop, bait punish, etc.)
 		var _mt = definition.movement_pattern.move_type if definition and definition.movement_pattern else 0
@@ -2500,7 +2530,7 @@ func _check_contact_damage() -> void:
 		var _is_dash = _mt == MovementPattern.MoveType.DASH_IN_OUT and _dash_state == 1
 		var _unstoppable = _is_swooping or _is_punishing or _is_intercepting or _is_elastic_snap or _is_dash
 
-		# Normal enemies: mutual knockback (original behavior)
+		# Normal enemies: mutual knockback
 		var enemy_dmg = int(ceil(momentum_mult / weight_mult))
 		if enemy_dmg > 0 and not _unstoppable:
 			take_damage(enemy_dmg)
@@ -2509,19 +2539,14 @@ func _check_contact_damage() -> void:
 		var kb_mult = 1.0 - clampf(kb_resist, 0.0, 1.0)
 
 		if _unstoppable:
-			# Unstoppable: no knockback on self, heavy push on player
+			# Unstoppable: heavy push on player via velocity
 			if player is CharacterBody2D:
-				player.velocity = -push_dir * 250.0
-				player.global_position -= push_dir * 10.0
+				player.velocity = -push_dir * 180.0
 		else:
-			var sep_amount = 6.0 / weight_mult * kb_mult
-			global_position += push_dir * sep_amount
-			velocity = push_dir * 50.0 / weight_mult * kb_mult
+			velocity = push_dir * 60.0 / weight_mult * kb_mult
 			_knockback_timer = 0.1
-
 			if player is CharacterBody2D:
-				player.velocity = -push_dir * 120.0 * weight_mult
-				player.global_position -= push_dir * 6.0
+				player.velocity = -push_dir * 100.0 * weight_mult
 
 	# Poise check: heavy enemies can stagger the player
 	var stagger_power = weight_mult * momentum_mult

@@ -40,7 +40,8 @@ func _on_bullet_hit(area: Node2D) -> void:
 			if vfx:
 				vfx.death_burst(global_position, Color(0.7, 0.6, 0.2), 0)
 			_play_sfx("impact_b", -3.0, 0.1)
-			deco_layer.erase_cell(origin + tile_pos)
+			if _has_deco_layer():
+				deco_layer.erase_cell(origin + tile_pos)
 			queue_free()
 
 func _physics_process(_delta: float) -> void:
@@ -74,7 +75,8 @@ func _ring() -> void:
 					enemy.awareness = 1.0
 
 	# Remove bell tile and self after ringing
-	deco_layer.erase_cell(origin + tile_pos)
+	if _has_deco_layer():
+		deco_layer.erase_cell(origin + tile_pos)
 	# Brief delay before cleanup so VFX plays
 	var timer = get_tree().create_timer(0.5)
 	timer.timeout.connect(queue_free)

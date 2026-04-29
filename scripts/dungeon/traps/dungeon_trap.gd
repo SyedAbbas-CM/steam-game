@@ -52,6 +52,12 @@ func _find_player() -> Node2D:
 		return player
 	return null
 
+func _has_deco_layer() -> bool:
+	return deco_layer != null and is_instance_valid(deco_layer)
+
+func _has_floor_layer(layer: TileMapLayer) -> bool:
+	return layer != null and is_instance_valid(layer)
+
 func _spawn_bullet(pos: Vector2, dir: Vector2, speed: float, damage: int, lifetime: float = 1.5) -> void:
 	if not is_inside_tree():
 		return

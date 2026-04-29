@@ -1,10 +1,10 @@
-[gd_resource type="TileSet" format=3 uid="uid://bs1jq6cp22rvi"]
+[gd_resource type="TileSet" format=3]
 
-[ext_resource type="Texture2D" uid="uid://do0jis83hwi4r" path="res://assets/sprites/lofiEnvironment.png" id="1_env"]
-[ext_resource type="Texture2D" uid="uid://6bly50dnjbgm" path="res://assets/sprites/lofi_dungeon_features.png" id="2_dng"]
+[ext_resource type="Texture2D" path="res://assets/sprites/lofiEnvironment.png" id="1_ps7o2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/lofi_dungeon_features.png" id="2_47opl"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_1"]
-texture = ExtResource("1_env")
+texture = ExtResource("1_ps7o2")
 texture_region_size = Vector2i(8, 8)
 0:0/0 = 0
 0:0/0/custom_data_0 = "grey_wall_roof"
@@ -840,7 +840,7 @@ texture_region_size = Vector2i(8, 8)
 15:25/0/custom_data_0 = "empty"
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_2"]
-texture = ExtResource("2_dng")
+texture = ExtResource("2_47opl")
 texture_region_size = Vector2i(8, 8)
 0:0/0 = 0
 0:0/0/custom_data_0 = "barrel"
@@ -1010,6 +1010,60 @@ texture_region_size = Vector2i(8, 8)
 10:6/0/custom_data_0 = "blood_small2"
 11:6/0 = 0
 11:6/0/custom_data_0 = "blood_drops2"
+12:6/0 = 0
+12:6/0/custom_data_0 = "blood_small"
+13:6/0 = 0
+13:6/0/custom_data_0 = "blood_drops"
+14:6/0 = 0
+14:6/0/custom_data_0 = "blood_medium"
+15:6/0 = 0
+15:6/0/custom_data_0 = "blood_large"
+16:6/0 = 0
+16:6/0/custom_data_0 = "furnace"
+17:6/0 = 0
+17:6/0/custom_data_0 = "water_trough"
+18:6/0 = 0
+18:6/0/custom_data_0 = "throne"
+19:6/0 = 0
+19:6/0/custom_data_0 = "head_chopping_block"
+12:1/0 = 0
+12:1/0/custom_data_0 = "gold_large"
+13:1/0 = 0
+13:1/0/custom_data_0 = "gold_very_large"
+12:2/0 = 0
+12:2/0/custom_data_0 = "bed_blue_left"
+13:2/0 = 0
+13:2/0/custom_data_0 = "bed_blue_right"
+14:2/0 = 0
+14:2/0/custom_data_0 = "bed_green_left"
+15:2/0 = 0
+15:2/0/custom_data_0 = "bed_green_right"
+16:2/0 = 0
+16:2/0/custom_data_0 = "carpet_red_vertical"
+17:2/0 = 0
+17:2/0/custom_data_0 = "carpet_blue_vertical"
+18:2/0 = 0
+18:2/0/custom_data_0 = "carpet_green_vertical"
+19:2/0 = 0
+19:2/0/custom_data_0 = "table_round"
+12:3/0 = 0
+12:3/0/custom_data_0 = "carpet_red_horizontal"
+13:3/0 = 0
+13:3/0/custom_data_0 = "carpet_blue_horizontal"
+14:3/0 = 0
+14:3/0/custom_data_0 = "carpet_green_horizontal"
+15:3/0 = 0
+15:3/0/custom_data_0 = "carpet_red_connector"
+16:3/0 = 0
+16:3/0/custom_data_0 = "carpet_blue_connector"
+17:3/0 = 0
+17:3/0/custom_data_0 = "carpet_green_connector"
+18:3/0 = 0
+18:3/0/custom_data_0 = "bench"
+12:5/0 = 0
+12:5/0/custom_data_0 = "cage"
+13:5/0 = 0
+13:5/0/custom_data_0 = "bucket"
 0:7/0 = 0
 0:7/0/custom_data_0 = "candle_stand"
 1:7/0 = 0
@@ -1034,6 +1088,22 @@ texture_region_size = Vector2i(8, 8)
 10:7/0/custom_data_0 = "large_chest_closed"
 11:7/0 = 0
 11:7/0/custom_data_0 = "advanced_weapon_rack"
+12:7/0 = 0
+12:7/0/custom_data_0 = "floor_candle"
+13:7/0 = 0
+13:7/0/custom_data_0 = "floor_candle_flicker"
+14:7/0 = 0
+14:7/0/custom_data_0 = "anvil"
+15:7/0 = 0
+15:7/0/custom_data_0 = "lever_right"
+16:7/0 = 0
+16:7/0/custom_data_0 = "lever_left"
+17:7/0 = 0
+17:7/0/custom_data_0 = "training_dummy"
+18:7/0 = 0
+18:7/0/custom_data_0 = "blood_altar"
+19:7/0 = 0
+19:7/0/custom_data_0 = "closed_chest"
 0:8/0 = 0
 0:8/0/custom_data_0 = "trap_base_horizontal"
 1:8/0 = 0
@@ -1058,6 +1128,22 @@ texture_region_size = Vector2i(8, 8)
 10:8/0/custom_data_0 = "brazier"
 11:8/0 = 0
 11:8/0/custom_data_0 = "brazier_flicker"
+12:8/0 = 0
+12:8/0/custom_data_0 = "repeating_chain_fence"
+13:8/0 = 0
+13:8/0/custom_data_0 = "blue_portal"
+14:8/0 = 0
+14:8/0/custom_data_0 = "green_portal"
+15:8/0 = 0
+15:8/0/custom_data_0 = "blue_power_generator"
+17:8/0 = 0
+17:8/0/custom_data_0 = "golden_statue"
+13:9/0 = 0
+13:9/0/custom_data_0 = "NEW_13_9"
+14:9/0 = 0
+14:9/0/custom_data_0 = "NEW_14_9"
+15:9/0 = 0
+15:9/0/custom_data_0 = "NEW_15_9"
 
 [resource]
 tile_size = Vector2i(8, 8)

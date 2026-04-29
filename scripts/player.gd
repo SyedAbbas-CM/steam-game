@@ -53,8 +53,6 @@ const MP_REGEN_RATE = 0.5  # MP per second base (non-wizard)
 const MP_REGEN_RATE_WIZARD = 2.0  # MP per second for wizard
 const MP_REGEN_DELAY = 3.0  # seconds after MP use before regen kicks in
 var _regen_accumulator: float = 0.0
-var _dbg_frame: int = 0
-var _dbg_file: FileAccess = null
 var _animator: SpriteAnimator  # disabled until spritesheets support animation
 var _player_anim: PlayerAnimator
 
@@ -740,13 +738,6 @@ func _physics_process(delta: float) -> void:
 		stamina_changed.emit(stamina)
 		if stamina <= 0:
 			_guard_stance_active = false
-	elif _wtype == "short_bow" and Input.is_action_pressed("sprint") and stamina > 0:
-		_rapid_fire_active = true
-		stamina = maxf(stamina - 20.0 * delta, 0.0)
-		_stamina_regen_delay = 0.5
-		stamina_changed.emit(stamina)
-		if stamina <= 0:
-			_rapid_fire_active = false
 	elif _wtype == "greatsword" and Input.is_action_pressed("sprint") and stamina > 0:
 		_berserker_rage_active = true
 		stamina = maxf(stamina - 40.0 * delta, 0.0)
@@ -887,10 +878,11 @@ func _physics_process(delta: float) -> void:
 	elif not _is_dashing and _dash_linger <= 0 and not _shield_active:
 		sprite.modulate.a = 1.0
 
-	# Sprint (hold Shift while moving — only weapons WITHOUT a shift ability)
-	# Weapons with shift abilities (blade_dance, whirlwind, etc.) use shift for that instead
+	# Sprint (hold Shift while moving — weapons without a special shift ability get sprint)
+	# Short bows and unarmed also get sprint instead of a special ability
 	_is_sprinting = false
-	var _has_shift_ability = _wtype != ""  # all weapon types now have shift abilities
+	var _sprint_weapons = ["short_bow", ""]  # weapon types that sprint on shift
+	var _has_shift_ability = _wtype != "" and _wtype not in _sprint_weapons
 	if not _has_shift_ability:
 		if Input.is_action_pressed("sprint") and direction.length() > 0 and stamina > 0 and not _is_dashing and not _shield_active:
 			_is_sprinting = true
@@ -935,45 +927,31 @@ func _physics_process(delta: float) -> void:
 	# Sync 3D first-person camera
 	if fps_mode and _first_person_view:
 		_first_person_view.update_camera(global_position, fps_angle)
-	# DEBUG: log ALL slide collisions
-	_dbg_frame += 1
-	var slides = get_slide_collision_count()
-	if slides > 0:
-		for si in range(slides):
-			var col = get_slide_collision(si)
-			var collider = col.get_collider()
-			if _dbg_frame % 60 == 0:
-				print("SLIDE: body=%s layer=%d normal=%s playerpos=%s" % [
-					collider.name if collider else "?",
-					collider.collision_layer if collider else -1,
-					col.get_normal(), global_position])
-	# Every 2 seconds, print test_move results
-	if _dbg_frame % 120 == 0 and velocity.length() > 1:
-		var hit = false
-		for dir_name in ["R", "L", "D", "U"]:
-			var dir = {"R": Vector2(32,0), "L": Vector2(-32,0), "D": Vector2(0,32), "U": Vector2(0,-32)}[dir_name]
-			if test_move(global_transform, dir):
-				print("TEST_MOVE %s=COLLIDE pos=%s" % [dir_name, global_position])
-				hit = true
-		if not hit:
-			print("TEST_MOVE: NO collisions in any direction pos=%s" % global_position)
-	if _dbg_frame == 1:
-		print("PLAYER SPAWN: pos=%s scale=%s col_layer=%d col_mask=%d" % [global_position, scale, collision_layer, collision_mask])
-		var cs = get_node_or_null("CollisionShape2D")
-		if cs and cs.shape is RectangleShape2D:
-			print("  shape_size=%s disabled=%s" % [cs.shape.size, cs.disabled])
-		_dbg_file = FileAccess.open("user://player_collision_log.txt", FileAccess.WRITE)
-		if _dbg_file:
-			_dbg_file.store_line("PLAYER SPAWN: pos=%s scale=%s col_layer=%d col_mask=%d shape=%s" % [global_position, scale, collision_layer, collision_mask, cs.shape.size if cs and cs.shape is RectangleShape2D else "?"])
-	# Write to file every frame when moving
-	if _dbg_file and velocity.length() > 1 and _dbg_frame % 10 == 0:
-		var line = "f=%d pos=%s vel=%s slides=%d" % [_dbg_frame, global_position, velocity, slides]
-		if slides > 0:
-			for si2 in range(slides):
-				var c2 = get_slide_collision(si2)
-				line += " col=%s" % c2.get_collider().name if c2.get_collider() else " col=null"
-		_dbg_file.store_line(line)
-		_dbg_file.flush()
+	# Slide collision: push enemies via _pushed_velocity (persists through AI updates)
+	for si in range(get_slide_collision_count()):
+		var col = get_slide_collision(si)
+		var collider = col.get_collider()
+		if not collider or not collider.is_in_group("enemies"):
+			continue
+		if not collider is CharacterBody2D:
+			continue
+		var push_dir_c = -col.get_normal()  # direction from player toward enemy
+		# Push enemy away — sprinting/dashing pushes harder
+		var push_force := 80.0
+		if _is_sprinting:
+			push_force = 180.0
+		if _is_dashing:
+			push_force = 350.0
+		if _blade_dance_active or _phalanx_active:
+			push_force = 250.0
+		# Heavier enemies resist push
+		var enemy_weight: float = collider._weight if "_weight" in collider else 1.0
+		var push_vec = push_dir_c * push_force / enemy_weight
+		# Use _pushed_velocity so it persists through enemy AI updates
+		if "_pushed_velocity" in collider:
+			collider._pushed_velocity = push_vec
+		else:
+			collider.velocity += push_vec
 
 	# Update facing direction (locked during dash to prevent frame flicker)
 	if _player_anim and not _is_dashing:
@@ -1804,13 +1782,18 @@ func _dash_strike_check() -> void:
 				e.take_damage(hit_dmg)
 			# Spear lunge pushes enemies far in the charge direction (not radially)
 			if _lunge_active:
-				e.velocity = _dash_direction * kb_force
-				if e.get("_nudge_timer") != null:
-					e._nudge_velocity = _dash_direction * kb_force * 0.5
-					e._nudge_timer = 0.3
+				if "_pushed_velocity" in e:
+					e._pushed_velocity = _dash_direction * kb_force
+				else:
+					e.velocity = _dash_direction * kb_force
+				e._contact_bounce = 0.3 if "_contact_bounce" in e else 0.0
 			else:
 				var kb_dir = (e.global_position - global_position).normalized()
-				e.velocity = kb_dir * kb_force
+				if "_pushed_velocity" in e:
+					e._pushed_velocity = kb_dir * kb_force
+				else:
+					e.velocity = kb_dir * kb_force
+				e._contact_bounce = 0.2 if "_contact_bounce" in e else 0.0
 			# VFX: impact spark per hit during lunge
 			if _lunge_active:
 				var vfx = get_node_or_null("/root/VFXManager")

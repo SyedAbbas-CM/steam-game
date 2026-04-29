@@ -46,12 +46,17 @@ func _start_blink() -> void:
 	timer.start()
 
 func _on_blink_tick(timer: Timer) -> void:
+	if not _has_deco_layer():
+		timer.stop()
+		timer.queue_free()
+		queue_free()
+		return
 	_blink_count += 1
 	var abs_pos = origin + tile_pos
 	if _blink_count % 2 == 1:
 		deco_layer.erase_cell(abs_pos)
 	else:
-		deco_layer.set_cell(abs_pos, 0, trap_atlas)
+		deco_layer.set_cell(abs_pos, trap_source_id, trap_atlas)
 	_play_sfx("click", -10.0 + _blink_count * 1.5, 0.05)
 	if _blink_count >= BLINK_TOTAL:
 		timer.stop()
@@ -64,7 +69,8 @@ func _explode() -> void:
 	if vfx:
 		vfx.shockwave(global_position, 16.0, Color(1.0, 0.5, 0.2, 0.6))
 		vfx.shake(2.0, 0.2)
-	deco_layer.erase_cell(origin + tile_pos)
+	if _has_deco_layer():
+		deco_layer.erase_cell(origin + tile_pos)
 
 	var damage = get_damage()
 

@@ -27,7 +27,7 @@ func trigger_remote() -> void:
 		return
 	_triggered = true
 	set_physics_process(false)
-	var atlas = floor_layer.get_cell_atlas_coords(abs_pos) if floor_layer else Vector2i(-1, -1)
+	var atlas = floor_layer.get_cell_atlas_coords(abs_pos) if _has_floor_layer(floor_layer) else Vector2i(-1, -1)
 	_floor_atlas = atlas if atlas != Vector2i(-1, -1) else Vector2i(5, 0)
 	_start_blink()
 
@@ -40,7 +40,7 @@ func _physics_process(_delta: float) -> void:
 			_triggered = true
 			set_physics_process(false)
 			# Remember the original floor tile for blinking
-			var atlas = floor_layer.get_cell_atlas_coords(abs_pos) if floor_layer else Vector2i(-1, -1)
+			var atlas = floor_layer.get_cell_atlas_coords(abs_pos) if _has_floor_layer(floor_layer) else Vector2i(-1, -1)
 			_floor_atlas = atlas if atlas != Vector2i(-1, -1) else Vector2i(5, 0)
 			_start_blink()
 
@@ -55,6 +55,11 @@ func _start_blink() -> void:
 	timer.start()
 
 func _on_blink_tick(timer: Timer) -> void:
+	if not _has_floor_layer(floor_layer) or not _has_deco_layer():
+		timer.stop()
+		timer.queue_free()
+		queue_free()
+		return
 	_blink_count += 1
 	if _blink_count % 2 == 1:
 		# Show cracked/warning look: erase floor, show red-tinted deco
@@ -73,8 +78,10 @@ func _on_blink_tick(timer: Timer) -> void:
 func _collapse() -> void:
 	_play_sfx("boom_b", -4.0, 0.1)
 
-	deco_layer.erase_cell(abs_pos)
-	floor_layer.erase_cell(abs_pos)
+	if _has_deco_layer():
+		deco_layer.erase_cell(abs_pos)
+	if _has_floor_layer(floor_layer):
+		floor_layer.erase_cell(abs_pos)
 
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
@@ -92,7 +99,8 @@ func _collapse() -> void:
 
 	if has_liquid and liquid_tiles.size() > 0:
 		var liq_tile = liquid_tiles[randi() % liquid_tiles.size()]
-		liquid_layer.set_cell(abs_pos, 0, liq_tile)
+		if _has_floor_layer(liquid_layer):
+			liquid_layer.set_cell(abs_pos, 0, liq_tile)
 	# else: just leave the hole as empty space — walkable, no collision
 
 	queue_free()

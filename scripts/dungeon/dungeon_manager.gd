@@ -59,10 +59,10 @@ const THEME_ROWS = {
 
 # Grid cell size must fit largest room shape + corridor gap
 # DEFAULT fits Arena (25x23), GRAND fits GRAND_HALL (39x33)
-const DEFAULT_GRID_CELL_W = 29
-const DEFAULT_GRID_CELL_H = 27
-const GRAND_GRID_CELL_W = 45
-const GRAND_GRID_CELL_H = 39
+const DEFAULT_GRID_CELL_W = 47
+const DEFAULT_GRID_CELL_H = 41
+const GRAND_GRID_CELL_W = 65
+const GRAND_GRID_CELL_H = 53
 var GRID_CELL_W: int = DEFAULT_GRID_CELL_W
 var GRID_CELL_H: int = DEFAULT_GRID_CELL_H
 const TILE_SIZE = 8
@@ -89,6 +89,12 @@ const TRAP_LEVEL_GATES = {
 	"bell": 1,
 	"rail_trap": 1,
 	"flame_jet": 3,
+}
+
+const GUARANTEED_RAIL_CHAINS := {
+	"Haven": true,
+	"Barrows": true,
+	"Duskfarm": true,
 }
 
 var _corridor_midpoints: Array[Dictionary] = []
@@ -633,6 +639,10 @@ func _generate_floor(floor_num: int) -> void:
 	if not _is_test_dungeon():
 		_spawn_cross_room_rail_traps(theme_row)
 
+	# Corridor patrol enemies (floor 2+)
+	if not _is_test_dungeon():
+		_spawn_corridor_enemies()
+
 	# Create transitions between rooms
 	t1 = Time.get_ticks_msec()
 	_create_all_transitions(theme_row)
@@ -674,6 +684,8 @@ func _generate_floor(floor_num: int) -> void:
 			match room_data.type:
 				RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS:
 					if dist_to_start > 0 and dist_to_start <= 2:
+						if room_data.deferred_spawn:
+							continue  # AMBUSH/GAUNTLET/ARENA — spawn only on player entry
 						room_states[grid_pos]["spawned"] = true
 						_spawn_room_enemies(grid_pos, room_data)
 						# Activate traps in pre-spawned rooms
@@ -1753,35 +1765,88 @@ func _find_wall_adjacent_to_floor(mask: Array, w: int, h: int, min_floor_neighbo
 
 func _paint_corridor_traps(theme_row: int) -> void:
 	var allowed = _get_allowed_traps()
-	if "swinging_axe" not in allowed:
+	# Filter to corridor-appropriate traps
+	var corridor_traps: Array[String] = []
+	for t in ["swinging_axe", "spike", "arrow", "dart", "flame_jet", "collapsing_floor"]:
+		if t in allowed:
+			corridor_traps.append(t)
+	if corridor_traps.size() == 0:
 		return
 
-	for midpoint in _corridor_midpoints:
-		if randf() > 0.2:  # 20% chance per corridor
+	var floor_num = run_state.current_floor if run_state else 1
+
+	for corridor in _corridor_midpoints:
+		# 50-70% of corridors have traps (scales with floor)
+		var trap_chance = 0.50 + floor_num * 0.04
+		trap_chance = minf(trap_chance, 0.70)
+		if randf() > trap_chance:
 			continue
 
-		# Create swinging axe
-		var axe = _SwingingAxeScript.new()
-		var floor_num = run_state.current_floor if run_state else 1
-		var direction = str(midpoint.get("direction", "east"))
-		var pos = midpoint.get("position", Vector2.ZERO) as Vector2
-		axe.floor_number = floor_num
-		axe.corridor_direction = direction
-		axe.position = pos
-		hazard_container.add_child(axe)
+		var trap_positions = corridor.get("trap_positions", []) as Array
+		if trap_positions.size() == 0:
+			# Fallback: use midpoint
+			trap_positions = [{"position": corridor.get("position", Vector2.ZERO), "direction": corridor.get("direction", "east")}]
 
-		# Place lever 3-5 tiles along the corridor from the axe (within walkable area)
-		var lever_offset: Vector2
-		var lever_dist = randi_range(3, 5) * TILE_SIZE * (1 if randf() > 0.5 else -1)
-		if direction == "east":
-			lever_offset = Vector2(lever_dist, 0)
-		else:
-			lever_offset = Vector2(0, lever_dist)
+		# 1-3 traps per corridor, scaling with floor
+		var num_traps = clampi(1 + floor_num / 3, 1, 3)
+		num_traps = mini(num_traps, trap_positions.size())
 
-		var lever = _TrapLeverScript.new()
-		lever.axe = axe
-		lever.position = pos + lever_offset
-		hazard_container.add_child(lever)
+		for i in range(num_traps):
+			var trap_type = corridor_traps[randi() % corridor_traps.size()]
+			var pos_data = trap_positions[i]
+			var pos = pos_data.get("position", Vector2.ZERO) as Vector2
+			var direction = str(pos_data.get("direction", "east"))
+
+			match trap_type:
+				"swinging_axe":
+					var axe = _SwingingAxeScript.new()
+					axe.floor_number = floor_num
+					axe.corridor_direction = direction
+					axe.position = pos
+					hazard_container.add_child(axe)
+					# Lever
+					var lever_dist = randi_range(3, 5) * TILE_SIZE * (1 if randf() > 0.5 else -1)
+					var lever_offset = Vector2(lever_dist, 0) if direction == "east" else Vector2(0, lever_dist)
+					var lever = _TrapLeverScript.new()
+					lever.axe = axe
+					lever.position = pos + lever_offset
+					hazard_container.add_child(lever)
+				"spike":
+					var tile_pos = Vector2i(int(pos.x) / TILE_SIZE, int(pos.y) / TILE_SIZE)
+					var trap_atlas = Vector2i(13, theme_row)
+					deco_layer.set_cell(tile_pos, 0, trap_atlas)
+					var spike = _TrapTileScript.new()
+					spike.tile_pos = tile_pos
+					spike.origin = Vector2i.ZERO
+					spike.deco_layer = deco_layer
+					spike.trap_atlas = trap_atlas
+					spike.floor_number = floor_num
+					spike.position = pos
+					hazard_container.add_child(spike)
+				"arrow":
+					if _ArrowTrapScript:
+						var arrow = _ArrowTrapScript.new()
+						arrow.floor_number = floor_num
+						arrow.position = pos
+						hazard_container.add_child(arrow)
+				"dart":
+					if _DartTrapScript:
+						var dart = _DartTrapScript.new()
+						dart.floor_number = floor_num
+						dart.position = pos
+						hazard_container.add_child(dart)
+				"flame_jet":
+					if _FlameJetScript:
+						var fj = _FlameJetScript.new()
+						fj.floor_number = floor_num
+						fj.position = pos
+						hazard_container.add_child(fj)
+				"collapsing_floor":
+					if _CollapsingFloorScript:
+						var cf = _CollapsingFloorScript.new()
+						cf.floor_number = floor_num
+						cf.position = pos
+						hazard_container.add_child(cf)
 
 ## --- Cross-Room Rail Traps ---
 
@@ -1836,8 +1901,9 @@ func _generate_room_edge_rails(origin: Vector2i, mask: Array, w: int, h: int) ->
 
 func _spawn_cross_room_rail_traps(theme_row: int) -> void:
 	# Rail traps are now a system-level feature again; don't suppress them behind stale level metadata.
+	var force_rail = _should_force_rail_trap()
 	var eff_level = _get_effective_level()
-	if eff_level < TRAP_LEVEL_GATES.get("rail_trap", 4):
+	if eff_level < TRAP_LEVEL_GATES.get("rail_trap", 4) and not force_rail:
 		return
 
 	# Collect eligible rooms (COMBAT/ELITE only, skip start room)
@@ -1847,16 +1913,20 @@ func _spawn_cross_room_rail_traps(theme_row: int) -> void:
 		if grid_pos == start_grid:
 			continue
 		var rd = run_state.floor_map[grid_pos] as RoomData
-		if rd.type == RoomData.RoomType.COMBAT or rd.type == RoomData.RoomType.ELITE:
+		if rd.type in [RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS]:
 			eligible.append(grid_pos)
 
 	if eligible.size() < 2:
+		if force_rail:
+			_spawn_single_room_rail_trap(eligible)
 		return
 
 	# Pick a chain of 2-4 connected rooms
 	var target_len = mini(randi_range(2, 4), eligible.size())
 	var chain = _pick_rail_room_chain(eligible, target_len)
 	if chain.size() < 2:
+		if force_rail:
+			_spawn_single_room_rail_trap(eligible)
 		return
 
 	# Build the full track through rooms and corridors
@@ -1883,6 +1953,8 @@ func _spawn_cross_room_rail_traps(theme_row: int) -> void:
 		var room_track = _route_track_through_room(origin, mask, w, h, entry_dir, exit_dir, room_data)
 		if room_track.size() == 0:
 			# L-path failed — abort entire track (silent, rail traps are bonus)
+			if force_rail:
+				_spawn_single_room_rail_trap(eligible)
 			return
 
 		# Append room track (skip first tile if it duplicates last corridor tile)
@@ -1897,6 +1969,8 @@ func _spawn_cross_room_rail_traps(theme_row: int) -> void:
 			var direction = _direction_between(grid_pos, next_grid)
 			var corridor_track = _route_track_through_corridor(grid_pos, next_grid, direction)
 			if corridor_track.size() == 0:
+				if force_rail:
+					_spawn_single_room_rail_trap(eligible)
 				return  # corridor routing failed
 			# Skip first tile if duplicate
 			if full_track.size() > 0 and corridor_track.size() > 0 and full_track[-1] == corridor_track[0]:
@@ -1907,13 +1981,19 @@ func _spawn_cross_room_rail_traps(theme_row: int) -> void:
 	full_track = _deduplicate_track(full_track)
 
 	if full_track.size() < 10:
+		if force_rail:
+			_spawn_single_room_rail_trap(eligible)
 		return  # track too short
 
 	# Validate all tiles are walkable floor and no deco overlap
 	for tile in full_track:
 		if not _floor_tile_set.has(tile):
+			if force_rail:
+				_spawn_single_room_rail_trap(eligible)
 			return
 		if deco_layer.get_cell_source_id(tile) != -1:
+			if force_rail:
+				_spawn_single_room_rail_trap(eligible)
 			return
 
 	# Check circuit: does last room connect back to first?
@@ -1948,6 +2028,62 @@ func _spawn_cross_room_rail_traps(theme_row: int) -> void:
 		hazard_container.add_child(rail)
 
 	print("RAIL_TRAPS: track=%d tiles, traps=%d, rooms=%s, circuit=%s" % [full_track.size(), trap_count, str(chain_rooms), str(is_circuit)])
+
+func _should_force_rail_trap() -> bool:
+	if not current_level:
+		return false
+	var chain_base = _get_chain_base(current_level.id)
+	return GUARANTEED_RAIL_CHAINS.has(chain_base)
+
+func _spawn_single_room_rail_trap(eligible: Array[Vector2i]) -> void:
+	if not run_state or not hazard_container or eligible.is_empty():
+		return
+
+	var best_room := Vector2i.ZERO
+	var best_track: Array[Vector2i] = []
+	for grid_pos in eligible:
+		var room_data = run_state.floor_map.get(grid_pos) as RoomData
+		if not room_data:
+			continue
+		var origin = _grid_to_tile_origin(grid_pos)
+		var track = _generate_room_edge_rails(origin, room_data.floor_mask, room_data.shape_width, room_data.shape_height)
+		if track.size() < 6:
+			continue
+
+		var valid_track: Array[Vector2i] = []
+		for tile in track:
+			if _floor_tile_set.has(tile):
+				valid_track.append(tile)
+		if valid_track.size() < 6:
+			continue
+
+		if valid_track.size() > best_track.size():
+			best_track = valid_track
+			best_room = grid_pos
+
+	if best_track.is_empty():
+		return
+
+	for i in range(best_track.size()):
+		# Forced rails take priority over decorative clutter in the authored dungeon chains.
+		if deco_layer.get_cell_source_id(best_track[i]) != -1:
+			deco_layer.erase_cell(best_track[i])
+		deco_layer.set_cell(best_track[i], 1, _get_track_tile_atlas(best_track, i))
+
+	var floor_num = run_state.current_floor if run_state else 1
+	var rail = _RailTrapScript.new()
+	rail.floor_number = floor_num
+	rail.track_tiles = best_track
+	rail.is_circuit = true
+	rail.start_track_index = 0
+	rail.room_grid_pos = best_room
+	rail.rail_type = 0 if randf() < 0.6 else 1
+	rail.move_speed = randf_range(25.0, 40.0)
+	var start_tile = best_track[0]
+	rail.position = Vector2(start_tile.x * TILE_SIZE + 4, start_tile.y * TILE_SIZE + 4)
+	hazard_container.add_child(rail)
+
+	print("RAIL_TRAPS: forced single-room rail in %s (%d tiles)" % [str(best_room), best_track.size()])
 
 func _pick_rail_room_chain(eligible: Array[Vector2i], target_len: int) -> Array[Vector2i]:
 	## Random walk through connected eligible rooms to build a chain of target_len rooms.
@@ -2241,100 +2377,81 @@ func _paint_corridor(from_grid: Vector2i, to_grid: Vector2i, direction: String, 
 	var floor_tile = Vector2i(5, theme_row)
 	var wall_tile = Vector2i(4, theme_row)
 
-	# Boss/Elite corridors are wider (5 tiles instead of 3)
-	var is_wide_corridor = (
-		from_room.type == RoomData.RoomType.BOSS or to_room.type == RoomData.RoomType.BOSS
-		or from_room.type == RoomData.RoomType.ELITE or to_room.type == RoomData.RoomType.ELITE
-		or from_room.type == RoomData.RoomType.SUPER_ELITE or to_room.type == RoomData.RoomType.SUPER_ELITE
-		or from_room.type == RoomData.RoomType.SUPER_ELITE or to_room.type == RoomData.RoomType.SUPER_ELITE
+	# Corridor width: minimum 3 tiles (half_w=1), randomly wider
+	var is_elite_corridor = (
+		from_room.type in [RoomData.RoomType.BOSS, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE]
+		or to_room.type in [RoomData.RoomType.BOSS, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE]
 	)
-	var half_w = 2 if is_wide_corridor else 1  # floor extends -half_w to +half_w
-	var wall_offset = half_w + 1  # walls just outside floor
+	var half_w: int
+	if is_elite_corridor:
+		# Elite/boss: always at least 5 wide, sometimes 7
+		half_w = 2 if randf() < 0.65 else 3
+	else:
+		# Normal: 3 (40%), 5 (35%), 7 (25%)
+		var w_roll = randf()
+		if w_roll < 0.40:
+			half_w = 1
+		elif w_roll < 0.75:
+			half_w = 2
+		else:
+			half_w = 3
+
+	# Calculate absolute exit positions
+	var from_exit_local: Vector2i
+	var to_exit_local: Vector2i
+	var from_exit_abs: Vector2i
+	var to_exit_abs: Vector2i
 
 	if direction == "east":
-		var from_exit = RoomShapeGenerator.get_exit_point(from_room.floor_mask, from_room.shape_width, from_room.shape_height, "east")
-		var to_exit = RoomShapeGenerator.get_exit_point(to_room.floor_mask, to_room.shape_width, to_room.shape_height, "west")
+		from_exit_local = RoomShapeGenerator.get_exit_point(from_room.floor_mask, from_room.shape_width, from_room.shape_height, "east")
+		to_exit_local = RoomShapeGenerator.get_exit_point(to_room.floor_mask, to_room.shape_width, to_room.shape_height, "west")
+		from_exit_abs = Vector2i(from_origin.x + from_room.shape_width, from_origin.y + from_exit_local.y)
+		to_exit_abs = Vector2i(to_origin.x - 1, to_origin.y + to_exit_local.y)
+	else:  # south
+		from_exit_local = RoomShapeGenerator.get_exit_point(from_room.floor_mask, from_room.shape_width, from_room.shape_height, "south")
+		to_exit_local = RoomShapeGenerator.get_exit_point(to_room.floor_mask, to_room.shape_width, to_room.shape_height, "north")
+		from_exit_abs = Vector2i(from_origin.x + from_exit_local.x, from_origin.y + from_room.shape_height)
+		to_exit_abs = Vector2i(to_origin.x + to_exit_local.x, to_origin.y - 1)
 
-		var start_x = from_origin.x + from_room.shape_width
-		var end_x = to_origin.x
-		var from_mid_y = from_origin.y + from_exit.y
-		var to_mid_y = to_origin.y + to_exit.y
+	# Generate corridor shape
+	var floor_num = run_state.current_floor if run_state else 1
+	var corridor_data = CorridorGenerator.generate_corridor(from_exit_abs, to_exit_abs, direction, half_w, floor_num)
 
-		# Check for corridor liquid (both rooms have liquid)
-		var corridor_liquid = _get_corridor_liquid(from_grid, to_grid)
+	# Paint floor tiles
+	for tile in corridor_data["floor_tiles"]:
+		floor_layer.set_cell(tile, 0, floor_tile)
+		_floor_tile_set[tile] = true
 
-		# Paint corridor — handle y offset between rooms
-		for x in range(start_x, end_x):
-			var t = 0.0
-			if end_x > start_x:
-				t = float(x - start_x) / float(end_x - start_x)
-			var mid_y = int(lerp(float(from_mid_y), float(to_mid_y), t))
-			for dy in range(-half_w, half_w + 1):
-				var ct = Vector2i(x, mid_y + dy)
-				floor_layer.set_cell(ct, 0, floor_tile)
-				_floor_tile_set[ct] = true
-			wall_layer.set_cell(Vector2i(x, mid_y - wall_offset), 0, wall_tile)
-			wall_layer.set_cell(Vector2i(x, mid_y + wall_offset), 0, wall_tile)
-			if corridor_liquid.size() > 0:
-				liquid_layer.set_cell(Vector2i(x, mid_y - (half_w + 1)), 0, corridor_liquid[randi() % corridor_liquid.size()])
-				liquid_layer.set_cell(Vector2i(x, mid_y + (half_w + 1)), 0, corridor_liquid[randi() % corridor_liquid.size()])
-				deco_layer.set_cell(Vector2i(x, mid_y - half_w), 0, SPIDER_WEB_FULL)
-				deco_layer.set_cell(Vector2i(x, mid_y + half_w), 0, SPIDER_WEB_FULL)
+	# Paint wall tiles
+	for tile in corridor_data["wall_tiles"]:
+		wall_layer.set_cell(tile, 0, wall_tile)
 
-		# Open walls at room exits
-		_open_exit_wall(from_origin, from_exit, from_room.floor_mask, from_room.shape_width, from_room.shape_height, floor_tile, half_w)
-		_open_exit_wall(to_origin, to_exit, to_room.floor_mask, to_room.shape_width, to_room.shape_height, floor_tile, half_w)
+	# Paint alcove tiles (floor + their walls are already in wall_tiles)
+	for tile in corridor_data["alcove_tiles"]:
+		floor_layer.set_cell(tile, 0, floor_tile)
+		_floor_tile_set[tile] = true
 
-		# Record corridor midpoint for trap placement
-		if end_x > start_x:
-			var mid_x_c = (start_x + end_x) / 2
-			var t_mid = 0.5
-			var mid_y_c = int(lerp(float(from_mid_y), float(to_mid_y), t_mid))
-			_corridor_midpoints.append({
-				"position": Vector2(mid_x_c * TILE_SIZE + 4, mid_y_c * TILE_SIZE + 4),
-				"direction": "east",
-			})
+	# Corridor liquid (if both rooms have liquid)
+	var corridor_liquid = _get_corridor_liquid(from_grid, to_grid)
+	if corridor_liquid.size() > 0:
+		# Apply liquid to wall-adjacent floor tiles
+		var floor_set: Dictionary = {}
+		for tile in corridor_data["floor_tiles"]:
+			floor_set[tile] = true
+		for tile in corridor_data["alcove_tiles"]:
+			floor_set[tile] = true
+		for tile in corridor_data["wall_tiles"]:
+			# If the wall tile is adjacent to a floor tile, put liquid there
+			if floor_set.has(tile):
+				liquid_layer.set_cell(tile, 0, corridor_liquid[randi() % corridor_liquid.size()])
 
-	elif direction == "south":
-		var from_exit = RoomShapeGenerator.get_exit_point(from_room.floor_mask, from_room.shape_width, from_room.shape_height, "south")
-		var to_exit = RoomShapeGenerator.get_exit_point(to_room.floor_mask, to_room.shape_width, to_room.shape_height, "north")
+	# Open walls at room exits
+	_open_exit_wall(from_origin, from_exit_local, from_room.floor_mask, from_room.shape_width, from_room.shape_height, floor_tile, half_w)
+	_open_exit_wall(to_origin, to_exit_local, to_room.floor_mask, to_room.shape_width, to_room.shape_height, floor_tile, half_w)
 
-		var start_y = from_origin.y + from_room.shape_height
-		var end_y = to_origin.y
-		var from_mid_x = from_origin.x + from_exit.x
-		var to_mid_x = to_origin.x + to_exit.x
-
-		var corridor_liquid = _get_corridor_liquid(from_grid, to_grid)
-
-		for y in range(start_y, end_y):
-			var t = 0.0
-			if end_y > start_y:
-				t = float(y - start_y) / float(end_y - start_y)
-			var mid_x = int(lerp(float(from_mid_x), float(to_mid_x), t))
-			for dx in range(-half_w, half_w + 1):
-				var ct = Vector2i(mid_x + dx, y)
-				floor_layer.set_cell(ct, 0, floor_tile)
-				_floor_tile_set[ct] = true
-			wall_layer.set_cell(Vector2i(mid_x - wall_offset, y), 0, wall_tile)
-			wall_layer.set_cell(Vector2i(mid_x + wall_offset, y), 0, wall_tile)
-			if corridor_liquid.size() > 0:
-				liquid_layer.set_cell(Vector2i(mid_x - (half_w + 1), y), 0, corridor_liquid[randi() % corridor_liquid.size()])
-				liquid_layer.set_cell(Vector2i(mid_x + (half_w + 1), y), 0, corridor_liquid[randi() % corridor_liquid.size()])
-				deco_layer.set_cell(Vector2i(mid_x - half_w, y), 0, SPIDER_WEB_FULL)
-				deco_layer.set_cell(Vector2i(mid_x + half_w, y), 0, SPIDER_WEB_FULL)
-
-		_open_exit_wall(from_origin, from_exit, from_room.floor_mask, from_room.shape_width, from_room.shape_height, floor_tile, half_w)
-		_open_exit_wall(to_origin, to_exit, to_room.floor_mask, to_room.shape_width, to_room.shape_height, floor_tile, half_w)
-
-		# Record corridor midpoint for trap placement
-		if end_y > start_y:
-			var mid_y_c = (start_y + end_y) / 2
-			var t_mid = 0.5
-			var mid_x_c = int(lerp(float(from_mid_x), float(to_mid_x), t_mid))
-			_corridor_midpoints.append({
-				"position": Vector2(mid_x_c * TILE_SIZE + 4, mid_y_c * TILE_SIZE + 4),
-				"direction": "south",
-			})
+	# Store corridor data for trap/enemy placement
+	corridor_data["position"] = Vector2(corridor_data["midpoint"].x * TILE_SIZE + 4, corridor_data["midpoint"].y * TILE_SIZE + 4)
+	_corridor_midpoints.append(corridor_data)
 
 func _open_exit_wall(origin: Vector2i, exit_point: Vector2i, mask: Array, w: int, h: int, floor_tile: Vector2i, exit_half_w: int = 1) -> void:
 	# Carve opening from the room edge inward to guarantee corridor connectivity.
@@ -2734,6 +2851,8 @@ func _prespawn_adjacent_rooms(grid_pos: Vector2i) -> void:
 			continue
 		match neighbor_data.type:
 			RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS:
+				if neighbor_data.deferred_spawn:
+					continue  # AMBUSH/GAUNTLET/ARENA — spawn only on player entry
 				neighbor_state["spawned"] = true
 				_spawn_room_enemies(neighbor_pos, neighbor_data)
 				# Activate traps in pre-spawned rooms
@@ -2767,7 +2886,10 @@ func _visit_room(grid_pos: Vector2i) -> void:
 		RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS:
 			if not state.get("spawned", false):
 				state["spawned"] = true
-				_spawn_room_enemies(grid_pos, room_data)
+				if room_data.deferred_spawn:
+					_spawn_room_enemies(grid_pos, room_data)
+				else:
+					_spawn_room_enemies(grid_pos, room_data)
 		RoomData.RoomType.TREASURE, RoomData.RoomType.SHRINE:
 			# Guarded reward rooms — spawn enemies that must be cleared first
 			if not state.get("spawned", false):
@@ -3074,7 +3196,16 @@ func _spawn_horde_wave_2(grid_pos: Vector2i) -> void:
 	var wave2_count = state.get("horde_wave2_count", 0)
 	if wave2_count <= 0:
 		return
+	# Cancel wave if player left the room
+	if run_state.current_grid_pos != grid_pos:
+		state.erase("horde_wave2_count")
+		return
 	state.erase("horde_wave2_count")
+	# SFX + announce
+	var sfx_w2 = get_node_or_null("/root/SFXManager")
+	if sfx_w2:
+		sfx_w2.play("alarm_a", -3.0, 0.0)
+	FloatingText.spawn(self, _grid_to_world_center(grid_pos), "WAVE 2!", Color(1.0, 0.4, 0.2))
 
 	var room_data = run_state.floor_map.get(grid_pos) as RoomData
 	if not room_data:
@@ -3125,6 +3256,325 @@ func _spawn_horde_wave_2(grid_pos: Vector2i) -> void:
 		var tween = create_tween()
 		tween.tween_property(enemy, "modulate", Color.WHITE, 0.3)
 		room_states[grid_pos]["alive"] += 1
+
+# --- Encounter Activation (deferred_spawn rooms) ---
+
+func _activate_encounter(grid_pos: Vector2i, room_data: RoomData) -> void:
+	match room_data.encounter_type:
+		RoomData.EncounterType.AMBUSH:
+			_activate_ambush(grid_pos, room_data)
+		RoomData.EncounterType.GAUNTLET:
+			_activate_gauntlet(grid_pos, room_data)
+		RoomData.EncounterType.ARENA:
+			_activate_arena(grid_pos, room_data)
+		_:
+			_spawn_room_enemies(grid_pos, room_data)
+
+func _pick_enemy_for_room(room_data: RoomData, loy_pool: Array, pool: Array, index: int) -> EnemyDefinition:
+	var fallback_def = EnemyDefinition.new()
+	fallback_def.enemy_name = "Default"
+	fallback_def.max_hp = 3
+	fallback_def.attack_type = EnemyDefinition.AttackType.RANGED
+	fallback_def.bullet_count = 3
+	fallback_def.bullet_speed = 80.0
+
+	var _random_names: Array = room_data.get_meta("random_enemy_names", []) if room_data else []
+	var def = null
+	if _random_names.size() > 0 and index < _random_names.size():
+		def = _load_enemy_by_name(_random_names[index])
+	elif _random_names.size() > 0:
+		def = _load_enemy_by_name(_random_names[randi() % _random_names.size()])
+	elif room_data and room_data.fixed_enemy_name != "":
+		def = _load_enemy_by_name(room_data.fixed_enemy_name)
+	elif room_data and room_data.type == RoomData.RoomType.BOSS:
+		var _quest_boss_path = ""
+		var _qm = get_node_or_null("/root/QuestManager")
+		if _qm and _qm.has_method("get_quest_boss_override"):
+			_quest_boss_path = _qm.get_quest_boss_override(starting_biome_name)
+		if _quest_boss_path != "":
+			var _qb = load(_quest_boss_path) as EnemyDefinition
+			if _qb:
+				def = _qb.duplicate()
+		elif current_biome and current_biome.boss_definition:
+			def = current_biome.boss_definition.duplicate()
+		elif current_level and current_level.legend != "":
+			def = _load_enemy_by_name(current_level.legend)
+		elif pool.size() > 0:
+			def = pool[0].duplicate()
+	if not def:
+		if loy_pool.size() > 0:
+			def = _pick_weighted_enemy(loy_pool)
+		elif pool.size() > 0:
+			def = pool[randi() % pool.size()].duplicate()
+		else:
+			def = fallback_def.duplicate()
+	return def
+
+func _get_encounter_scaling() -> Dictionary:
+	var rec_level = current_level.recommended_level if current_level else 0
+	var player_level = player.level_system.level if player and player.level_system else 1
+	var effective_level = rec_level + player_level
+	return {
+		"level_scale": 1.0 + effective_level * 0.15,
+		"dmg_scale": 1.0 + effective_level * 0.08,
+		"floor_idx": run_state.current_floor if run_state else 1,
+		"bd": current_biome.base_difficulty if current_biome else 0,
+	}
+
+func _spawn_encounter_enemy(grid_pos: Vector2i, room_data: RoomData, spawn_pos: Vector2, def: EnemyDefinition, scaling: Dictionary) -> Node2D:
+	var enemy_scene = preload("res://scenes/enemy.tscn")
+	# Apply scaling
+	def.max_hp = maxi(1, int(def.max_hp * room_data.enemy_hp_mult * scaling["level_scale"]))
+	def.attack_damage = maxi(1, int(def.attack_damage * room_data.enemy_damage_mult * scaling["dmg_scale"]))
+	def.xp_value = maxi(def.xp_value, int(def.xp_value * (1.0 + scaling["floor_idx"] * 0.15)))
+
+	# 30% melee secondary for normal enemies
+	if def.size_class == EnemyDefinition.SizeClass.NORMAL and randf() < 0.3:
+		var _melee_attacks = [
+			EnemyDefinition.AttackType.SWORD_SLASH,
+			EnemyDefinition.AttackType.SPEAR_LUNGE,
+			EnemyDefinition.AttackType.CHARGE_BULL,
+			EnemyDefinition.AttackType.CLEAVE_COMBO,
+			EnemyDefinition.AttackType.WHIRLWIND,
+		]
+		def.set_meta("melee_secondary", _melee_attacks.pick_random())
+
+	# Loot table
+	if _item_pool and not def.drop_table:
+		def.drop_table = _item_pool.create_drop_table(scaling["floor_idx"], false, scaling["bd"])
+
+	var enemy = enemy_scene.instantiate()
+	enemy.global_position = spawn_pos
+	enemy.setup(def)
+	enemy._nav = nav
+	enemy._dm = self
+	enemy.set_meta("grid_pos", grid_pos)
+	enemy.tree_exited.connect(_on_enemy_died.bind(grid_pos))
+	enemy_container.add_child(enemy)
+	room_states[grid_pos]["alive"] += 1
+	return enemy
+
+func _get_encounter_enemy_count(grid_pos: Vector2i, room_data: RoomData) -> int:
+	var count = room_data.enemy_count
+	if count == 0:
+		return 0
+	if current_level and room_data.type not in [RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS]:
+		var min_m = current_level.min_monsters
+		var max_m = maxi(current_level.max_monsters, 1)
+		var start_gp = _find_start_grid_pos()
+		var dist = absi(grid_pos.x - start_gp.x) + absi(grid_pos.y - start_gp.y)
+		if dist <= 1:
+			count = min_m
+		elif dist <= 3:
+			count = randi_range(min_m, max_m)
+		else:
+			count = randi_range(max_m, mini(max_m + 2, max_m + 2))
+		count = maxi(count, 1)
+	return count
+
+func _activate_ambush(grid_pos: Vector2i, room_data: RoomData) -> void:
+	var count = _get_encounter_enemy_count(grid_pos, room_data)
+	if count == 0:
+		return
+
+	var spawn_positions = _get_perimeter_positions(grid_pos, room_data, count)
+	var center = _grid_to_world_center(grid_pos)
+	var loy_pool = _get_loy_enemy_pool()
+	var pool = current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+	var scaling = _get_encounter_scaling()
+
+	# SFX cue
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("bay_door_open", -3.0, 0.0)
+	FloatingText.spawn(self, center, "AMBUSH!", Color(1.0, 0.3, 0.1))
+
+	for i in range(mini(count, spawn_positions.size())):
+		var spawn_pos = spawn_positions[i]
+		var def = _pick_enemy_for_room(room_data, loy_pool, pool, i)
+		def = _try_make_rare(def)
+
+		var enemy = _spawn_encounter_enemy(grid_pos, room_data, spawn_pos, def, scaling)
+
+		# Tween: fade in + slide inward from wall
+		enemy.modulate.a = 0.0
+		var delay = float(i) * 0.08
+		var inward_dir = (center - spawn_pos).normalized()
+		var final_pos = spawn_pos + inward_dir * 12.0
+
+		var tw = create_tween()
+		tw.tween_interval(delay)
+		tw.tween_property(enemy, "modulate:a", 1.0, 0.15)
+		tw.parallel().tween_property(enemy, "global_position", final_pos, 0.25).set_ease(Tween.EASE_OUT)
+
+func _activate_gauntlet(grid_pos: Vector2i, room_data: RoomData) -> void:
+	var total_count = _get_encounter_enemy_count(grid_pos, room_data)
+	if total_count == 0:
+		return
+
+	var center = _grid_to_world_center(grid_pos)
+	var loy_pool = _get_loy_enemy_pool()
+	var pool = current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+	var scaling = _get_encounter_scaling()
+
+	# SFX + announce
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("bay_door_open", -3.0, 0.0)
+	FloatingText.spawn(self, center, "GAUNTLET!", Color(0.8, 0.2, 1.0))
+
+	# Spawn initial 2 enemies
+	var initial_count = mini(2, total_count)
+	var spawn_positions = _get_valid_spawn_positions(grid_pos, room_data, initial_count)
+	for i in range(mini(initial_count, spawn_positions.size())):
+		var def = _pick_enemy_for_room(room_data, loy_pool, pool, i)
+		def = _try_make_rare(def)
+		_spawn_encounter_enemy(grid_pos, room_data, spawn_positions[i], def, scaling)
+
+	# Schedule waves for the rest
+	var remaining = total_count - initial_count
+	if remaining > 0:
+		room_states[grid_pos]["gauntlet_remaining"] = remaining
+		room_states[grid_pos]["gauntlet_room_data"] = room_data
+		_schedule_gauntlet_wave(grid_pos, 5.0)
+
+func _schedule_gauntlet_wave(grid_pos: Vector2i, delay: float) -> void:
+	var timer = get_tree().create_timer(delay)
+	timer.timeout.connect(_spawn_gauntlet_wave.bind(grid_pos))
+
+func _spawn_gauntlet_wave(grid_pos: Vector2i) -> void:
+	if not room_states.has(grid_pos):
+		return
+	var state = room_states[grid_pos]
+	var remaining = state.get("gauntlet_remaining", 0)
+	if remaining <= 0:
+		return
+	if run_state.current_grid_pos != grid_pos:
+		return  # Player left — stop spawning
+	if state.get("cleared", false):
+		return
+
+	var room_data = state.get("gauntlet_room_data") as RoomData
+	if not room_data:
+		return
+
+	var wave_size = mini(2, remaining)
+	var loy_pool = _get_loy_enemy_pool()
+	var pool = current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+	var scaling = _get_encounter_scaling()
+
+	var spawn_positions = _get_valid_spawn_positions(grid_pos, room_data, wave_size)
+	for i in range(mini(wave_size, spawn_positions.size())):
+		var def = _pick_enemy_for_room(room_data, loy_pool, pool, i)
+		var enemy = _spawn_encounter_enemy(grid_pos, room_data, spawn_positions[i], def, scaling)
+		# Spawn flash
+		enemy.modulate = Color(2.0, 2.0, 2.0, 1.0)
+		var tw = create_tween()
+		tw.tween_property(enemy, "modulate", Color.WHITE, 0.3)
+
+	state["gauntlet_remaining"] = remaining - wave_size
+	var center = _grid_to_world_center(grid_pos)
+	FloatingText.spawn(self, center, "+%d!" % wave_size, Color(0.8, 0.2, 1.0))
+
+	if state["gauntlet_remaining"] > 0:
+		_schedule_gauntlet_wave(grid_pos, 5.0)
+
+func _activate_arena(grid_pos: Vector2i, room_data: RoomData) -> void:
+	var count = _get_encounter_enemy_count(grid_pos, room_data)
+	if count == 0:
+		return
+
+	var center = _grid_to_world_center(grid_pos)
+	var spawn_positions = _get_ring_positions(grid_pos, room_data, count)
+	var loy_pool = _get_loy_enemy_pool()
+	var pool = current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+	var scaling = _get_encounter_scaling()
+
+	# Camera shake + SFX
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shake(3.0, 0.4)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("magic_crumble", -2.0, 0.0)
+	FloatingText.spawn(self, center, "ARENA!", Color(1.0, 0.2, 0.2))
+
+	for i in range(mini(count, spawn_positions.size())):
+		var def = _pick_enemy_for_room(room_data, loy_pool, pool, i)
+		# Arena enemies: +25% HP, +10% damage
+		def.max_hp = int(def.max_hp * 1.25)
+		def.attack_damage = int(def.attack_damage * 1.1)
+		def = _try_make_rare(def)
+
+		var enemy = _spawn_encounter_enemy(grid_pos, room_data, spawn_positions[i], def, scaling)
+
+		# Flash-in: red tint fading to white, staggered
+		enemy.modulate = Color(3.0, 0.3, 0.3, 0.0)
+		var delay = float(i) * 0.12
+		var tw = create_tween()
+		tw.tween_interval(delay)
+		tw.tween_property(enemy, "modulate", Color.WHITE, 0.3)
+
+# --- Corridor Enemies ---
+
+func _spawn_corridor_enemies() -> void:
+	var floor_num = run_state.current_floor if run_state else 1
+	if floor_num < 2:
+		return  # No corridor enemies on floor 1
+
+	var loy_pool = _get_loy_enemy_pool()
+	var pool = current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+	var scaling = _get_encounter_scaling()
+	var enemy_scene = preload("res://scenes/enemy.tscn")
+	var spawned_count = 0
+
+	for corridor in _corridor_midpoints:
+		var corridor_type = corridor.get("type", 0)
+		# WIDE_CHAMBER corridors: 50% enemy chance, others: 30%
+		var enemy_chance = 0.50 if corridor_type == CorridorGenerator.CorridorType.WIDE_CHAMBER else 0.30
+		if randf() > enemy_chance:
+			continue
+
+		var floor_tiles = corridor.get("floor_tiles", []) as Array
+		if floor_tiles.size() < 6:
+			continue  # Too short for enemies
+
+		var enemy_count = randi_range(1, 2)
+		# Floor 3+: 10% chance of elite in corridor
+		var has_elite = floor_num >= 3 and randf() < 0.10
+
+		for i in range(enemy_count):
+			var tile = floor_tiles[randi() % floor_tiles.size()] as Vector2i
+			var world_pos = Vector2(tile.x * TILE_SIZE + 4, tile.y * TILE_SIZE + 4)
+
+			var def = _pick_enemy_for_room(null, loy_pool, pool, i)
+			# Apply scaling
+			def.max_hp = maxi(1, int(def.max_hp * scaling["level_scale"]))
+			def.attack_damage = maxi(1, int(def.attack_damage * scaling["dmg_scale"]))
+
+			if has_elite and i == 0:
+				def.max_hp = int(def.max_hp * 3.0)
+				def.attack_damage = int(def.attack_damage * 1.5)
+				def.size_class = EnemyDefinition.SizeClass.LARGE
+				def.sprite_color = def.sprite_color.lightened(0.3)
+
+			if _item_pool and not def.drop_table:
+				def.drop_table = _item_pool.create_drop_table(scaling["floor_idx"], false, scaling["bd"])
+
+			var enemy = enemy_scene.instantiate()
+			enemy.global_position = world_pos
+			enemy.setup(def)
+			enemy._nav = nav
+			enemy._dm = self
+			enemy.set_meta("corridor_patrol", true)
+			enemy.set_meta("patrol_origin", world_pos)
+			enemy_container.add_child(enemy)
+			spawned_count += 1
+
+	if spawned_count > 0:
+		print("CORRIDORS: spawned %d corridor enemies" % spawned_count)
+
+# --- End Encounter & Corridor Systems ---
 
 func _find_start_grid_pos() -> Vector2i:
 	for pos in run_state.floor_map:

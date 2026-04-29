@@ -179,6 +179,11 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 					room.enemy_count = int(room.enemy_count * 2)
 					room.enemy_hp_mult *= 1.5
 
+		# Deferred spawn: enemies only appear when player enters the room
+		match room.encounter_type:
+			RoomData.EncounterType.AMBUSH, RoomData.EncounterType.GAUNTLET, RoomData.EncounterType.ARENA:
+				room.deferred_spawn = true
+
 		# Super elite always gets GRAND_HALL shape (2x larger than normal large rooms)
 		if room.type == RoomData.RoomType.SUPER_ELITE:
 			room.shape = RoomData.RoomShape.GRAND_HALL
@@ -187,7 +192,9 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 		if room.type != RoomData.RoomType.SUPER_ELITE:
 			room.shape = _roll_room_shape(room.type, pos == start_pos)
 			match room.encounter_type:
-				RoomData.EncounterType.AMBUSH, RoomData.EncounterType.REST:
+				RoomData.EncounterType.AMBUSH:
+					room.shape = RoomData.RoomShape.RECTANGLE  # needs space for 2x enemies rushing from walls
+				RoomData.EncounterType.REST:
 					room.shape = RoomData.RoomShape.TINY
 				RoomData.EncounterType.GAUNTLET:
 					room.shape = RoomData.RoomShape.WIDE_RECT
