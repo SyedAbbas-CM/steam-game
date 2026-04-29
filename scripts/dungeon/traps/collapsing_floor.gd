@@ -40,7 +40,7 @@ func _physics_process(_delta: float) -> void:
 			_triggered = true
 			set_physics_process(false)
 			# Remember the original floor tile for blinking
-			var atlas = floor_layer.get_cell_atlas_coords(abs_pos)
+			var atlas = floor_layer.get_cell_atlas_coords(abs_pos) if floor_layer else Vector2i(-1, -1)
 			_floor_atlas = atlas if atlas != Vector2i(-1, -1) else Vector2i(5, 0)
 			_start_blink()
 

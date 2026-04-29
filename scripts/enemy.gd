@@ -389,14 +389,24 @@ const _SUPPORT_ATTACK_TYPES: Array = [
 
 func _assign_random_movement(def: EnemyDefinition) -> void:
 	var is_boss = def.size_class >= EnemyDefinition.SizeClass.BOSS
-	# 80% of enemies use default movement (straight approach), 20% get a special pattern
-	# Bosses always get a special pattern
-	if not is_boss and randf() > 0.1:
+	var is_elite = def.size_class == EnemyDefinition.SizeClass.LARGE
+	# Normal: 80% default movement, 20% special
+	# Elite: 50% default movement, 50% special
+	# Boss/Hyper-elite: choose from the full global movement set equally
+	var special_chance := 0.2
+	if is_elite:
+		special_chance = 0.5
+	elif is_boss:
+		special_chance = 1.0
+	if randf() > special_chance:
 		return  # keep default WEIGHTED (basic approach)
 	_load_movement_pools()
 	var pool: Array
 	if is_boss:
-		pool = _MOVE_POOL_BOSS
+		pool = []
+		for candidate in _MOVE_POOL_MELEE + _MOVE_POOL_RANGED + _MOVE_POOL_SUPPORT + _MOVE_POOL_BOSS:
+			if candidate not in pool:
+				pool.append(candidate)
 	elif def.attack_type in _MELEE_ATTACK_TYPES:
 		pool = _MOVE_POOL_MELEE
 	elif def.attack_type in _SUPPORT_ATTACK_TYPES:
@@ -691,7 +701,12 @@ func _physics_process(delta: float) -> void:
 	var _overlap_player = player if is_instance_valid(player) else null
 	if _overlap_player and state != State.DEAD:
 		var _sep_dist = global_position.distance_to(_overlap_player.global_position)
-		var _min_sep = 6.0 * scale.x  # minimum separation distance
+		# Bosses need larger separation to prevent sticking
+		var _min_sep = 6.0 * scale.x
+		if definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS:
+			_min_sep = 18.0 * scale.x
+		elif definition and definition.size_class >= EnemyDefinition.SizeClass.LARGE:
+			_min_sep = 12.0 * scale.x
 		if _sep_dist < _min_sep:
 			var _sep_dir = (global_position - _overlap_player.global_position).normalized()
 			if _sep_dir == Vector2.ZERO:

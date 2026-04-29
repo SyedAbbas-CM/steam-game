@@ -887,10 +887,11 @@ func _physics_process(delta: float) -> void:
 	elif not _is_dashing and _dash_linger <= 0 and not _shield_active:
 		sprite.modulate.a = 1.0
 
-	# Sprint (hold Shift while moving — sword, club, hammer, spear, short_bow)
+	# Sprint (hold Shift while moving — only weapons WITHOUT a shift ability)
+	# Weapons with shift abilities (blade_dance, whirlwind, etc.) use shift for that instead
 	_is_sprinting = false
-	var _can_sprint = _wtype in ["sword", "club", "hammer", "spear", "short_bow"]
-	if _can_sprint:
+	var _has_shift_ability = _wtype != ""  # all weapon types now have shift abilities
+	if not _has_shift_ability:
 		if Input.is_action_pressed("sprint") and direction.length() > 0 and stamina > 0 and not _is_dashing and not _shield_active:
 			_is_sprinting = true
 			_sneaking = false  # sprinting cancels sneak

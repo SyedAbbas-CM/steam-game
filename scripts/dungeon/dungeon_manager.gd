@@ -43,7 +43,7 @@ var dungeon_levels: Array[DungeonLevelData] = []
 var current_level: DungeonLevelData
 var _item_pool: ItemPool
 
-# Room state: grid_pos -> { "visited", "alive", "cleared", "liquid_mask", "web_positions" }
+# Room state: grid_pos -> { "visited", "spawned", "alive", "cleared", "liquid_mask", "web_positions" }
 var room_states: Dictionary = {}
 
 # Transition tracking
@@ -605,13 +605,14 @@ func _generate_floor(floor_num: int) -> void:
 		# Start room and shop rooms are auto-cleared (no enemies to fight)
 		var auto_cleared = room_data.type == RoomData.RoomType.SHOP or room_data.enemy_count == 0
 		room_states[grid_pos] = {
-			"visited": grid_pos == map["start"],
-			"alive": 0,
-			"cleared": auto_cleared,
-			"enemies": [],
-			"liquid_mask": [],
-			"web_positions": [],
-		}
+				"visited": grid_pos == map["start"],
+				"spawned": false,
+				"alive": 0,
+				"cleared": auto_cleared,
+				"enemies": [],
+				"liquid_mask": [],
+				"web_positions": [],
+			}
 	print("TIMING: paint rooms took %d ms" % (Time.get_ticks_msec() - t1))
 
 	# Paint corridors
@@ -671,11 +672,11 @@ func _generate_floor(floor_num: int) -> void:
 		var dist_to_start = abs(grid_pos.x - start.x) + abs(grid_pos.y - start.y)
 		var room_data = run_state.floor_map[grid_pos] as RoomData
 		match room_data.type:
-			RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS:
-				if dist_to_start > 0 and dist_to_start <= 2:
-					room_states[grid_pos]["visited"] = true
-					_spawn_room_enemies(grid_pos, room_data)
-					# Activate traps in pre-spawned rooms
+				RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS:
+					if dist_to_start > 0 and dist_to_start <= 2:
+						room_states[grid_pos]["spawned"] = true
+						_spawn_room_enemies(grid_pos, room_data)
+						# Activate traps in pre-spawned rooms
 					for child in hazard_container.get_children():
 						if child.has_method("activate"):
 							var trap_match = false
@@ -2723,14 +2724,14 @@ func _prespawn_adjacent_rooms(grid_pos: Vector2i) -> void:
 	for dir_name in room_data.connections:
 		var neighbor_pos = room_data.connections[dir_name]
 		var neighbor_state = room_states.get(neighbor_pos)
-		if not neighbor_state or neighbor_state["visited"]:
+		if not neighbor_state or neighbor_state.get("spawned", false):
 			continue
 		var neighbor_data = run_state.floor_map.get(neighbor_pos) as RoomData
 		if not neighbor_data:
 			continue
 		match neighbor_data.type:
 			RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS:
-				neighbor_state["visited"] = true
+				neighbor_state["spawned"] = true
 				_spawn_room_enemies(neighbor_pos, neighbor_data)
 				# Activate traps in pre-spawned rooms
 		for child in hazard_container.get_children():
@@ -2761,10 +2762,14 @@ func _visit_room(grid_pos: Vector2i) -> void:
 
 	match room_data.type:
 		RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS:
-			_spawn_room_enemies(grid_pos, room_data)
+			if not state.get("spawned", false):
+				state["spawned"] = true
+				_spawn_room_enemies(grid_pos, room_data)
 		RoomData.RoomType.TREASURE, RoomData.RoomType.SHRINE:
 			# Guarded reward rooms — spawn enemies that must be cleared first
-			_spawn_room_enemies(grid_pos, room_data)
+			if not state.get("spawned", false):
+				state["spawned"] = true
+				_spawn_room_enemies(grid_pos, room_data)
 			_spawn_chest_loot(grid_pos)
 			reward_requested.emit(room_data)
 		_:

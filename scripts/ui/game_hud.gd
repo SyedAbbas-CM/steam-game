@@ -549,10 +549,7 @@ func setup_minimap(floor_map: Dictionary, start_pos: Vector2i) -> void:
 			offset_x + (pos.x - min_pos.x) * cell_size,
 			offset_y + (pos.y - min_pos.y) * cell_size
 		)
-		rect.color = Color(0.2, 0.2, 0.2)  # unvisited = dark
-
-		if room.has_stairs_down:
-			rect.color = Color(0.6, 0.5, 0.1)  # stairs = yellow-ish
+		rect.color = Color(0.02, 0.02, 0.02, 0.95)  # unvisited = effectively black
 
 		_minimap_panel.add_child(rect)
 		_minimap_rects[pos] = rect
@@ -560,13 +557,17 @@ func setup_minimap(floor_map: Dictionary, start_pos: Vector2i) -> void:
 	update_minimap_room(start_pos)
 
 func update_minimap_room(grid_pos: Vector2i) -> void:
-	# Dim previous current room
+	# Dim previous current room to visited color
 	if _minimap_rects.has(_minimap_current):
-		_minimap_rects[_minimap_current].color = Color(0.5, 0.5, 0.5)  # visited = grey
+		var prev_room = _minimap_data.get(_minimap_current) as RoomData
+		if prev_room and prev_room.has_stairs_down:
+			_minimap_rects[_minimap_current].color = Color(0.6, 0.5, 0.1)  # stairs = gold
+		else:
+			_minimap_rects[_minimap_current].color = Color(0.22, 0.22, 0.22, 1.0)  # visited = dark grey
 
 	_minimap_current = grid_pos
 	if _minimap_rects.has(grid_pos):
-		_minimap_rects[grid_pos].color = Color.WHITE  # current = white
+		_minimap_rects[grid_pos].color = Color.WHITE  # current = bright white
 
 # --- Public API ---
 
