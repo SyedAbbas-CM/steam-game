@@ -26,4 +26,4 @@ use_loy_sprite = true
 loy_tile_index = 28
 sprite_color = Color(0.3, 0.55, 0.2, 1)
 xp_value = 38
-score_value = 76
+score_value = 14

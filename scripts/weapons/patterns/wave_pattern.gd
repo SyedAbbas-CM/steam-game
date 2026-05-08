@@ -2,9 +2,10 @@ class_name WavePattern
 extends WeaponPattern
 
 ## Fires bullets in a sine-wave pattern. Bullets oscillate perpendicular to aim direction.
-@export var wave_count: int = 3
-@export var wave_spacing: float = 0.08
-@export var wave_amplitude: float = 8.0
+## Balanced: 2 shots with halved damage each (1.0x total effective DPS).
+@export var wave_count: int = 2
+@export var wave_spacing: float = 0.12
+@export var wave_amplitude: float = 6.0
 
 func _init() -> void:
 	pattern_name = "Wave Shot"
@@ -19,6 +20,7 @@ func get_fire_data(aim_direction: Vector2, _stats: EquipmentManager) -> Array[Di
 			"direction": aim_direction,
 			"delay": i * wave_spacing,
 			"offset": perp * offset_amount,
-			"speed_mult": 1.0
+			"speed_mult": 1.0,
+			"damage_mult": 0.5
 		})
 	return result

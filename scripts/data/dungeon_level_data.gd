@@ -18,5 +18,6 @@ extends Resource
 @export var branch_monsters: Array = []  # [{type}] — second branch going north from start room
 @export var west_branch: Array = []  # [{type, room_type}] — west branch from start room
 @export var south_branch: Array = []  # [{trap}] — south branch showcase rooms (one trap each)
+@export var arena_room_scale: int = 1  # Test/showcase arenas can override room size explicitly
 @export var chest_loot: Array = []  # [{min_items, max_items, trap_chance, items: [{name, chance, min, max}]}]
 @export var has_rail_traps: bool = false

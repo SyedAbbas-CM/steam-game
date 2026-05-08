@@ -6,7 +6,7 @@
 script = ExtResource("1")
 item_name = "Mana Potion"
 loy_tile_index = 124
-description = "Restores magical energy (+10 MP)"
+description = "Restores 10 MP. Brewed for those who tire of forgetting their own spells."
 slot_type = 10
 rarity = 0
 buy_price = 40

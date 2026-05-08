@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="GemDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/gem_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="StatModifier_speed"]
+script = ExtResource("2")
+stat = 1
+flat_bonus = 2.0
+
+[resource]
+script = ExtResource("1")
+gem_id = "chipped_topaz"
+gem_name = "Chipped Topaz"
+description = "A rough yellow gem that quickens the step."
+family = 3
+tier = 1
+color_hint = Color(0.95, 0.78, 0.2, 1)
+modifiers = [SubResource("StatModifier_speed")]
+tags = PackedStringArray("speed", "agility", "topaz")
+buy_price = 45
+sell_value = 18

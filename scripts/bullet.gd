@@ -1,5 +1,7 @@
 extends Area2D
 
+const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+
 var speed: float = 150.0
 var direction: Vector2 = Vector2.RIGHT
 var is_player_bullet: bool = true
@@ -19,6 +21,7 @@ var _hits_remaining: int = 1
 var _spent: bool = false  # true once hits are used up or absorbed by barrier
 var bounce_count: int = 0  # wall bounces remaining (WALL_BOUNCE behavior)
 var poison_on_hit: bool = false  # enemy bullet applies POISONED to player
+var is_melee: bool = false  # melee/swing bullet — blocked by cliff walls (layer 64)
 
 ## --- Advanced Bullet Behaviors ---
 enum BulletBehavior {
@@ -71,6 +74,33 @@ var _force_radius: float = 40.0             # pull/push effect radius
 var _force_strength: float = 20.0           # pull/push force per tick
 var _force_ring_drawn: bool = false         # whether the radius indicator has been created
 var _base_sprite_scale: Vector2 = Vector2(0.6, 0.6)  # stored after _ready() for animated behaviors
+var movement_pattern: MovementPattern = null
+var movement_anchor_entity: Node2D = null
+var movement_anchor_point: Vector2 = Vector2.ZERO
+var _movement_orbit_angle: float = 0.0
+var _movement_base_speed: float = 0.0
+var _projectile_scale_mult: float = 1.0
+var _movement_dash_state: int = 0
+var _movement_dash_timer: float = 0.0
+var _movement_dash_cd: float = 0.0
+var _movement_elastic_state: int = 0
+var _movement_elastic_vel: Vector2 = Vector2.ZERO
+var _movement_elastic_bounces: int = 0
+var _movement_bait_state: int = 0
+var _movement_bait_timer: float = 0.0
+var _movement_bait_prev_dist: float = 0.0
+var _movement_wall_dir: Vector2 = Vector2.ZERO
+var _movement_edge_dir: Vector2 = Vector2.ZERO
+var _movement_edge_wall_timer: float = 0.0
+var _movement_mirror_prev_player: Vector2 = Vector2.ZERO
+var _movement_intercept_state: int = 0
+var _movement_intercept_timer: float = 0.0
+var _movement_intercept_target: Vector2 = Vector2.ZERO
+var _movement_orbit_radius: float = -1.0
+var _movement_orbit_radial_speed: float = 0.0
+var _movement_orbit_radial_accel: float = 0.0
+var _movement_orbit_reverse_time: float = -1.0
+var _movement_orbit_reversed: bool = false
 
 # Sprite sheet: lofi_obj.png, 128x128, 8x8 tiles (16 cols x 16 rows)
 const TILE_SIZE = 8
@@ -103,6 +133,8 @@ func _ready() -> void:
 	_hits_remaining = pierce_count + 1
 	_origin_pos = global_position
 	_base_direction = direction
+	# Render above terrain height layers (max terrain z = 4)
+	z_index = 5
 
 	var sprite = $Sprite2D as Sprite2D
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -160,6 +192,9 @@ func _ready() -> void:
 		else:
 			sprite.scale = Vector2(0.6, 0.6)
 	sprite.modulate = tint
+	var sprite_scale_mult := float(get_meta("sprite_scale_mult", 1.0))
+	if sprite_scale_mult != 1.0:
+		apply_projectile_scale(sprite_scale_mult)
 	_base_sprite_scale = sprite.scale
 
 	# Rotate sprite to face travel direction
@@ -183,6 +218,10 @@ func _ready() -> void:
 	else:
 		collision_layer = 8
 		collision_mask = 1 | 16  # player + walls
+
+	# Melee/swing bullets are blocked by cliff walls (layer 64). Ranged bullets pass through.
+	if is_melee:
+		collision_mask |= 64
 
 	body_entered.connect(_on_body_entered)
 	area_entered.connect(_on_area_entered)
@@ -231,10 +270,40 @@ func _ready() -> void:
 		trail.color_ramp.set_color(1, Color(1.0, 0.3, 0.0, 0.0))
 		add_child(trail)
 
+func apply_projectile_scale(mult: float) -> void:
+	if mult <= 0.0:
+		return
+	if is_equal_approx(mult, _projectile_scale_mult):
+		return
+	var ratio := mult / _projectile_scale_mult
+	_projectile_scale_mult = mult
+	var sprite = get_node_or_null("Sprite2D")
+	if sprite and sprite is Sprite2D:
+		sprite.scale *= ratio
+		_base_sprite_scale = sprite.scale
+	var hit_shape = get_node_or_null("CollisionShape2D")
+	if hit_shape and hit_shape is CollisionShape2D:
+		hit_shape.scale *= ratio
+		if hit_shape.shape:
+			hit_shape.shape = hit_shape.shape.duplicate()
+			var shape = hit_shape.shape
+			if shape is CircleShape2D:
+				shape.radius *= ratio
+			elif shape is RectangleShape2D:
+				shape.size *= ratio
+			elif shape is CapsuleShape2D:
+				shape.radius *= ratio
+				shape.height *= ratio
+			elif shape is SegmentShape2D:
+				shape.a *= ratio
+				shape.b *= ratio
+
 func _physics_process(delta: float) -> void:
 	if not is_inside_tree():
 		return
 	_behavior_timer += delta
+	if _movement_base_speed <= 0.0:
+		_movement_base_speed = speed
 
 	# Player bullet homing (equipment-based)
 	if homing_strength > 0.0 and is_player_bullet:
@@ -245,6 +314,10 @@ func _physics_process(delta: float) -> void:
 			var target_angle = desired.angle()
 			var new_angle = lerp_angle(current_angle, target_angle, homing_strength * delta)
 			direction = Vector2.from_angle(new_angle)
+
+	var pattern_handled_movement := false
+	if movement_pattern != null:
+		pattern_handled_movement = _apply_movement_pattern(delta)
 
 	# Advanced bullet behaviors
 	match behavior:
@@ -302,7 +375,7 @@ func _physics_process(delta: float) -> void:
 
 		BulletBehavior.HOMING_ENEMY:
 			# Enemy bullet that homes toward player
-			var player_node = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
+			var player_node = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
 			if player_node and is_instance_valid(player_node):
 				var desired = (player_node.global_position - global_position).normalized()
 				var cur_angle = direction.angle()
@@ -311,7 +384,7 @@ func _physics_process(delta: float) -> void:
 
 		BulletBehavior.SEEKING_MINE:
 			# Very slow, persistent homing
-			var player_node = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
+			var player_node = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
 			if player_node and is_instance_valid(player_node):
 				var desired = (player_node.global_position - global_position).normalized()
 				var cur_angle = direction.angle()
@@ -353,7 +426,7 @@ func _physics_process(delta: float) -> void:
 
 		BulletBehavior.PULL_ORB:
 			# Slow-moving, gently pulls player toward it when in range
-			var p = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
+			var p = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
 			if p and is_instance_valid(p):
 				var dist = p.global_position.distance_to(global_position)
 				if dist < _force_radius and dist > 4.0:
@@ -373,7 +446,7 @@ func _physics_process(delta: float) -> void:
 
 		BulletBehavior.PUSH_ORB:
 			# Slow-moving, pushes player away when in range
-			var p2 = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
+			var p2 = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
 			if p2 and is_instance_valid(p2):
 				var dist2 = p2.global_position.distance_to(global_position)
 				if dist2 < _force_radius and dist2 > 4.0:
@@ -389,11 +462,308 @@ func _physics_process(delta: float) -> void:
 				_force_ring_drawn = true
 				_create_force_ring(Color(1.0, 0.8, 0.2, 0.25), false)
 
-	position += direction * speed * delta
+	if not pattern_handled_movement:
+		position += direction * speed * delta
 	# Rotate sprite to match direction (sprites point downward, offset -PI/2)
 	var s = get_node_or_null("Sprite2D")
 	if s:
 		s.rotation = direction.angle() - PI / 2.0
+
+func _apply_movement_pattern(delta: float) -> bool:
+	if movement_pattern == null:
+		return false
+	var target_player = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
+	var target_player_velocity := Vector2.ZERO
+	if target_player and is_instance_valid(target_player):
+		var vel_prop = target_player.get("velocity")
+		if vel_prop is Vector2:
+			target_player_velocity = vel_prop
+	var to_player := Vector2.ZERO
+	var dist_to_player := 0.0
+	var dir_to_player := direction
+	if target_player and is_instance_valid(target_player):
+		to_player = target_player.global_position - global_position
+		dist_to_player = to_player.length()
+		if dist_to_player > 0.01:
+			dir_to_player = to_player / dist_to_player
+	var speed_scale = maxf(movement_pattern.speed_mult, 0.01)
+	match movement_pattern.move_type:
+		MovementPattern.MoveType.WEIGHTED:
+			if target_player and is_instance_valid(target_player):
+				var desired = Vector2.ZERO
+				desired += dir_to_player * movement_pattern.approach_weight
+				desired -= dir_to_player * movement_pattern.retreat_weight
+				var perp_dir = Vector2(-dir_to_player.y, dir_to_player.x)
+				desired += perp_dir * movement_pattern.strafe_weight
+				if desired.length() > 0.01:
+					direction = direction.slerp(desired.normalized(), clampf(delta * 4.0, 0.0, 1.0)).normalized()
+				speed = _movement_base_speed * speed_scale
+			return false
+		MovementPattern.MoveType.ORBIT_POINT:
+			_movement_orbit_angle += movement_pattern.orbit_speed * delta
+			_tick_orbit_radius(delta)
+			var offset = Vector2.RIGHT.rotated(_movement_orbit_angle) * _get_effective_orbit_radius()
+			global_position = movement_anchor_point + offset
+			direction = offset.orthogonal().normalized() * signf(movement_pattern.orbit_speed)
+			return true
+		MovementPattern.MoveType.ORBIT_ALLY:
+			if movement_anchor_entity and is_instance_valid(movement_anchor_entity):
+				_movement_orbit_angle += movement_pattern.orbit_speed * delta
+				_tick_orbit_radius(delta)
+				var offset = Vector2.RIGHT.rotated(_movement_orbit_angle) * _get_effective_orbit_radius()
+				global_position = movement_anchor_entity.global_position + offset
+				direction = offset.orthogonal().normalized() * signf(movement_pattern.orbit_speed)
+				return true
+		MovementPattern.MoveType.ORBIT_PLAYER:
+			if target_player and is_instance_valid(target_player):
+				_movement_orbit_angle += movement_pattern.orbit_speed * delta
+				_tick_orbit_radius(delta)
+				var offset = Vector2.RIGHT.rotated(_movement_orbit_angle) * _get_effective_orbit_radius()
+				global_position = target_player.global_position + offset
+				direction = offset.orthogonal().normalized() * signf(movement_pattern.orbit_speed)
+				return true
+		MovementPattern.MoveType.PATROL_H:
+			var phase_h = sin(_behavior_timer * maxf(movement_pattern.orbit_speed, 0.01))
+			var desired_h = movement_anchor_point + Vector2(phase_h * movement_pattern.patrol_length, 0.0)
+			var move_h = desired_h - global_position
+			if move_h.length() > 0.5:
+				direction = move_h.normalized()
+				speed = _movement_base_speed * speed_scale
+				position += direction * speed * delta
+			return true
+		MovementPattern.MoveType.PATROL_V:
+			var phase_v = sin(_behavior_timer * maxf(movement_pattern.orbit_speed, 0.01))
+			var desired_v = movement_anchor_point + Vector2(0.0, phase_v * movement_pattern.patrol_length)
+			var move_v = desired_v - global_position
+			if move_v.length() > 0.5:
+				direction = move_v.normalized()
+				speed = _movement_base_speed * speed_scale
+				position += direction * speed * delta
+			return true
+		MovementPattern.MoveType.ZIGZAG:
+			var perp = direction.rotated(PI * 0.5)
+			var amplitude = maxf(movement_pattern.weave_amplitude, 8.0)
+			var wave = sin(_behavior_timer * 8.0) * amplitude
+			speed = _movement_base_speed * speed_scale
+			position += (direction * speed + perp * wave * 10.0) * delta
+			return true
+		MovementPattern.MoveType.WALL_BOUNCE:
+			speed = _movement_base_speed * speed_scale
+			if behavior != BulletBehavior.WALL_BOUNCE:
+				behavior = BulletBehavior.WALL_BOUNCE
+			if bounce_count <= 0:
+				bounce_count = 12
+			return false
+		MovementPattern.MoveType.DASH_IN_OUT:
+			_movement_dash_cd -= delta
+			_movement_dash_timer -= delta
+			match _movement_dash_state:
+				0:
+					var to_anchor = movement_anchor_point - global_position
+					if to_anchor.length() > 4.0:
+						direction = to_anchor.normalized()
+						speed = _movement_base_speed * speed_scale * 0.6
+						position += direction * speed * delta
+						return true
+					if _movement_dash_cd <= 0.0:
+						_movement_dash_state = 1
+						_movement_dash_timer = 1.5
+					return true
+				1:
+					if target_player and is_instance_valid(target_player):
+						direction = dir_to_player
+					speed = movement_pattern.dash_in_speed
+					position += direction * speed * delta
+					if dist_to_player < 15.0 or _movement_dash_timer <= 0.0:
+						_movement_dash_state = 2
+						_movement_dash_timer = movement_pattern.dash_pause
+					return true
+				2:
+					if _movement_dash_timer <= 0.0:
+						_movement_dash_state = 3
+						_movement_dash_timer = 1.5
+					return true
+				3:
+					var retreat = movement_anchor_point - global_position
+					if retreat.length() > 8.0 and _movement_dash_timer > 0.0:
+						direction = retreat.normalized()
+						speed = movement_pattern.dash_in_speed
+						position += direction * speed * delta
+					else:
+						_movement_dash_state = 0
+						_movement_dash_cd = movement_pattern.dash_cooldown
+					return true
+		MovementPattern.MoveType.KITE:
+			if target_player and is_instance_valid(target_player):
+				var perp_dir = Vector2(-dir_to_player.y, dir_to_player.x)
+				var ideal = movement_pattern.kite_distance
+				var margin = 10.0
+				if dist_to_player < ideal - margin:
+					direction = -dir_to_player
+				elif dist_to_player > ideal + margin:
+					direction = dir_to_player
+				else:
+					direction = perp_dir.normalized()
+				speed = _movement_base_speed * speed_scale
+			return false
+		MovementPattern.MoveType.SWOOP:
+			if target_player and is_instance_valid(target_player):
+				var side_sign = 1.0 if sin(_behavior_timer * 1.4) >= 0.0 else -1.0
+				var perp_dir = Vector2(-dir_to_player.y, dir_to_player.x) * side_sign
+				direction = (dir_to_player + perp_dir * 2.5).normalized()
+				speed = movement_pattern.swoop_speed
+			return false
+		MovementPattern.MoveType.TELEPORT:
+			var tp_timer = float(get_meta("bullet_tp_timer", movement_pattern.teleport_interval))
+			tp_timer -= delta
+			if tp_timer <= 0.0:
+				var target_center = movement_anchor_entity.global_position if movement_anchor_entity and is_instance_valid(movement_anchor_entity) else movement_anchor_point
+				var angle = randf() * TAU
+				var radius = randf_range(12.0, movement_pattern.teleport_range)
+				global_position = target_center + Vector2.from_angle(angle) * radius
+				set_meta("bullet_tp_timer", movement_pattern.teleport_interval)
+				return true
+			set_meta("bullet_tp_timer", tp_timer)
+			return false
+		MovementPattern.MoveType.MIRROR:
+			if target_player and is_instance_valid(target_player):
+				if _movement_mirror_prev_player == Vector2.ZERO:
+					_movement_mirror_prev_player = target_player.global_position
+				var player_delta = target_player.global_position - _movement_mirror_prev_player
+				_movement_mirror_prev_player = target_player.global_position
+				if player_delta.length() > 0.1:
+					global_position += player_delta
+					direction = player_delta.normalized()
+					return true
+			return false
+		MovementPattern.MoveType.INTERCEPT:
+			if target_player and is_instance_valid(target_player):
+				if _movement_intercept_state == 0:
+					_movement_intercept_timer += delta
+					var orbit_dir = (Vector2(-dir_to_player.y, dir_to_player.x) * 0.8 + dir_to_player * 0.2).normalized()
+					direction = orbit_dir
+					speed = _movement_base_speed * speed_scale * 0.5
+					if _movement_intercept_timer >= 1.0:
+						_movement_intercept_target = target_player.global_position + target_player_velocity * movement_pattern.intercept_predict_time
+						_movement_intercept_state = 1
+						_movement_intercept_timer = movement_pattern.intercept_commit_time
+				else:
+					_movement_intercept_timer -= delta
+					var to_target = _movement_intercept_target - global_position
+					if to_target.length() > 5.0 and _movement_intercept_timer > 0.0:
+						direction = to_target.normalized()
+						speed = _movement_base_speed * speed_scale * 5.0
+					else:
+						_movement_intercept_state = 0
+						_movement_intercept_timer = 0.0
+				return false
+		MovementPattern.MoveType.ELASTIC:
+			var to_anchor = movement_anchor_point - global_position
+			var anchor_dist = to_anchor.length()
+			var to_anchor_dir = to_anchor.normalized() if anchor_dist > 1.0 else Vector2.ZERO
+			match _movement_elastic_state:
+				0:
+					var tension = clampf(anchor_dist / maxf(movement_pattern.elastic_max_stretch, 1.0), 0.0, 1.0)
+					var accel = direction * _movement_base_speed * speed_scale * 3.0 * (1.0 - tension * 0.9)
+					var spring_pull = to_anchor_dir * tension * _movement_base_speed * speed_scale * 4.0
+					_movement_elastic_vel = (_movement_elastic_vel + (accel + spring_pull) * delta).limit_length(_movement_base_speed * speed_scale * 2.0)
+					direction = _movement_elastic_vel.normalized() if _movement_elastic_vel.length() > 0.01 else direction
+					position += _movement_elastic_vel * delta
+					if anchor_dist >= movement_pattern.elastic_max_stretch:
+						_movement_elastic_state = 1
+						_movement_elastic_vel = to_anchor_dir * movement_pattern.elastic_whip_speed
+						_movement_elastic_bounces = 0
+					return true
+				1:
+					_movement_elastic_vel += to_anchor_dir * movement_pattern.elastic_whip_speed * 3.0 * delta
+					_movement_elastic_vel = _movement_elastic_vel.limit_length(movement_pattern.elastic_whip_speed)
+					direction = _movement_elastic_vel.normalized() if _movement_elastic_vel.length() > 0.01 else direction
+					position += _movement_elastic_vel * delta
+					if anchor_dist < 10.0:
+						_movement_elastic_state = 2
+						_movement_elastic_vel *= 0.6
+						_movement_elastic_bounces += 1
+					return true
+				_:
+					_movement_elastic_vel += to_anchor_dir * _movement_base_speed * speed_scale * 6.0 * delta
+					_movement_elastic_vel *= (1.0 - 1.5 * delta)
+					direction = _movement_elastic_vel.normalized() if _movement_elastic_vel.length() > 0.01 else direction
+					position += _movement_elastic_vel * delta
+					if anchor_dist < 10.0 and _movement_elastic_vel.length() < _movement_base_speed * speed_scale * 0.3:
+						_movement_elastic_state = 0
+						_movement_elastic_vel = Vector2.ZERO
+					elif anchor_dist < 10.0 and _movement_elastic_bounces < 3:
+						_movement_elastic_state = 1
+						_movement_elastic_vel *= 0.5
+						_movement_elastic_bounces += 1
+					return true
+		MovementPattern.MoveType.EDGE_SKATER:
+			if _movement_edge_dir == Vector2.ZERO:
+				var dirs = [Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT, Vector2.UP]
+				_movement_edge_dir = dirs[randi() % dirs.size()]
+			speed = _movement_base_speed * maxf(movement_pattern.edge_skate_speed, 0.01)
+			direction = _movement_edge_dir
+			_movement_edge_wall_timer += delta
+			return false
+		MovementPattern.MoveType.BAIT_PUNISH:
+			match _movement_bait_state:
+				0:
+					if target_player and is_instance_valid(target_player):
+						direction = -dir_to_player
+						speed = _movement_base_speed * speed_scale * 1.2
+					_movement_bait_timer += delta
+					if _movement_bait_timer >= movement_pattern.bait_flee_time:
+						_movement_bait_state = 1
+						_movement_bait_timer = 0.0
+						_movement_bait_prev_dist = dist_to_player
+					return false
+				1:
+					_movement_bait_timer += delta
+					if dist_to_player < _movement_bait_prev_dist - 5.0 or _movement_bait_timer > 0.5:
+						_movement_bait_state = 2
+						_movement_bait_timer = 1.0
+					elif _movement_bait_timer > 1.0:
+						_movement_bait_state = 0
+						_movement_bait_timer = 0.0
+					return true
+				_:
+					if target_player and is_instance_valid(target_player):
+						direction = dir_to_player
+						speed = movement_pattern.punish_speed
+					_movement_bait_timer -= delta
+					if _movement_bait_timer <= 0.0 or dist_to_player < 10.0:
+						_movement_bait_state = 0
+						_movement_bait_timer = 0.0
+					return false
+		MovementPattern.MoveType.AMBUSH:
+			if target_player and is_instance_valid(target_player):
+				if dist_to_player > 40.0:
+					direction = dir_to_player
+					speed = _movement_base_speed * speed_scale * 0.3
+				else:
+					speed = 0.0
+			return false
+		MovementPattern.MoveType.FLEE:
+			if target_player and is_instance_valid(target_player):
+				direction = -dir_to_player
+				speed = _movement_base_speed * speed_scale
+	return false
+
+func _get_effective_orbit_radius() -> float:
+	if _movement_orbit_radius >= 0.0:
+		return _movement_orbit_radius
+	return movement_pattern.orbit_radius if movement_pattern != null else 0.0
+
+func _tick_orbit_radius(delta: float) -> void:
+	if _movement_orbit_radius < 0.0 and movement_pattern != null:
+		_movement_orbit_radius = movement_pattern.orbit_radius
+	if _movement_orbit_reverse_time >= 0.0 and not _movement_orbit_reversed and _behavior_timer >= _movement_orbit_reverse_time:
+		_movement_orbit_reversed = true
+		_movement_orbit_radial_speed = -absf(_movement_orbit_radial_speed)
+		if _movement_orbit_radial_accel > 0.0:
+			_movement_orbit_radial_accel = -_movement_orbit_radial_accel
+	_movement_orbit_radial_speed += _movement_orbit_radial_accel * delta
+	_movement_orbit_radius = maxf(0.0, _movement_orbit_radius + _movement_orbit_radial_speed * delta)
 
 func _on_body_entered(body: Node2D) -> void:
 	# Wall collision
@@ -428,6 +798,42 @@ func _on_body_entered(body: Node2D) -> void:
 			if s:
 				s.rotation = direction.angle() - PI / 2.0
 			return
+		# ── Mine breakable wall damage (player bullets only) ──
+		if is_player_bullet:
+			var tree = get_tree()
+			var dm: Node = null
+			if tree and tree.current_scene:
+				dm = tree.current_scene.get_node_or_null("DungeonManager")
+			if dm and dm.has_method("has_breakable_mine_cell"):
+				var tile_pos := Vector2i(int(floor(global_position.x / 8.0)), int(floor(global_position.y / 8.0)))
+				# Check the tile we hit + neighbors in bullet direction
+				var tiles_to_check: Array[Vector2i] = [tile_pos]
+				var dir_tile := Vector2i(roundi(direction.x), roundi(direction.y))
+				if dir_tile != Vector2i.ZERO:
+					tiles_to_check.append(tile_pos + dir_tile)
+				for check_tile in tiles_to_check:
+					if dm.has_breakable_mine_cell(check_tile):
+						var world_pos := Vector2((check_tile.x + 0.5) * 8.0, (check_tile.y + 0.5) * 8.0)
+						var wall_dmg: int = maxi(1, _get_scaled_damage())
+						var result: Dictionary = dm.damage_breakable_mine_cell_at(world_pos, wall_dmg)
+						if result.get("ok", false):
+							var destroyed: bool = result.get("destroyed", false)
+							var sfx_mgr = get_node_or_null("/root/SFXManager")
+							if sfx_mgr:
+								sfx_mgr.play("impact_b" if destroyed else "clack", -6.0, 0.0)
+							var vfx_mgr = get_node_or_null("/root/VFXManager")
+							if vfx_mgr:
+								vfx_mgr.hit_spark(global_position)
+							var scene_root = get_tree().current_scene
+							if scene_root:
+								if destroyed:
+									FloatingText.spawn(scene_root, world_pos + Vector2(0, -10), "Mined!", Color(0.9, 0.8, 0.4))
+								else:
+									var hp_left: int = result.get("hp", 0)
+									var kind: String = result.get("kind", "soft")
+									var label := kind.capitalize() + " [%d]" % hp_left
+									FloatingText.spawn(scene_root, world_pos + Vector2(0, -10), label, Color(0.75, 0.75, 0.75))
+						break
 		queue_free()
 		return
 	if _spent:
@@ -435,9 +841,15 @@ func _on_body_entered(body: Node2D) -> void:
 	if (is_player_bullet or hits_all) and body.has_method("take_damage"):
 		if body.is_in_group("enemy"):
 			var aggro_player_b = is_player_bullet and not hits_all
-			body.take_damage(_get_scaled_damage(), aggro_player_b)
+			if has_meta("trap_true_damage") and get_meta("trap_true_damage"):
+				body.take_damage(_get_scaled_damage(), aggro_player_b, CombatTypes.DamageType.TRUE)
+			else:
+				body.take_damage(_get_scaled_damage(), aggro_player_b)
 		else:
-			body.take_damage(_get_scaled_damage())
+			if has_meta("trap_true_damage") and get_meta("trap_true_damage"):
+				body.take_damage(_get_scaled_damage(), global_position, false, false, CombatTypes.DamageType.TRUE)
+			else:
+				body.take_damage(_get_scaled_damage())
 		_hits_remaining -= 1
 		if _hits_remaining <= 0:
 			_spent = true
@@ -502,7 +914,10 @@ func _on_area_entered(area: Node2D) -> void:
 			if trap_enemy_mult > 1:
 				total_dmg *= trap_enemy_mult
 			var aggro_player = is_player_bullet and not hits_all
-			enemy.take_damage(total_dmg, aggro_player)
+			if has_meta("trap_true_damage") and get_meta("trap_true_damage"):
+				enemy.take_damage(total_dmg, aggro_player, CombatTypes.DamageType.TRUE)
+			else:
+				enemy.take_damage(total_dmg, aggro_player)
 			if not hits_all:
 				_apply_enchant_effect(enemy)
 			# Ability buff on-hit: Fire Fists → BURNING, Venom Coat → POISONED
@@ -533,7 +948,10 @@ func _on_area_entered(area: Node2D) -> void:
 	if (not is_player_bullet or hits_all) and area.name == "Hitbox":
 		var player = area.get_parent()
 		if player.has_method("take_damage"):
-			player.take_damage(damage, global_position)
+			if has_meta("trap_true_damage") and get_meta("trap_true_damage"):
+				player.take_damage(damage, global_position, false, false, CombatTypes.DamageType.TRUE)
+			else:
+				player.take_damage(damage, global_position)
 		# Poison on hit from enemy bullets
 		if poison_on_hit and "status_effects" in player and player.status_effects:
 			player.status_effects.apply_status("POISONED", 4.0)
@@ -580,7 +998,7 @@ func _apply_enchant_effect(target: Node2D) -> void:
 				if target.has_method("take_damage"):
 					target.take_damage(maxi(1, damage / 2))
 		6:  # VAMPIRIC → heal player
-			var player = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
+			var player = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
 			if player and player.has_method("heal"):
 				player.heal(maxi(1, damage / 10))
 		7:  # EXPLOSIVE → AoE
@@ -675,7 +1093,7 @@ func _lob_land() -> void:
 		_spawn_poison_cloud(global_position, cloud_radius, cloud_duration)
 	# AOE damage
 	if not is_player_bullet:
-		var p = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
+		var p = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
 		if p and is_instance_valid(p) and p.global_position.distance_to(global_position) < _lob_aoe_radius:
 			if p.has_method("take_damage"):
 				p.take_damage(damage, global_position)

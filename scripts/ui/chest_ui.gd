@@ -36,19 +36,19 @@ const TIER_COLORS = [
 	Color(1.0, 0.85, 0.2),  # T5 gold
 ]
 
-## Compute item power (total flat_bonus across all modifiers)
-static func _get_item_power(item: EquipmentItem) -> float:
-	var power: float = 0.0
+## Compute item rating (total flat_bonus across all modifiers)
+static func _get_item_rating(item: EquipmentItem) -> float:
+	var rating: float = 0.0
 	for mod in item.modifiers:
-		power += absf(mod.flat_bonus)
-		power += absf(mod.percent_bonus) * 20.0  # weight % bonuses
+		rating += absf(mod.flat_bonus)
+		rating += absf(mod.percent_bonus) * 20.0  # weight % bonuses
 	if item.heal_hp > 0:
-		power += item.heal_hp * 0.5
+		rating += item.heal_hp * 0.5
 	if item.heal_mp > 0:
-		power += item.heal_mp * 0.3
-	return power
+		rating += item.heal_mp * 0.3
+	return rating
 
-## Compute tier from weapon damage or total power
+## Compute tier from weapon damage or total item rating
 static func _get_item_tier(item: EquipmentItem) -> int:
 	# For weapons: tier based on attack damage flat_bonus
 	if EquipmentItem.is_weapon_slot(item.slot_type):
@@ -62,13 +62,13 @@ static func _get_item_tier(item: EquipmentItem) -> int:
 		if dmg >= 7: return 2
 		if dmg >= 3: return 1
 		return 0
-	# For armor/accessories: tier based on total power
-	var power = _get_item_power(item)
-	if power >= 25: return 5
-	if power >= 16: return 4
-	if power >= 10: return 3
-	if power >= 5: return 2
-	if power >= 2: return 1
+	# For armor/accessories: tier based on total item rating
+	var rating = _get_item_rating(item)
+	if rating >= 25: return 5
+	if rating >= 16: return 4
+	if rating >= 10: return 3
+	if rating >= 5: return 2
+	if rating >= 2: return 1
 	return 0
 
 func _ready() -> void:
@@ -316,11 +316,11 @@ func _refresh() -> void:
 		tier_label.position = Vector2(3, 1)
 		btn.add_child(tier_label)
 
-		# Power label in top-right corner
-		var power = _get_item_power(item)
-		if power > 0:
+		# Item rating label in top-right corner
+		var rating = _get_item_rating(item)
+		if rating > 0:
 			var pow_label = Label.new()
-			pow_label.text = str(int(power))
+			pow_label.text = str(int(rating))
 			pow_label.add_theme_font_size_override("font_size", 10)
 			pow_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.3))
 			pow_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -334,16 +334,20 @@ func _refresh() -> void:
 
 func _build_tooltip(item: EquipmentItem) -> String:
 	var tier = _get_item_tier(item)
-	var power = _get_item_power(item)
+	var rating = _get_item_rating(item)
 	var rarity_name = RARITY_NAMES[clampi(item.rarity, 0, 2)]
 	var tip = item.get_display_name()
-	tip += "\nTier " + str(tier) + " | " + rarity_name + " | Power: " + str(int(power))
+	tip += "\nTier " + str(tier) + " | " + rarity_name + " | Item Rating: " + str(int(rating))
 	if item.description != "":
 		tip += "\n" + item.description
 	if item.buy_price > 0:
 		tip += "\nBuy: " + str(item.buy_price) + "g"
 	if item.weapon_type != "":
 		tip += "\nType: " + item.weapon_type
+	if item.socket_count > 0:
+		tip += "\nSockets: %d/%d filled" % [item.get_socketed_gem_count(), item.socket_count]
+	if item.archetype_tags.size() > 0:
+		tip += "\nTags: " + ", ".join(Array(item.archetype_tags))
 	for mod in item.modifiers:
 		var stat_name = StatModifier.StatType.keys()[mod.stat] if mod.stat < StatModifier.StatType.size() else "?"
 		if mod.flat_bonus != 0:
@@ -356,6 +360,17 @@ func _build_tooltip(item: EquipmentItem) -> String:
 		tip += "\nRestores " + str(item.heal_mp) + " MP"
 	if item.use_effect != "":
 		tip += "\nEffect: " + item.use_effect
+	if item.socket_count > 0:
+		for socket_idx in range(item.socket_count):
+			var socket_type = item.socket_types[socket_idx] if socket_idx < item.socket_types.size() else "open"
+			var gem_path = item.socketed_gem_paths[socket_idx] if socket_idx < item.socketed_gem_paths.size() else ""
+			var socket_label = "Socket %d [%s]" % [socket_idx + 1, socket_type.capitalize()]
+			if gem_path != "":
+				var gem = load(gem_path) as GemDefinition
+				socket_label += ": " + (gem.gem_name if gem else "Filled")
+			else:
+				socket_label += ": Empty"
+			tip += "\n" + socket_label
 	return tip
 
 func _on_item_clicked(item: EquipmentItem) -> void:

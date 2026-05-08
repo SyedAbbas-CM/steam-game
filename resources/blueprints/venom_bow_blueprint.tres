@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="BlueprintDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/blueprint_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+blueprint_id = "venom_bow_blueprint"
+blueprint_name = "Venom Bow Blueprint"
+description = "A toxic bow design favored by hunters who fight from range and attrition."
+result_item_path = "res://resources/items/crafted/venom_bow.tres"
+station_type = "forge"
+required_fragments = 4
+required_salvage_points = 8
+unlock_tags = PackedStringArray("ranged", "bow", "poison")
+recipe_paths = PackedStringArray("res://resources/recipes/venom_bow.tres")

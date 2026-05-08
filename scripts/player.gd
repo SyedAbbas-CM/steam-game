@@ -9,6 +9,9 @@ var invincible: bool = false
 var iframes_enabled: bool = false  # disabled for now; can become an armor perk later
 var in_dungeon: bool = false
 var touch_controls: TouchControls
+var peer_owner_id: int = 1
+var player_slot_index: int = 0
+var replicated_proxy: bool = false
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var equipment_manager: EquipmentManager = $EquipmentManager
@@ -83,6 +86,10 @@ const SPRINT_SPEED_MULT = 2.0
 const SPRINT_STAMINA_DRAIN = 20.0  # stamina per second while sprinting
 var _is_sprinting: bool = false
 var _sneaking: bool = false
+var _stealth_kill_cooldown: float = 0.0
+const STEALTH_KILL_COOLDOWN = 1.0
+const STEALTH_KILL_RANGE = 28.0
+const AMBUSH_DAMAGE_MULT = 2.5
 
 # i do not like these variables and implementations to be in the player.gd file
 #TODO: seperate files for all of this
@@ -251,6 +258,13 @@ func _ready() -> void:
 	var gm = get_node_or_null("/root/GameManager")
 	if gm and gm.save_data and gm.has_method("load_level_data"):
 		gm.load_level_data(level_system)
+	if gm and gm.has_method("load_perk_data"):
+		gm.load_perk_data()
+	# Add perk tree UI if not already present
+	if not get_tree().get_first_node_in_group("perk_tree_screen"):
+		var pts = PerkTreeScreen.new()
+		pts.add_to_group("perk_tree_screen")
+		get_tree().current_scene.add_child.call_deferred(pts)
 
 	# Load saved equipment, or give starting items if first time
 	var loaded_equip = false
@@ -292,6 +306,19 @@ func _ready() -> void:
 	# Ensure weapon pattern matches equipped weapon (signal was missed during _give_starting_items)
 	weapon_system.update_pattern_for_weapon()
 
+func configure_peer_owner(owner_peer_id: int, slot_index: int = 0, proxy: bool = false) -> void:
+	peer_owner_id = max(owner_peer_id, 1)
+	player_slot_index = max(slot_index, 0)
+	replicated_proxy = proxy
+
+func is_local_controlled() -> bool:
+	var coop = get_node_or_null("/root/CoopSession")
+	if coop == null or not coop.has_method("is_multiplayer_active") or not coop.is_multiplayer_active():
+		return true
+	if replicated_proxy:
+		return false
+	return multiplayer.get_unique_id() == peer_owner_id
+
 func _is_ui_open() -> bool:
 	if not is_inside_tree():
 		return true
@@ -304,6 +331,9 @@ func _is_ui_open() -> bool:
 		return true
 	var quest_log = get_tree().get_first_node_in_group("quest_log")
 	if quest_log and quest_log is CanvasLayer and quest_log.visible:
+		return true
+	var perk_tree = get_tree().get_first_node_in_group("perk_tree_screen")
+	if perk_tree and perk_tree is CanvasLayer and perk_tree.visible:
 		return true
 	# Check CraftingUI, ShopUI, EnchantUI, SpellCraftUI, SpellBookUI
 	for ui_name in ["crafting_ui", "shop_ui", "enchant_ui", "spell_craft_ui", "spellbook_ui", "world_map", "chest_ui"]:
@@ -422,12 +452,26 @@ func _physics_process(delta: float) -> void:
 			var dash_speed_mod = 0.5 if _shield_active else 1.0  # slower dash while shielding
 			velocity = _dash_direction * equipment_manager.get_move_speed() * DASH_SPEED_MULT * dash_speed_mod
 			move_and_slide()
+			# Dash push: shove enemies we collide with during dash
+			var player_w_d = get_weight()
+			for si_d in range(get_slide_collision_count()):
+				var col_d = get_slide_collision(si_d)
+				var coll_d = col_d.get_collider()
+				if coll_d and coll_d.is_in_group("enemies") and coll_d is CharacterBody2D:
+					var ew: float = coll_d._weight if "_weight" in coll_d else 1.0
+					var push_d = _dash_direction * 250.0 * player_w_d / ew
+					if "_pushed_velocity" in coll_d:
+						coll_d._pushed_velocity += push_d
+					else:
+						coll_d.velocity += push_d
+					if "_contact_bounce" in coll_d:
+						coll_d._contact_bounce = 0.3
 			_dash_strike_check()
 			# Spawn afterimages + trail lines during dash
 			var vfx2 = get_node_or_null("/root/VFXManager")
 			if vfx2 and Engine.get_physics_frames() % 2 == 0:
-				vfx2.dash_afterimage(sprite, global_position)
-				vfx2.dash_trail_lines(global_position, _dash_direction, sprite.scale)
+				vfx2.dash_afterimage(sprite, global_position, null, z_index - 1)
+				vfx2.dash_trail_lines(global_position, _dash_direction, sprite.scale, null, z_index - 1)
 			# Keep FPS camera synced during dash
 			if fps_mode and _first_person_view:
 				_first_person_view.update_camera(global_position, fps_angle)
@@ -863,21 +907,32 @@ func _physics_process(delta: float) -> void:
 			var sfx_sn = get_node_or_null("/root/SFXManager")
 			if sfx_sn:
 				sfx_sn.play("click", -6.0)
-	# Sneak drains stamina slowly (reduced by STEALTH stat)
+	# Sneak drains stamina slowly (reduced by STEALTH stat, or free with "ghost" perk)
 	if _sneaking:
 		if stamina <= 0 or _is_dashing:
-			_sneaking = false
+			var _pm = get_node_or_null("/root/PerkManager")
+			if not (_pm and _pm.has_special("ghost")):
+				_sneaking = false
 		else:
-			var stealth_stat = equipment_manager.get_stealth()
-			var sneak_drain = SNEAK_STAMINA_BASE_DRAIN * (1.0 - clampf(stealth_stat / 50.0, 0.0, 0.6))
-			stamina = maxf(stamina - sneak_drain * delta, 0.0)
-			_stamina_regen_delay = 0.5
-			stamina_changed.emit(stamina)
+			var _pm = get_node_or_null("/root/PerkManager")
+			if not (_pm and _pm.has_special("ghost")):
+				var stealth_stat = equipment_manager.get_stealth()
+				var sneak_drain = SNEAK_STAMINA_BASE_DRAIN * (1.0 - clampf(stealth_stat / 50.0, 0.0, 0.6))
+				stamina = maxf(stamina - sneak_drain * delta, 0.0)
+				_stamina_regen_delay = 0.5
+				stamina_changed.emit(stamina)
 	# Sneak visual
 	if _sneaking:
 		sprite.modulate.a = 0.5
 	elif not _is_dashing and _dash_linger <= 0 and not _shield_active:
 		sprite.modulate.a = 1.0
+
+	# Stealth kill cooldown
+	if _stealth_kill_cooldown > 0:
+		_stealth_kill_cooldown -= delta
+	# Stealth kill (E key while sneaking behind unaware enemy)
+	if _sneaking and _stealth_kill_cooldown <= 0 and Input.is_action_just_pressed("interact"):
+		_try_stealth_kill()
 
 	# Sprint (hold Shift while moving — weapons without a special shift ability get sprint)
 	# Short bows and unarmed also get sprint instead of a special ability
@@ -924,14 +979,29 @@ func _physics_process(delta: float) -> void:
 	var target_velocity = direction * equipment_manager.get_move_speed() * speed_mult
 	var accel = equipment_manager.get_acceleration()
 	velocity = velocity.lerp(target_velocity, accel * delta * 10.0)
-	# Apply external push (from enemy contact knockback)
+	# Apply external push (from enemy contact knockback) — decays quickly, capped
+	var _max_push := 200.0
+	if _pushed_velocity.length_squared() > _max_push * _max_push:
+		_pushed_velocity = _pushed_velocity.normalized() * _max_push
 	velocity += _pushed_velocity
-	_pushed_velocity = _pushed_velocity.move_toward(Vector2.ZERO, delta * 400.0)
+	_pushed_velocity *= 0.82  # exponential decay per frame (~60fps = gone in ~0.25s)
 	move_and_slide()
+	# Noise emission for stealth system
+	if direction.length() > 0.1:
+		var noise = get_node_or_null("/root/NoiseSystem")
+		if noise:
+			if _is_sprinting:
+				noise.emit_noise(global_position, 100.0, 0.6 * delta)
+			elif _sneaking:
+				var _pm_n = get_node_or_null("/root/PerkManager")
+				if not (_pm_n and _pm_n.has_special("silent_step")):
+					noise.emit_noise(global_position, 20.0, 0.05 * delta)
+			else:
+				noise.emit_noise(global_position, 60.0, 0.3 * delta)
 	# Sync 3D first-person camera
 	if fps_mode and _first_person_view:
 		_first_person_view.update_camera(global_position, fps_angle)
-	# Slide collision: push enemies via _pushed_velocity (persists through AI updates)
+	# Slide collision: push enemies away using center-to-center direction (not slide normal)
 	for si in range(get_slide_collision_count()):
 		var col = get_slide_collision(si)
 		var collider = col.get_collider()
@@ -939,23 +1009,29 @@ func _physics_process(delta: float) -> void:
 			continue
 		if not collider is CharacterBody2D:
 			continue
-		var push_dir_c = -col.get_normal()  # direction from player toward enemy
-		# Push enemy away — sprinting/dashing pushes harder
-		var push_force := 80.0
+		# Use center-to-center direction — prevents "slipping to sides" from slide normals
+		var push_dir_c: Vector2 = (collider.global_position - global_position).normalized()
+		if push_dir_c == Vector2.ZERO:
+			push_dir_c = Vector2.RIGHT.rotated(randf() * TAU)
+		# Push enemy away — gentle by default, harder on sprint/dash
+		var player_w = get_weight()
+		var push_force: float = 50.0 * player_w
 		if _is_sprinting:
-			push_force = 180.0
+			push_force = 100.0 * player_w
 		if _is_dashing:
-			push_force = 350.0
+			push_force = 220.0 * player_w
 		if _blade_dance_active or _phalanx_active:
-			push_force = 250.0
-		# Heavier enemies resist push
+			push_force = 140.0 * player_w
 		var enemy_weight: float = collider._weight if "_weight" in collider else 1.0
 		var push_vec = push_dir_c * push_force / enemy_weight
-		# Use _pushed_velocity so it persists through enemy AI updates
+		# Accumulate push so multiple sources don't cancel each other
 		if "_pushed_velocity" in collider:
-			collider._pushed_velocity = push_vec
+			collider._pushed_velocity += push_vec
 		else:
 			collider.velocity += push_vec
+		# Brief contact_bounce so enemy AI doesn't immediately override the push
+		if "_contact_bounce" in collider and collider._contact_bounce <= 0:
+			collider._contact_bounce = 0.12
 
 	# Update facing direction (locked during dash to prevent frame flicker)
 	if _player_anim and not _is_dashing:
@@ -1061,8 +1137,16 @@ func _physics_process(delta: float) -> void:
 	if _is_touch and touch_controls.is_shooting():
 		# Touch: only right joystick triggers shooting
 		var aim_dir = touch_controls.get_aim_input().normalized()
+		var _was_sneak_fire = _sneaking
 		_sneaking = false  # firing breaks sneak
+		var _ns = get_node_or_null("/root/NoiseSystem")
+		if _ns: _ns.emit_noise(global_position, 120.0, 0.8)
+		if _was_sneak_fire:
+			weapon_system.damage_mult *= AMBUSH_DAMAGE_MULT
 		weapon_system.try_shoot(global_position, aim_dir)
+		if _was_sneak_fire:
+			weapon_system.damage_mult /= AMBUSH_DAMAGE_MULT
+			FloatingText.spawn(get_parent(), global_position + Vector2(0, -16), "AMBUSH!", Color(1.0, 0.6, 0.1))
 		if _multishot_active and _multishot_cooldown <= 0:
 			_fire_multishot(aim_dir)
 			_multishot_cooldown = MULTISHOT_FIRE_RATE
@@ -1074,7 +1158,16 @@ func _physics_process(delta: float) -> void:
 		var _mouse_shooting = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 		var _kb_shooting = Input.is_action_pressed("shoot") and not _mouse_shooting
 		if _mouse_shooting or (_kb_shooting and not _space_suppressed):
+			var _was_sneak_fire2 = _sneaking
 			_sneaking = false  # firing breaks sneak
+			var _ns2 = get_node_or_null("/root/NoiseSystem")
+			if _ns2: _ns2.emit_noise(global_position, 120.0, 0.8)
+			if _was_sneak_fire2:
+				weapon_system.damage_mult *= AMBUSH_DAMAGE_MULT
+				# Hawkeye perk: stealth attacks always crit
+				var _pm_hw = get_node_or_null("/root/PerkManager")
+				if _pm_hw and _pm_hw.has_special("hawkeye"):
+					weapon_system.crit_bonus += 100.0
 			var aim_dir: Vector2
 			if fps_mode:
 				# FPS: shoot in the direction the camera is facing
@@ -1083,6 +1176,12 @@ func _physics_process(delta: float) -> void:
 				var mouse_pos = get_global_mouse_position()
 				aim_dir = (mouse_pos - global_position).normalized()
 			weapon_system.try_shoot(global_position, aim_dir)
+			if _was_sneak_fire2:
+				weapon_system.damage_mult /= AMBUSH_DAMAGE_MULT
+				var _pm_hw2 = get_node_or_null("/root/PerkManager")
+				if _pm_hw2 and _pm_hw2.has_special("hawkeye"):
+					weapon_system.crit_bonus -= 100.0
+				FloatingText.spawn(get_parent(), global_position + Vector2(0, -16), "AMBUSH!", Color(1.0, 0.6, 0.1))
 			if _multishot_active and _multishot_cooldown <= 0:
 				_fire_multishot(aim_dir)
 				_multishot_cooldown = MULTISHOT_FIRE_RATE
@@ -1132,6 +1231,77 @@ func gain_xp(amount: int) -> void:
 
 func is_sneaking() -> bool:
 	return _sneaking
+
+## Attempt a stealth kill on the nearest valid target
+func _try_stealth_kill() -> void:
+	var best_enemy: Node2D = null
+	var best_dist: float = STEALTH_KILL_RANGE
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(enemy) or enemy.state == enemy.State.DEAD:
+			continue
+		var d = global_position.distance_to(enemy.global_position)
+		if d > STEALTH_KILL_RANGE:
+			continue
+		# Must be unaware and back exposed
+		if not enemy.has_method("get_awareness") or enemy.get_awareness() >= 0.3:
+			continue
+		if not enemy.has_method("is_back_exposed") or not enemy.is_back_exposed(global_position):
+			continue
+		if d < best_dist:
+			best_dist = d
+			best_enemy = enemy
+	if not best_enemy:
+		return
+	var _pm_sk = get_node_or_null("/root/PerkManager")
+	var sk_cd = STEALTH_KILL_COOLDOWN
+	if _pm_sk and _pm_sk.has_special("predator"):
+		sk_cd *= 0.5
+	_stealth_kill_cooldown = sk_cd
+	# Determine damage based on enemy size
+	var size_class = 0
+	if best_enemy.definition:
+		size_class = best_enemy.definition.size_class
+	if size_class == 0:  # NORMAL — instant kill
+		best_enemy.take_damage(best_enemy.hp + best_enemy.shield_hp + 999)
+	elif size_class == 1:  # LARGE — 4x weapon damage
+		var dmg = maxi(equipment_manager.get_damage() * 4, best_enemy._max_hp / 3)
+		best_enemy.take_damage(dmg)
+	else:  # BOSS — 2x weapon damage
+		var dmg = maxi(equipment_manager.get_damage() * 2, best_enemy._max_hp / 6)
+		best_enemy.take_damage(dmg)
+	# VFX + SFX
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.death_burst(best_enemy.global_position)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("crit", -2.0)
+	# Floating text
+	FloatingText.spawn(get_parent(), best_enemy.global_position + Vector2(0, -12), "STEALTH KILL!", Color(0.9, 0.2, 0.9))
+	# Assassin perk: stealth kills restore stamina
+	if _pm_sk and _pm_sk.has_special("assassin"):
+		stamina = minf(stamina + 30.0, max_stamina)
+		stamina_changed.emit(stamina)
+	# Minimal noise from the kill
+	var ns = get_node_or_null("/root/NoiseSystem")
+	if ns:
+		ns.emit_noise(best_enemy.global_position, 40.0, 0.3)
+
+## Get the nearest stealth-killable enemy (for HUD prompt)
+func get_stealth_kill_target() -> Node2D:
+	if not _sneaking or _stealth_kill_cooldown > 0:
+		return null
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(enemy) or enemy.state == enemy.State.DEAD:
+			continue
+		if global_position.distance_to(enemy.global_position) > STEALTH_KILL_RANGE:
+			continue
+		if not enemy.has_method("get_awareness") or enemy.get_awareness() >= 0.3:
+			continue
+		if not enemy.has_method("is_back_exposed") or not enemy.is_back_exposed(global_position):
+			continue
+		return enemy
+	return null
 
 ## Called by enemy._die() to track massacre kills for FEARED trigger
 func on_enemy_killed_for_massacre() -> void:
@@ -1358,7 +1528,16 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 		iframe_tween.tween_callback(func(): invincible = false)
 
 	if hp <= 0:
-		player_died.emit()
+		# Undying perk: survive lethal hit once per dungeon
+		var _pm_ud = get_node_or_null("/root/PerkManager")
+		if _pm_ud and _pm_ud.has_special("undying") and not has_meta("undying_used"):
+			hp = 1
+			set_meta("undying_used", true)
+			FloatingText.spawn(get_parent(), global_position + Vector2(0, -16), "UNDYING!", Color(1.0, 0.3, 0.3))
+			var _sfx_ud = get_node_or_null("/root/SFXManager")
+			if _sfx_ud: _sfx_ud.play("shield_break", -2.0)
+		else:
+			player_died.emit()
 
 func _on_stats_changed() -> void:
 	var new_max = equipment_manager.get_max_hp()
@@ -1419,7 +1598,7 @@ func _apply_class_stats() -> void:
 		return
 	var bs = equipment_manager.base_stats
 	bs.max_hp = player_class.base_hp
-	bs.move_speed = player_class.base_speed
+	bs.move_speed = player_class.base_speed * 1.1
 	bs.attack_damage = int(player_class.base_damage)
 	bs.max_mp = player_class.base_mp
 	bs.weight = player_class.base_weight
@@ -1428,6 +1607,17 @@ func _apply_class_stats() -> void:
 	bs.thorns = player_class.base_thorns
 	if pc == "mercenary":
 		bs.max_stamina = 150.0  # mercenary has extra stamina for versatility
+
+func get_weight() -> float:
+	var pc = _get_player_class()
+	var class_path = "res://resources/classes/%s.tres" % pc
+	if pc == "ranger":
+		class_path = "res://resources/classes/archer.tres"
+	var player_class = load(class_path) as PlayerClass
+	var base = player_class.base_weight if player_class else 1.0
+	# Equipment weight adds to player weight (heavier armor = harder to push)
+	var equip_weight = equipment_manager.get_weight() if equipment_manager else 0.0
+	return base + maxf(equip_weight - base, 0.0)
 
 func get_poise() -> float:
 	var pc = _get_player_class()
@@ -1439,6 +1629,11 @@ func get_poise() -> float:
 	# Add equipment WEIGHT bonuses to poise (heavier gear = more poise)
 	var weight_bonus = equipment_manager.get_weight() - (player_class.base_weight if player_class else 1.0)
 	return base + maxf(weight_bonus, 0.0)
+
+## Apply push from enemy, reduced by player weight
+func apply_push(push_vec: Vector2) -> void:
+	var w = get_weight()
+	_pushed_velocity = push_vec / maxf(w, 0.5)
 
 func apply_stagger(duration: float) -> void:
 	if _stagger_cooldown > 0:
@@ -1618,6 +1813,32 @@ func _get_shoot_direction() -> Vector2:
 func _get_aim_direction() -> Vector2:
 	return _get_shoot_direction()
 
+func get_high_ground_level() -> int:
+	## Returns 0-3 based on player's current height tile. Ramps count as the higher level.
+	var dm = get_tree().get_first_node_in_group("dungeon_manager")
+	if dm == null or dm.get("_height_system") == null:
+		return 0
+	var hs = dm._height_system
+	if not is_instance_valid(hs):
+		return 0
+	var ts: int = int(hs.tile_size)
+	if ts <= 0:
+		ts = 8
+	var tile := Vector2i(int(floor(global_position.x / ts)), int(floor(global_position.y / ts)))
+	var h: int = int(hs.get_height(tile))
+	if hs.is_ramp(tile):
+		var top := h
+		for d in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(1, 0), Vector2i(-1, 0)]:
+			top = maxi(top, int(hs.get_height(tile + d)))
+		h = top
+	return h
+
+func get_high_ground_damage_mult() -> float:
+	return 1.0 + 0.20 * float(get_high_ground_level())
+
+func get_high_ground_crit_bonus() -> float:
+	return 10.0 * float(get_high_ground_level())
+
 func _give_starting_items() -> void:
 	var player_class = _get_player_class()
 	var starter_armor = load("res://resources/items/loy/leather_armor.tres") as EquipmentItem
@@ -1727,6 +1948,12 @@ func _start_dash() -> void:
 	_dash_direction = _last_move_dir
 	_dash_hit_enemies.clear()
 	sprite.modulate.a = 0.4  # ghost effect
+	var _ns_dash = get_node_or_null("/root/NoiseSystem")
+	if _ns_dash: _ns_dash.emit_noise(global_position, 80.0, 0.5)
+	# Combat Roll perk: dash grants 1s stealth
+	var _pm_cr = get_node_or_null("/root/PerkManager")
+	if _pm_cr and _pm_cr.has_special("combat_roll"):
+		_sneaking = true
 	if _player_anim:
 		_player_anim.set_direction(_dash_direction)  # lock direction to dash direction
 		_player_anim.set_state(PlayerAnimator.AnimState.DASH)
@@ -1736,7 +1963,7 @@ func _start_dash() -> void:
 		sfx.play("woosh_a", -3.0)
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
-		vfx.dash_afterimage(sprite, global_position)
+		vfx.dash_afterimage(sprite, global_position, null, z_index - 1)
 
 ## Dash-strike: damage and knockback enemies we collide with during dash (melee only)
 ## Also nudges ALL nearby enemies in dash direction (environmental knockback)
@@ -3574,7 +3801,7 @@ func _wand_blink() -> void:
 	sprite.modulate.a = 0.3
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
-		vfx.dash_afterimage(sprite, global_position)
+		vfx.dash_afterimage(sprite, global_position, null, z_index - 1)
 	global_position = target
 	if vfx:
 		vfx.hit_spark(global_position, Color(0.5, 0.7, 1.0))

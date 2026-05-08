@@ -240,7 +240,7 @@ func _explode() -> void:
 	set_physics_process(false)
 
 	var explosion_radius := EXPLOSION_RADIUS_TILES * TILE_SIZE
-	var damage := 8 + floor_number * 2
+	var damage := 10 + floor_number * 3
 
 	# Erase barrel tile (wherever it currently sits)
 	var cur_tile := Vector2i(
@@ -263,7 +263,7 @@ func _explode() -> void:
 	for body in _get_bodies_in_radius(explosion_radius):
 		if body.is_in_group("player"):
 			if body.has_method("take_damage"):
-				body.take_damage(damage, Vector2.INF, false, false)
+				body.take_damage(damage, Vector2.INF, false, false, CombatTypes.DamageType.TRUE)
 			if "status_effects" in body and body.status_effects:
 				body.status_effects.apply_effect(StatusEffect.Type.BURNING, 3.0, 1.0)
 		elif body.is_in_group("enemy"):

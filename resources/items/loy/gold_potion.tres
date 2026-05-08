@@ -6,7 +6,7 @@
 script = ExtResource("1")
 item_name = "Gold Potion"
 loy_tile_index = 125
-description = "Regenerates some magical charge (+96C)"
+description = "Restores 96 MP. Tastes faintly of starlight and old ink."
 slot_type = 10
 rarity = 0
 buy_price = 40

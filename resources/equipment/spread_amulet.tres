@@ -20,3 +20,6 @@ item_name = "Spread Amulet"
 description = "+2 bullets, wider spread"
 modifiers = Array[ExtResource("2")]([SubResource("mod_count"), SubResource("mod_spread")])
 rarity = 2
+archetype_tags = null
+socket_types = null
+socketed_gem_paths = null

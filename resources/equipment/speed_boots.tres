@@ -14,3 +14,6 @@ script = ExtResource("1")
 item_name = "Speed Boots"
 description = "+20 move speed"
 modifiers = Array[ExtResource("2")]([SubResource("mod_speed")])
+archetype_tags = null
+socket_types = null
+socketed_gem_paths = null

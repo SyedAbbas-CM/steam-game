@@ -6,6 +6,7 @@ var floor_layer: TileMapLayer
 var liquid_layer: TileMapLayer
 var has_liquid: bool = false
 var liquid_tiles: Array[Vector2i] = []
+var trap_atlas: Vector2i = Vector2i(13, 0)
 
 const PROXIMITY_RANGE_SQ = 100.0  # 10px ~1.25 tiles
 const BLINK_TOTAL = 8
@@ -64,7 +65,7 @@ func _on_blink_tick(timer: Timer) -> void:
 	if _blink_count % 2 == 1:
 		# Show cracked/warning look: erase floor, show red-tinted deco
 		floor_layer.erase_cell(abs_pos)
-		deco_layer.set_cell(abs_pos, 1, Vector2i(2, 4))  # crack rubble
+		deco_layer.set_cell(abs_pos, trap_source_id, trap_atlas)
 	else:
 		# Restore floor
 		floor_layer.set_cell(abs_pos, 0, _floor_atlas)

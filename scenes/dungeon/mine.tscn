@@ -1,0 +1,52 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon/mine_scene.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/dungeon/mine_manager.gd" id="2_mine"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/ui/death_screen.tscn" id="4_death"]
+[ext_resource type="PackedScene" path="res://scenes/ui/inventory_screen.tscn" id="5_inventory"]
+[ext_resource type="PackedScene" path="res://scenes/ui/touch_controls.tscn" id="6_touch"]
+[ext_resource type="TileSet" path="res://assets/tilesets/environment_tileset.tres" id="7_tileset"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="MineManager" type="Node2D" parent="."]
+script = ExtResource("2_mine")
+
+[node name="Floor" type="TileMapLayer" parent="MineManager"]
+tile_set = ExtResource("7_tileset")
+z_index = 0
+
+[node name="Liquids" type="TileMapLayer" parent="MineManager"]
+tile_set = ExtResource("7_tileset")
+z_index = 1
+
+[node name="Walls" type="TileMapLayer" parent="MineManager"]
+tile_set = ExtResource("7_tileset")
+z_index = 2
+
+[node name="Decorations" type="TileMapLayer" parent="MineManager"]
+tile_set = ExtResource("7_tileset")
+z_index = 0
+
+[node name="RoomTriggers" type="Node2D" parent="MineManager"]
+
+[node name="EnemyContainer" type="Node2D" parent="MineManager"]
+z_index = 1
+
+[node name="HazardContainer" type="Node2D" parent="MineManager"]
+
+[node name="Player" parent="MineManager" instance=ExtResource("3_player")]
+z_index = 1
+
+[node name="Camera2D" type="Camera2D" parent="MineManager/Player"]
+zoom = Vector2(7, 7)
+
+[node name="Bullets" type="Node2D" parent="."]
+
+[node name="DeathScreen" parent="." instance=ExtResource("4_death")]
+
+[node name="InventoryScreen" parent="." instance=ExtResource("5_inventory")]
+
+[node name="TouchControls" parent="." instance=ExtResource("6_touch")]

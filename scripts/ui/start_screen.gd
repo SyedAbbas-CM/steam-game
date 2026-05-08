@@ -96,7 +96,7 @@ func _build_ui() -> void:
 	center.add_child(class_row)
 
 	for class_id in CLASS_DATA:
-		var btn_vbox = _create_class_button(class_id, data)
+		var btn_vbox = _create_class_button(class_id, CLASS_DATA[class_id])
 		class_row.add_child(btn_vbox)
 
 	_update_class_selection()
@@ -135,10 +135,12 @@ func _create_class_button(class_id: String, data: Dictionary) -> VBoxContainer:
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 4)
 
+	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(200, 120)
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.pressed.connect(_on_class_selected.bind(class_id))
 
+	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.08, 0.14)
 	style.border_color = Color(0.3, 0.3, 0.4)
 	style.set_border_width_all(2)
@@ -176,7 +178,7 @@ func _create_class_button(class_id: String, data: Dictionary) -> VBoxContainer:
 	content.add_child(desc_lbl)
 
 	var stats_lbl = Label.new()
-	stats_lbl.text = "HP:%d SPD:%d DMG:%s" % [data["hp"], data["spd"], data["dmg"]]
+	stats_lbl.text = "Health:%d  Move:%d  Attack:%s" % [data["hp"], data["spd"], data["dmg"]]
 	stats_lbl.add_theme_font_size_override("font_size", 13)
 	stats_lbl.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
 	stats_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -191,6 +193,7 @@ func _create_class_button(class_id: String, data: Dictionary) -> VBoxContainer:
 func _on_class_selected(class_id: String) -> void:
 	_selected_class = class_id
 	_update_class_selection()
+	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("select_a", -4.0, 0.0)
 

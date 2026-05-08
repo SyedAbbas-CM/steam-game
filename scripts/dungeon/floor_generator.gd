@@ -3,6 +3,131 @@ extends RefCounted
 
 # Generate a floor as a dictionary of grid_pos -> RoomData
 # Returns: { "rooms": Dictionary (Vector2i -> RoomData), "start": Vector2i, "stairs": Vector2i }
+static func generate_mine_map(floor_number: int, mine_def: MineDefinition, total_floors: int = 5) -> Dictionary:
+	_super_elite_spawned_this_floor = 0
+	var room_count = randi_range(mine_def.room_count_min, mine_def.room_count_max)
+	room_count = clampi(room_count, 4, 16)
+	var directions = [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]
+	var start_pos = Vector2i.ZERO
+	var positions: Array[Vector2i] = [start_pos]
+	var position_set: Dictionary = {start_pos: true}
+
+	while positions.size() < room_count:
+		var frontier: Array[Vector2i] = []
+		for pos in positions:
+			for dir in directions:
+				var next = pos + dir
+				if position_set.has(next):
+					continue
+				if not frontier.has(next):
+					frontier.append(next)
+		if frontier.is_empty():
+			break
+		frontier.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			var da = abs(a.x) + abs(a.y)
+			var db = abs(b.x) + abs(b.y)
+			if da == db:
+				if a.x == b.x:
+					return a.y < b.y
+				return a.x < b.x
+			return da < db
+		)
+		var pick_pool = mini(frontier.size(), 5)
+		var pick = frontier[randi() % pick_pool]
+		positions.append(pick)
+		position_set[pick] = true
+
+	var bfs_dist: Dictionary = {}
+	bfs_dist[start_pos] = 0
+	var queue: Array[Vector2i] = [start_pos]
+	var idx = 0
+	var stairs_pos = start_pos
+	while idx < queue.size():
+		var pos = queue[idx]
+		idx += 1
+		for dir in directions:
+			var neighbor = pos + dir
+			if position_set.has(neighbor) and not bfs_dist.has(neighbor):
+				bfs_dist[neighbor] = bfs_dist[pos] + 1
+				queue.append(neighbor)
+				if bfs_dist[neighbor] > bfs_dist.get(stairs_pos, 0):
+					stairs_pos = neighbor
+
+	var rooms: Dictionary = {}
+	var base_elite = clampi(3 + floor_number / 3, 3, 6)
+	for pos in positions:
+		var room = RoomData.new()
+		room.grid_pos = pos
+
+		if pos == start_pos:
+			room.type = RoomData.RoomType.COMBAT
+			room.enemy_count = 0
+			room.has_stairs_up = true
+		elif pos == stairs_pos:
+			room.has_stairs_down = true
+			if floor_number >= total_floors:
+				room.type = RoomData.RoomType.BOSS
+				room.enemy_count = 1
+			else:
+				room.type = RoomData.RoomType.ELITE
+				room.enemy_count = base_elite
+		else:
+			room.type = _roll_mine_room_type(floor_number)
+			match room.type:
+				RoomData.RoomType.COMBAT:
+					room.enemy_count = 4 + floor_number + randi_range(0, 2)
+					if randf() < 0.08:
+						room.set_meta("has_rare_elite", true)
+				RoomData.RoomType.ELITE:
+					room.enemy_count = base_elite
+				RoomData.RoomType.SUPER_ELITE:
+					room.enemy_count = clampi(2 + floor_number / 4, 2, 4)
+				RoomData.RoomType.TREASURE, RoomData.RoomType.SHRINE:
+					room.enemy_count = 2 + floor_number
+				RoomData.RoomType.SHOP:
+					room.enemy_count = 0
+
+		room.difficulty_tier = floor_number
+		var hp_mult = 1.0
+		var dmg_mult = 1.0
+		if room.type == RoomData.RoomType.BOSS:
+			hp_mult = 5.0
+			dmg_mult = 1.5
+		elif room.type == RoomData.RoomType.SUPER_ELITE:
+			hp_mult = 6.0
+			dmg_mult = 1.8
+		elif room.type == RoomData.RoomType.ELITE:
+			hp_mult = 4.0
+			dmg_mult = 1.3
+		room.enemy_hp_mult = hp_mult
+		room.enemy_damage_mult = dmg_mult
+		room.encounter_type = RoomData.EncounterType.STANDARD
+		room.shape = RoomData.RoomShape.ARENA
+
+		for dir in directions:
+			var neighbor = pos + dir
+			if position_set.has(neighbor):
+				var dir_name = _dir_to_name(dir)
+				room.connections[dir_name] = neighbor
+				room.transition_types[dir_name] = RoomData.TransitionType.OPEN
+
+		var shape_data = RoomShapeGenerator.generate_mine_cavern(
+			room.type in [RoomData.RoomType.BOSS, RoomData.RoomType.SUPER_ELITE] or randf() < mine_def.grand_cavern_chance
+		)
+		room.shape_width = shape_data["width"]
+		room.shape_height = shape_data["height"]
+		room.floor_mask = shape_data["mask"]
+		rooms[pos] = room
+
+	_ensure_reachable_path(rooms, start_pos, stairs_pos, directions)
+	return {
+		"rooms": rooms,
+		"start": start_pos,
+		"stairs": stairs_pos,
+		"grid_cell_w": 65,
+		"grid_cell_h": 53,
+	}
+
 static func generate_floor_map(floor_number: int, room_override: int = -1, biome: DungeonBiome = null, total_floors: int = 5) -> Dictionary:
 	_super_elite_spawned_this_floor = 0
 	var room_count: int
@@ -272,8 +397,19 @@ static func generate_linear_arena(fixed_monsters: Array, biome: DungeonBiome = n
 			room.has_stairs_up = true
 		else:
 			room.type = RoomData.RoomType.COMBAT
-			room.enemy_count = 1
-			room.fixed_enemy_name = str(fixed_monsters[i - 1].get("type", ""))
+			var type_str = str(fixed_monsters[i - 1].get("type", ""))
+			# Support pipe-separated names for multiple enemies: "Bone Grunt|Bone Brute"
+			if "|" in type_str:
+				var names = type_str.split("|")
+				room.fixed_enemy_name = names[0].strip_edges()
+				var name_arr: Array = []
+				for n in names:
+					name_arr.append(n.strip_edges())
+				room.enemy_count = name_arr.size()
+				room.set_meta("random_enemy_names", name_arr)
+			else:
+				room.fixed_enemy_name = type_str
+				room.enemy_count = 1
 			if i == room_count - 1:
 				room.has_stairs_down = true
 
@@ -470,6 +606,22 @@ static func _dir_to_name(dir: Vector2i) -> String:
 	return ""
 
 static var _super_elite_spawned_this_floor: int = 0  # track per floor to limit count
+
+static func _roll_mine_room_type(floor_number: int) -> RoomData.RoomType:
+	var roll = randf()
+	if roll < 0.68:
+		return RoomData.RoomType.COMBAT
+	if roll < 0.78:
+		return RoomData.RoomType.TREASURE
+	if roll < 0.86:
+		return RoomData.RoomType.SHRINE
+	if roll < 0.92:
+		return RoomData.RoomType.SHOP
+	var max_super = 1 if floor_number < 5 else 2
+	if _super_elite_spawned_this_floor < max_super and randf() < 0.45:
+		_super_elite_spawned_this_floor += 1
+		return RoomData.RoomType.SUPER_ELITE
+	return RoomData.RoomType.ELITE
 
 static func _roll_room_type(floor_number: int) -> RoomData.RoomType:
 	# Higher floors = more combat, less free loot
@@ -710,15 +862,15 @@ static func _guarantee_room_types(rooms: Dictionary, start_pos: Vector2i, stairs
 
 static func _roll_encounter_type() -> RoomData.EncounterType:
 	var roll = randf()
-	if roll < 0.40:
+	if roll < 0.70:
 		return RoomData.EncounterType.STANDARD
-	elif roll < 0.55:
+	elif roll < 0.78:
 		return RoomData.EncounterType.AMBUSH
-	elif roll < 0.70:
+	elif roll < 0.86:
 		return RoomData.EncounterType.HORDE
-	elif roll < 0.80:
+	elif roll < 0.91:
 		return RoomData.EncounterType.GAUNTLET
-	elif roll < 0.90:
+	elif roll < 0.96:
 		return RoomData.EncounterType.REST
 	else:
 		return RoomData.EncounterType.ARENA

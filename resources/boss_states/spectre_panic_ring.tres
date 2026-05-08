@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="BossState" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/boss_state.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/movements/teleport.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/boss_patterns/spectre_panic_ring.tres" id="3"]
+
+[resource]
+script = ExtResource("1")
+state_id = "panic_ring"
+display_name = "Panic Ring"
+movement_pattern = ExtResource("2")
+attack_mode = 2
+shot_pattern = ExtResource("3")
+attack_interval = 0.68
+require_line_of_sight = false
+min_attack_distance = 0.0
+max_attack_distance = 0.0
+duration = 1.9
+transition_mode = 0
+hp_threshold = 0.5
+external_trigger = ""
+next_state_id = "death_spiral"

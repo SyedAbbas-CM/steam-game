@@ -56,6 +56,10 @@ var _quest_arrow_label: Label
 var _quest_objective_pos: Vector2 = Vector2.ZERO
 var _quest_arrow_visible: bool = false
 
+# Stealth indicator
+var _stealth_indicator: Label
+var _stealth_kill_prompt: Label
+
 const BAR_WIDTH = 360.0
 const BAR_HEIGHT = 20.0
 const MP_BAR_HEIGHT = 16.0
@@ -88,6 +92,7 @@ func _ready() -> void:
 	_build_quickbar()
 	_build_spell_slots()
 	_build_quest_arrow()
+	_build_stealth_indicator()
 
 func setup(player: CharacterBody2D) -> void:
 	_player = player
@@ -439,6 +444,8 @@ func _process(_delta: float) -> void:
 	if _spell_refresh_timer >= 0.5:
 		_spell_refresh_timer = 0.0
 		_refresh_spell_slots()
+	# Stealth indicator (every frame for responsiveness)
+	_update_stealth_indicator()
 
 	# Update shield bar cooldown display
 	if _player and _shield_bar_bg.visible:
@@ -549,12 +556,22 @@ func setup_minimap(floor_map: Dictionary, start_pos: Vector2i) -> void:
 			offset_x + (pos.x - min_pos.x) * cell_size,
 			offset_y + (pos.y - min_pos.y) * cell_size
 		)
-		rect.color = Color(0.02, 0.02, 0.02, 0.95)  # unvisited = effectively black
+		if room and room.has_stairs_down:
+			rect.color = Color(0.5, 0.4, 0.08, 0.95)  # stairs = dim gold (visible before visiting)
+		else:
+			rect.color = Color(0.02, 0.02, 0.02, 0.95)  # unvisited = effectively black
 
 		_minimap_panel.add_child(rect)
 		_minimap_rects[pos] = rect
 
 	update_minimap_room(start_pos)
+
+func hide_minimap() -> void:
+	_minimap_data.clear()
+	_minimap_rects.clear()
+	if _minimap_panel:
+		_minimap_panel.queue_free()
+		_minimap_panel = null
 
 func update_minimap_room(grid_pos: Vector2i) -> void:
 	# Dim previous current room to visited color
@@ -571,11 +588,16 @@ func update_minimap_room(grid_pos: Vector2i) -> void:
 
 # --- Public API ---
 
-func set_floor_info(floor_num: int, recommended_level: int = 0) -> void:
+func set_floor_info(floor_num: int, recommended_level: int = 0, area_name: String = "") -> void:
+	var floor_text: String
 	if recommended_level > 0:
-		_info_line1.text = "Floor %d  (Lv.%d)" % [floor_num, recommended_level]
+		floor_text = "Floor %d  (Lv.%d)" % [floor_num, recommended_level]
 	else:
-		_info_line1.text = "Floor " + str(floor_num)
+		floor_text = "Floor " + str(floor_num)
+	if area_name != "":
+		_info_line1.text = "%s  %s" % [area_name, floor_text]
+	else:
+		_info_line1.text = floor_text
 
 func set_room_info(room_text: String) -> void:
 	_info_line2.text = room_text
@@ -699,7 +721,7 @@ func _update_xp(current: int, needed: int) -> void:
 
 func _update_level(level: int) -> void:
 	var power = _player.level_system.get_power_level() if _player and _player.level_system else level * 10
-	_level_label.text = "Lv.%d  PL:%d" % [level, power]
+	_level_label.text = "Lv.%d  Rating:%d" % [level, power]
 
 # --- Quickbar ---
 
@@ -1104,3 +1126,61 @@ func _on_quickbar_pressed(slot_index: int) -> void:
 				if sfx:
 					sfx.play("click", -5.0)
 			return
+
+func _build_stealth_indicator() -> void:
+	_stealth_indicator = Label.new()
+	_stealth_indicator.text = ""
+	_stealth_indicator.add_theme_font_size_override("font_size", 14)
+	_stealth_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_stealth_indicator.position = Vector2(MARGIN, MARGIN + BAR_HEIGHT + MP_BAR_HEIGHT + STAMINA_BAR_HEIGHT + XP_BAR_HEIGHT + 30)
+	_stealth_indicator.visible = false
+	add_child(_stealth_indicator)
+	_stealth_kill_prompt = Label.new()
+	_stealth_kill_prompt.text = "[E] KILL"
+	_stealth_kill_prompt.add_theme_font_size_override("font_size", 12)
+	_stealth_kill_prompt.add_theme_color_override("font_color", Color(0.9, 0.2, 0.9))
+	_stealth_kill_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stealth_kill_prompt.visible = false
+	add_child(_stealth_kill_prompt)
+
+func _update_stealth_indicator() -> void:
+	if not _player or not _stealth_indicator:
+		return
+	if not _player.is_sneaking():
+		_stealth_indicator.visible = false
+		_stealth_kill_prompt.visible = false
+		return
+	_stealth_indicator.visible = true
+	# Find highest awareness of nearby enemies
+	var max_awareness: float = 0.0
+	for enemy in _player.get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(enemy) or enemy.state == enemy.State.DEAD:
+			continue
+		if _player.global_position.distance_to(enemy.global_position) > 120.0:
+			continue
+		if enemy.has_method("get_awareness"):
+			max_awareness = maxf(max_awareness, enemy.get_awareness())
+	# Set indicator state
+	if max_awareness < 0.3:
+		_stealth_indicator.text = "(-) HIDDEN"
+		_stealth_indicator.add_theme_color_override("font_color", Color(0.3, 0.9, 0.3))
+	elif max_awareness < 0.7:
+		_stealth_indicator.text = "(?) DETECTED"
+		_stealth_indicator.add_theme_color_override("font_color", Color(0.9, 0.9, 0.2))
+	else:
+		_stealth_indicator.text = "(!) ALERT"
+		_stealth_indicator.add_theme_color_override("font_color", Color(0.9, 0.2, 0.2))
+	# Stealth kill prompt
+	if _player.has_method("get_stealth_kill_target"):
+		var target = _player.get_stealth_kill_target()
+		if target:
+			_stealth_kill_prompt.visible = true
+			var vp = _player.get_viewport()
+			if vp and vp.get_camera_2d():
+				var cam = vp.get_camera_2d()
+				var screen_pos = target.global_position - cam.global_position + Vector2(vp.get_visible_rect().size) / 2.0
+				_stealth_kill_prompt.position = screen_pos + Vector2(-20, -20)
+		else:
+			_stealth_kill_prompt.visible = false
+	else:
+		_stealth_kill_prompt.visible = false

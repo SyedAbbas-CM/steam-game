@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="GemDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/gem_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="StatModifier_mp"]
+script = ExtResource("2")
+stat = 9
+flat_bonus = 8.0
+
+[resource]
+script = ExtResource("1")
+gem_id = "flawed_sapphire"
+gem_name = "Flawed Sapphire"
+description = "A cloudy blue gem brimming with arcane reserves."
+family = 1
+tier = 2
+color_hint = Color(0.18, 0.4, 0.88, 1)
+modifiers = [SubResource("StatModifier_mp")]
+tags = PackedStringArray("magic", "mana", "sapphire")
+buy_price = 120
+sell_value = 48

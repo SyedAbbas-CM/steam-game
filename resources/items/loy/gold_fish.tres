@@ -6,7 +6,7 @@
 script = ExtResource("1")
 item_name = "Gold Fish"
 loy_tile_index = 240
-description = "A tasty shiny fish (Heals 100 HP)"
+description = "Restores 100 HP. Bottled in better days, priced for these ones."
 slot_type = 10
 rarity = 1
 buy_price = 250

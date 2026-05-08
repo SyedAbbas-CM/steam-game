@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="BlueprintDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/blueprint_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+blueprint_id = "iron_shield_blueprint"
+blueprint_name = "Iron Shield Blueprint"
+description = "A basic forge pattern for a dependable iron shield."
+result_item_path = "res://resources/items/crafted/iron_shield.tres"
+station_type = "forge"
+required_fragments = 3
+required_salvage_points = 6
+unlock_tags = PackedStringArray("shield", "defense", "forge")
+recipe_paths = PackedStringArray("res://resources/recipes/iron_shield.tres")

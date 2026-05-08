@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BossState" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/boss_state.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/movements/defensive_wall.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/boss_sequence_steps/bone_golem_march_wave.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/boss_sequence_steps/bone_golem_lunge_crush.tres" id="4"]
+
+[resource]
+script = ExtResource("1")
+state_id = "march"
+display_name = "March"
+movement_pattern = ExtResource("2")
+attack_mode = 0
+attack_type = 7
+attack_interval = 1.0
+require_line_of_sight = true
+min_attack_distance = 0.0
+max_attack_distance = 0.0
+sequence_steps = Array[Resource]([ExtResource("3"), ExtResource("4")])
+loop_sequence = true
+duration = 10.0
+transition_mode = 1
+hp_threshold = 0.66
+external_trigger = ""
+next_state_id = "prison"

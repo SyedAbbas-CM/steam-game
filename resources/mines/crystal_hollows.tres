@@ -1,0 +1,52 @@
+[gd_resource type="Resource" script_class="MineDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/mine_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/dungeon_bat.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/enemies/basic/cave_beetle.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/enemies/mountain/crystal_golem.tres" id="4"]
+
+[resource]
+script = ExtResource("1")
+mine_id = "crystal_hollows"
+mine_name = "Crystal Hollows"
+description = "A glittering cavern network rich in unstable crystals, strange echoes, and arcane residue."
+darkness_level = 0.65
+danger_tier = 2
+base_difficulty = 12
+biome_theme = "blue"
+liquid_type = "water"
+biome_aliases = PackedStringArray("Crystal Hollows", "Spire-Tower", "Frost-Dungeons", "Storm-Dungeons", "Sanctum-Dungeons", "Crystal")
+room_count_min = 4
+room_count_max = 6
+grand_cavern_chance = 0.38
+bounds_cells_w = 7
+bounds_cells_h = 6
+carve_density_bias = 0.66
+blocked_connection_chance = 0.28
+secret_pocket_chance = 0.16
+enemy_pool = [ExtResource("2"), ExtResource("3")]
+elite_enemy_pool = [ExtResource("4")]
+material_drop_paths = PackedStringArray("res://resources/items/crafting/cave_crystal.tres", "res://resources/items/crafting/magic_essence.tres")
+rare_material_drop_paths = PackedStringArray("res://resources/items/crafting/fire_crystal.tres")
+blueprint_ids = PackedStringArray("crystal_wand_blueprint")
+gem_hint_ids = PackedStringArray("chipped_sapphire", "chipped_topaz", "chipped_amethyst")
+node_spawn_rooms_min = 4
+node_spawn_rooms_max = 7
+node_count_per_room_min = 1
+node_count_per_room_max = 3
+gem_node_chance = 0.35
+blueprint_fragment_chance = 0.25
+soft_wall_hp = 2
+ore_wall_hp = 3
+gem_wall_hp = 5
+gas_pocket_chance = 0.02
+cave_in_chance = 0.05
+breakable_clusters_min = 6
+breakable_clusters_max = 10
+breakable_cluster_radius_min = 1
+breakable_cluster_radius_max = 2
+intrusion_interval = 24.0
+intrusion_wave_size_min = 1
+intrusion_wave_size_max = 3
+intrusion_elite_time = 42.0
+intrusion_super_time = 74.0

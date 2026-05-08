@@ -2,6 +2,8 @@
 class_name Overworld
 extends Node2D
 
+const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+
 @onready var ground: TileMapLayer = $Ground
 @onready var paths: TileMapLayer = $Paths
 @onready var water: TileMapLayer = $Water
@@ -13,6 +15,7 @@ extends Node2D
 var zone_data: Array[LoyZoneData] = []
 var _door_shapes: Dictionary = {}  # cell -> CollisionShape2D
 var _wall_body: StaticBody2D
+var _shadow_occluders: Node2D
 var _door_areas: Array[Area2D] = []
 var _enemy_def_cache: Dictionary = {}  # path -> EnemyDefinition
 var _nearby_entrance: Area2D = null  # entrance the player is standing near
@@ -21,6 +24,8 @@ var _zone_spawn_data: Array = []  # [{zone, spawn_data, enemy_def, ox, oy, s}] f
 var _respawn_timer: float = 0.0
 const RESPAWN_INTERVAL: float = 8.0  # seconds between spawn ticks (enemies appear gradually)
 const MAX_ENEMIES_PER_ZONE: int = 6
+const DEFAULT_TEST_MINE_ID: String = "ironvein_depths"
+const CRYSTAL_TEST_MINE_ID: String = "crystal_hollows"
 
 ## Zone-based loading: only load chunks in current zone + connected zones
 var _current_zone: LoyZoneData = null
@@ -133,6 +138,10 @@ func _ready() -> void:
 		gm.remove_meta("spawn_overworld_portal")
 		_spawn_temp_portal(spawn_px + Vector2(0, 40))
 
+	var lm = get_node_or_null("/root/LightingManager")
+	if lm and lm.has_method("apply_outline_to_subtree"):
+		lm.apply_outline_to_subtree(self)
+
 	# Phase 1: Essential setup
 	_load_zone_data()
 	print("TIMING: overworld _load_zone_data took %d ms" % (Time.get_ticks_msec() - t0))
@@ -200,6 +209,11 @@ func _init_chunk_system() -> void:
 	_wall_body.collision_mask = 0
 	add_child(_wall_body)
 
+	_shadow_occluders = Node2D.new()
+	_shadow_occluders.name = "ShadowOccluders"
+	add_child(_shadow_occluders)
+
+
 	# Check if pre-baked chunks exist and are up-to-date
 	print("CHUNKS: Loading from '%s'" % chunks_base_path)
 	var index_path = chunks_base_path + "/index.tres"
@@ -232,6 +246,12 @@ func _init_chunk_system() -> void:
 	if _current_zone:
 		_rebuild_allowed_zones()
 		_update_town_speed(_current_zone)
+		# Apply zone lighting mood
+		var lm = get_node_or_null("/root/LightingManager")
+		if lm:
+			lm.reset()
+			lm.apply_zone_mood(_current_zone)
+			lm.setup_player_lantern(player)
 		print("Starting zone: %s (%s)" % [_current_zone.id, _current_zone.zone_name])
 	else:
 		print("WARNING: Player spawn tile not in any zone — loading all chunks")
@@ -348,7 +368,9 @@ func _async_init() -> void:
 	_spawn_editor_enemies()
 	print("TIMING: overworld spawn enemies took %d ms" % (Time.get_ticks_msec() - t1))
 	_spawn_equipment_bag()
+	_spawn_mine_entrances()
 	_spawn_test_arena_entrance()
+	_spawn_height_test_entrance()
 
 	t1 = Time.get_ticks_msec()
 	_spawn_harvest_nodes()
@@ -612,6 +634,11 @@ func _switch_to_zone(zone: LoyZoneData) -> void:
 	_rebuild_allowed_zones()
 	_create_zone_gates()
 	_update_town_speed(zone)
+	# Transition lighting mood
+	var lm = get_node_or_null("/root/LightingManager")
+	if lm:
+		lm.apply_zone_mood(zone)
+		lm.setup_player_lantern($Player)
 	var zone_name = zone.zone_name if zone.zone_name != "" else zone.id
 	# Only show name + chime if this is a different zone than last shown
 	if zone.id != _last_shown_zone_id:
@@ -700,6 +727,8 @@ func _add_entrance(pos: Vector2, biome_name: String, tile_size: int = 32, displa
 	entrance.collision_mask = 1
 	entrance.set_meta("biome_name", biome_name)
 	entrance.set_meta("display_name", display_name)
+	var mine_id = _get_default_mine_id_for_biome(biome_name)
+	entrance.set_meta("mine_id", mine_id)
 
 	var shape = CollisionShape2D.new()
 	var rect = RectangleShape2D.new()
@@ -709,7 +738,10 @@ func _add_entrance(pos: Vector2, biome_name: String, tile_size: int = 32, displa
 
 	# E-key prompt label (hidden until player is nearby)
 	var prompt = Label.new()
-	prompt.text = ("Tap to Enter %s" if TouchControls.is_mobile() else "[E] Enter %s") % display_name
+	if TouchControls.is_mobile():
+		prompt.text = "Tap to Enter %s" % display_name
+	else:
+		prompt.text = "[E] Enter %s" % display_name
 	prompt.position = Vector2(-40, -28)
 	prompt.add_theme_font_size_override("font_size", 10)
 	prompt.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
@@ -729,6 +761,15 @@ func _add_entrance(pos: Vector2, biome_name: String, tile_size: int = 32, displa
 	if sign_label:
 		nodes.append(sign_label)
 	return nodes
+
+func _get_default_mine_id_for_biome(biome_name: String) -> String:
+	if biome_name == "" or biome_name.begins_with("Test-") or biome_name == "TestCombo" or biome_name == "TestMovement":
+		return ""
+	var lowered := biome_name.to_lower()
+	for crystal_key in ["spire", "frost", "storm", "sanctum", "eldori", "cenneth", "crystal"]:
+		if crystal_key in lowered:
+			return CRYSTAL_TEST_MINE_ID
+	return DEFAULT_TEST_MINE_ID
 
 func _on_entrance_proximity(body: Node2D, entrance: Area2D) -> void:
 	if body.is_in_group("player"):
@@ -1353,7 +1394,7 @@ func _respawn_editor_enemies() -> void:
 	var container = get_node_or_null("EnemyContainer")
 	if not container:
 		return
-	var player_node = get_tree().get_first_node_in_group("player")
+	var player_node = PlayerQuery.get_primary_player(get_tree())
 	if not player_node:
 		return
 	var ts = 32
@@ -1396,7 +1437,7 @@ func _respawn_zone_enemies() -> void:
 	var container = get_node_or_null("EnemyContainer")
 	if not container:
 		return
-	var player_node = get_tree().get_first_node_in_group("player")
+	var player_node = PlayerQuery.get_primary_player(get_tree())
 	if not player_node:
 		return
 	var ts: int = 32
@@ -1451,7 +1492,7 @@ func _despawn_far_enemies() -> void:
 	var container = get_node_or_null("EnemyContainer")
 	if not container:
 		return
-	var player_node = get_tree().get_first_node_in_group("player")
+	var player_node = PlayerQuery.get_primary_player(get_tree())
 	if not player_node:
 		return
 	var player_pos = player_node.global_position
@@ -1481,35 +1522,90 @@ func _spawn_equipment_bag() -> void:
 	bag.position = Vector2(player_spawn_tile.x * 32 + 16, player_spawn_tile.y * 32 + 16)
 	add_child(bag)
 
+## Spawn dedicated mine entrances in specific zones
+func _spawn_mine_entrances() -> void:
+	var ts := 32
+	if ground and ground.tile_set:
+		ts = ground.tile_set.tile_size.x
+	var half := ts / 2
+
+	# Mine entrance in Haven (Ravenhollow) — south of the wizard's shop (Morin at x:20, y:18)
+	for zone in zone_data:
+		if zone.id != "haven":
+			continue
+		if zone.baked_offset == Vector2i(-99999, -99999):
+			continue
+		var ox := zone.baked_offset.x
+		var oy := zone.baked_offset.y
+		var s: int = zone.baked_scale if zone.baked_scale > 0 else 1
+		# Place mine entrance 2 tiles south of the wizard (zone coords 20, 21)
+		var mine_x := 20
+		var mine_y := 21
+		var mine_pos := Vector2((ox + mine_x * s) * ts + half, (oy + mine_y * s) * ts + half)
+		var mine_nodes := _add_entrance(mine_pos, "Haven-Dungeons", ts, "Ironvein Mine")
+		if mine_nodes.size() > 0:
+			var entrance = mine_nodes[0]
+			# Override: this entrance always goes to mine, no sprint needed
+			entrance.set_meta("mine_id", "ironvein_depths")
+			entrance.set_meta("force_mine", true)
+			# Update prompt
+			var prompt_lbl = entrance.get_meta("prompt_label", null)
+			if prompt_lbl and prompt_lbl is Label:
+				if TouchControls.is_mobile():
+					prompt_lbl.text = "Tap to Enter Ironvein Mine"
+				else:
+					prompt_lbl.text = "[E] Enter Ironvein Mine"
+			# Add mine entrance visual (darker stairs sprite)
+			var sprite := Sprite2D.new()
+			sprite.texture = load("res://assets/sprites/loy/maptiles.png")
+			sprite.region_enabled = true
+			sprite.region_rect = Rect2(5 * 32, 0, 32, 32)  # stairs tile
+			sprite.modulate = Color(0.7, 0.5, 0.3)  # brown tint for mine
+			sprite.z_index = 1
+			entrance.add_child(sprite)
+		break
+
 ## Spawn Test Arena entrance near player spawn in Aria town
 func _spawn_test_arena_entrance() -> void:
 	var spawn_px = Vector2(player_spawn_tile.x * 32 + 16, player_spawn_tile.y * 32 + 16)
-	# Place entrance further right so it doesn't overlap flags
-	var entrance_pos = spawn_px + Vector2(128, 0)
-	var nodes = _add_entrance(entrance_pos, "Test-Arena", 32, "Test Arena")
-	# Add stairs sprite so entrance is visible
+	var start_offset = Vector2(96, 0)
+	var spacing = 64.0
+	var entries = [
+		{"biome": "Test-Arena", "label": "Test Arena", "tint": Color(1, 1, 1)},
+		{"biome": "Test-Arena-Boss", "label": "Boss Arena", "tint": Color(1.0, 0.55, 0.35)},
+		{"biome": "TestCombo", "label": "Combo Arena", "tint": Color(0.4, 1.0, 0.4)},
+		{"biome": "PushTest", "label": "Push Arena", "tint": Color(1.0, 0.6, 1.0)},
+	]
+	for i in range(entries.size()):
+		var entry = entries[i]
+		var entrance_pos = spawn_px + start_offset + Vector2(spacing * i, 0)
+		var nodes = _add_entrance(entrance_pos, str(entry["biome"]), 32, str(entry["label"]))
+		if nodes.size() <= 0:
+			continue
+		var entrance = nodes[0]
+		var sprite = Sprite2D.new()
+		sprite.texture = load("res://assets/sprites/loy/maptiles.png")
+		sprite.region_enabled = true
+		sprite.region_rect = Rect2(5 * 32, 0, 32, 32)
+		sprite.z_index = 1
+		sprite.modulate = entry["tint"]
+		entrance.add_child(sprite)
+
+
+## Spawn Height Test entrance near player spawn
+func _spawn_height_test_entrance() -> void:
+	var spawn_px = Vector2(player_spawn_tile.x * 32 + 16, player_spawn_tile.y * 32 + 16)
+	var entrance_pos = spawn_px + Vector2(128, 128)
+	var nodes = _add_entrance(entrance_pos, "HeightTest", 32, "Height Test")
 	if nodes.size() > 0:
 		var entrance = nodes[0]
 		var sprite = Sprite2D.new()
 		sprite.texture = load("res://assets/sprites/loy/maptiles.png")
 		sprite.region_enabled = true
-		sprite.region_rect = Rect2(5 * 32, 0, 32, 32)  # stairs tile at atlas (5,0)
+		sprite.region_rect = Rect2(5 * 32, 0, 32, 32)
 		sprite.z_index = 1
+		sprite.modulate = Color(0.5, 0.7, 1.0)  # blue tint to distinguish
 		entrance.add_child(sprite)
-
-	# Test Arena 2 entrance (below Test Arena 1)
-	var entrance_pos_2 = spawn_px + Vector2(128, 64)
-	var nodes_2 = _add_entrance(entrance_pos_2, "TestCombo", 32, "Combo Arena")
-	if nodes_2.size() > 0:
-		var entrance_2 = nodes_2[0]
-		var sprite_2 = Sprite2D.new()
-		sprite_2.texture = load("res://assets/sprites/loy/maptiles.png")
-		sprite_2.region_enabled = true
-		sprite_2.region_rect = Rect2(5 * 32, 0, 32, 32)
-		sprite_2.z_index = 1
-		sprite_2.modulate = Color(0.4, 1.0, 0.4)  # green tint to distinguish
-		entrance_2.add_child(sprite_2)
-
 
 ## Safe zones where no enemies should spawn (towns, settlements, etc.)
 const SAFE_ZONES: Array = [
@@ -1629,6 +1725,23 @@ func _add_merged_shape(body: StaticBody2D, x_start: int, x_end: int, y: int, til
 	body.add_child(shape)
 	return shape
 
+func _build_light_occluder_for_shape(shape: CollisionShape2D) -> LightOccluder2D:
+	if not (shape.shape is RectangleShape2D):
+		return null
+	var rect := shape.shape as RectangleShape2D
+	var half := rect.size * 0.5
+	var polygon := OccluderPolygon2D.new()
+	polygon.polygon = PackedVector2Array([
+		Vector2(-half.x, -half.y),
+		Vector2(half.x, -half.y),
+		Vector2(half.x, half.y),
+		Vector2(-half.x, half.y),
+	])
+	var occluder := LightOccluder2D.new()
+	occluder.occluder = polygon
+	occluder.position = shape.position
+	return occluder
+
 func _is_door_tile(atlas: Vector2i, tile_size: int) -> bool:
 	if tile_size == 32:
 		return (atlas.x == 2 or atlas.x == 3) and atlas.y <= 7
@@ -1655,9 +1768,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			if sfx:
 				sfx.play("teleport", -2.0, 0.0)
 			var biome_name = _nearby_entrance.get_meta("biome_name", "Dungeon") as String
+			var mine_id = _nearby_entrance.get_meta("mine_id", "") as String
+			# Special-case: push/weight test arena is a standalone scene, not a dungeon floor
+			if biome_name == "PushTest":
+				get_viewport().set_input_as_handled()
+				get_tree().change_scene_to_file.call_deferred("res://scenes/test/push_test_arena.tscn")
+				return
 			var gm = get_node_or_null("/root/GameManager")
 			if gm:
-				gm.start_dungeon_run(biome_name)
+				var use_mine = mine_id != "" and bool(_nearby_entrance.get_meta("force_mine", false))
+				gm.start_dungeon_run(biome_name, mine_id if use_mine else "")
 			get_viewport().set_input_as_handled()
 			return
 		# Priority 2: Door interaction
@@ -1979,7 +2099,7 @@ func _on_territory_travel(zone_id: String) -> void:
 	var target_px := center_tile * 32.0
 
 	# Teleport player
-	var player = get_tree().get_first_node_in_group("player")
+	var player = PlayerQuery.get_primary_player(get_tree())
 	if not player:
 		player = $Player
 	if player:
@@ -2109,7 +2229,7 @@ func _on_territory_attacked(zone_id: String, attacker_faction: String, attacker_
 
 	# Show attack notification
 	_show_attack_notification("%s is attacking %s!" % [faction_name, zone_id.capitalize()])
-	print("ATTACK: %s attacks %s — press B near zone to defend, auto-resolves in 60s" % [faction_name, zone_id])
+	print("ATTACK: %s attacks %s — auto-resolves in 60s" % [faction_name, zone_id])
 
 func _show_attack_notification(text: String) -> void:
 	if _attack_notification_label and is_instance_valid(_attack_notification_label):
@@ -2347,7 +2467,8 @@ func _setup_game_hud(player_node: CharacterBody2D) -> void:
 	_game_hud = GameHUD.new()
 	add_child(_game_hud)
 	_game_hud.setup(player_node)
-	player_node.player_died.connect(_on_player_died)
+	if not player_node.player_died.is_connected(_on_player_died):
+		player_node.player_died.connect(_on_player_died)
 	_update_gold_label()
 
 	# Loot bag UI
@@ -2917,6 +3038,10 @@ func _unload_chunk(chunk_key: Vector2i) -> void:
 		if is_instance_valid(shape):
 			shape.queue_free()
 
+	for occluder in chunk_info.get("shadow_occluders", []):
+		if is_instance_valid(occluder):
+			occluder.queue_free()
+
 	# Remove entrance areas and signs
 	for node in chunk_info.get("entrances", []):
 		if is_instance_valid(node):
@@ -2955,6 +3080,7 @@ func _generate_chunk_collisions(chunk_key: Vector2i, chunk_info: Dictionary) -> 
 	var half = tile_size / 2
 	var blocking_set: Dictionary = {}
 	var door_set: Dictionary = {}
+	var shadow_occluders: Array = []
 
 	# Build blocking set from tile layers (read directly from TileMapLayer)
 	for layer_name in ["decorations", "buildings", "fences", "water"]:
@@ -3009,6 +3135,10 @@ func _generate_chunk_collisions(chunk_key: Vector2i, chunk_info: Dictionary) -> 
 		_wall_body.add_child(shape)
 		_door_shapes[cell] = shape
 		chunk_info["shapes"].append(shape)
+		var door_occluder = _build_light_occluder_for_shape(shape)
+		if door_occluder and _shadow_occluders:
+			_shadow_occluders.add_child(door_occluder)
+			shadow_occluders.append(door_occluder)
 		blocking_set.erase(cell)
 
 		# Door interaction area
@@ -3045,10 +3175,19 @@ func _generate_chunk_collisions(chunk_key: Vector2i, chunk_info: Dictionary) -> 
 			else:
 				var s = _add_merged_shape(_wall_body, run_start, run_end, y, tile_size, half)
 				chunk_info["shapes"].append(s)
+				var occ = _build_light_occluder_for_shape(s)
+				if occ and _shadow_occluders:
+					_shadow_occluders.add_child(occ)
+					shadow_occluders.append(occ)
 				run_start = xs[i]
 				run_end = xs[i]
 		var s = _add_merged_shape(_wall_body, run_start, run_end, y, tile_size, half)
 		chunk_info["shapes"].append(s)
+		var occ = _build_light_occluder_for_shape(s)
+		if occ and _shadow_occluders:
+			_shadow_occluders.add_child(occ)
+			shadow_occluders.append(occ)
+	chunk_info["shadow_occluders"] = shadow_occluders
 
 func _create_chunk_entrances(chunk_key: Vector2i, chunk_res: Resource, chunk_info: Dictionary) -> void:
 	var tile_size = 32

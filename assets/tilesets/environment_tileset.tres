@@ -1,7 +1,7 @@
-[gd_resource type="TileSet" format=3]
+[gd_resource type="TileSet" format=3 uid="uid://bw6tvrkx7k65"]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/lofiEnvironment.png" id="1_ps7o2"]
-[ext_resource type="Texture2D" path="res://assets/sprites/lofi_dungeon_features.png" id="2_47opl"]
+[ext_resource type="Texture2D" uid="uid://do0jis83hwi4r" path="res://assets/sprites/lofiEnvironment.png" id="1_ps7o2"]
+[ext_resource type="Texture2D" uid="uid://6bly50dnjbgm" path="res://assets/sprites/lofi_dungeon_features.png" id="2_47opl"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_1"]
 texture = ExtResource("1_ps7o2")

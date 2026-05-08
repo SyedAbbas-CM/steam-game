@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="BossShotPattern" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/boss_shot_pattern.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+shot_count = 1
+pattern_family = 5
+burst_count = 1
+aim_mode = 0
+bullet_speed_mult = 1.0
+use_seed_variation = true
+seed_value = 1337
+seed_step_per_burst = 53
+angle_jitter_degrees = 4.0
+param_jitter = 0.18
+recursive_depth = 3
+recursive_branch_angle_degrees = 14.0
+recursive_branch_scale = 0.72
+recursive_spawn_scale_jitter = 0.12

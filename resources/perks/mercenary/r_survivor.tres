@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "r_survivor"
+perk_name = "Survivor"
+description = "+2 HP/s when out of combat 5s"
+class_required = "mercenary"
+tier = 2
+prerequisites = ["r_scavenger"]
+stat_bonuses = {10: 2.0}
+special_effect = ""
+is_percent = false

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "w_regeneration"
+perk_name = "Regeneration"
+description = "+1 HP/s regen"
+class_required = "warrior"
+tier = 2
+prerequisites = ["w_iron_skin"]
+stat_bonuses = {10: 1.0}
+special_effect = ""
+is_percent = false

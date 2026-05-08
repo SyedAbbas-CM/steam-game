@@ -90,6 +90,7 @@ enum SizeClass { NORMAL, LARGE, BOSS }
 @export var phase_3_bullet_count: int = 0
 @export var summon_on_phase_change: bool = false
 @export var summon_phase_count: int = 3  # minions spawned per phase change
+@export var boss_states: Array[Resource] = []  # explicit ROTMG-style state machine; BossState resources override random boss pools when non-empty
 
 @export_group("Visuals")
 @export var sprite_frame: int = 48

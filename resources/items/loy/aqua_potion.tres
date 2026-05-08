@@ -6,7 +6,7 @@
 script = ExtResource("1")
 item_name = "Aqua Potion"
 loy_tile_index = 124
-description = "Regenerates some magical charge (+48C)"
+description = "Restores 48 MP. Cool and bitter; the head clears within a breath."
 slot_type = 10
 rarity = 0
 buy_price = 200

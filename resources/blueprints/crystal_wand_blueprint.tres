@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="BlueprintDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/blueprint_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+blueprint_id = "crystal_wand_blueprint"
+blueprint_name = "Crystal Wand Blueprint"
+description = "A refined arcane pattern that channels cave crystal into focused spellcraft."
+result_item_path = "res://resources/items/crafted/crystal_wand.tres"
+station_type = "forge"
+required_fragments = 4
+required_salvage_points = 8
+unlock_tags = PackedStringArray("magic", "wand", "crystal")
+recipe_paths = PackedStringArray("res://resources/recipes/crystal_wand.tres")

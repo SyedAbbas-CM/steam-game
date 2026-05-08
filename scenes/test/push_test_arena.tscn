@@ -1,0 +1,102 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/test/push_test_arena.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2_player"]
+
+[sub_resource type="RectangleShape2D" id="WallShapeH"]
+size = Vector2(420, 8)
+
+[sub_resource type="RectangleShape2D" id="WallShapeV"]
+size = Vector2(8, 320)
+
+[sub_resource type="GDScript" id="FloorPaint"]
+script/source = "extends ColorRect
+func _ready():
+	# Big tinted floor under everything for visibility
+	color = Color(0.10, 0.11, 0.13, 1.0)
+	size = Vector2(420, 320)
+	position = -size * 0.5
+	z_index = -10
+"
+
+[sub_resource type="GDScript" id="GridPaint"]
+script/source = "extends Node2D
+func _draw():
+	# Light grid every 16 px so you can see push distance and bounce
+	var w = 420.0
+	var h = 320.0
+	var step = 16.0
+	var col = Color(1, 1, 1, 0.06)
+	var x = -w * 0.5
+	while x <= w * 0.5:
+		draw_line(Vector2(x, -h * 0.5), Vector2(x, h * 0.5), col, 1.0)
+		x += step
+	var y = -h * 0.5
+	while y <= h * 0.5:
+		draw_line(Vector2(-w * 0.5, y), Vector2(w * 0.5, y), col, 1.0)
+		y += step
+"
+
+[node name="PushTestArena" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="Floor" type="ColorRect" parent="."]
+script = SubResource("FloorPaint")
+
+[node name="Grid" type="Node2D" parent="."]
+script = SubResource("GridPaint")
+
+[node name="Walls" type="Node2D" parent="."]
+
+[node name="WallTop" type="StaticBody2D" parent="Walls"]
+position = Vector2(0, -160)
+collision_layer = 16
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape2D" parent="Walls/WallTop"]
+shape = SubResource("WallShapeH")
+
+[node name="WallBottom" type="StaticBody2D" parent="Walls"]
+position = Vector2(0, 160)
+collision_layer = 16
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape2D" parent="Walls/WallBottom"]
+shape = SubResource("WallShapeH")
+
+[node name="WallLeft" type="StaticBody2D" parent="Walls"]
+position = Vector2(-210, 0)
+collision_layer = 16
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape2D" parent="Walls/WallLeft"]
+shape = SubResource("WallShapeV")
+
+[node name="WallRight" type="StaticBody2D" parent="Walls"]
+position = Vector2(210, 0)
+collision_layer = 16
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape2D" parent="Walls/WallRight"]
+shape = SubResource("WallShapeV")
+
+[node name="EnemyContainer" type="Node2D" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(0, 80)
+
+[node name="Camera2D" type="Camera2D" parent="Player"]
+zoom = Vector2(4, 4)
+
+[node name="LabelLayer" type="CanvasLayer" parent="."]
+
+[node name="InfoLabel" type="Label" parent="LabelLayer"]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 800.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+text = "PUSH TEST ARENA"

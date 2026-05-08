@@ -39,10 +39,30 @@ const SS_ICON_SIZE = 36
 var _current_tab: String = "items"
 var _items_content: VBoxContainer
 var _spells_content: VBoxContainer
+var _socket_content: VBoxContainer
+var _salvage_content: VBoxContainer
 var _tab_items_btn: Button
 var _tab_spells_btn: Button
+var _tab_socket_btn: Button
+var _tab_salvage_btn: Button
 var _spell_inv_grid: GridContainer
 const SPELL_INV_COLS = 8
+
+# Socket tab state
+var _socket_selected_item: EquipmentItem = null
+var _socket_selected_idx: int = -1
+var _socket_active_socket: int = -1  # which socket is waiting for a gem
+var _socket_item_grid: HBoxContainer
+var _socket_detail_panel: VBoxContainer
+var _socket_gem_grid: GridContainer
+
+# Salvage tab state
+var _salvage_selected_item: EquipmentItem = null
+var _salvage_selected_idx: int = -1
+var _salvage_item_grid: GridContainer
+var _salvage_preview: VBoxContainer
+var _salvage_bp_list: VBoxContainer
+var _salvage_points_label: Label
 
 const SLOT_SIZE = 108
 const INV_COLS = 8
@@ -155,6 +175,14 @@ func _build_ui() -> void:
 	_tab_spells_btn.pressed.connect(_switch_tab.bind("spells"))
 	tab_bar.add_child(_tab_spells_btn)
 
+	_tab_socket_btn = _create_tab_button("SOCKET", false)
+	_tab_socket_btn.pressed.connect(_switch_tab.bind("socket"))
+	tab_bar.add_child(_tab_socket_btn)
+
+	_tab_salvage_btn = _create_tab_button("SALVAGE", false)
+	_tab_salvage_btn.pressed.connect(_switch_tab.bind("salvage"))
+	tab_bar.add_child(_tab_salvage_btn)
+
 	# Items tab content
 	_items_content = _build_inventory_panel()
 	_items_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -167,6 +195,20 @@ func _build_ui() -> void:
 	_spells_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_spells_content.visible = false
 	center_vbox.add_child(_spells_content)
+
+	# Socket tab content
+	_socket_content = _build_socket_tab()
+	_socket_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_socket_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_socket_content.visible = false
+	center_vbox.add_child(_socket_content)
+
+	# Salvage tab content
+	_salvage_content = _build_salvage_tab()
+	_salvage_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_salvage_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_salvage_content.visible = false
+	center_vbox.add_child(_salvage_content)
 
 	# ===== RIGHT-MID: Quickslots column =====
 	var qs_panel = _build_quickslot_panel()
@@ -231,10 +273,18 @@ func _switch_tab(tab_name: String) -> void:
 	_current_tab = tab_name
 	_items_content.visible = tab_name == "items"
 	_spells_content.visible = tab_name == "spells"
+	_socket_content.visible = tab_name == "socket"
+	_salvage_content.visible = tab_name == "salvage"
 	_update_tab_style(_tab_items_btn, tab_name == "items")
 	_update_tab_style(_tab_spells_btn, tab_name == "spells")
+	_update_tab_style(_tab_socket_btn, tab_name == "socket")
+	_update_tab_style(_tab_salvage_btn, tab_name == "salvage")
 	if tab_name == "spells":
 		_refresh_spells_tab()
+	elif tab_name == "socket":
+		_refresh_socket_tab()
+	elif tab_name == "salvage":
+		_refresh_salvage_tab()
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("click", -4.0)
@@ -836,6 +886,10 @@ func _refresh() -> void:
 	_refresh_quickslots()
 	if _current_tab == "spells":
 		_refresh_spells_tab()
+	elif _current_tab == "socket":
+		_refresh_socket_tab()
+	elif _current_tab == "salvage":
+		_refresh_salvage_tab()
 	# Restore scroll position after grid rebuild
 	if _inv_scroll:
 		_inv_scroll.scroll_vertical = saved_scroll
@@ -929,11 +983,11 @@ func _refresh_inv_grid() -> void:
 			tier_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			btn.add_child(tier_lbl)
 
-			# Power number (top-right)
-			var power = ChestUI._get_item_power(item)
-			if power > 0 and count <= 1:
+			# Item rating number (top-right)
+			var rating = ChestUI._get_item_rating(item)
+			if rating > 0 and count <= 1:
 				var pow_lbl = Label.new()
-				pow_lbl.text = str(int(power))
+				pow_lbl.text = str(int(rating))
 				pow_lbl.add_theme_font_size_override("font_size", 10)
 				pow_lbl.add_theme_color_override("font_color", Color(0.9, 0.6, 0.3))
 				pow_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -953,24 +1007,35 @@ func _refresh_stats() -> void:
 		return
 	var lines = []
 	var player = get_tree().get_first_node_in_group("player")
+	var level_system = equipment_manager.level_system
 
 	if player:
-		lines.append("HP: %d / %d" % [player.hp, player.max_hp])
-	lines.append("ATK: %d" % equipment_manager.get_damage())
-	lines.append("SPD: %d" % int(equipment_manager.get_move_speed()))
-	lines.append("AS: %.2f s" % equipment_manager.get_attack_speed())
-	lines.append("Bullet SPD: %d" % int(equipment_manager.get_bullet_speed()))
+		lines.append("Health: %d / %d" % [player.hp, player.max_hp])
+	if level_system:
+		var alloc = level_system.allocated
+		lines.append("--- Attributes ---")
+		lines.append("Vitality: %d" % int(alloc.get("vitality", 0)))
+		lines.append("Power: %d" % int(alloc.get("power", 0)))
+		lines.append("Agility: %d" % int(alloc.get("agility", 0)))
+		lines.append("Spirit: %d" % int(alloc.get("spirit", 0)))
+		lines.append("Fortune: %d" % int(alloc.get("fortune", 0)))
+		lines.append("Bulk: %d" % int(alloc.get("bulk", 0)))
+	lines.append("--- Combat Stats ---")
+	lines.append("Attack: %d" % equipment_manager.get_damage())
+	lines.append("Move Speed: %d" % int(equipment_manager.get_move_speed()))
+	lines.append("Attack Interval: %.2f s" % equipment_manager.get_attack_speed())
+	lines.append("Projectile Speed: %d" % int(equipment_manager.get_bullet_speed()))
 	lines.append("Pierce: %d" % equipment_manager.get_pierce_count())
-	lines.append("Crit DMG: %.0f%%" % (equipment_manager.get_crit_damage() * 100))
-	lines.append("Luck: %.0f" % equipment_manager.get_luck())
+	lines.append("Crit Damage: %.0f%%" % (equipment_manager.get_crit_damage() * 100))
 	lines.append("Armor: %.0f" % equipment_manager.get_armor())
 	lines.append("Dodge: %.0f%%" % equipment_manager.get_dodge_chance())
-	lines.append("XP Mult: %.0f%%" % (equipment_manager.get_xp_mult() * 100))
-	lines.append("Gold Mult: %.0f%%" % (equipment_manager.get_gold_mult() * 100))
-	lines.append("Pickup: %.0f" % equipment_manager.get_pickup_radius())
+	lines.append("Luck: %.0f" % equipment_manager.get_luck())
+	lines.append("XP Gain: %.0f%%" % (equipment_manager.get_xp_mult() * 100))
+	lines.append("Gold Gain: %.0f%%" % (equipment_manager.get_gold_mult() * 100))
+	lines.append("Pickup Radius: %.0f" % equipment_manager.get_pickup_radius())
 	# Show active stat threshold passives
-	if equipment_manager.level_system:
-		var passives = StatThresholds.get_all_passives(equipment_manager.level_system.allocated)
+	if level_system:
+		var passives = StatThresholds.get_all_passives(level_system.allocated)
 		var active_lines: Array[String] = []
 		var next_line = ""
 		for p in passives:
@@ -988,12 +1053,12 @@ func _refresh_stats() -> void:
 	_refresh_stat_allocation()
 
 const STAT_DESCRIPTIONS = {
-	"vitality": "+10 HP, +0.3 Regen, +1 Armor",
-	"power": "+1 ATK, +5 Bullet SPD, +0.1 Crit",
-	"agility": "+3 SPD, +1 Dodge, +15 Stamina",
-	"spirit": "+10 MP, +0.5 MP Regen, +3 CDR",
-	"fortune": "+3 Luck, +10% XP, +10% Gold",
-	"bulk": "+5 HP, +2 Pickup, +3 Tenacity",
+	"vitality": "+10 Max Health, +0.3 Health Regen, +1 Armor",
+	"power": "+1 Attack, +5 Projectile Speed, +10% Crit Damage",
+	"agility": "+3 Move Speed, +1 Dodge, +15 Stamina",
+	"spirit": "+10 Max MP, +0.5 MP Regen, +3% Cooldown Reduction",
+	"fortune": "+3 Luck, +10% XP Gain, +10% Gold Gain",
+	"bulk": "+5 Max Health, +2 Pickup Radius, +3 Tenacity",
 }
 
 func _refresh_stat_allocation() -> void:
@@ -1213,14 +1278,14 @@ func _show_item_tooltip(item: EquipmentItem) -> void:
 	var saved_scroll = _inv_scroll.scroll_vertical if _inv_scroll else 0
 	_tooltip_panel.visible = true
 	var tier = ChestUI._get_item_tier(item)
-	var power = ChestUI._get_item_power(item)
+	var rating = ChestUI._get_item_rating(item)
 	var rarity_name = RARITY_NAMES[clampi(item.rarity, 0, 2)]
 	var equipped_str = ""
 	if equipment_manager and equipment_manager.is_equipped(item):
 		equipped_str = " [EQUIPPED]"
 	_tooltip_name.text = item.get_display_name() + equipped_str
 	_tooltip_name.add_theme_color_override("font_color", RARITY_COLORS[clampi(item.rarity, 0, 2)])
-	_tooltip_desc.text = "Tier " + str(tier) + " | " + rarity_name + " | Power: " + str(int(power))
+	_tooltip_desc.text = "Tier " + str(tier) + " | " + rarity_name + " | Item Rating: " + str(int(rating))
 	if item.description != "":
 		_tooltip_desc.text += "\n" + item.description
 	if item.weapon_type != "":
@@ -1228,8 +1293,18 @@ func _show_item_tooltip(item: EquipmentItem) -> void:
 		_tooltip_desc.text += "\nType: " + item.weapon_type
 		if scaling != "":
 			_tooltip_desc.text += "  (scales with " + scaling.capitalize() + ")"
+		# Show weapon SPACE and SHIFT abilities
+		var _wa = _get_weapon_abilities(item.weapon_type)
+		if _wa.space != "":
+			_tooltip_desc.text += "\n[SPACE] " + _wa.space
+		if _wa.shift != "":
+			_tooltip_desc.text += "\n[SHIFT] " + _wa.shift
 	if item.buy_price > 0:
 		_tooltip_desc.text += "\nValue: " + str(item.buy_price) + "g"
+	if item.socket_count > 0:
+		_tooltip_desc.text += "\nSockets: %d/%d filled" % [item.get_socketed_gem_count(), item.socket_count]
+	if item.archetype_tags.size() > 0:
+		_tooltip_desc.text += "\nTags: " + ", ".join(Array(item.archetype_tags))
 	var stat_lines = []
 	for mod in item.modifiers:
 		var stat_name = StatModifier.StatType.keys()[mod.stat]
@@ -1248,6 +1323,20 @@ func _show_item_tooltip(item: EquipmentItem) -> void:
 	if item.ability_id != "":
 		stat_lines.append("Ability: " + item.ability_id.replace("_", " ").capitalize())
 		stat_lines.append("  MP: %.0f  CD: %.1fs" % [item.ability_mp_cost, item.ability_cooldown])
+	if item.socket_count > 0:
+		for socket_idx in range(item.socket_count):
+			var socket_type = item.socket_types[socket_idx] if socket_idx < item.socket_types.size() else "open"
+			var gem_path = item.socketed_gem_paths[socket_idx] if socket_idx < item.socketed_gem_paths.size() else ""
+			var socket_label = "Socket %d [%s]" % [socket_idx + 1, socket_type.capitalize()]
+			if gem_path != "":
+				var gem = load(gem_path) as GemDefinition
+				if gem:
+					socket_label += ": " + gem.gem_name
+				else:
+					socket_label += ": Filled"
+			else:
+				socket_label += ": Empty"
+			stat_lines.append(socket_label)
 	_tooltip_stats.text = "\n".join(stat_lines)
 	# Show equipment requirements (unmet in red, met in dim green)
 	var req_text = ""
@@ -1412,3 +1501,756 @@ func _cancel_drag() -> void:
 	_drag_mouse_down = false
 	_drag_display_idx = -1
 	_drop_zone.visible = false
+
+# ===== SOCKET TAB =====
+
+func _build_socket_tab() -> VBoxContainer:
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+
+	var title = Label.new()
+	title.text = "GEM SOCKETING"
+	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	var sep = HSeparator.new()
+	sep.add_theme_constant_override("separation", 4)
+	vbox.add_child(sep)
+
+	# Top: item selection scroll
+	var item_label = Label.new()
+	item_label.text = "SELECT ITEM WITH SOCKETS"
+	item_label.add_theme_font_size_override("font_size", 16)
+	item_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
+	item_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(item_label)
+
+	var item_scroll = ScrollContainer.new()
+	item_scroll.custom_minimum_size = Vector2(0, SLOT_SIZE + 16)
+	item_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(item_scroll)
+
+	_socket_item_grid = HBoxContainer.new()
+	_socket_item_grid.add_theme_constant_override("separation", 4)
+	item_scroll.add_child(_socket_item_grid)
+
+	var sep2 = HSeparator.new()
+	sep2.add_theme_constant_override("separation", 4)
+	vbox.add_child(sep2)
+
+	# Middle: socket detail panel
+	_socket_detail_panel = VBoxContainer.new()
+	_socket_detail_panel.add_theme_constant_override("separation", 6)
+	_socket_detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(_socket_detail_panel)
+
+	var sep3 = HSeparator.new()
+	sep3.add_theme_constant_override("separation", 4)
+	vbox.add_child(sep3)
+
+	# Bottom: gem bag grid
+	var gem_label = Label.new()
+	gem_label.text = "AVAILABLE GEMS"
+	gem_label.add_theme_font_size_override("font_size", 16)
+	gem_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
+	gem_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(gem_label)
+
+	var gem_scroll = ScrollContainer.new()
+	gem_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	gem_scroll.custom_minimum_size = Vector2(0, SLOT_SIZE + 16)
+	vbox.add_child(gem_scroll)
+
+	var gem_center = CenterContainer.new()
+	gem_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gem_scroll.add_child(gem_center)
+
+	_socket_gem_grid = GridContainer.new()
+	_socket_gem_grid.columns = INV_COLS
+	_socket_gem_grid.add_theme_constant_override("h_separation", 4)
+	_socket_gem_grid.add_theme_constant_override("v_separation", 4)
+	gem_center.add_child(_socket_gem_grid)
+
+	return vbox
+
+func _refresh_socket_tab() -> void:
+	if not equipment_manager:
+		return
+	# Refresh item selection row
+	for child in _socket_item_grid.get_children():
+		child.queue_free()
+
+	var socketed_items: Array[Dictionary] = []
+	for i in range(equipment_manager.inventory.size()):
+		var item = equipment_manager.inventory[i]
+		if item and item.socket_count > 0:
+			socketed_items.append({"item": item, "inv_index": i})
+
+	for entry in socketed_items:
+		var item = entry["item"] as EquipmentItem
+		var inv_idx = entry["inv_index"] as int
+		var btn = Button.new()
+		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+		btn.focus_mode = Control.FOCUS_NONE
+		var sty = StyleBoxFlat.new()
+		var is_selected = (_socket_selected_item == item)
+		sty.bg_color = Color(0.12, 0.1, 0.25) if is_selected else NORMAL_BG
+		sty.border_color = Color(0.6, 0.5, 0.2) if is_selected else Color(0.3, 0.3, 0.4)
+		sty.set_border_width_all(2 if is_selected else 1)
+		sty.set_corner_radius_all(3)
+		btn.add_theme_stylebox_override("normal", sty)
+		var hover = sty.duplicate()
+		hover.bg_color = Color(0.16, 0.14, 0.28)
+		hover.border_color = Color(0.7, 0.6, 0.3)
+		hover.set_border_width_all(2)
+		btn.add_theme_stylebox_override("hover", hover)
+
+		var icon = _make_icon_rect_for_item(item)
+		icon.position = Vector2(SLOT_SIZE / 2 - ICON_SIZE / 2, 2)
+		btn.add_child(icon)
+
+		var name_lbl = Label.new()
+		name_lbl.text = item.item_name.substr(0, 8) if item.item_name.length() > 8 else item.item_name
+		name_lbl.add_theme_font_size_override("font_size", 12)
+		name_lbl.add_theme_color_override("font_color", RARITY_COLORS[clampi(item.rarity, 0, 2)])
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.position = Vector2(0, SLOT_SIZE - 20)
+		name_lbl.size = Vector2(SLOT_SIZE, 18)
+		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(name_lbl)
+
+		# Socket count badge
+		var sc_lbl = Label.new()
+		sc_lbl.text = "%d/%d" % [item.get_socketed_gem_count(), item.socket_count]
+		sc_lbl.add_theme_font_size_override("font_size", 11)
+		sc_lbl.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
+		sc_lbl.position = Vector2(SLOT_SIZE - 30, 2)
+		sc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(sc_lbl)
+
+		btn.pressed.connect(_on_socket_item_selected.bind(item, inv_idx))
+		_socket_item_grid.add_child(btn)
+
+	if socketed_items.is_empty():
+		var empty_lbl = Label.new()
+		empty_lbl.text = "No items with sockets in inventory"
+		empty_lbl.add_theme_font_size_override("font_size", 16)
+		empty_lbl.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
+		_socket_item_grid.add_child(empty_lbl)
+
+	# Refresh socket detail
+	_refresh_socket_detail()
+	# Refresh gem bag
+	_refresh_gem_bag()
+
+func _on_socket_item_selected(item: EquipmentItem, inv_idx: int) -> void:
+	_socket_selected_item = item
+	_socket_selected_idx = inv_idx
+	_socket_active_socket = -1
+	_refresh_socket_tab()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("click", -4.0)
+
+func _refresh_socket_detail() -> void:
+	for child in _socket_detail_panel.get_children():
+		child.queue_free()
+
+	if not _socket_selected_item:
+		var hint = Label.new()
+		hint.text = "Select an item above to manage its sockets"
+		hint.add_theme_font_size_override("font_size", 16)
+		hint.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_socket_detail_panel.add_child(hint)
+		return
+
+	var item = _socket_selected_item
+	var header = Label.new()
+	header.text = item.item_name + " - Sockets"
+	header.add_theme_font_size_override("font_size", 20)
+	header.add_theme_color_override("font_color", RARITY_COLORS[clampi(item.rarity, 0, 2)])
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_socket_detail_panel.add_child(header)
+
+	for si in range(item.socket_count):
+		var row = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		_socket_detail_panel.add_child(row)
+
+		var socket_type = item.socket_types[si] if si < item.socket_types.size() else "open"
+		var gem_path = item.socketed_gem_paths[si] if si < item.socketed_gem_paths.size() else ""
+
+		var slot_label = Label.new()
+		slot_label.add_theme_font_size_override("font_size", 16)
+		slot_label.custom_minimum_size = Vector2(140, 0)
+
+		if gem_path != "":
+			var gem = load(gem_path) as GemDefinition
+			var gem_name = gem.gem_name if gem else "Unknown Gem"
+			var gem_stat = ""
+			if gem:
+				for mod in gem.modifiers:
+					var stat_name = StatModifier.StatType.keys()[mod.stat]
+					if mod.flat_bonus != 0:
+						gem_stat += " +%d %s" % [mod.flat_bonus, stat_name]
+					if mod.percent_bonus != 0:
+						gem_stat += " +%d%% %s" % [int(mod.percent_bonus * 100), stat_name]
+			slot_label.text = "Socket #%d: %s%s" % [si + 1, gem_name, gem_stat]
+			slot_label.add_theme_color_override("font_color", gem.color_hint if gem else Color(0.8, 0.8, 0.8))
+			row.add_child(slot_label)
+
+			# Unsocket button
+			var unsocket_btn = Button.new()
+			unsocket_btn.text = "Unsocket"
+			unsocket_btn.focus_mode = Control.FOCUS_NONE
+			unsocket_btn.custom_minimum_size = Vector2(90, 30)
+			unsocket_btn.add_theme_font_size_override("font_size", 14)
+			var us_sty = StyleBoxFlat.new()
+			us_sty.bg_color = Color(0.25, 0.1, 0.1)
+			us_sty.border_color = Color(0.6, 0.25, 0.25)
+			us_sty.set_border_width_all(1)
+			us_sty.set_corner_radius_all(3)
+			unsocket_btn.add_theme_stylebox_override("normal", us_sty)
+			unsocket_btn.pressed.connect(_on_unsocket_gem.bind(si))
+			row.add_child(unsocket_btn)
+		else:
+			var is_active = (_socket_active_socket == si)
+			slot_label.text = "Socket #%d [%s]: %s" % [si + 1, socket_type.capitalize(), "Click gem below..." if is_active else "Empty"]
+			slot_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4) if is_active else Color(0.5, 0.5, 0.6))
+			row.add_child(slot_label)
+
+			# Select socket button
+			var select_btn = Button.new()
+			select_btn.text = "Select" if not is_active else "..."
+			select_btn.focus_mode = Control.FOCUS_NONE
+			select_btn.custom_minimum_size = Vector2(70, 30)
+			select_btn.add_theme_font_size_override("font_size", 14)
+			var sel_sty = StyleBoxFlat.new()
+			sel_sty.bg_color = Color(0.1, 0.15, 0.25) if not is_active else Color(0.15, 0.2, 0.35)
+			sel_sty.border_color = Color(0.3, 0.4, 0.6) if not is_active else Color(0.5, 0.7, 1.0)
+			sel_sty.set_border_width_all(1)
+			sel_sty.set_corner_radius_all(3)
+			select_btn.add_theme_stylebox_override("normal", sel_sty)
+			select_btn.pressed.connect(_on_select_socket.bind(si))
+			row.add_child(select_btn)
+
+func _on_select_socket(socket_index: int) -> void:
+	_socket_active_socket = socket_index
+	_refresh_socket_detail()
+	_refresh_gem_bag()
+
+func _on_unsocket_gem(socket_index: int) -> void:
+	if not _socket_selected_item or not equipment_manager:
+		return
+	var gem_path = equipment_manager.unsocket_gem(_socket_selected_item, socket_index)
+	if gem_path != "":
+		var gm = get_node_or_null("/root/GameManager")
+		if gm:
+			gm.add_gem_to_bag(gem_path)
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("click", -4.0)
+	_refresh_socket_tab()
+
+func _refresh_gem_bag() -> void:
+	for child in _socket_gem_grid.get_children():
+		child.queue_free()
+
+	var gm = get_node_or_null("/root/GameManager")
+	if not gm:
+		return
+	var bag: Array = gm.get_gem_bag()
+	if bag.is_empty():
+		var empty = Label.new()
+		empty.text = "No gems in bag"
+		empty.add_theme_font_size_override("font_size", 16)
+		empty.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
+		_socket_gem_grid.add_child(empty)
+		return
+
+	for i in range(bag.size()):
+		var gem_path = bag[i] as String
+		var gem = load(gem_path) as GemDefinition
+		if not gem:
+			continue
+		var btn = Button.new()
+		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+		btn.focus_mode = Control.FOCUS_NONE
+		var sty = StyleBoxFlat.new()
+		sty.bg_color = Color(0.08, 0.06, 0.14)
+		sty.border_color = gem.color_hint.darkened(0.3)
+		sty.set_border_width_all(1)
+		sty.set_corner_radius_all(3)
+		btn.add_theme_stylebox_override("normal", sty)
+		var hover = sty.duplicate()
+		hover.bg_color = Color(0.14, 0.1, 0.22)
+		hover.border_color = gem.color_hint
+		hover.set_border_width_all(2)
+		btn.add_theme_stylebox_override("hover", hover)
+
+		# Gem color swatch as icon
+		var gem_icon = ColorRect.new()
+		gem_icon.color = gem.color_hint
+		gem_icon.size = Vector2(ICON_SIZE * 0.6, ICON_SIZE * 0.6)
+		gem_icon.position = Vector2(SLOT_SIZE / 2 - ICON_SIZE * 0.3, 8)
+		gem_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(gem_icon)
+
+		var name_lbl = Label.new()
+		name_lbl.text = gem.gem_name.substr(0, 10) if gem.gem_name.length() > 10 else gem.gem_name
+		name_lbl.add_theme_font_size_override("font_size", 11)
+		name_lbl.add_theme_color_override("font_color", gem.color_hint)
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.position = Vector2(0, SLOT_SIZE - 20)
+		name_lbl.size = Vector2(SLOT_SIZE, 18)
+		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(name_lbl)
+
+		# Stat preview
+		var stat_text = ""
+		for mod in gem.modifiers:
+			var stat_name = StatModifier.StatType.keys()[mod.stat]
+			if mod.flat_bonus != 0:
+				stat_text += "+%d %s" % [mod.flat_bonus, stat_name.substr(0, 3)]
+		if stat_text != "":
+			var stat_lbl = Label.new()
+			stat_lbl.text = stat_text
+			stat_lbl.add_theme_font_size_override("font_size", 10)
+			stat_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
+			stat_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			stat_lbl.position = Vector2(0, SLOT_SIZE - 34)
+			stat_lbl.size = Vector2(SLOT_SIZE, 14)
+			stat_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(stat_lbl)
+
+		btn.pressed.connect(_on_gem_selected.bind(i, gem_path))
+		_socket_gem_grid.add_child(btn)
+
+func _on_gem_selected(bag_index: int, gem_path: String) -> void:
+	if not _socket_selected_item or _socket_active_socket < 0 or not equipment_manager:
+		return
+	if equipment_manager.socket_gem(_socket_selected_item, _socket_active_socket, gem_path):
+		var gm = get_node_or_null("/root/GameManager")
+		if gm:
+			gm.remove_gem_from_bag(gem_path)
+		_socket_active_socket = -1
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("click", -4.0)
+	_refresh_socket_tab()
+
+# ===== SALVAGE TAB =====
+
+func _build_salvage_tab() -> VBoxContainer:
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+
+	var title_row = HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 16)
+	title_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(title_row)
+
+	var title = Label.new()
+	title.text = "SALVAGE"
+	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
+	title_row.add_child(title)
+
+	_salvage_points_label = Label.new()
+	_salvage_points_label.add_theme_font_size_override("font_size", 18)
+	_salvage_points_label.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
+	title_row.add_child(_salvage_points_label)
+
+	var sep = HSeparator.new()
+	sep.add_theme_constant_override("separation", 4)
+	vbox.add_child(sep)
+
+	# Main layout: items grid left, preview right
+	var main_hbox = HBoxContainer.new()
+	main_hbox.add_theme_constant_override("separation", 16)
+	main_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(main_hbox)
+
+	# Left: item grid
+	var left_vbox = VBoxContainer.new()
+	left_vbox.add_theme_constant_override("separation", 4)
+	left_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_hbox.add_child(left_vbox)
+
+	var grid_label = Label.new()
+	grid_label.text = "ITEMS (click to select)"
+	grid_label.add_theme_font_size_override("font_size", 16)
+	grid_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
+	grid_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	left_vbox.add_child(grid_label)
+
+	var grid_scroll = ScrollContainer.new()
+	grid_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	grid_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_vbox.add_child(grid_scroll)
+
+	var grid_center = CenterContainer.new()
+	grid_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid_scroll.add_child(grid_center)
+
+	_salvage_item_grid = GridContainer.new()
+	_salvage_item_grid.columns = 6
+	_salvage_item_grid.add_theme_constant_override("h_separation", 4)
+	_salvage_item_grid.add_theme_constant_override("v_separation", 4)
+	grid_center.add_child(_salvage_item_grid)
+
+	# Right: preview + salvage button
+	_salvage_preview = VBoxContainer.new()
+	_salvage_preview.add_theme_constant_override("separation", 8)
+	_salvage_preview.custom_minimum_size = Vector2(280, 0)
+	main_hbox.add_child(_salvage_preview)
+
+	# Bottom: blueprint progress list
+	var bp_sep = HSeparator.new()
+	bp_sep.add_theme_constant_override("separation", 4)
+	vbox.add_child(bp_sep)
+
+	var bp_label = Label.new()
+	bp_label.text = "BLUEPRINT PROGRESS"
+	bp_label.add_theme_font_size_override("font_size", 16)
+	bp_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
+	bp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(bp_label)
+
+	var bp_scroll = ScrollContainer.new()
+	bp_scroll.custom_minimum_size = Vector2(0, 80)
+	vbox.add_child(bp_scroll)
+
+	_salvage_bp_list = VBoxContainer.new()
+	_salvage_bp_list.add_theme_constant_override("separation", 4)
+	bp_scroll.add_child(_salvage_bp_list)
+
+	return vbox
+
+func _refresh_salvage_tab() -> void:
+	if not equipment_manager:
+		return
+	# Update salvage points display
+	var gm = get_node_or_null("/root/GameManager")
+	if gm and _salvage_points_label:
+		_salvage_points_label.text = "Salvage Points: %d" % gm.get_salvage_points()
+	# Refresh item grid (non-equipped items only)
+	for child in _salvage_item_grid.get_children():
+		child.queue_free()
+
+	var salvageable: Array[Dictionary] = []
+	for i in range(equipment_manager.inventory.size()):
+		var item = equipment_manager.inventory[i]
+		if item and not equipment_manager.is_equipped(item):
+			salvageable.append({"item": item, "inv_index": i})
+
+	for entry in salvageable:
+		var item = entry["item"] as EquipmentItem
+		var inv_idx = entry["inv_index"] as int
+		var btn = Button.new()
+		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+		btn.focus_mode = Control.FOCUS_NONE
+		var sty = StyleBoxFlat.new()
+		var is_selected = (_salvage_selected_item == item)
+		sty.bg_color = Color(0.18, 0.08, 0.08) if is_selected else NORMAL_BG
+		sty.border_color = Color(0.8, 0.3, 0.3) if is_selected else RARITY_COLORS[clampi(item.rarity, 0, 2)].darkened(0.3)
+		sty.set_border_width_all(2 if is_selected else 1)
+		sty.set_corner_radius_all(3)
+		btn.add_theme_stylebox_override("normal", sty)
+		var hover = sty.duplicate()
+		hover.bg_color = Color(0.22, 0.1, 0.1)
+		hover.border_color = Color(0.9, 0.4, 0.4)
+		hover.set_border_width_all(2)
+		btn.add_theme_stylebox_override("hover", hover)
+
+		var icon = _make_icon_rect_for_item(item)
+		icon.position = Vector2(SLOT_SIZE / 2 - ICON_SIZE / 2, 2)
+		btn.add_child(icon)
+
+		var name_lbl = Label.new()
+		name_lbl.text = item.item_name.substr(0, 8) if item.item_name.length() > 8 else item.item_name
+		name_lbl.add_theme_font_size_override("font_size", 12)
+		name_lbl.add_theme_color_override("font_color", RARITY_COLORS[clampi(item.rarity, 0, 2)])
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.position = Vector2(0, SLOT_SIZE - 20)
+		name_lbl.size = Vector2(SLOT_SIZE, 18)
+		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(name_lbl)
+
+		btn.pressed.connect(_on_salvage_item_selected.bind(item, inv_idx))
+		_salvage_item_grid.add_child(btn)
+
+	if salvageable.is_empty():
+		var empty = Label.new()
+		empty.text = "No items to salvage"
+		empty.add_theme_font_size_override("font_size", 16)
+		empty.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
+		_salvage_item_grid.add_child(empty)
+
+	# Refresh preview
+	_refresh_salvage_preview()
+	# Refresh blueprint progress
+	_refresh_blueprint_list()
+
+func _on_salvage_item_selected(item: EquipmentItem, inv_idx: int) -> void:
+	_salvage_selected_item = item
+	_salvage_selected_idx = inv_idx
+	_refresh_salvage_tab()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("click", -4.0)
+
+func _refresh_salvage_preview() -> void:
+	for child in _salvage_preview.get_children():
+		child.queue_free()
+
+	if not _salvage_selected_item:
+		var hint = Label.new()
+		hint.text = "Select an item to see\nsalvage preview"
+		hint.add_theme_font_size_override("font_size", 16)
+		hint.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_salvage_preview.add_child(hint)
+		return
+
+	var item = _salvage_selected_item
+
+	# Item header
+	var name_lbl = Label.new()
+	name_lbl.text = item.item_name
+	name_lbl.add_theme_font_size_override("font_size", 20)
+	name_lbl.add_theme_color_override("font_color", RARITY_COLORS[clampi(item.rarity, 0, 2)])
+	_salvage_preview.add_child(name_lbl)
+
+	# Stats summary
+	var stat_lines: Array[String] = []
+	for mod in item.modifiers:
+		var stat_name = StatModifier.StatType.keys()[mod.stat]
+		if mod.flat_bonus != 0:
+			stat_lines.append("+%d %s" % [mod.flat_bonus, stat_name])
+		if mod.percent_bonus != 0:
+			stat_lines.append("+%d%% %s" % [int(mod.percent_bonus * 100), stat_name])
+	if stat_lines.size() > 0:
+		var stats_lbl = Label.new()
+		stats_lbl.text = "\n".join(stat_lines)
+		stats_lbl.add_theme_font_size_override("font_size", 14)
+		stats_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
+		_salvage_preview.add_child(stats_lbl)
+
+	var sep = HSeparator.new()
+	sep.add_theme_constant_override("separation", 4)
+	_salvage_preview.add_child(sep)
+
+	# Salvage yields (computed from calculate_salvage_yield)
+	var yields = EquipmentManager.calculate_salvage_yield(item)
+
+	var yield_title = Label.new()
+	yield_title.text = "Salvage yields:"
+	yield_title.add_theme_font_size_override("font_size", 16)
+	yield_title.add_theme_color_override("font_color", Color(0.8, 0.7, 0.4))
+	_salvage_preview.add_child(yield_title)
+
+	var gold_lbl = Label.new()
+	gold_lbl.text = "Gold: %d" % yields["gold"]
+	gold_lbl.add_theme_font_size_override("font_size", 16)
+	gold_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
+	_salvage_preview.add_child(gold_lbl)
+
+	if yields["salvage_points"] > 0:
+		var sp_lbl = Label.new()
+		sp_lbl.text = "Salvage Points: +%d" % yields["salvage_points"]
+		sp_lbl.add_theme_font_size_override("font_size", 16)
+		sp_lbl.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
+		_salvage_preview.add_child(sp_lbl)
+
+	for mat_path in yields["materials"]:
+		var mat = load(mat_path) as EquipmentItem
+		if mat:
+			var mat_lbl = Label.new()
+			mat_lbl.text = "  + %s" % mat.item_name
+			mat_lbl.add_theme_font_size_override("font_size", 14)
+			mat_lbl.add_theme_color_override("font_color", Color(0.7, 0.85, 0.7))
+			_salvage_preview.add_child(mat_lbl)
+
+	if item.blueprint_id != "":
+		var bp_lbl = Label.new()
+		var gm = get_node_or_null("/root/GameManager")
+		var progress = gm.get_blueprint_progress(item.blueprint_id) if gm else 0
+		var bp_def = gm.get_blueprint_definition(item.blueprint_id) if gm else null
+		var needed = bp_def.required_fragments if bp_def else 1
+		var bp_name = bp_def.blueprint_name if bp_def else item.blueprint_id
+		var salvage_needed = bp_def.required_salvage_points if bp_def else 0
+		var salvage_have = gm.get_salvage_points() if gm else 0
+		bp_lbl.text = "Blueprint: %s (%d/%d fragments, %d/%d SP)" % [bp_name, progress, needed, salvage_have, salvage_needed]
+		bp_lbl.add_theme_font_size_override("font_size", 14)
+		bp_lbl.add_theme_color_override("font_color", Color(0.6, 0.7, 1.0))
+		_salvage_preview.add_child(bp_lbl)
+
+	# Spacer
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 10)
+	_salvage_preview.add_child(spacer)
+
+	# SALVAGE button
+	var salvage_btn = Button.new()
+	salvage_btn.text = "SALVAGE"
+	salvage_btn.focus_mode = Control.FOCUS_NONE
+	salvage_btn.custom_minimum_size = Vector2(200, 44)
+	salvage_btn.add_theme_font_size_override("font_size", 20)
+	salvage_btn.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	var sal_sty = StyleBoxFlat.new()
+	sal_sty.bg_color = Color(0.3, 0.08, 0.08)
+	sal_sty.border_color = Color(0.7, 0.2, 0.2)
+	sal_sty.set_border_width_all(2)
+	sal_sty.set_corner_radius_all(4)
+	salvage_btn.add_theme_stylebox_override("normal", sal_sty)
+	var sal_hover = sal_sty.duplicate()
+	sal_hover.bg_color = Color(0.45, 0.1, 0.1)
+	sal_hover.border_color = Color(1.0, 0.3, 0.3)
+	salvage_btn.add_theme_stylebox_override("hover", sal_hover)
+	salvage_btn.pressed.connect(_on_salvage_confirmed)
+	_salvage_preview.add_child(salvage_btn)
+
+func _on_salvage_confirmed() -> void:
+	if not equipment_manager or _salvage_selected_idx < 0:
+		return
+	var result = equipment_manager.salvage_inventory_item(_salvage_selected_idx)
+	if result.get("ok", false):
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("click", -4.0)
+		var player = get_tree().get_first_node_in_group("player")
+		if player:
+			var ft = get_node_or_null("/root/FloatingText")
+			if ft:
+				var msg = "Salvaged: %s" % result.get("item_name", "")
+				var gold_amt = result.get("gold", 0)
+				var sp_amt = result.get("salvage_points", 0)
+				if gold_amt > 0:
+					msg += " (+%dg" % gold_amt
+					if sp_amt > 0:
+						msg += ", +%d SP" % sp_amt
+					msg += ")"
+				ft.spawn(get_tree().current_scene, player.global_position + Vector2(0, -12), msg, Color(1.0, 0.6, 0.3))
+				var mats: Array = result.get("materials", [])
+				if mats.size() > 0:
+					ft.spawn(get_tree().current_scene, player.global_position + Vector2(0, -28), "+ " + ", ".join(mats), Color(0.7, 0.85, 0.7))
+				if result.get("unlocked", false):
+					ft.spawn(get_tree().current_scene, player.global_position + Vector2(0, -44), "Blueprint Unlocked!", Color(0.3, 1.0, 0.3))
+	_salvage_selected_item = null
+	_salvage_selected_idx = -1
+	_refresh_salvage_tab()
+
+func _refresh_blueprint_list() -> void:
+	for child in _salvage_bp_list.get_children():
+		child.queue_free()
+
+	var gm = get_node_or_null("/root/GameManager")
+	if not gm or not gm.save_data:
+		return
+
+	var bp_progress: Dictionary = gm.save_data.blueprint_progress
+	var discovered: Array = gm.save_data.discovered_blueprints
+	if bp_progress.is_empty() and discovered.is_empty():
+		var empty = Label.new()
+		empty.text = "No blueprints discovered yet"
+		empty.add_theme_font_size_override("font_size", 14)
+		empty.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
+		_salvage_bp_list.add_child(empty)
+		return
+
+	var seen_blueprints: Dictionary = {}
+	for bp_id in bp_progress:
+		seen_blueprints[bp_id] = true
+		var progress = int(bp_progress[bp_id])
+		var bp_def = gm.get_blueprint_definition(bp_id)
+		var needed = bp_def.required_fragments if bp_def else 1
+		var bp_name = bp_def.blueprint_name if bp_def else bp_id
+		var complete = bp_id in discovered
+		var salvage_needed = bp_def.required_salvage_points if bp_def else 0
+		var salvage_have = gm.get_salvage_points()
+
+		var row = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		_salvage_bp_list.add_child(row)
+
+		var name_lbl = Label.new()
+		name_lbl.text = bp_name
+		name_lbl.add_theme_font_size_override("font_size", 14)
+		name_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3) if complete else Color(0.7, 0.7, 0.8))
+		name_lbl.custom_minimum_size = Vector2(180, 0)
+		row.add_child(name_lbl)
+
+		# Progress bar
+		var bar_bg = ColorRect.new()
+		bar_bg.color = Color(0.15, 0.15, 0.2)
+		bar_bg.custom_minimum_size = Vector2(120, 16)
+		row.add_child(bar_bg)
+
+		var fill_width = 120.0 * minf(float(progress) / float(needed), 1.0)
+		var bar_fill = ColorRect.new()
+		bar_fill.color = Color(0.3, 0.8, 0.3) if complete else Color(0.4, 0.5, 0.8)
+		bar_fill.custom_minimum_size = Vector2(fill_width, 16)
+		bar_fill.size = Vector2(fill_width, 16)
+		bar_fill.position = Vector2.ZERO
+		bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar_bg.add_child(bar_fill)
+
+		var detail_lbl = Label.new()
+		detail_lbl.text = "%d/%d fragments | %d/%d SP" % [progress, needed, salvage_have, salvage_needed]
+		detail_lbl.add_theme_font_size_override("font_size", 12)
+		detail_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6) if not complete else Color(0.4, 0.8, 0.4))
+		row.add_child(detail_lbl)
+
+	for bp_id in discovered:
+		if seen_blueprints.has(bp_id):
+			continue
+		var bp_def = gm.get_blueprint_definition(String(bp_id))
+		var row = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		_salvage_bp_list.add_child(row)
+
+		var name_lbl = Label.new()
+		name_lbl.text = bp_def.blueprint_name if bp_def else String(bp_id)
+		name_lbl.add_theme_font_size_override("font_size", 14)
+		name_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
+		name_lbl.custom_minimum_size = Vector2(180, 0)
+		row.add_child(name_lbl)
+
+		var unlocked_lbl = Label.new()
+		unlocked_lbl.text = "Unlocked"
+		unlocked_lbl.add_theme_font_size_override("font_size", 12)
+		unlocked_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
+		row.add_child(unlocked_lbl)
+
+func _get_weapon_abilities(wtype: String) -> Dictionary:
+	match wtype:
+		"sword": return {space = "Dash — quick dodge roll", shift = "Blade Dance — spinning slash aura"}
+		"dagger": return {space = "Dash — quick dodge roll", shift = "Rapid Strike — doubled attack speed"}
+		"axe": return {space = "Dash Cleave — dash + AoE on landing", shift = "Whirlwind — ring of axes"}
+		"club": return {space = "Ground Pound — AoE stun", shift = "Berserk Swing — wide arcs, slow move"}
+		"hammer": return {space = "Hammer Throw — boomerang toss", shift = "Earthquake — tremor pulses"}
+		"spear": return {space = "Lunge — extended dash piercing foes", shift = "Phalanx — immobile rapid-fire"}
+		"flail": return {space = "Chain Lash — extended range strike", shift = "Whip Spin — boomerang multishot"}
+		"throwing": return {space = "Fan of Knives — scatter burst", shift = "Barrage — rapid scatter volley"}
+		"bow": return {space = "Dash — quick dodge roll", shift = "Multishot — triple arrow spread"}
+		"short_bow": return {space = "Evasive Shot — backflip + fire", shift = "Sprint — move faster"}
+		"crossbow": return {space = "Power Shot — 4x damage, pierces all", shift = "Aimed Mode — slow move, 2x damage"}
+		"staff": return {space = "Powershot — charged blast", shift = "Teleport — short-range blink"}
+		"wand": return {space = "Blink — instant dodge", shift = "Magic Barrage — rapid bolts"}
+		"tome": return {space = "Nova Burst — magic explosion", shift = "Arcane Shield — absorb damage"}
+		"javelin": return {space = "Javelin Throw — long-range pierce", shift = "Javelin Rain — area bombardment"}
+		"sling": return {space = "Scatter Volley — wide spray", shift = "Rapid Sling — faster fire rate"}
+		"halberd": return {space = "Sweep — wide arc cleave", shift = "Guard Stance — immobile, auto-counter"}
+		"greatsword": return {space = "Overhead Slam — heavy AoE hit", shift = "Berserker Rage — faster, stronger"}
+		"great_axe": return {space = "Whirlwind Cleave — spinning dash", shift = "Executioner — bonus vs low HP"}
+		"whip": return {space = "Lasso Pull — grab + drag enemy", shift = "Crack — extended range stun"}
+		"scythe": return {space = "Reap — dash through enemies", shift = "Soul Harvest — drain on kill"}
+		"claws": return {space = "Dash — quick dodge roll", shift = "Frenzy — rapid claw swipes"}
+		"sceptre": return {space = "Dash — quick dodge roll", shift = "Sprint — move faster"}
+		_: return {space = "Dash — quick dodge roll", shift = "Sprint — move faster"}

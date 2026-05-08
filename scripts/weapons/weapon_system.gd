@@ -161,6 +161,9 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	# WEAKENED/STRENGTHENED damage multiplier
 	if p and p.get("status_effects") and p.status_effects.has_method("get_damage_multiplier"):
 		base_damage = int(base_damage * p.status_effects.get_damage_multiplier())
+	# High-ground combat bonus: +20% damage per height level
+	if p and p.has_method("get_high_ground_damage_mult"):
+		base_damage = int(base_damage * p.get_high_ground_damage_mult())
 	# Per-bullet damage split from pattern (e.g. shotgun pellets share total damage)
 	if data.has("damage_mult"):
 		base_damage = maxi(1, int(base_damage * data["damage_mult"]))
@@ -168,6 +171,9 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	# Crit roll: chance = luck / 2 %
 	var luck = equipment_manager.get_luck()
 	var crit_chance = luck / 2.0 + crit_bonus
+	# High-ground combat bonus: +10 crit chance per height level
+	if p and p.has_method("get_high_ground_crit_bonus"):
+		crit_chance += p.get_high_ground_crit_bonus()
 	if crit_chance > 0 and randf() * 100.0 < crit_chance:
 		bullet.is_crit = true
 		bullet.damage = int(base_damage * equipment_manager.get_crit_damage())
@@ -252,6 +258,12 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 		if ammo and ammo.quantity > 0 and ammo.arrow_effect != "":
 			_apply_arrow_effects(bullet, ammo)
 			equipment_manager.consume_ammo()
+
+	# Melee/swing bullets are blocked by cliff walls; thrown/javelin still count as ranged
+	# so they can clear elevation gaps.
+	if weapon and weapon.slot_type == EquipmentItem.SlotType.WEAPON_MELEE \
+		and weapon.weapon_type not in ["throwing", "javelin"]:
+		bullet.is_melee = true
 
 	container.add_child(bullet)
 

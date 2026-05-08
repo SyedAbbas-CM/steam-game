@@ -1,5 +1,7 @@
 extends CharacterBody2D
 
+const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+
 enum State { IDLE, FOLLOWING, ATTACKING, RETREATING }
 
 var definition: CompanionDefinition
@@ -23,7 +25,7 @@ func _ready() -> void:
 	collision_mask = 0
 
 	if is_inside_tree():
-		player = get_tree().get_first_node_in_group("player")
+		player = PlayerQuery.get_primary_player(get_tree())
 
 	shoot_timer.one_shot = true
 	shoot_timer.timeout.connect(func(): can_shoot = true)
@@ -37,6 +39,8 @@ func setup(def: CompanionDefinition, index: int) -> void:
 	shoot_timer.wait_time = def.attack_speed
 
 func _physics_process(_delta: float) -> void:
+	if is_inside_tree() and not is_instance_valid(player):
+		player = PlayerQuery.get_primary_player(get_tree())
 	if not is_inside_tree() or not is_instance_valid(player):
 		return
 

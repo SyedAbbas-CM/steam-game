@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "r_bounty_hunter"
+perk_name = "Bounty Hunter"
+description = "Boss token drop rate doubled"
+class_required = "mercenary"
+tier = 3
+prerequisites = ["r_dual_wield", "r_scavenger"]
+stat_bonuses = {}
+special_effect = "bounty_hunter"
+is_percent = false

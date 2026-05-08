@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="BossShotPattern" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/boss_shot_pattern.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+shot_count = 2
+spread_degrees = 14.0
+symmetric_spread = true
+base_angle_offset_degrees = 0.0
+ring_pattern = false
+burst_count = 1
+burst_interval = 0.12
+rotate_per_burst_degrees = 0.0
+aim_mode = 0
+fixed_angle_degrees = 0.0
+spinning_speed_degrees = 90.0
+bullet_speed_mult = 0.55
+damage_override = 10
+sprite_scale_mult = 3.1
+bounce_count_override = 0
+bullet_behavior_override = -1
+status_effect = ""
+status_duration = 3.0

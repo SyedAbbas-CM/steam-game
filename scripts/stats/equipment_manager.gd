@@ -1,6 +1,8 @@
 class_name EquipmentManager
 extends Node
 
+const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+
 @export var base_stats: PlayerStats
 
 # Equipped items by slot (up to 12 simultaneous)
@@ -57,7 +59,14 @@ func remove_from_inventory(index: int) -> EquipmentItem:
 	if index < 0 or index >= inventory.size():
 		return null
 	var item = inventory[index]
+	if is_equipped(item):
+		for slot in equipped.keys():
+			if equipped[slot] == item:
+				_on_item_unequipped(item)
+				equipped.erase(slot)
+				break
 	inventory.remove_at(index)
+	stats_changed.emit()
 	inventory_changed.emit()
 	return item
 
@@ -97,7 +106,7 @@ func toggle_equip(inv_index: int) -> void:
 
 func _on_item_equipped(item: EquipmentItem) -> void:
 	if item.grants_spell != "":
-		var player = get_tree().get_first_node_in_group("player")
+		var player = PlayerQuery.get_primary_player(get_tree())
 		if player:
 			var spell_book = player.get_node_or_null("SpellBook")
 			if spell_book:
@@ -105,7 +114,7 @@ func _on_item_equipped(item: EquipmentItem) -> void:
 
 func _on_item_unequipped(item: EquipmentItem) -> void:
 	if item.grants_spell != "":
-		var player = get_tree().get_first_node_in_group("player")
+		var player = PlayerQuery.get_primary_player(get_tree())
 		if player:
 			var spell_book = player.get_node_or_null("SpellBook")
 			if spell_book:
@@ -127,7 +136,7 @@ func use_consumable(inv_index: int) -> bool:
 	if item.use_effect != "":
 		inventory.remove_at(inv_index)
 		inventory_changed.emit()
-		var player = get_tree().get_first_node_in_group("player")
+		var player = PlayerQuery.get_primary_player(get_tree())
 		match item.use_effect:
 			"cure_poison":
 				if player and player.has_node("StatusEffectManager"):
@@ -261,7 +270,7 @@ func use_consumable(inv_index: int) -> bool:
 	# HP/MP healing consumables
 	if item.heal_hp <= 0 and item.heal_mp <= 0:
 		return false
-	var player = get_tree().get_first_node_in_group("player")
+	var player = PlayerQuery.get_primary_player(get_tree())
 	if not player:
 		return false
 	if item.heal_hp > 0:
@@ -369,7 +378,7 @@ func consume_ammo() -> bool:
 				inventory.remove_at(i)
 				break
 		# Show floating text
-		var player = get_tree().get_first_node_in_group("player")
+		var player = PlayerQuery.get_primary_player(get_tree())
 		if player:
 			var sr = get_tree().current_scene
 			if sr:
@@ -383,6 +392,144 @@ func get_equipped_items() -> Array:
 		if item:
 			items.append(item)
 	return items
+
+func can_socket_gem(item: EquipmentItem, socket_index: int, gem_path: String) -> bool:
+	if not item or gem_path == "":
+		return false
+	if socket_index < 0 or socket_index >= item.socket_count:
+		return false
+	if socket_index >= item.socket_types.size():
+		return false
+	if socket_index < item.socketed_gem_paths.size() and item.socketed_gem_paths[socket_index] != "":
+		return false
+	var socket_type = item.socket_types[socket_index]
+	return socket_type == "" or socket_type == "open" or socket_type == "prismatic"
+
+func socket_gem(item: EquipmentItem, socket_index: int, gem_path: String) -> bool:
+	if not can_socket_gem(item, socket_index, gem_path):
+		return false
+	item.socketed_gem_paths[socket_index] = gem_path
+	var gm = get_node_or_null("/root/GameManager")
+	if gm:
+		var gem = load(gem_path) as GemDefinition
+		if gem:
+			gm.discover_gem(gem.gem_id)
+	stats_changed.emit()
+	inventory_changed.emit()
+	return true
+
+func unsocket_gem(item: EquipmentItem, socket_index: int) -> String:
+	if not item or socket_index < 0 or socket_index >= item.socket_count:
+		return ""
+	if socket_index >= item.socketed_gem_paths.size():
+		return ""
+	var gem_path = item.socketed_gem_paths[socket_index]
+	if gem_path == "":
+		return ""
+	item.socketed_gem_paths[socket_index] = ""
+	stats_changed.emit()
+	inventory_changed.emit()
+	return gem_path
+
+static func calculate_salvage_yield(item: EquipmentItem) -> Dictionary:
+	var result := {
+		"gold": 0,
+		"salvage_points": 0,
+		"materials": [] as Array,
+	}
+	if not item:
+		return result
+	result["gold"] = item.sell_value if item.sell_value > 0 else maxi(int(item.buy_price / 4), 1)
+	match item.slot_type:
+		EquipmentItem.SlotType.CONSUMABLE:
+			result["gold"] = maxi(1, result["gold"] / 2)
+			return result
+		EquipmentItem.SlotType.MATERIAL:
+			result["gold"] = maxi(1, result["gold"] / 3)
+			return result
+		EquipmentItem.SlotType.AMMO:
+			result["salvage_points"] = 1
+			return result
+	# Equipment: salvage points scale with rarity (common=1, uncommon=3, rare=5)
+	var rarity_sp := [1, 3, 5]
+	result["salvage_points"] = rarity_sp[clampi(item.rarity, 0, 2)]
+	# Material yields by slot type
+	if EquipmentItem.is_weapon_slot(item.slot_type):
+		result["materials"].append("res://resources/items/crafting/iron_ore.tres")
+		if item.rarity >= 1:
+			result["materials"].append("res://resources/items/crafting/magic_essence.tres")
+	elif item.slot_type in [EquipmentItem.SlotType.BODY, EquipmentItem.SlotType.HELM, EquipmentItem.SlotType.SHIELD]:
+		result["materials"].append("res://resources/items/crafting/iron_ore.tres")
+		result["materials"].append("res://resources/items/crafting/leather_scraps.tres")
+	elif item.slot_type in [EquipmentItem.SlotType.BOOTS, EquipmentItem.SlotType.GLOVES, EquipmentItem.SlotType.CLOAK]:
+		result["materials"].append("res://resources/items/crafting/leather_scraps.tres")
+	elif item.slot_type == EquipmentItem.SlotType.RING:
+		result["materials"].append("res://resources/items/crafting/magic_essence.tres")
+	# Rare items have a chance for bonus rare material
+	if item.rarity >= 2 and randf() < 0.3:
+		result["materials"].append("res://resources/items/crafting/fire_crystal.tres")
+	return result
+
+func salvage_inventory_item(inv_index: int) -> Dictionary:
+	if inv_index < 0 or inv_index >= inventory.size():
+		return {"ok": false, "reason": "invalid_index"}
+	var item = inventory[inv_index]
+	if not item:
+		return {"ok": false, "reason": "missing_item"}
+	var yields = EquipmentManager.calculate_salvage_yield(item)
+	var item_name: String = item.item_name
+	# Award gold
+	var gold_amount: int = yields["gold"]
+	var gm = get_node_or_null("/root/GameManager")
+	if gm and gold_amount > 0:
+		gm.add_gold(gold_amount)
+	# Award salvage points
+	var sp: int = yields["salvage_points"]
+	if gm and sp > 0:
+		gm.add_salvage_points(sp)
+	# Award materials -> add to inventory
+	var mat_names: Array[String] = []
+	for mat_path in yields["materials"]:
+		var mat = load(mat_path) as EquipmentItem
+		if mat:
+			add_to_inventory(mat.make_copy())
+			mat_names.append(mat.item_name)
+	# Blueprint progress
+	var blueprint_id: String = item.blueprint_id
+	var bp_progress := 0
+	var bp_unlocked := false
+	if gm:
+		if blueprint_id != "":
+			var bp_result = gm.add_blueprint_progress(blueprint_id, 1)
+			bp_progress = int(bp_result.get("progress", 0))
+			bp_unlocked = bool(bp_result.get("unlocked", false))
+		else:
+			# Tag-based blueprint matching
+			var item_tags := PackedStringArray()
+			item_tags.append(EquipmentItem.SlotType.keys()[item.slot_type].to_lower())
+			if item.weapon_type != "":
+				item_tags.append(item.weapon_type)
+			for tag in item.archetype_tags:
+				item_tags.append(tag)
+			for bp_path in ResourceRegistry.blueprints():
+				var bp = load(bp_path) as BlueprintDefinition
+				if not bp or bp.blueprint_id == "" or gm.has_blueprint(bp.blueprint_id):
+					continue
+				for tag in bp.unlock_tags:
+					if tag in item_tags:
+						gm.add_blueprint_progress(bp.blueprint_id, 1)
+						break
+	remove_from_inventory(inv_index)
+	return {
+		"ok": true,
+		"item_name": item_name,
+		"gold": gold_amount,
+		"salvage_points": sp,
+		"materials": mat_names,
+		"blueprint_id": blueprint_id,
+		"progress": bp_progress,
+		"unlocked": bp_unlocked,
+	}
 
 # Legacy compatibility
 func equip_from_inventory(inv_index: int) -> void:
@@ -487,11 +634,19 @@ func get_stat(stat_type: StatModifier.StatType) -> float:
 	if level_system:
 		total += level_system.get_level_bonus(stat_type)
 		total += level_system.get_allocation_bonus(stat_type)
+	# Perk flat bonuses
+	var pm = get_node_or_null("/root/PerkManager")
+	if pm:
+		total += pm.get_stat_bonus(stat_type)
 	for item in equipped.values():
 		if item:
 			for mod in item.modifiers:
 				if mod.stat == stat_type:
 					total += mod.flat_bonus
+			for gem in item.get_socketed_gems():
+				for mod in gem.modifiers:
+					if mod.stat == stat_type:
+						total += mod.flat_bonus
 	if stat_type in [StatModifier.StatType.ATTACK_DAMAGE, StatModifier.StatType.MOVE_SPEED, StatModifier.StatType.ATTACK_SPEED, StatModifier.StatType.BULLET_SPEED, StatModifier.StatType.BULLET_COUNT, StatModifier.StatType.SPREAD_ANGLE, StatModifier.StatType.PIERCE_COUNT, StatModifier.StatType.BULLET_LIFETIME, StatModifier.StatType.MAX_HP, StatModifier.StatType.MAX_MP, StatModifier.StatType.HP_REGEN, StatModifier.StatType.MP_REGEN, StatModifier.StatType.LUCK, StatModifier.StatType.CRIT_DAMAGE, StatModifier.StatType.ARMOR, StatModifier.StatType.DODGE_CHANCE, StatModifier.StatType.PICKUP_RADIUS, StatModifier.StatType.COOLDOWN_REDUCTION, StatModifier.StatType.STEALTH, StatModifier.StatType.XP_MULT, StatModifier.StatType.GOLD_MULT, StatModifier.StatType.MAX_STAMINA, StatModifier.StatType.STAMINA_REGEN, StatModifier.StatType.TENACITY, StatModifier.StatType.THORNS]:
 			var mult = 1.0
 			for item in equipped.values():
@@ -499,6 +654,13 @@ func get_stat(stat_type: StatModifier.StatType) -> float:
 					for mod in item.modifiers:
 						if mod.stat == stat_type and mod.percent_bonus != 0:
 							mult += mod.percent_bonus
+					for gem in item.get_socketed_gems():
+						for mod in gem.modifiers:
+							if mod.stat == stat_type and mod.percent_bonus != 0:
+								mult += mod.percent_bonus
+			# Perk percent bonuses
+			if pm:
+				mult += pm.get_stat_percent_bonus(stat_type) / 100.0
 			total *= mult
 	return total
 

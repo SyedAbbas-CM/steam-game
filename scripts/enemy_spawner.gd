@@ -1,5 +1,7 @@
 extends Node2D
 
+const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+
 var enemy_scene: PackedScene
 var spawn_interval: float = 3.0
 var default_drop_table: DropTable
@@ -16,7 +18,7 @@ func _ready() -> void:
 func _spawn_enemy() -> void:
 	if not is_inside_tree():
 		return
-	var player = get_tree().get_first_node_in_group("player")
+	var player = PlayerQuery.get_primary_player(get_tree())
 	if not player:
 		return
 

@@ -135,6 +135,53 @@ static func _irregular() -> Dictionary:
 
 	return { "mask": mask, "width": w, "height": h }
 
+static func generate_mine_cavern(grand: bool = false) -> Dictionary:
+	var w = randi_range(29, 37) if grand else randi_range(21, 29)
+	var h = randi_range(23, 31) if grand else randi_range(17, 25)
+	var mask: Array = []
+
+	for y in range(h):
+		var row: Array = []
+		for x in range(w):
+			if x <= 1 or x >= w - 2 or y <= 1 or y >= h - 2:
+				row.append(false)
+			else:
+				row.append(randf() < 0.58)
+		mask.append(row)
+
+	for _iter in range(5):
+		var new_mask: Array = []
+		for y in range(h):
+			var row: Array = []
+			for x in range(w):
+				if x <= 1 or x >= w - 2 or y <= 1 or y >= h - 2:
+					row.append(false)
+				else:
+					var neighbors = _count_floor_neighbors(mask, x, y)
+					if mask[y][x]:
+						row.append(neighbors >= 4)
+					else:
+						row.append(neighbors >= 5)
+			new_mask.append(row)
+		mask = new_mask
+
+	var cx = w / 2
+	var cy = h / 2
+	var carve_radius_x = 6 if grand else 5
+	var carve_radius_y = 5 if grand else 4
+	for y in range(cy - carve_radius_y, cy + carve_radius_y + 1):
+		for x in range(cx - carve_radius_x, cx + carve_radius_x + 1):
+			if x > 1 and x < w - 2 and y > 1 and y < h - 2:
+				mask[y][x] = true
+
+	var reachable = _flood_fill(mask, cx, cy, w, h)
+	for y in range(h):
+		for x in range(w):
+			if mask[y][x] and not reachable[y][x]:
+				mask[y][x] = false
+
+	return { "mask": mask, "width": w, "height": h }
+
 static func _count_floor_neighbors(mask: Array, x: int, y: int) -> int:
 	var count = 0
 	for dy in range(-1, 2):

@@ -353,6 +353,7 @@ static func levels() -> Array[String]:
 		"res://resources/levels/storm_6.tres",
 		"res://resources/levels/storm_base.tres",
 		"res://resources/levels/test_arena.tres",
+		"res://resources/levels/test_arena_boss.tres",
 		"res://resources/levels/testcombo.tres",
 		"res://resources/levels/testmovement.tres",
 		"res://resources/levels/testcombo.tres",
@@ -1404,6 +1405,7 @@ static func enemies() -> Array[String]:
 		"res://resources/enemies/forest/treant.tres",
 		"res://resources/enemies/test/bone_bomber.tres",
 		"res://resources/enemies/test/bone_grunt.tres",
+		"res://resources/enemies/test/bone_pusher.tres",
 		"res://resources/enemies/test/bone_shooter.tres",
 		"res://resources/enemies/test/bone_splitter.tres",
 		"res://resources/enemies/test/cursed_skeleton.tres",
@@ -1624,4 +1626,36 @@ static func crafted_items() -> Array[String]:
 		"res://resources/items/crafted/crystal_wand.tres",
 		"res://resources/items/crafted/swamp_brew.tres",
 		"res://resources/items/crafted/natures_elixir.tres",
+	]
+
+static func gems() -> Array[String]:
+	return [
+		"res://resources/gems/chipped_ruby.tres",
+		"res://resources/gems/chipped_sapphire.tres",
+		"res://resources/gems/chipped_emerald.tres",
+		"res://resources/gems/chipped_topaz.tres",
+		"res://resources/gems/chipped_amethyst.tres",
+		"res://resources/gems/chipped_diamond.tres",
+		"res://resources/gems/chipped_prism.tres",
+		"res://resources/gems/flawed_ruby.tres",
+		"res://resources/gems/flawed_sapphire.tres",
+		"res://resources/gems/flawed_emerald.tres",
+		"res://resources/gems/flawed_topaz.tres",
+		"res://resources/gems/flawed_amethyst.tres",
+		"res://resources/gems/flawed_diamond.tres",
+		"res://resources/gems/flawed_prism.tres",
+	]
+
+static func blueprints() -> Array[String]:
+	return [
+		"res://resources/blueprints/iron_dagger_blueprint.tres",
+		"res://resources/blueprints/iron_shield_blueprint.tres",
+		"res://resources/blueprints/crystal_wand_blueprint.tres",
+		"res://resources/blueprints/venom_bow_blueprint.tres",
+	]
+
+static func mines() -> Array[String]:
+	return [
+		"res://resources/mines/ironvein_depths.tres",
+		"res://resources/mines/crystal_hollows.tres",
 	]

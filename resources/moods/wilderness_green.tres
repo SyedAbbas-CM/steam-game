@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="AreaMoodProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/area_mood_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+ambient_color = Color(0.96, 1.0, 0.94, 1)
+is_dark = false
+glow_enabled = true
+glow_intensity = 0.3
+glow_bloom = 0.08
+vignette_strength = 0.14
+vignette_softness = 0.86
+vignette_color = Color(0.02, 0.06, 0.02, 0.24)

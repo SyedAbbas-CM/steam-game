@@ -27,8 +27,9 @@ static func _get_overworld_tileset() -> TileSet:
 		_cached_tileset = load(TILESET_CACHE_PATH) as TileSet
 		if _cached_tileset:
 			return _cached_tileset
-	# Fallback: extract from overworld scene and save for next time
-	for path in ["res://scenes/overworld/overworld_light.tscn", "res://scenes/overworld/overworld2_light.tscn"]:
+	# Fallback: extract from the live runtime overworld scene and save for next time.
+	# Do not reference editor-only world variants here or exports will drag them in.
+	for path in ["res://scenes/overworld/overworld_light.tscn"]:
 		if ResourceLoader.exists(path):
 			var ow_scene = load(path) as PackedScene
 			if ow_scene:
@@ -1743,7 +1744,10 @@ func _on_return() -> void:
 	if gm and gm.has_method("return_to_overworld"):
 		gm.return_to_overworld()
 	else:
-		get_tree().change_scene_to_file("res://scenes/overworld/overworld.tscn")
+		if ResourceLoader.exists("res://scenes/overworld/overworld.scn"):
+			get_tree().change_scene_to_file("res://scenes/overworld/overworld.scn")
+		else:
+			get_tree().change_scene_to_file("res://scenes/overworld/overworld.tscn")
 
 func _hide_gamehud_clutter() -> void:
 	## Hide inventory/equipment/map/quest UI from GameHUD during battle.

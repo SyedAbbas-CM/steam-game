@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="BossShotPattern" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/boss_shot_pattern.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/movements/orbit_ally.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+shot_count = 3
+spread_degrees = 0.0
+symmetric_spread = true
+base_angle_offset_degrees = 0.0
+ring_pattern = true
+burst_count = 16
+burst_interval = 0.13
+rotate_per_burst_degrees = 9.0
+aim_mode = 1
+fixed_angle_degrees = 0.0
+spinning_speed_degrees = 0.0
+bullet_speed_mult = 0.0
+movement_pattern = ExtResource("2")
+orbit_radius_override = 14.0
+orbit_radial_speed = 14.0
+orbit_radial_accel = -2.0
+orbit_reverse_time = 1.4
+bounce_count_override = 0
+bullet_behavior_override = -1
+status_effect = "SLOWED"
+status_duration = 1.4

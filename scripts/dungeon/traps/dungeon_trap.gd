@@ -44,7 +44,7 @@ func _on_bullet_hit(area: Node2D) -> void:
 		trigger_remote()
 
 func get_damage() -> int:
-	return 3 + floor_number
+	return 4 + floor_number * 2
 
 func _find_player() -> Node2D:
 	var player = get_tree().get_first_node_in_group("player")
@@ -71,6 +71,7 @@ func _spawn_bullet(pos: Vector2, dir: Vector2, speed: float, damage: int, lifeti
 	bullet.is_player_bullet = false
 	bullet.hits_all = true
 	bullet.trap_enemy_mult = 2
+	bullet.set_meta("trap_true_damage", true)
 	get_tree().current_scene.add_child(bullet)
 
 ## Trigger this trap remotely (stone toss, bullet impact). Override in subclass.

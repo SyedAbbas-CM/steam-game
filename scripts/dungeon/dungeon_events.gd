@@ -819,17 +819,13 @@ func _apply_buff(id: String, stat: String, value: float, duration: String, timer
 		return
 
 	var original: float = 0.0
-	var em = player.equipment_manager if player.has_method("get") or "equipment_manager" in player else null
-	if not em:
-		# Try direct access
-		if "equipment_manager" in player:
-			em = player.equipment_manager
+	var em = player.equipment_manager if "equipment_manager" in player else null
 
 	match stat:
 		"damage_mult":
-			original = em.base_stats.damage_mult if em else 1.0
 			if em:
-				em.base_stats.damage_mult += value
+				original = float(em.base_stats.attack_damage)
+				em.base_stats.attack_damage = maxi(1, int(round(em.base_stats.attack_damage * (1.0 + value))))
 				em.stats_changed.emit()
 		"move_speed":
 			original = em.base_stats.move_speed if em else 100.0
@@ -837,13 +833,15 @@ func _apply_buff(id: String, stat: String, value: float, duration: String, timer
 				em.base_stats.move_speed *= (1.0 + value)
 				em.stats_changed.emit()
 		"max_hp":
-			original = float(player.max_hp)
-			var bonus = int(original * value)
-			player.max_hp += bonus
-			player.hp += bonus
-			player.hp_changed.emit(player.hp)
+			if em:
+				original = float(em.base_stats.max_hp)
+				em.base_stats.max_hp = maxi(1, int(round(em.base_stats.max_hp * (1.0 + value))))
+				em.stats_changed.emit()
 		"regen":
-			original = 0.0  # no baseline regen
+			if em:
+				original = em.base_stats.hp_regen
+				em.base_stats.hp_regen += value
+				em.stats_changed.emit()
 		"gold_mult":
 			original = 0.0  # handled in gold pickup logic
 
@@ -872,19 +870,21 @@ func _remove_buff(buff: Dictionary) -> void:
 	match buff["stat"]:
 		"damage_mult":
 			if em:
-				em.base_stats.damage_mult -= buff["value"]
+				em.base_stats.attack_damage = maxi(1, int(round(float(em.base_stats.attack_damage) / maxf(0.01, 1.0 + float(buff["value"])))))
 				em.stats_changed.emit()
 		"move_speed":
 			if em:
 				em.base_stats.move_speed /= (1.0 + buff["value"])
 				em.stats_changed.emit()
 		"max_hp":
-			if buff["duration"] != "permanent":
-				var bonus = int(buff["original"] * buff["value"])
-				player.max_hp -= bonus
-				player.hp = mini(player.hp, player.max_hp)
-				player.hp_changed.emit(player.hp)
-		"regen", "gold_mult", "poison_tick":
+			if em and buff["duration"] != "permanent":
+				em.base_stats.max_hp = maxi(1, int(round(float(em.base_stats.max_hp) / maxf(0.01, 1.0 + float(buff["value"])))))
+				em.stats_changed.emit()
+		"regen":
+			if em:
+				em.base_stats.hp_regen -= buff["value"]
+				em.stats_changed.emit()
+		"gold_mult", "poison_tick":
 			pass  # No stat to restore
 
 	_active_buffs.erase(buff)
@@ -916,16 +916,6 @@ func _tick_timed_buffs(delta: float) -> void:
 				buff["poison_timer"] -= 3.0
 				if dm.player and dm.player.hp > 1:
 					dm.player.hp -= 1
-					dm.player.hp_changed.emit(dm.player.hp)
-
-		# Regen tick
-		if buff["stat"] == "regen":
-			buff["regen_timer"] = buff.get("regen_timer", 0.0) + delta
-			if buff["regen_timer"] >= 1.0:
-				buff["regen_timer"] -= 1.0
-				if dm.player and dm.player.hp < dm.player.max_hp:
-					var heal = int(buff["value"])
-					dm.player.hp = mini(dm.player.hp + heal, dm.player.max_hp)
 					dm.player.hp_changed.emit(dm.player.hp)
 
 	for buff in to_remove:

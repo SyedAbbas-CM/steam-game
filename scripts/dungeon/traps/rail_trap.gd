@@ -54,9 +54,9 @@ func activate() -> void:
 
 func get_damage() -> int:
 	if rail_type == RailType.SAW:
-		return 5 + floor_number * 3  # heavy TRUE damage
+		return 8 + floor_number * 4  # heavy TRUE damage
 	else:
-		return 6 + floor_number * 3
+		return 9 + floor_number * 4
 
 func _physics_process(delta: float) -> void:
 	if not _active or track_tiles.size() < 2:

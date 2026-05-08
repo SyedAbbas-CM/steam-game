@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BossState" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/boss_state.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/movements/hold_ranged.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/boss_patterns/library/log_spiral_three_arm.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/boss_sequence_steps/spectre_phase1_spiral.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/boss_sequence_steps/spectre_phase1_chase.tres" id="5"]
+
+[resource]
+script = ExtResource("1")
+state_id = "opening"
+display_name = "Log Spiral"
+movement_pattern = ExtResource("2")
+attack_mode = 2
+shot_pattern = ExtResource("3")
+attack_interval = 0.24
+require_line_of_sight = true
+min_attack_distance = 0.0
+max_attack_distance = 0.0
+sequence_steps = Array[Resource]([ExtResource("4"), ExtResource("5")])
+loop_sequence = true
+duration = 10.0
+transition_mode = 1
+hp_threshold = 0.56
+external_trigger = ""
+next_state_id = "bounce_fan"

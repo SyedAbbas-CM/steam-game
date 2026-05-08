@@ -21,7 +21,7 @@ func _ready() -> void:
 	player = get_tree().get_first_node_in_group("player")
 
 func get_damage() -> int:
-	return 1
+	return 2 + floor_number
 
 func trigger_remote() -> void:
 	if _triggered:

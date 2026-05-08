@@ -6,7 +6,7 @@
 script = ExtResource("1")
 item_name = "Meat"
 loy_tile_index = 98
-description = "A meaty drum stick (Heals 5 HP)"
+description = "Restores 5 HP. Bottled in better days, priced for these ones."
 slot_type = 10
 rarity = 0
 buy_price = 40

@@ -1,10 +1,13 @@
 class_name PlayerStats
 extends Resource
 
+@export_group("Core")
 @export var max_hp: int = 30
 @export var move_speed: float = 130.0
 @export var attack_damage: int = 0
 @export var attack_speed: float = 0.2
+
+@export_group("Ranged")
 @export var bullet_speed: float = 600.0
 @export var bullet_count: int = 1
 @export var spread_angle: float = 0.0
@@ -36,10 +39,6 @@ extends Resource
 @export_group("Stamina")
 @export var max_stamina: float = 100.0
 @export var stamina_regen: float = 15.0
-
-@export_group("Defense")
-
-@export_group("Defense")
 
 @export_group("Defense")
 @export var tenacity: float = 0.0  # reduces negative status effect duration (0-80%)

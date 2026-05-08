@@ -148,7 +148,7 @@ func crit_spark(pos: Vector2, parent: Node = null) -> void:
 
 # ── Dash Afterimage ──
 
-func dash_afterimage(sprite: Sprite2D, pos: Vector2, parent: Node = null) -> void:
+func dash_afterimage(sprite: Sprite2D, pos: Vector2, parent: Node = null, z: int = 1) -> void:
 	if not enabled or not sprite:
 		return
 	var ghost = Sprite2D.new()
@@ -159,13 +159,15 @@ func dash_afterimage(sprite: Sprite2D, pos: Vector2, parent: Node = null) -> voi
 	ghost.scale = sprite.scale
 	ghost.modulate = Color(0.4, 0.6, 1.0, 0.5)
 	ghost.global_position = pos
-	ghost.z_index = -1
+	# Absolute z so trail stays above ground regardless of scene structure
+	ghost.z_as_relative = false
+	ghost.z_index = z
 	_add_to_scene(ghost, parent)
 	var tween = ghost.create_tween()
 	tween.tween_property(ghost, "modulate:a", 0.0, 0.25)
 	tween.tween_callback(ghost.queue_free)
 
-func dash_trail_lines(pos: Vector2, dash_dir: Vector2, sprite_scale: Vector2 = Vector2.ONE, parent: Node = null) -> void:
+func dash_trail_lines(pos: Vector2, dash_dir: Vector2, sprite_scale: Vector2 = Vector2.ONE, parent: Node = null, z: int = 1) -> void:
 	## Spawns 3 black trail lines behind the player during dash.
 	## Uses Sprite2D nodes drawn as stretched black pixels that elongate and fade.
 	if not enabled:
@@ -184,7 +186,9 @@ func dash_trail_lines(pos: Vector2, dash_dir: Vector2, sprite_scale: Vector2 = V
 		trail.length = base_length * sprite_scale.x
 		trail.global_position = trail_pos
 		trail.rotation = angle
-		trail.z_index = -1
+		# Absolute z so trail stays above ground regardless of scene structure
+		trail.z_as_relative = false
+		trail.z_index = z
 		_add_to_scene(trail, parent)
 		var tween = trail.create_tween()
 		tween.set_parallel(true)

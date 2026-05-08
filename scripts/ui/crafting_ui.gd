@@ -150,6 +150,9 @@ func _show_recipe_list() -> void:
 	var player_level = _get_player_level()
 
 	for recipe in _recipes:
+		var result_item = load(recipe.result_item_path) as EquipmentItem
+		var gm = get_node_or_null("/root/GameManager")
+		var blueprint_locked = result_item and result_item.blueprint_id != "" and gm and not gm.has_blueprint(result_item.blueprint_id)
 		var hbox = HBoxContainer.new()
 		hbox.add_theme_constant_override("separation", 6)
 
@@ -158,7 +161,9 @@ func _show_recipe_list() -> void:
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		name_label.add_theme_font_size_override("font_size", 11)
 		var can_craft = _can_craft(recipe)
-		if recipe.required_level > player_level:
+		if blueprint_locked:
+			name_label.add_theme_color_override("font_color", Color(0.45, 0.45, 0.55))
+		elif recipe.required_level > player_level:
 			name_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
 		elif can_craft:
 			name_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
@@ -187,7 +192,15 @@ func _show_recipe_list() -> void:
 		var btn = Button.new()
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.add_theme_font_size_override("font_size", 10)
-		if recipe.required_level > player_level:
+		if blueprint_locked:
+			var progress = gm.get_blueprint_progress(result_item.blueprint_id) if gm else 0
+			var def = gm.get_blueprint_definition(result_item.blueprint_id) if gm else null
+			if def:
+				btn.text = "BP %d/%d" % [progress, def.required_fragments]
+			else:
+				btn.text = "LOCKED"
+			btn.disabled = true
+		elif recipe.required_level > player_level:
 			btn.text = "Lv" + str(recipe.required_level)
 			btn.disabled = true
 		else:
@@ -326,6 +339,10 @@ func _do_craft(recipe: CraftingRecipe) -> void:
 		for i in range(recipe.result_count):
 			var copy = result_item.make_copy()
 			_equipment_manager.add_to_inventory(copy)
+		if gm:
+			gm.record_crafted_item(recipe.result_item_path, recipe.result_count)
+			for ing in recipe.ingredients:
+				gm.record_material_discovery(str(ing.get("item_name", "")), "crafted_with")
 
 	_status_label.text = "Crafted: " + recipe.recipe_name + "!"
 	if _craft_type == "alchemist":

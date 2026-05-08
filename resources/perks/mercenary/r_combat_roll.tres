@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "r_combat_roll"
+perk_name = "Combat Roll"
+description = "Dash grants 1s stealth"
+class_required = "mercenary"
+tier = 2
+prerequisites = ["r_dual_wield"]
+stat_bonuses = {}
+special_effect = "combat_roll"
+is_percent = false

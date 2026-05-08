@@ -17,6 +17,7 @@ extends Resource
 @export var equipped_items: Dictionary = {}  # slot_type(int) -> item_path(String)
 @export var inventory_items: Array[String] = []  # array of item resource paths
 @export var inventory_quantities: Dictionary = {}  # inv_index(int) -> quantity(int) for ammo items
+@export var inventory_item_states: Dictionary = {}  # inv_index(int) -> per-instance state (sockets, gems, future craft state)
 @export var secondary_weapon_path: String = ""  # weapon swap secondary (mercenary/ranger)
 @export var quickbar_items: Array[String] = ["", "", "", "", "", ""]  # item_name per slot
 @export var learned_spells: Array[Dictionary] = []  # spell data as dicts
@@ -35,10 +36,19 @@ extends Resource
 @export var completed_quests: Array[String] = []
 @export var npc_states: Dictionary = {}  # npc_name -> {talked, flags}
 @export var harvested_nodes: Dictionary = {}  # "zone_id:index" -> depleted_timestamp (float)
+@export var gem_bag: Array[String] = []  # resource paths of held gems
 @export var discovered_blueprints: Array[String] = []
+@export var discovered_gems: Array[String] = []
+@export var blueprint_progress: Dictionary = {}  # blueprint_id -> research/fragments count
+@export var salvage_points: int = 0  # universal crafting currency from salvaging
+@export var crafted_item_counts: Dictionary = {}  # item_path or item_id -> craft count
+@export var material_codex: Dictionary = {}  # material_id -> {seen, mined, crafted_with}
+@export var enemy_codex: Dictionary = {}  # enemy_id -> {seen, kills, drops_seen}
 @export var owned_territories: Array[String] = []
 @export var permanent_upgrades: Dictionary = {}  # upgrade_id -> level
 @export var army_divisions: Array[Dictionary] = []
+@export var perk_tokens: int = 0
+@export var unlocked_perks: Array[String] = []
 
 # --- Future-proof (empty until implemented) ---
 @export var city_states: Dictionary = {}
@@ -87,6 +97,7 @@ func wipe_character() -> void:
 	equipped_items.clear()
 	inventory_items.clear()
 	inventory_quantities.clear()
+	inventory_item_states.clear()
 	secondary_weapon_path = ""
 	quickbar_items = ["", "", "", "", "", ""]
 	learned_spells.clear()

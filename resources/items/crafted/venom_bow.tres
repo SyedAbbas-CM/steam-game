@@ -11,6 +11,7 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Venom Bow"
+blueprint_id = "venom_bow_blueprint"
 loy_tile_index = 91
 description = "A bow that drips with venom."
 slot_type = 1

@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="AreaMoodProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/area_mood_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+ambient_color = Color(0.9, 0.9, 0.9, 1)
+is_dark = true
+darkness_color = Color(0.09, 0.09, 0.11, 1)
+torch_color = Color(1.0, 0.82, 0.45, 1)
+torch_intensity = 0.75
+torch_radius = 90.0
+torch_flicker = true
+torch_shadows = false
+player_light_radius = 120.0
+player_light_color = Color(0.9, 0.85, 0.7, 1)
+player_light_energy = 0.8
+player_light_shadows = true
+glow_enabled = true
+glow_intensity = 0.35
+glow_bloom = 0.2
+vignette_strength = 0.42
+vignette_softness = 0.7
+vignette_color = Color(0.0, 0.0, 0.0, 0.78)

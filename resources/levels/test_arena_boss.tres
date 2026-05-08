@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="DungeonLevelData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/dungeon_level_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "Test-Arena-Boss"
+tileset = 0
+chests = 4
+width = 180
+height = 90
+rooms = 6
+min_monsters = 1
+max_monsters = 1
+aggro_chance = 0
+requires_key = false
+recommended_level = 0
+legend = "Boss Pattern Lab"
+monster_pool = []
+fixed_monsters = [{ "type": "Spectre" }, { "type": "Bone Golem" }, { "type": "Artillery Golem" }, { "type": "Crystal Golem" }, { "type": "Magma Golem" }]
+branch_monsters = []
+west_branch = []
+south_branch = []
+arena_room_scale = 3
+chest_loot = []
+has_rail_traps = false

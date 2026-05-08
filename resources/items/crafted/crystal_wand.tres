@@ -11,6 +11,7 @@ flat_bonus = 7.0
 [resource]
 script = ExtResource("1")
 item_name = "Crystal Wand"
+blueprint_id = "crystal_wand_blueprint"
 loy_tile_index = 91
 description = "A wand imbued with crystalline energy."
 slot_type = 2

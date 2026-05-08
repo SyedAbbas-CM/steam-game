@@ -118,6 +118,35 @@ func _build_slot_select() -> void:
 		var panel = _build_slot_panel(slot)
 		slot_row.add_child(panel)
 
+	var coop_panel = PanelContainer.new()
+	var coop_style = StyleBoxFlat.new()
+	coop_style.bg_color = Color(0.05, 0.08, 0.12)
+	coop_style.border_color = Color(0.22, 0.4, 0.55)
+	coop_style.set_border_width_all(2)
+	coop_style.set_corner_radius_all(8)
+	coop_style.content_margin_left = 18
+	coop_style.content_margin_right = 18
+	coop_style.content_margin_top = 12
+	coop_style.content_margin_bottom = 12
+	coop_panel.add_theme_stylebox_override("panel", coop_style)
+	var coop_box = VBoxContainer.new()
+	coop_box.add_theme_constant_override("separation", 6)
+	coop_panel.add_child(coop_box)
+	var coop_title = Label.new()
+	coop_title.text = "Co-op Prototype"
+	coop_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	coop_title.add_theme_font_size_override("font_size", 20)
+	coop_title.add_theme_color_override("font_color", Color(0.72, 0.86, 1.0))
+	coop_box.add_child(coop_title)
+	var coop_desc = Label.new()
+	coop_desc.text = "Host-authoritative ENet test path.\nLAN/direct IP now, with optional UPnP host setup for internet-host groundwork."
+	coop_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	coop_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	coop_desc.add_theme_font_size_override("font_size", 14)
+	coop_desc.add_theme_color_override("font_color", Color(0.7, 0.75, 0.82))
+	coop_box.add_child(coop_desc)
+	_container.add_child(coop_panel)
+
 func _build_slot_panel(slot: int) -> VBoxContainer:
 	var gm = get_node_or_null("/root/GameManager")
 	var vbox = VBoxContainer.new()
@@ -177,6 +206,14 @@ func _build_slot_panel(slot: int) -> VBoxContainer:
 			var continue_btn = _make_btn("Continue", Color(0.2, 0.5, 0.2))
 			continue_btn.pressed.connect(_on_continue.bind(slot))
 			btn_box.add_child(continue_btn)
+
+			var host_btn = _make_btn("Host Boss Arena", Color(0.15, 0.35, 0.55))
+			host_btn.pressed.connect(_show_host_coop_dialog.bind(slot))
+			btn_box.add_child(host_btn)
+
+			var join_btn = _make_btn("Join Boss Arena", Color(0.2, 0.25, 0.45))
+			join_btn.pressed.connect(_show_join_coop_dialog.bind(slot))
+			btn_box.add_child(join_btn)
 		else:
 			var new_char_btn = _make_btn("Pick New Class", Color(0.4, 0.3, 0.1))
 			new_char_btn.pressed.connect(_on_new_character.bind(slot))
@@ -297,6 +334,203 @@ func _show_delete_confirm(slot: int) -> void:
 	)
 	btn_row.add_child(no_btn)
 
+func _show_join_coop_dialog(slot: int) -> void:
+	_play_click()
+	var overlay = ColorRect.new()
+	overlay.name = "JoinCoopDialog"
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0.0, 0.0, 0.0, 0.76)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay)
+
+	var center = VBoxContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	center.custom_minimum_size = Vector2(420, 0)
+	center.add_theme_constant_override("separation", 12)
+	center.alignment = BoxContainer.ALIGNMENT_CENTER
+	overlay.add_child(center)
+
+	var title = Label.new()
+	title.text = "Join Boss Arena Prototype"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", Color(0.9, 0.9, 1.0))
+	center.add_child(title)
+
+	var hint = Label.new()
+	hint.text = "Use LAN IP on same Wi-Fi now. Public IP join is possible later if the host opens the port or UPnP succeeds."
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.add_theme_color_override("font_color", Color(0.72, 0.74, 0.82))
+	center.add_child(hint)
+
+	var ip_edit = LineEdit.new()
+	ip_edit.placeholder_text = "Host IP address"
+	ip_edit.custom_minimum_size = Vector2(360, 38)
+	center.add_child(ip_edit)
+
+	var port_edit = LineEdit.new()
+	port_edit.placeholder_text = "Port"
+	port_edit.text = "24567"
+	port_edit.custom_minimum_size = Vector2(160, 38)
+	center.add_child(port_edit)
+
+	var error_label = Label.new()
+	error_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	error_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.45))
+	center.add_child(error_label)
+
+	var btn_row = HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	center.add_child(btn_row)
+
+	var join_btn = _make_btn("Join", Color(0.15, 0.35, 0.55))
+	join_btn.pressed.connect(func():
+		var address: String = ip_edit.text.strip_edges()
+		var port: int = int(port_edit.text) if port_edit.text.is_valid_int() else 24567
+		if address == "":
+			error_label.text = "IP address is required."
+			return
+		var gm = get_node_or_null("/root/GameManager")
+		if gm == null:
+			error_label.text = "GameManager not found."
+			return
+		var err: Error = gm.join_coop_boss_arena(slot, address, port)
+		if err != OK:
+			error_label.text = "Join failed: %s" % error_string(err)
+			return
+		overlay.queue_free()
+	)
+	btn_row.add_child(join_btn)
+
+	var cancel_btn = _make_btn("Cancel", Color(0.3, 0.3, 0.3))
+	cancel_btn.pressed.connect(func(): overlay.queue_free())
+	btn_row.add_child(cancel_btn)
+
+func _on_host_boss_arena(slot: int) -> void:
+	_play_click()
+	var gm = get_node_or_null("/root/GameManager")
+	if gm == null:
+		return
+	var result: Dictionary = gm.host_coop_boss_arena(slot)
+	var err: Error = int(result.get("error", OK))
+	if err != OK:
+		_show_simple_modal("Host failed: %s" % error_string(err), Color(1.0, 0.45, 0.45))
+
+func _show_host_coop_dialog(slot: int) -> void:
+	_play_click()
+	var overlay = ColorRect.new()
+	overlay.name = "HostCoopDialog"
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0.0, 0.0, 0.0, 0.76)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay)
+
+	var center = VBoxContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	center.custom_minimum_size = Vector2(460, 0)
+	center.add_theme_constant_override("separation", 12)
+	center.alignment = BoxContainer.ALIGNMENT_CENTER
+	overlay.add_child(center)
+
+	var title = Label.new()
+	title.text = "Host Boss Arena Prototype"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", Color(0.9, 0.9, 1.0))
+	center.add_child(title)
+
+	var hint = Label.new()
+	hint.text = "LAN works first. Enable UPnP to attempt public internet hosting without manual router setup."
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.add_theme_color_override("font_color", Color(0.72, 0.74, 0.82))
+	center.add_child(hint)
+
+	var port_edit = LineEdit.new()
+	port_edit.placeholder_text = "Port"
+	port_edit.text = "24567"
+	port_edit.custom_minimum_size = Vector2(160, 38)
+	center.add_child(port_edit)
+
+	var upnp_toggle = CheckBox.new()
+	upnp_toggle.text = "Try UPnP internet hosting"
+	upnp_toggle.button_pressed = true
+	center.add_child(upnp_toggle)
+
+	var result_label = Label.new()
+	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	result_label.custom_minimum_size = Vector2(400, 0)
+	result_label.add_theme_color_override("font_color", Color(0.78, 0.82, 0.9))
+	center.add_child(result_label)
+
+	var error_label = Label.new()
+	error_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	error_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.45))
+	center.add_child(error_label)
+
+	var btn_row = HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	center.add_child(btn_row)
+
+	var host_btn = _make_btn("Start Host", Color(0.15, 0.35, 0.55))
+	host_btn.pressed.connect(func():
+		var port: int = int(port_edit.text) if port_edit.text.is_valid_int() else 24567
+		var gm = get_node_or_null("/root/GameManager")
+		var coop = get_node_or_null("/root/CoopSession")
+		if gm == null or coop == null:
+			error_label.text = "Multiplayer systems not found."
+			return
+		var result: Dictionary = gm.host_coop_boss_arena(slot, port, 4, upnp_toggle.button_pressed)
+		var err: Error = int(result.get("error", OK))
+		if err != OK:
+			error_label.text = "Host failed: %s" % error_string(err)
+			return
+		var net: Dictionary = coop.get_host_network_summary()
+		var locals: PackedStringArray = net.get("local_addresses", PackedStringArray())
+		var local_text: String = ", ".join(locals) if not locals.is_empty() else "none found"
+		var external_text: String = String(net.get("external_address", ""))
+		var upnp_ok: bool = bool(net.get("upnp_ok", false))
+		var lines: Array[String] = []
+		lines.append("LAN IPs: %s" % local_text)
+		lines.append("Port: %d" % int(net.get("port", port)))
+		if external_text != "":
+			lines.append("Public IP: %s" % external_text)
+		lines.append("UPnP: %s" % ("opened" if upnp_ok else "not opened"))
+		result_label.text = "\n".join(lines)
+		error_label.text = ""
+	)
+	btn_row.add_child(host_btn)
+
+	var close_btn = _make_btn("Close", Color(0.3, 0.3, 0.3))
+	close_btn.pressed.connect(func(): overlay.queue_free())
+	btn_row.add_child(close_btn)
+
+func _show_simple_modal(message: String, color: Color) -> void:
+	var overlay = ColorRect.new()
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0.0, 0.0, 0.0, 0.7)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay)
+	var center = VBoxContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	center.add_theme_constant_override("separation", 12)
+	center.alignment = BoxContainer.ALIGNMENT_CENTER
+	overlay.add_child(center)
+	var msg = Label.new()
+	msg.text = message
+	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg.add_theme_font_size_override("font_size", 20)
+	msg.add_theme_color_override("font_color", color)
+	center.add_child(msg)
+	var ok_btn = _make_btn("OK", Color(0.3, 0.3, 0.3))
+	ok_btn.pressed.connect(func(): overlay.queue_free())
+	center.add_child(ok_btn)
+
 # ============================================================
 #  Phase 2 — Class Selection
 # ============================================================
@@ -399,7 +633,7 @@ func _create_class_button(class_id: String, data: Dictionary) -> VBoxContainer:
 	content.add_child(desc_lbl)
 
 	var stats_lbl = Label.new()
-	stats_lbl.text = "HP:%d SPD:%d DMG:%s" % [data["hp"], data["spd"], data["dmg"]]
+	stats_lbl.text = "Health:%d  Move:%d  Attack:%s" % [data["hp"], data["spd"], data["dmg"]]
 	stats_lbl.add_theme_font_size_override("font_size", 13)
 	stats_lbl.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
 	stats_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

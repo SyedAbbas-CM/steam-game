@@ -1,5 +1,7 @@
 extends Node
 
+const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+
 ## Autoload singleton managing quests, dialogue execution, and NPC scripts
 
 signal quest_started(quest_id: String)
@@ -61,7 +63,7 @@ func _load_item_cache() -> void:
 	print("QuestManager: Cached " + str(_item_cache.size()) + " item names")
 
 func _get_player() -> Node:
-	return get_tree().get_first_node_in_group("player")
+	return PlayerQuery.get_primary_player(get_tree())
 
 func _get_equipment_manager() -> EquipmentManager:
 	var p = _get_player()
@@ -439,6 +441,19 @@ func _execute_script(commands: Array, context_quest_id: String) -> void:
 						shop_ui.open_shop(sid)
 					else:
 						print("QuestManager: ShopUI not found in scene tree")
+
+			"openPerkTree":
+				var pt = get_tree().get_first_node_in_group("perk_tree_screen")
+				if pt:
+					if pt.has_method("open"):
+						pt.open()
+					else:
+						pt.visible = true
+						if pt.has_method("_refresh"):
+							pt._refresh()
+						get_tree().paused = true
+				else:
+					print("QuestManager: PerkTreeScreen not found in scene tree")
 
 		i += 1
 

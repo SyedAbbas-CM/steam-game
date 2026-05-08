@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="GemDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/gem_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="StatModifier_hp"]
+script = ExtResource("2")
+stat = 0
+flat_bonus = 12.0
+
+[resource]
+script = ExtResource("1")
+gem_id = "flawed_diamond"
+gem_name = "Flawed Diamond"
+description = "A cloudy white gem that greatly bolsters vitality."
+family = 5
+tier = 2
+color_hint = Color(0.8, 0.85, 0.9, 1)
+modifiers = [SubResource("StatModifier_hp")]
+tags = PackedStringArray("health", "defense", "diamond")
+buy_price = 120
+sell_value = 48

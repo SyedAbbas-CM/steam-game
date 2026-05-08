@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "w_bulwark"
+perk_name = "Bulwark"
+description = "+30 shield charges"
+class_required = "warrior"
+tier = 1
+prerequisites = []
+stat_bonuses = {}
+special_effect = "bulwark"
+is_percent = false

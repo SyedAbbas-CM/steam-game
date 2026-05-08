@@ -38,6 +38,12 @@ static func is_equippable(slot: SlotType) -> bool:
 @export var bullet_sprite_index: int = -1  # index into lofi_obj.png (8x8 tiles, 16x16 grid). -1 = default
 @export var weapon_range: float = 0.0  # effective range override (0 = use default bullet_lifetime)
 @export var weapon_type: String = ""  # sword, dagger, axe, club, hammer, flail, spear, throwing, bow, short_bow, crossbow, staff
+@export var archetype_tags: PackedStringArray = PackedStringArray()
+@export var blueprint_id: String = ""
+@export var salvage_research_family: String = ""
+@export var socket_count: int = 0
+@export var socket_types: PackedStringArray = PackedStringArray()
+@export var socketed_gem_paths: PackedStringArray = PackedStringArray()
 
 # Tracks original .tres path for save/load (set when duplicating)
 var source_path: String = ""
@@ -69,7 +75,84 @@ var source_path: String = ""
 func make_copy() -> EquipmentItem:
 	var copy = duplicate() as EquipmentItem
 	copy.source_path = resource_path if resource_path != "" else source_path
+	copy._randomize_sockets()
 	return copy
+
+static func _roll_random_socket_count() -> int:
+	# 80% chance of 0 sockets
+	if randf() < 0.80:
+		return 0
+	# Geometric distribution: 60% stop, 40% add another
+	# 1 socket: ~12% overall, 2: ~4.8%, 3: ~1.9%, 4+: <1%
+	var count := 1
+	while randf() < 0.4:
+		count += 1
+	return count
+
+func _randomize_sockets() -> void:
+	# Only equippable gear gets random sockets (not consumables, materials, ammo)
+	if not EquipmentItem.is_equippable(slot_type) or slot_type == SlotType.AMMO:
+		socket_count = 0
+		_normalize_sockets()
+		return
+	socket_count = EquipmentItem._roll_random_socket_count()
+	socket_types = PackedStringArray()
+	socketed_gem_paths = PackedStringArray()
+	_normalize_sockets()
+
+func _normalize_sockets() -> void:
+	socket_count = maxi(socket_count, 0)
+	while socket_types.size() < socket_count:
+		socket_types.append("open")
+	if socket_types.size() > socket_count:
+		socket_types = PackedStringArray(Array(socket_types).slice(0, socket_count))
+	while socketed_gem_paths.size() < socket_count:
+		socketed_gem_paths.append("")
+	if socketed_gem_paths.size() > socket_count:
+		socketed_gem_paths = PackedStringArray(Array(socketed_gem_paths).slice(0, socket_count))
+
+func get_effective_tags() -> PackedStringArray:
+	return archetype_tags
+
+func get_item_instance_state() -> Dictionary:
+	_normalize_sockets()
+	return {
+		"socket_count": socket_count,
+		"socket_types": Array(socket_types),
+		"socketed_gem_paths": Array(socketed_gem_paths),
+	}
+
+func apply_item_instance_state(state: Dictionary) -> void:
+	if state.has("socket_count"):
+		socket_count = maxi(int(state["socket_count"]), 0)
+	if state.has("socket_types"):
+		socket_types = PackedStringArray(state["socket_types"])
+	if state.has("socketed_gem_paths"):
+		socketed_gem_paths = PackedStringArray(state["socketed_gem_paths"])
+	_normalize_sockets()
+
+func has_socketed_gems() -> bool:
+	for gem_path in socketed_gem_paths:
+		if gem_path != "":
+			return true
+	return false
+
+func get_socketed_gem_count() -> int:
+	var total := 0
+	for gem_path in socketed_gem_paths:
+		if gem_path != "":
+			total += 1
+	return total
+
+func get_socketed_gems() -> Array[GemDefinition]:
+	var gems: Array[GemDefinition] = []
+	for gem_path in socketed_gem_paths:
+		if gem_path == "":
+			continue
+		var gem = load(gem_path) as GemDefinition
+		if gem:
+			gems.append(gem)
+	return gems
 
 func get_weapon_type() -> String:
 	if weapon_type != "":

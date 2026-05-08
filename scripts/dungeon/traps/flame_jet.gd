@@ -15,21 +15,28 @@ const DAMAGE_INTERVAL = 0.1
 const BURST_RANGE = 32.0  # 4 tiles
 const ENEMY_DAMAGE_MULT = 2
 const SFX_RANGE_SQ = 2500.0  # only play SFX within ~50px of player
+const ACTIVE_RANGE_SQ = 36864.0  # 192px; sleep when far from player
 var _damage_tick: float = 0.0
 var _idle_flicker: float = 0.0
+var _redraw_timer: float = 0.0
+const REDRAW_INTERVAL = 0.06
 
 func _ready() -> void:
 	super._ready()
 	_fire_timer = randf() * FIRE_INTERVAL
 
 func get_damage() -> int:
-	return 2
+	return 6 + floor_number * 2
 
 func _physics_process(delta: float) -> void:
 	if not _active or not is_inside_tree():
 		return
+	var player = _find_player()
+	if player == null or global_position.distance_squared_to(player.global_position) > ACTIVE_RANGE_SQ:
+		return
 
 	_idle_flicker += delta
+	_redraw_timer -= delta
 
 	if _is_bursting:
 		_burst_timer += delta
@@ -38,9 +45,7 @@ func _physics_process(delta: float) -> void:
 		if _damage_tick >= DAMAGE_INTERVAL:
 			_damage_tick -= DAMAGE_INTERVAL
 			var damage = get_damage()
-			var player = _find_player()
-			if player:
-				_try_flame_hit(player, damage)
+			_try_flame_hit(player, damage)
 			for enemy in get_tree().get_nodes_in_group("enemy"):
 				if is_instance_valid(enemy):
 					_try_flame_hit(enemy, damage)
@@ -57,7 +62,9 @@ func _physics_process(delta: float) -> void:
 			_fire_timer -= FIRE_INTERVAL
 			_start_burst()
 
-	queue_redraw()
+	if _redraw_timer <= 0.0:
+		_redraw_timer = REDRAW_INTERVAL
+		queue_redraw()
 
 func _try_flame_hit(target: Node2D, damage: int) -> void:
 	var to_target = target.global_position - global_position
@@ -83,7 +90,7 @@ func _start_burst() -> void:
 
 	if not _particles:
 		_particles = CPUParticles2D.new()
-		_particles.amount = 25
+		_particles.amount = 12
 		_particles.lifetime = 0.3
 		_particles.one_shot = false
 		_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINT

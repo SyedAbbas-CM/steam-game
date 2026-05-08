@@ -30,4 +30,4 @@ boss_phases = 2
 phase_2_attack = 7
 phase_2_bullet_count = 6
 xp_value = 25
-score_value = 40
+score_value = 20

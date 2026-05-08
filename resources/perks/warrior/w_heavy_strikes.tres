@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "w_heavy_strikes"
+perk_name = "Heavy Strikes"
+description = "+20% melee damage"
+class_required = "warrior"
+tier = 1
+prerequisites = []
+stat_bonuses = {2: 20.0}
+special_effect = ""
+is_percent = true

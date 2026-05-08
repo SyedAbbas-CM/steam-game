@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "r_jack_trades"
+perk_name = "Jack of Trades"
+description = "All stat allocation categories get +1 free point"
+class_required = "mercenary"
+tier = 3
+prerequisites = ["r_survivor"]
+stat_bonuses = {}
+special_effect = "jack_of_trades"
+is_percent = false

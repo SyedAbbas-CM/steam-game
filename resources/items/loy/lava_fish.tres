@@ -6,7 +6,7 @@
 script = ExtResource("1")
 item_name = "Lava Fish"
 loy_tile_index = 384
-description = "A bright yellow fish (+30 zen)"
+description = "Restores 30 HP. Bottled in better days, priced for these ones."
 slot_type = 10
 rarity = 0
 buy_price = 60

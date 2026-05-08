@@ -1,31 +1,36 @@
-[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/boss_states/spectre_opening.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/boss_states/spectre_bounce_fan.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/boss_states/spectre_shroud_ring.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/boss_states/spectre_death_spiral.tres" id="5"]
 
 [resource]
 script = ExtResource("1")
 
 enemy_name = "Spectre"
 description = "A massive demented spirit that floods the room with spiraling death"
-max_hp = 32
-move_speed = 20.0
-contact_damage = 2
+max_hp = 58
+move_speed = 22.0
+contact_damage = 1
 level = 8
 kingdom = "undead"
-size_class = 1
+size_class = 2
 hostile = true
 attack_type = 14
-attack_damage = 2
-attack_speed = 1.8
-bullet_speed = 55
+attack_damage = 1
+attack_speed = 1.2
+bullet_speed = 62
 bullet_count = 5
 preferred_distance = 40.0
 charge_speed = 80.0
 charge_duration = 0.3
 aggro_range = 90.0
 ignores_terrain = true
+boss_states = Array[Resource]([ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5")])
 use_loy_sprite = true
 loy_tile_index = 45
 sprite_color = Color(0.8, 0.85, 1, 0.8)
-xp_value = 50
-score_value = 100
+xp_value = 140
+score_value = 280

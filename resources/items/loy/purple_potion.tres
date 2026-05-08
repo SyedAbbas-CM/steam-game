@@ -6,7 +6,7 @@
 script = ExtResource("1")
 item_name = "Purple Potion"
 loy_tile_index = 79
-description = "A vial of purple liquid (+65HP) (Heals 65 HP)"
+description = "Restores 65 HP. Drink in a single pull — the second sip is always wasted."
 slot_type = 10
 rarity = 0
 buy_price = 40

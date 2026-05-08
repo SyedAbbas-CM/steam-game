@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+
+enemy_name = "Bone Brute"
+description = "Heavy skeleton that bulldozes into targets. Heavier than a normal player."
+max_hp = 8
+move_speed = 22.0
+contact_damage = 2
+level = 1
+kingdom = "undead"
+size_class = 1
+hostile = true
+attack_type = 0
+attack_damage = 2
+attack_speed = 2.0
+bullet_speed = 0
+bullet_count = 0
+preferred_distance = 0.0
+charge_speed = 0.0
+charge_duration = 0.0
+aggro_range = 50.0
+ignores_terrain = false
+use_loy_sprite = true
+loy_tile_index = 73
+sprite_color = Color(0.7, 0.65, 0.5, 1)
+xp_value = 5
+score_value = 8
+knockback_resistance = 0.6

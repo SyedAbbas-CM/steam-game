@@ -1,5 +1,7 @@
 extends CharacterBody2D
 
+const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+
 enum State { IDLE, CHASE, ATTACK, COOLDOWN, CHARGING, DEAD, STEALTHED, INVESTIGATE }
 
 var definition: EnemyDefinition
@@ -54,6 +56,7 @@ var _nudge_velocity: Vector2 = Vector2.ZERO
 # Awareness meter (gradual aggro)
 var _awareness: float = 0.0  # 0.0–1.0: unaware → suspicious → alert
 var _awareness_indicator: Label  # ? or ! above sprite
+var _facing_dir: Vector2 = Vector2.RIGHT  # direction enemy is "looking" for vision cone
 var _current_phase: int = 1
 var _max_hp: int = 0
 var _animator: SpriteAnimator
@@ -76,6 +79,7 @@ var _break_timer: float = 0.0  # obstacle breaking check timer
 var _elite_taunt_done: bool = false  # elite aggro taunt animation
 var _boss_shadow: Node2D  # pulsing shadow under boss
 var _boss_name_label: Label  # name label above boss
+var _boss_base_name: String = ""
 
 # Random attack pool for elites/bosses
 var _attack_pool: Array[int] = []  # random attack types assigned on setup
@@ -94,6 +98,16 @@ var _shared_vision_checked: bool = false  # one-time shared vision performed?
 # Boss HP bar
 var _hp_bar_bg: ColorRect
 var _hp_bar_fill: ColorRect
+
+# Explicit boss-state machine
+var _boss_state_index: int = -1
+var _boss_state_elapsed: float = 0.0
+var _boss_state_attack_timer: float = 0.0
+var _boss_pending_trigger: String = ""
+var _boss_spin_angle: float = 0.0
+var _boss_sequence_index: int = -1
+var _boss_sequence_elapsed: float = 0.0
+var _boss_sequence_attack_timer: float = 0.0
 
 # Boss HP regen
 var _time_since_hit: float = 0.0
@@ -119,7 +133,10 @@ func _ready() -> void:
 	bullet_scene = preload("res://scenes/bullet.tscn")
 	pickup_scene = preload("res://scenes/pickup.tscn")
 	collision_layer = 2
-	collision_mask = 17  # collide with walls (16) + player (1)
+	# walls (16) + player (1) + cliff walls (64)
+	collision_mask = 1 | 16 | 64
+	# Render above terrain height layers
+	z_index = 5
 	add_to_group("enemy")
 	if is_inside_tree():
 		player = get_tree().get_first_node_in_group("player")
@@ -163,6 +180,17 @@ func setup(def: EnemyDefinition) -> void:
 		EnemyDefinition.SizeClass.BOSS:
 			size_mult = 3.0
 			_weight = 5.0
+	# Ranged/support enemies are lighter (easier to push) unless elite/boss
+	if def.size_class == EnemyDefinition.SizeClass.NORMAL:
+		var _at = def.attack_type
+		var _melee_types = [
+			EnemyDefinition.AttackType.MELEE, EnemyDefinition.AttackType.CHARGE,
+			EnemyDefinition.AttackType.DASH, EnemyDefinition.AttackType.NONE,
+			EnemyDefinition.AttackType.SWORD_SLASH, EnemyDefinition.AttackType.SHIELD_BASH,
+			EnemyDefinition.AttackType.SLAM, EnemyDefinition.AttackType.STRAFE_RUN,
+		]
+		if _at not in _melee_types:
+			_weight = 0.5  # ranged/support enemies are easy to push
 	if size_mult > 1.0:
 		if spr: spr.scale *= size_mult
 		if loy_spr: loy_spr.scale *= size_mult
@@ -193,17 +221,17 @@ func setup(def: EnemyDefinition) -> void:
 		_create_boss_name_label(def.enemy_name)
 		_create_boss_shadow()
 
-	# Assign random attack pool for elites/bosses (skip if attack_slots defined)
-	if _is_boss_or_large and def.attack_slots.size() == 0:
+	# Assign random attack pool for elites/bosses only when they do not have an authored boss state machine.
+	if _is_boss_or_large and def.attack_slots.size() == 0 and not _uses_boss_state_machine():
 		_assign_random_attack_pool(def)
 
 	# Auto-assign the new movement system for regular enemies.
 	# Keep explicit authored test-arena movement resources intact.
 	var _movement_path := def.resource_path
 	var _is_test_movement_enemy := _movement_path.find("/resources/enemies/test/") != -1
-	if not _is_test_movement_enemy:
+	if not _is_test_movement_enemy and not _uses_boss_state_machine():
 		_assign_random_movement(def)
-	elif not def.movement_pattern:
+	elif not def.movement_pattern and not _uses_boss_state_machine():
 		_assign_random_movement(def)
 
 	# Awareness indicator (? or !) above sprite
@@ -217,7 +245,24 @@ func setup(def: EnemyDefinition) -> void:
 	_awareness_indicator.z_index = 10
 	add_child(_awareness_indicator)
 
+	# Scale bullet speed by enemy level — low level = slower, high level = faster
+	# Level 1-3: cap at 50, Level 4-8: cap at 70, Level 9-14: cap at 90, Level 15+: uncapped
+	if def.bullet_speed > 0:
+		var lvl = def.level
+		var speed_cap := 999.0
+		if lvl <= 3:
+			speed_cap = 50.0
+		elif lvl <= 8:
+			speed_cap = 70.0
+		elif lvl <= 14:
+			speed_cap = 90.0
+		# Add slight random variation (±10%)
+		var variation = randf_range(0.9, 1.1)
+		definition.bullet_speed = minf(def.bullet_speed * variation, speed_cap)
+
 	state = State.IDLE
+	if _uses_boss_state_machine():
+		_enter_boss_state(0)
 
 # Interesting attacks for random pool (excludes basic NONE/MELEE/RANGED/SPLIT/STEALTH/HEAL)
 const ATTACK_POOL_CANDIDATES: Array = [
@@ -449,6 +494,65 @@ func _assign_random_attack_pool(def: EnemyDefinition) -> void:
 	_attack_pool.shuffle()
 	_attack_pool_idx = 0
 
+func _uses_boss_state_machine() -> bool:
+	return definition != null and definition.boss_states.size() > 0
+
+func _get_active_players() -> Array[Node2D]:
+	if not is_inside_tree():
+		return []
+	return PlayerQuery.get_active_players(get_tree())
+
+func _get_primary_player() -> Node2D:
+	if not is_inside_tree():
+		return null
+	return PlayerQuery.get_primary_player(get_tree())
+
+func _get_nearest_player(from_pos: Vector2 = global_position) -> Node2D:
+	if not is_inside_tree():
+		return null
+	return PlayerQuery.get_nearest_player(get_tree(), from_pos)
+
+func _get_current_boss_state() -> BossState:
+	if not _uses_boss_state_machine():
+		return null
+	if _boss_state_index < 0 or _boss_state_index >= definition.boss_states.size():
+		return null
+	return definition.boss_states[_boss_state_index]
+
+func _get_current_boss_sequence_step():
+	var boss_state = _get_current_boss_state()
+	if boss_state == null or boss_state.sequence_steps.is_empty():
+		return null
+	if _boss_sequence_index < 0 or _boss_sequence_index >= boss_state.sequence_steps.size():
+		return null
+	return boss_state.sequence_steps[_boss_sequence_index]
+
+func _find_boss_state_index(state_id: String) -> int:
+	if not _uses_boss_state_machine() or state_id == "":
+		return -1
+	for i in range(definition.boss_states.size()):
+		var state = definition.boss_states[i] as BossState
+		if state and state.state_id == state_id:
+			return i
+	return -1
+
+func _enter_boss_state(index: int) -> void:
+	if not _uses_boss_state_machine():
+		return
+	if index < 0 or index >= definition.boss_states.size():
+		return
+	_boss_state_index = index
+	_boss_state_elapsed = 0.0
+	_boss_state_attack_timer = 0.0
+	_boss_sequence_index = 0
+	_boss_sequence_elapsed = 0.0
+	_boss_sequence_attack_timer = 0.0
+	_boss_pending_trigger = ""
+	_refresh_boss_name_label()
+
+func trigger_boss_state(trigger_name: String) -> void:
+	_boss_pending_trigger = trigger_name
+
 func _next_pool_attack() -> int:
 	if _attack_pool.is_empty():
 		return EnemyDefinition.AttackType.BURST
@@ -490,6 +594,7 @@ func _update_boss_hp_bar() -> void:
 		_hp_bar_bg.get_parent().global_position = global_position
 
 func _create_boss_name_label(boss_name: String) -> void:
+	_boss_base_name = boss_name
 	var container = Control.new()
 	var anchor = Node2D.new()
 	anchor.top_level = true
@@ -512,6 +617,22 @@ func _create_boss_name_label(boss_name: String) -> void:
 	_boss_name_label.position = Vector2(-est_w / 2.0, -72)  # -72 * 0.25 = -18 world px above
 	_boss_name_label.size = Vector2(est_w, 20)
 	container.add_child(_boss_name_label)
+	_refresh_boss_name_label()
+
+func _refresh_boss_name_label() -> void:
+	if _boss_name_label == null:
+		return
+	var text = _boss_base_name if _boss_base_name != "" else (definition.enemy_name if definition else "Boss")
+	var boss_state = _get_current_boss_state()
+	if boss_state and boss_state.display_name != "":
+		text += " - " + boss_state.display_name
+		var seq_step = _get_current_boss_sequence_step()
+		if seq_step and seq_step.display_name != "" and seq_step.display_name != boss_state.display_name:
+			text += " / " + seq_step.display_name
+	_boss_name_label.text = text
+	var est_w = text.length() * 9.0
+	_boss_name_label.position = Vector2(-est_w / 2.0, -72)
+	_boss_name_label.size = Vector2(est_w, 20)
 
 func _create_boss_shadow() -> void:
 	var _elapsed: float = 0.0
@@ -554,10 +675,11 @@ func _physics_process(delta: float) -> void:
 		return
 	if state == State.DEAD:
 		return
+	var nearest_player = _get_nearest_player()
+	if is_instance_valid(nearest_player):
+		player = nearest_player
 	if not is_instance_valid(player):
-		player = get_tree().get_first_node_in_group("player") if is_inside_tree() else null
-		if not player:
-			return
+		return
 
 	var to_player = player.global_position - global_position
 	var dist = to_player.length()
@@ -705,10 +827,11 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# Contact bounce: skip movement AI during bounce-back but still check damage
-	if _contact_bounce > 0:
+	# EXCEPTION: don't interrupt CHARGING state (lunges must complete)
+	if _contact_bounce > 0 and state != State.CHARGING:
 		_contact_bounce -= delta
 		velocity += _pushed_velocity
-		_pushed_velocity = _pushed_velocity.move_toward(Vector2.ZERO, delta * 600.0)
+		_pushed_velocity *= 0.85  # exponential decay — gone in ~0.3s at 60fps
 		move_and_slide()
 		_contact_cooldown -= delta
 		if _contact_cooldown <= 0:
@@ -732,6 +855,8 @@ func _physics_process(delta: float) -> void:
 					else:
 						_wander_dir = Vector2.ZERO
 				velocity = _wander_dir * speed * 0.6
+				if _wander_dir.length() > 0.1:
+					_facing_dir = _wander_dir.normalized()
 				if _enemy_anim:
 					_enemy_anim.set_direction(_wander_dir)
 				elif _wander_dir.x < 0:
@@ -769,7 +894,17 @@ func _physics_process(delta: float) -> void:
 					var stealth_factor = 1.0 / (1.0 + stealth_stat / 15.0)
 					# Sneak: 0.1x awareness ramp (very slow detection)
 					var sneak_factor = 0.1 if _player_sneaking else 1.0
-					_awareness = minf(_awareness + 3.0 * dist_factor * stealth_factor * sneak_factor * delta, 1.0)
+					# Vision cone: detection depends on angle between facing and player
+					var vision_factor = 1.0
+					if _facing_dir.length() > 0.1 and dir.length() > 0.1:
+						var facing_dot = _facing_dir.dot(dir)
+						if facing_dot > 0.5:  # front cone (~60deg)
+							vision_factor = 1.0
+						elif facing_dot > -0.25:  # side (~105deg)
+							vision_factor = 0.3
+						else:  # behind
+							vision_factor = 0.05
+					_awareness = minf(_awareness + 3.0 * dist_factor * stealth_factor * sneak_factor * vision_factor * delta, 1.0)
 				else:
 					_awareness = maxf(_awareness - 0.4 * delta, 0.0)
 				_update_awareness_indicator()
@@ -787,6 +922,7 @@ func _physics_process(delta: float) -> void:
 						state = State.INVESTIGATE
 		State.CHASE:
 			_chase_timer += delta
+			if dir.length() > 0.1: _facing_dir = dir
 			# Track player's position and movement direction while chasing
 			if is_instance_valid(player):
 				if player_vel.length() > 5.0:
@@ -843,9 +979,9 @@ func _physics_process(delta: float) -> void:
 							var bdmg = int((definition.attack_damage if definition else 2) * charge_mult)
 							player.take_damage(maxi(bdmg, 1), global_position, true, false)
 						# Push player in charge direction
-						var push_str = 250.0 if _is_bull else 150.0
-						if "_pushed_velocity" in player:
-							player._pushed_velocity = charge_dir * push_str
+						var push_str = 150.0 if _is_bull else 80.0
+						if player.has_method("apply_push"):
+							player.apply_push(charge_dir * push_str)
 						else:
 							player.velocity += charge_dir * push_str
 						set_meta(_charge_hit_key, true)
@@ -1006,9 +1142,15 @@ func _physics_process(delta: float) -> void:
 		_beam_angle += (definition.beam_sweep_speed if definition else 1.5) * delta
 		_shoot_single(Vector2.RIGHT.rotated(_beam_angle))
 
-	# Apply external push (from player collision)
+	# Apply external push (from player collision) — capped to prevent runaway accumulation
+	var max_push := 300.0
+	if _pushed_velocity.length_squared() > max_push * max_push:
+		_pushed_velocity = _pushed_velocity.normalized() * max_push
 	velocity += _pushed_velocity
-	_pushed_velocity = _pushed_velocity.move_toward(Vector2.ZERO, delta * 600.0)
+	_pushed_velocity *= 0.85  # exponential decay — gone in ~0.3s at 60fps
+
+	# Enemy-enemy soft separation (prevents stacking/clumping)
+	_apply_separation(delta)
 
 	_maybe_leave_trail(delta)
 	if has_meta("_wall_bounce_handled"):
@@ -1016,24 +1158,59 @@ func _physics_process(delta: float) -> void:
 	else:
 		move_and_slide()
 
+	# Post-move charge hit: if CHARGING and slide-collided with player, deal damage
+	if state == State.CHARGING and is_instance_valid(player):
+		var _chk = "_charge_dmg_dealt"
+		if not (has_meta(_chk) and get_meta(_chk)):
+			for si in range(get_slide_collision_count()):
+				var col = get_slide_collision(si)
+				if col.get_collider() == player:
+					if not ("_is_dashing" in player and player._is_dashing):
+						var _is_bull_c = has_meta("bull_charge") and get_meta("bull_charge")
+						var charge_mult_c = 2.0 if _is_bull_c else 1.5
+						var bdmg_c = int((definition.attack_damage if definition else 2) * charge_mult_c)
+						if player.has_method("take_damage"):
+							player.take_damage(maxi(bdmg_c, 1), global_position, true, false)
+						var push_str_c = 150.0 if _is_bull_c else 80.0
+						if player.has_method("apply_push"):
+							player.apply_push(charge_dir * push_str_c)
+						else:
+							player.velocity += charge_dir * push_str_c
+						set_meta(_chk, true)
+						var sfx_chc = get_node_or_null("/root/SFXManager")
+						if sfx_chc:
+							sfx_chc.play("impact_b", -5.0, 0.1)
+						var vfx_chc = get_node_or_null("/root/VFXManager")
+						if vfx_chc:
+							vfx_chc.hit_spark(player.global_position)
+					break
+
 	# Bounce-back on player contact to prevent sticking
-	if _contact_bounce <= 0:
+	# Skip during CHARGING (lunges must reach target) and KNOCKBACK
+	if _contact_bounce <= 0 and state != State.CHARGING and _knockback_timer <= 0:
 		for si in range(get_slide_collision_count()):
 			var col = get_slide_collision(si)
 			if col.get_collider() == player:
-				var bounce_dir = col.get_normal()  # points away from player
-				# Stronger bounce when player is dashing/sprinting
-				var bounce_str := 0.4
+				# Use center-to-center direction (away from player) — not slide normal
+				var bounce_dir: Vector2 = (global_position - player.global_position).normalized()
+				if bounce_dir == Vector2.ZERO:
+					bounce_dir = Vector2.RIGHT.rotated(randf() * TAU)
+				# Gentle baseline bounce; stronger only when player is dashing/sprinting
+				var bounce_str := 0.5
 				var bounce_time := 0.15
 				if is_instance_valid(player):
 					if "_is_dashing" in player and player._is_dashing:
-						bounce_str = 2.0
+						bounce_str = 2.5
 						bounce_time = 0.3
 					elif "_is_sprinting" in player and player._is_sprinting:
-						bounce_str = 1.0
+						bounce_str = 1.2
 						bounce_time = 0.2
 				velocity = bounce_dir * speed * bounce_str
+				_pushed_velocity = bounce_dir * speed * bounce_str * 0.3
 				_contact_bounce = bounce_time
+				# Trigger contact damage immediately on physical collision
+				if _contact_cooldown <= 0:
+					_check_contact_damage(true)
 				break
 
 	# Update enemy animation state
@@ -1049,10 +1226,18 @@ func _physics_process(delta: float) -> void:
 	if _time_warp_mult < 1.0:
 		velocity *= _time_warp_mult
 
-	# Contact damage — check if we collided with the player
+	# Contact damage — slide collision (reliable) + distance fallback
 	_contact_cooldown -= delta
 	if _contact_cooldown <= 0:
-		_check_contact_damage()
+		var _slide_touched := false
+		for _si_cd in range(get_slide_collision_count()):
+			if get_slide_collision(_si_cd).get_collider() == player:
+				_slide_touched = true
+				break
+		if _slide_touched:
+			_check_contact_damage(true)  # force — we physically touched
+		else:
+			_check_contact_damage(false)  # distance check
 
 func _move_intercept(dir: Vector2, dist: float, p: MovementPattern, spd: float, delta: float) -> void:
 	var perp = Vector2(-dir.y, dir.x)
@@ -1063,7 +1248,7 @@ func _move_intercept(dir: Vector2, dist: float, p: MovementPattern, spd: float, 
 		set_meta("ic_timer", 0.0)
 		set_meta("ic_target", Vector2.ZERO)
 	var ic_state: int = get_meta("ic_state")
-	var ic_timer: float = get_meta("ic_timer")
+	var ic_timer: float = float(get_meta("ic_timer"))
 	if ic_state == 0:
 		# Tracking — orbit at distance, wait for opening
 		velocity = (perp * 0.8 + dir * 0.2).normalized() * spd * 0.5
@@ -1165,8 +1350,8 @@ func _move_edge_skater(p: MovementPattern, spd: float, delta: float) -> void:
 		set_meta("es_dir", es_dir)
 		velocity = es_dir * es_speed
 	# Also check if we're drifting away from walls — steer back toward nearest wall
-	set_meta("es_wall_timer", get_meta("es_wall_timer") + delta)
-	if get_meta("es_wall_timer") > 2.0 and get_slide_collision_count() == 0:
+	set_meta("es_wall_timer", float(get_meta("es_wall_timer")) + delta)
+	if float(get_meta("es_wall_timer")) > 2.0 and get_slide_collision_count() == 0:
 		# Haven't hit a wall in 2s — veer toward spawn (room center has walls around it)
 		var to_wall = (_spawn_pos - global_position)
 		if to_wall.length() > 60.0:
@@ -1181,7 +1366,7 @@ func _move_bait_punish(dir: Vector2, dist: float, p: MovementPattern, spd: float
 		set_meta("bp_timer", 0.0)
 		set_meta("bp_prev_dist", dist)
 	var bp_state: int = get_meta("bp_state")
-	var bp_timer: float = get_meta("bp_timer")
+	var bp_timer: float = float(get_meta("bp_timer"))
 	match bp_state:
 		0:  # Bait — flee away from player
 			velocity = _steer_around_walls(-dir) * spd * 1.2
@@ -1195,7 +1380,7 @@ func _move_bait_punish(dir: Vector2, dist: float, p: MovementPattern, spd: float
 			velocity = Vector2.ZERO  # pause briefly
 			bp_timer += delta
 			set_meta("bp_timer", bp_timer)
-			var prev_d: float = get_meta("bp_prev_dist")
+			var prev_d: float = float(get_meta("bp_prev_dist"))
 			if dist < prev_d - 5.0 or bp_timer > 0.5:
 				# Player is pursuing or timeout — PUNISH
 				set_meta("bp_state", 2)
@@ -1407,7 +1592,7 @@ func _move_swoop(dir: Vector2, dist: float, p: MovementPattern, delta: float) ->
 		var swoop_dir = (dir + perp * side * 2.5).normalized()
 		velocity = swoop_dir * p.swoop_speed
 		# Track closest approach — once we start getting farther, we've passed
-		var prev_closest: float = get_meta("swoop_closest")
+		var prev_closest: float = float(get_meta("swoop_closest"))
 		if dist < prev_closest:
 			set_meta("swoop_closest", dist)
 		elif dist > prev_closest + 15.0:
@@ -1426,11 +1611,12 @@ func _move_swoop(dir: Vector2, dist: float, p: MovementPattern, delta: float) ->
 
 ## Teleport: blinks to random position in room when hit, also periodic blink
 func _move_teleport(p: MovementPattern, spd: float, delta: float) -> void:
-	var timer = Timer.new()
 	var to_spawn: Vector2 = _spawn_pos - global_position
 	if not has_meta("tp_timer"):
 		set_meta("tp_timer", p.teleport_interval)
 		set_meta("tp_last_hp", hp)
+	var timer: float = get_meta("tp_timer", p.teleport_interval) as float
+	timer -= delta
 	set_meta("tp_timer", timer)
 	# Reactive teleport: blink immediately when taking damage
 	var last_hp: int = get_meta("tp_last_hp", hp)
@@ -1549,6 +1735,30 @@ func _find_nearest_ally() -> Node2D:
 			nearest_dist = d
 			nearest = e
 	return nearest
+
+## Soft separation: enemies push away from overlapping neighbors (prevents clumping)
+func _apply_separation(_delta: float) -> void:
+	if state == State.DEAD or state == State.CHARGING:
+		return
+	var sep_radius := 12.0 * (1.0 + (_weight - 1.0) * 0.3)  # larger enemies need more space
+	var sep_force := 60.0
+	var sep := Vector2.ZERO
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	var my_pos := global_position
+	for e in enemies:
+		if e == self or not is_instance_valid(e):
+			continue
+		if "state" in e and e.state == State.DEAD:
+			continue
+		var diff: Vector2 = my_pos - e.global_position
+		var dist_sq: float = diff.length_squared()
+		if dist_sq < sep_radius * sep_radius and dist_sq > 0.01:
+			var dist_val: float = sqrt(dist_sq)
+			# Stronger push when closer (inverse linear)
+			var strength: float = (sep_radius - dist_val) / sep_radius
+			sep += diff.normalized() * strength
+	if sep.length_squared() > 0.01:
+		velocity += sep.normalized() * sep_force * minf(sep.length(), 2.0)
 
 ## Legacy weighted movement (existing system)
 func _move_weighted(p: MovementPattern, dir: Vector2, dist: float, delta: float, eff_speed: float) -> void:
@@ -1812,6 +2022,20 @@ func _get_active_bullet_count() -> int:
 		return definition.phase_2_bullet_count
 	return definition.bullet_count
 
+func _get_bomb_attack_count(default_count: int = 1) -> int:
+	if not definition:
+		return default_count
+	var raw = _get_active_bullet_count()
+	if definition.size_class >= EnemyDefinition.SizeClass.BOSS:
+		return clampi(raw, default_count, default_count + 2)
+	if definition.size_class >= EnemyDefinition.SizeClass.LARGE:
+		return clampi(raw, default_count, default_count + 1)
+	return clampi(raw, default_count, default_count)
+
+func _get_bomb_flight_time(base_flight: float, extra_scale: float = 1.0) -> float:
+	var tuned = maxf(base_flight, 0.55) * extra_scale
+	return clampf(tuned, 0.55, 1.8)
+
 func _steer_around_walls(desired_dir: Vector2) -> Vector2:
 	var space = get_world_2d().direct_space_state
 	# Cast rays ahead to detect walls and steer around them
@@ -1837,6 +2061,15 @@ func _steer_around_walls(desired_dir: Vector2) -> Vector2:
 
 	# All directions blocked — just try perpendicular
 	return desired_dir.rotated(PI / 2)
+
+func _get_runtime_movement_pattern() -> MovementPattern:
+	var seq_step = _get_current_boss_sequence_step()
+	if seq_step and seq_step.movement_pattern:
+		return seq_step.movement_pattern
+	var boss_state = _get_current_boss_state()
+	if boss_state and boss_state.movement_pattern:
+		return boss_state.movement_pattern
+	return definition.movement_pattern if definition else null
 
 var _boss_charge_cd: float = 0.0  # cooldown for boss charge attacks
 var _boss_summon_cd: float = 0.0  # cooldown for boss periodic summons
@@ -1890,13 +2123,17 @@ func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
 		attack_timer -= delta  # double-tick attack timer when enraged
 
 	# --- Data-driven movement pattern ---
-	if definition and definition.movement_pattern:
-		_apply_movement_pattern(definition.movement_pattern, dir, dist, delta)
+	var runtime_movement = _get_runtime_movement_pattern()
+	if runtime_movement:
+		_apply_movement_pattern(runtime_movement, dir, dist, delta)
 	else:
 		# --- Legacy hardcoded movement ---
 		_do_legacy_movement(dir, dist, delta)
 
 	attack_timer -= delta
+	if _uses_boss_state_machine():
+		_tick_boss_state_machine(delta, dir, dist)
+		return
 	# Artillery: re-check shared vision every ~1s (allies may die)
 	if definition and definition.attack_type == EnemyDefinition.AttackType.ARTILLERY and Engine.get_physics_frames() % 60 == 0:
 		_shared_vision_checked = false
@@ -2072,9 +2309,107 @@ func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
 				state = State.ATTACK
 
 func _has_continuous_movement() -> bool:
-	if not definition or not definition.movement_pattern:
+	var runtime_movement = _get_runtime_movement_pattern()
+	if runtime_movement == null:
 		return false
-	return definition.movement_pattern.move_type != MovementPattern.MoveType.WEIGHTED
+	return runtime_movement.move_type != MovementPattern.MoveType.WEIGHTED
+
+func _tick_boss_state_machine(delta: float, dir: Vector2, dist: float) -> void:
+	var boss_state = _get_current_boss_state()
+	if boss_state == null:
+		return
+	_boss_state_elapsed += delta
+	var seq_step = _get_current_boss_sequence_step()
+	var active_attack_mode = boss_state.attack_mode
+	var active_attack_type = boss_state.attack_type
+	var active_shot_pattern = boss_state.shot_pattern
+	var active_attack_interval = boss_state.attack_interval
+	var active_require_los = boss_state.require_line_of_sight
+	var active_min_distance = boss_state.min_attack_distance
+	var active_max_distance = boss_state.max_attack_distance
+	if seq_step:
+		_boss_sequence_elapsed += delta
+		_boss_sequence_attack_timer -= delta
+		active_attack_mode = seq_step.attack_mode
+		active_attack_type = seq_step.attack_type
+		active_shot_pattern = seq_step.shot_pattern
+		active_attack_interval = seq_step.attack_interval
+		active_require_los = seq_step.require_line_of_sight
+		active_min_distance = seq_step.min_attack_distance
+		active_max_distance = seq_step.max_attack_distance
+	else:
+		_boss_state_attack_timer -= delta
+	if active_shot_pattern and active_shot_pattern.aim_mode == BossShotPattern.AimMode.SPINNING:
+		_boss_spin_angle += deg_to_rad(active_shot_pattern.spinning_speed_degrees) * delta
+
+	var has_los = true
+	if active_require_los:
+		has_los = _has_line_of_sight()
+	if active_min_distance > 0.0 and dist < active_min_distance:
+		has_los = false
+	if active_max_distance > 0.0 and dist > active_max_distance:
+		has_los = false
+
+	var attack_timer_ref = _boss_sequence_attack_timer if seq_step else _boss_state_attack_timer
+	if active_attack_mode != BossState.AttackMode.NONE and attack_timer_ref <= 0.0 and has_los:
+		match active_attack_mode:
+			BossState.AttackMode.ATTACK_TYPE:
+				_fire_attack_type(active_attack_type, dir)
+			BossState.AttackMode.GENERIC_SHOT:
+				if active_shot_pattern:
+					_fire_boss_shot_pattern(dir, active_shot_pattern)
+		if seq_step:
+			_boss_sequence_attack_timer = maxf(active_attack_interval, 0.05)
+		else:
+			_boss_state_attack_timer = maxf(active_attack_interval, 0.05)
+		_active_modifier = null
+
+	if seq_step and _should_advance_boss_sequence_step(boss_state, seq_step):
+		_advance_boss_sequence_step(boss_state)
+
+	if _should_advance_boss_state(boss_state):
+		var next_idx = _find_boss_state_index(boss_state.next_state_id)
+		if next_idx >= 0:
+			_enter_boss_state(next_idx)
+		else:
+			_enter_boss_state((_boss_state_index + 1) % definition.boss_states.size())
+
+func _should_advance_boss_state(boss_state: BossState) -> bool:
+	if boss_state == null:
+		return false
+	var hp_ratio = float(hp) / float(maxi(_max_hp, 1))
+	match boss_state.transition_mode:
+		BossState.TransitionMode.TIME:
+			return _boss_state_elapsed >= boss_state.duration
+		BossState.TransitionMode.HP_BELOW:
+			return hp_ratio <= boss_state.hp_threshold
+		BossState.TransitionMode.EXTERNAL_TRIGGER:
+			return boss_state.external_trigger != "" and _boss_pending_trigger == boss_state.external_trigger
+		BossState.TransitionMode.TIME_OR_HP:
+			return _boss_state_elapsed >= boss_state.duration or hp_ratio <= boss_state.hp_threshold
+		BossState.TransitionMode.TIME_OR_EXTERNAL:
+			return _boss_state_elapsed >= boss_state.duration or (boss_state.external_trigger != "" and _boss_pending_trigger == boss_state.external_trigger)
+	return false
+
+func _should_advance_boss_sequence_step(boss_state: BossState, seq_step) -> bool:
+	if boss_state == null or seq_step == null:
+		return false
+	if boss_state.sequence_steps.is_empty():
+		return false
+	return _boss_sequence_elapsed >= maxf(float(seq_step.duration), 0.01)
+
+func _advance_boss_sequence_step(boss_state: BossState) -> void:
+	if boss_state == null or boss_state.sequence_steps.is_empty():
+		return
+	_boss_sequence_elapsed = 0.0
+	_boss_sequence_attack_timer = 0.0
+	_boss_sequence_index += 1
+	if _boss_sequence_index >= boss_state.sequence_steps.size():
+		if boss_state.loop_sequence:
+			_boss_sequence_index = 0
+		else:
+			_boss_sequence_index = boss_state.sequence_steps.size() - 1
+	_refresh_boss_name_label()
 
 func _do_attack(dir: Vector2) -> void:
 	var d: float = 0.0
@@ -2457,14 +2792,15 @@ func _do_boss_combo_attack(dir: Vector2) -> void:
 	if is_boss and (_current_phase >= 2 or _enraged):
 		_shoot_nova(dir)
 
-func _check_contact_damage() -> void:
+func _check_contact_damage(force_contact: bool = false) -> void:
 	if state == State.DEAD or not is_instance_valid(player):
 		return
-	var dist = global_position.distance_to(player.global_position)
-	var in_ow = is_inside_tree() and get_tree().current_scene and get_tree().current_scene.name == "Overworld"
-	var contact_range = 8.0 * scale.x * (4.0 if in_ow else 1.0)
-	if dist > contact_range:
-		return
+	if not force_contact:
+		var dist = global_position.distance_to(player.global_position)
+		var in_ow = is_inside_tree() and get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+		var contact_range = 12.0 * scale.x * (4.0 if in_ow else 1.0)
+		if dist > contact_range:
+			return
 	# Player dashing — invincible, no contact damage
 	if "_is_dashing" in player and player._is_dashing:
 		return
@@ -2510,24 +2846,24 @@ func _check_contact_damage() -> void:
 		if thorns_dmg > 0:
 			take_damage(thorns_dmg)
 
+	# push_dir points FROM enemy TO player (away from enemy, from player's view)
 	var push_dir = (player.global_position - global_position).normalized()
 	if push_dir == Vector2.ZERO:
 		push_dir = Vector2.RIGHT.rotated(randf() * TAU)
 
 	var is_heavy = definition and definition.size_class >= 1  # LARGE or BOSS
-	# Push player using _pushed_velocity so it persists through player's movement lerp
+	# Push player AWAY from enemy (+push_dir = from enemy to player = away from enemy)
 	if is_heavy:
-		# Heavy enemies: immovable, push player hard
 		if definition.size_class >= 2:  # BOSS
-			if "_pushed_velocity" in player:
-				player._pushed_velocity = -push_dir * 400.0
+			if player.has_method("apply_push"):
+				player.apply_push(push_dir * 90.0 * weight_mult)
 			else:
-				player.velocity = -push_dir * 400.0
+				player.velocity = push_dir * 90.0
 		else:  # LARGE/elite
-			if "_pushed_velocity" in player:
-				player._pushed_velocity = -push_dir * 200.0
+			if player.has_method("apply_push"):
+				player.apply_push(push_dir * 55.0 * weight_mult)
 			else:
-				player.velocity = -push_dir * 200.0
+				player.velocity = push_dir * 55.0
 	else:
 		# Check if movement makes this enemy unstoppable (swoop, bait punish, etc.)
 		var _mt = definition.movement_pattern.move_type if definition and definition.movement_pattern else 0
@@ -2547,19 +2883,20 @@ func _check_contact_damage() -> void:
 		var kb_mult = 1.0 - clampf(kb_resist, 0.0, 1.0)
 
 		if _unstoppable:
-			# Unstoppable: heavy push on player
-			if "_pushed_velocity" in player:
-				player._pushed_velocity = -push_dir * 180.0
+			if player.has_method("apply_push"):
+				player.apply_push(push_dir * 80.0)
 			elif player is CharacterBody2D:
-				player.velocity = -push_dir * 180.0
+				player.velocity = push_dir * 80.0
 		else:
-			velocity = push_dir * 60.0 / weight_mult * kb_mult
-			_pushed_velocity = push_dir * 40.0 / weight_mult * kb_mult
+			# Enemy bounces AWAY from player (-push_dir = from player to enemy = away from player)
+			velocity = -push_dir * 40.0 / weight_mult * kb_mult
+			_pushed_velocity = -push_dir * 30.0 / weight_mult * kb_mult
 			_knockback_timer = 0.1
-			if "_pushed_velocity" in player:
-				player._pushed_velocity = -push_dir * 100.0 * weight_mult
+			# Player gently pushed AWAY from enemy
+			if player.has_method("apply_push"):
+				player.apply_push(push_dir * 45.0 * weight_mult)
 			elif player is CharacterBody2D:
-				player.velocity = -push_dir * 100.0 * weight_mult
+				player.velocity = push_dir * 45.0 * weight_mult
 
 	# Poise check: heavy enemies can stagger the player
 	var stagger_power = weight_mult * momentum_mult
@@ -2677,7 +3014,6 @@ func heal(amount: int) -> void:
 	hp = mini(hp + amount, max_val)
 
 func _maybe_leave_trail(delta: float) -> void:
-	var shape = CircleShape2D.new()
 	if not definition or not definition.leaves_trail:
 		return
 	_trail_timer -= delta
@@ -2688,6 +3024,7 @@ func _maybe_leave_trail(delta: float) -> void:
 	var hazard = HazardArea.new()
 	hazard.collision_layer = 0
 	hazard.collision_mask = 1
+	var shape = CollisionShape2D.new()
 	var rect = RectangleShape2D.new()
 	rect.size = Vector2(6, 6)
 	shape.shape = rect
@@ -2797,7 +3134,7 @@ func _shoot_ring(dir: Vector2) -> void:
 		_spawn_bullet(bullets_container, Vector2.from_angle(angle), bspeed)
 
 func _apply_attack_modifier(b) -> void:
-	var m = definition.attack_modifier if definition else null
+	var m = _active_modifier if _active_modifier != null else (definition.attack_modifier if definition else null)
 	if not m:
 		return
 	# Homing — apply to any bullet that isn't already using a special behavior
@@ -2833,6 +3170,184 @@ func _apply_attack_modifier(b) -> void:
 		b.set_meta("status_duration", 1.5)
 	# AoE — fireball_aoe only works for player bullets; for enemy bullets use lobbed bomb system instead
 	# (enemy AoE is handled via LOBBED behavior and bomb attacks, not this modifier)
+
+func _fire_boss_shot_pattern(dir: Vector2, pattern: BossShotPattern) -> void:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if bullets_container == null or pattern == null:
+		return
+	var bursts = maxi(pattern.burst_count, 1)
+	for burst_idx in range(bursts):
+		var delay = float(burst_idx) * maxf(pattern.burst_interval, 0.0)
+		if delay <= 0.0:
+			_fire_boss_shot_burst(bullets_container, dir, pattern, burst_idx)
+		else:
+			var bc = bullets_container
+			get_tree().create_timer(delay).timeout.connect(
+				func():
+					if is_instance_valid(self) and hp > 0 and bc:
+						_fire_boss_shot_burst(bc, dir, pattern, burst_idx)
+			)
+
+func _fire_boss_shot_burst(container: Node, dir: Vector2, pattern: BossShotPattern, burst_idx: int) -> void:
+	var shot_count = maxi(pattern.shot_count, 1)
+	var base_angle = dir.angle()
+	match pattern.aim_mode:
+		BossShotPattern.AimMode.FIXED_ANGLE:
+			base_angle = deg_to_rad(pattern.fixed_angle_degrees)
+		BossShotPattern.AimMode.SPINNING:
+			base_angle = _boss_spin_angle
+		_:
+			base_angle = dir.angle()
+	base_angle += deg_to_rad(pattern.base_angle_offset_degrees + pattern.rotate_per_burst_degrees * float(burst_idx))
+
+	if pattern.pattern_family != BossShotPattern.PatternFamily.BASIC:
+		_fire_boss_math_pattern(container, base_angle, pattern, burst_idx)
+		return
+
+	if pattern.ring_pattern:
+		for i in range(shot_count):
+			var angle = base_angle + TAU * float(i) / float(shot_count)
+			_spawn_boss_pattern_bullet(container, Vector2.from_angle(angle), pattern)
+		return
+
+	if shot_count == 1:
+		_spawn_boss_pattern_bullet(container, Vector2.from_angle(base_angle), pattern)
+		return
+
+	var spread_rad = deg_to_rad(pattern.spread_degrees)
+	var start_angle = base_angle - spread_rad * 0.5 if pattern.symmetric_spread else base_angle
+	var step = spread_rad / float(maxi(shot_count - 1, 1))
+	for i in range(shot_count):
+		var angle = start_angle + step * float(i)
+		_spawn_boss_pattern_bullet(container, Vector2.from_angle(angle), pattern)
+
+func _fire_boss_math_pattern(container: Node, base_angle: float, pattern: BossShotPattern, burst_idx: int) -> void:
+	var shot_count = maxi(pattern.shot_count, 1)
+	var rng = _make_pattern_rng(pattern, burst_idx)
+	var angle_jitter = deg_to_rad(pattern.angle_jitter_degrees)
+	match pattern.pattern_family:
+		BossShotPattern.PatternFamily.ROSE:
+			var amp = deg_to_rad(_vary_param(pattern.spread_degrees if pattern.spread_degrees > 0.0 else 70.0, pattern.param_jitter, rng))
+			var petals = maxi(int(round(_vary_param(float(maxi(pattern.rose_petals, 1)), pattern.param_jitter, rng))), 1)
+			for i in range(shot_count):
+				var t = TAU * (float(i) / float(shot_count)) + float(burst_idx) * 0.15
+				var angle = base_angle + sin(t * float(petals)) * amp + _rand_signed(rng) * angle_jitter
+				_spawn_boss_pattern_bullet(container, Vector2.from_angle(angle), pattern)
+		BossShotPattern.PatternFamily.LISSAJOUS:
+			var delta = deg_to_rad(_vary_param(pattern.lissajous_delta_degrees, pattern.param_jitter, rng))
+			var a = _vary_param(pattern.lissajous_a, pattern.param_jitter, rng)
+			var b = _vary_param(pattern.lissajous_b, pattern.param_jitter, rng)
+			for i in range(shot_count):
+				var t = TAU * (float(i) / float(shot_count)) + float(burst_idx) * 0.12
+				var p = Vector2(sin(a * t + delta), sin(b * t))
+				if p.length() < 0.01:
+					continue
+				var dir = p.normalized().rotated(_rand_signed(rng) * angle_jitter)
+				_spawn_boss_pattern_bullet(container, dir, pattern)
+		BossShotPattern.PatternFamily.CYCLOID:
+			var ratio = maxf(_vary_param(pattern.cycloid_ratio, pattern.param_jitter, rng), 1.1)
+			var r = 1.0 / ratio
+			for i in range(shot_count):
+				var t = TAU * (float(i) / float(shot_count)) + float(burst_idx) * 0.1
+				var p: Vector2
+				if pattern.cycloid_inner:
+					p = Vector2((1.0 - r) * cos(t) + r * cos(((1.0 - r) / r) * t), (1.0 - r) * sin(t) - r * sin(((1.0 - r) / r) * t))
+				else:
+					p = Vector2((1.0 + r) * cos(t) - r * cos(((1.0 + r) / r) * t), (1.0 + r) * sin(t) - r * sin(((1.0 + r) / r) * t))
+				if p.length() < 0.01:
+					continue
+				var dir = p.normalized().rotated(base_angle + _rand_signed(rng) * angle_jitter)
+				_spawn_boss_pattern_bullet(container, dir, pattern)
+		BossShotPattern.PatternFamily.LOG_SPIRAL:
+			var step_angle = deg_to_rad(_vary_param(pattern.spread_degrees if pattern.spread_degrees > 0.0 else 22.0, pattern.param_jitter, rng))
+			var growth = _vary_param(pattern.logarithmic_growth, pattern.param_jitter, rng)
+			for i in range(shot_count):
+				var theta = float(i) * step_angle + float(burst_idx) * deg_to_rad(pattern.rotate_per_burst_degrees)
+				var radius_scale = exp(growth * theta)
+				var dir = Vector2.from_angle(base_angle + theta + _rand_signed(rng) * angle_jitter)
+				var pos = global_position + dir * minf(radius_scale * 2.0, 18.0)
+				_spawn_boss_pattern_bullet_at(container, pos, dir, pattern)
+		BossShotPattern.PatternFamily.FRACTAL_FAN:
+			_emit_recursive_fan(container, base_angle, pattern, maxi(pattern.recursive_depth, 1), 1.0, true, rng)
+		BossShotPattern.PatternFamily.RECURSIVE_FAN:
+			_emit_recursive_fan(container, base_angle, pattern, maxi(pattern.recursive_depth, 1), 1.0, false, rng)
+		_:
+			_spawn_boss_pattern_bullet(container, Vector2.from_angle(base_angle), pattern)
+
+func _emit_recursive_fan(container: Node, base_angle: float, pattern: BossShotPattern, depth: int, scale_mult: float, mirrored: bool, rng: RandomNumberGenerator) -> void:
+	var emit_angle = base_angle + _rand_signed(rng) * deg_to_rad(pattern.angle_jitter_degrees)
+	_spawn_boss_pattern_bullet(container, Vector2.from_angle(emit_angle), pattern)
+	if depth <= 0:
+		return
+	var branch_angle = deg_to_rad(_vary_param(pattern.recursive_branch_angle_degrees, pattern.param_jitter, rng)) * scale_mult
+	var next_scale = scale_mult * _vary_param(pattern.recursive_branch_scale, pattern.recursive_spawn_scale_jitter, rng)
+	_emit_recursive_fan(container, base_angle + branch_angle, pattern, depth - 1, next_scale, mirrored, rng)
+	if mirrored:
+		_emit_recursive_fan(container, base_angle - branch_angle, pattern, depth - 1, next_scale, mirrored, rng)
+
+func _make_pattern_rng(pattern: BossShotPattern, burst_idx: int) -> RandomNumberGenerator:
+	var rng = RandomNumberGenerator.new()
+	if pattern.use_seed_variation:
+		rng.seed = int(pattern.seed_value + burst_idx * pattern.seed_step_per_burst)
+	else:
+		rng.randomize()
+	return rng
+
+func _vary_param(base_value: float, jitter: float, rng: RandomNumberGenerator) -> float:
+	if jitter <= 0.0:
+		return base_value
+	return base_value * (1.0 + _rand_signed(rng) * jitter)
+
+func _rand_signed(rng: RandomNumberGenerator) -> float:
+	return rng.randf_range(-1.0, 1.0)
+
+func _spawn_boss_pattern_bullet(container: Node, shot_dir: Vector2, pattern: BossShotPattern) -> void:
+	_spawn_boss_pattern_bullet_at(container, global_position, shot_dir, pattern)
+
+func _spawn_boss_pattern_bullet_at(container: Node, spawn_pos: Vector2, shot_dir: Vector2, pattern: BossShotPattern) -> void:
+	var bspeed = (definition.bullet_speed if definition else 60.0) * pattern.bullet_speed_mult
+	var previous_modifier = _active_modifier
+	if pattern.modifier_override != null:
+		_active_modifier = pattern.modifier_override
+	var bullet: Area2D = null
+	if spawn_pos == global_position:
+		bullet = _spawn_bullet(container, shot_dir, bspeed)
+	else:
+		bullet = bullet_scene.instantiate()
+		bullet.global_position = spawn_pos
+		bullet.direction = shot_dir
+		_apply_enemy_bullet_props(bullet, bspeed)
+		container.add_child(bullet)
+	_active_modifier = previous_modifier
+	if bullet == null:
+		return
+	if pattern.bullet_behavior_override >= 0:
+		bullet.behavior = pattern.bullet_behavior_override
+	if pattern.damage_override >= 0:
+		bullet.damage = pattern.damage_override
+	if pattern.sprite_scale_mult != 1.0:
+		bullet.set_meta("sprite_scale_mult", pattern.sprite_scale_mult)
+		var bullet_sprite = bullet.get_node_or_null("Sprite2D")
+		if bullet_sprite and bullet_sprite is Sprite2D:
+			bullet_sprite.scale *= pattern.sprite_scale_mult
+		var bullet_hit_shape = bullet.get_node_or_null("CollisionShape2D")
+		if bullet_hit_shape and bullet_hit_shape is CollisionShape2D:
+			bullet_hit_shape.scale *= pattern.sprite_scale_mult
+	if pattern.movement_pattern != null:
+		bullet.movement_pattern = pattern.movement_pattern
+		bullet.movement_anchor_entity = self
+		bullet.movement_anchor_point = global_position
+		bullet._movement_orbit_angle = shot_dir.angle()
+		bullet._movement_orbit_radius = pattern.orbit_radius_override if pattern.orbit_radius_override >= 0.0 else pattern.movement_pattern.orbit_radius
+		bullet._movement_orbit_radial_speed = pattern.orbit_radial_speed
+		bullet._movement_orbit_radial_accel = pattern.orbit_radial_accel
+		bullet._movement_orbit_reverse_time = pattern.orbit_reverse_time
+		bullet._movement_orbit_reversed = false
+	if pattern.bounce_count_override >= 0:
+		bullet.bounce_count = pattern.bounce_count_override
+	if pattern.status_effect != "":
+		bullet.set_meta("apply_status", pattern.status_effect)
+		bullet.set_meta("status_duration", pattern.status_duration)
 
 func _apply_enemy_bullet_props(bullet, spd: float) -> void:
 	bullet.is_player_bullet = false
@@ -3655,12 +4170,9 @@ func _shoot_death_spiral_at(pos: Vector2) -> void:
 ## BARRIER_WALL: Spawns a line of stationary barrier bullets perpendicular to player direction
 ## Max 1 wall alive at a time — won't spawn if existing barriers are still up
 func _shoot_barrier_wall(dir: Vector2) -> void:
-	var b = bullet_scene.instantiate()
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
 	var count: int = _get_active_bullet_count()
-	var center: Vector2 = global_position
-	var offset: Vector2 = Vector2.ZERO
 	if not bc:
 		return
 	# Boss/large enemies get 2 walls (6 segments), normal gets 1 wall (3 segments)
@@ -3674,11 +4186,15 @@ func _shoot_barrier_wall(dir: Vector2) -> void:
 		return  # walls still up, skip
 	if sfx:
 		sfx.play("spell_a", -5.0, 0.1)
-	# Boss/large: 5 segments per wall, wider spacing. Normal: 3 segments.
 	var seg_hp = 5 if _is_boss_or_large else 3
 	var seg_lifetime = 6.0 if _is_boss_or_large else 4.0
+	var perp = Vector2(-dir.y, dir.x)
+	var wall_dist = 12.0
+	var spacing = 8.0
 	for i in range(count):
-		b.global_position = center + offset
+		var b = bullet_scene.instantiate()
+		var lateral = (i - (count - 1) * 0.5) * spacing
+		b.global_position = global_position + dir * wall_dist + perp * lateral
 		b.direction = Vector2.ZERO
 		b.behavior = b.BulletBehavior.BARRIER
 		b.barrier_hp = seg_hp
@@ -3713,20 +4229,23 @@ func _shoot_push_wave(dir: Vector2) -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
 	var count: int = _get_active_bullet_count()
-	var d: float = 0.0
-	var b = bullet_scene.instantiate()
 	if sfx:
 		sfx.play("area_effect_b", -5.0, 0.1)
 	if not bc:
 		return
 	var cone_angle = PI * 0.4  # ~72 degree cone
 	for i in range(count):
+		var b = bullet_scene.instantiate()
+		var angle_offset = 0.0
+		if count > 1:
+			angle_offset = lerp(-cone_angle * 0.5, cone_angle * 0.5, float(i) / float(count - 1))
+		var d = dir.rotated(angle_offset)
 		b.global_position = global_position
 		b.direction = d
 		b.behavior = b.BulletBehavior.PUSH_ORB
-		b._force_radius = 45.0  # large zone of influence
-		b._force_strength = 4.0  # firm push away
-		b.lifetime = randf_range(6.0, 10.0)  # persists a long time
+		b._force_radius = 45.0
+		b._force_strength = 4.0
+		b.lifetime = randf_range(6.0, 10.0)
 		_apply_enemy_bullet_props(b, bspeed)
 		b.bullet_sprite_index = ObjSpriteIndex.HOLY_ORB
 		bc.add_child(b)
@@ -3802,7 +4321,8 @@ func _shoot_artillery() -> void:
 	if not bc:
 		return
 	# Single big bomb: large AOE, ring of sub-bullets, high damage
-	_spawn_lob_at(bc, player.global_position, ObjSpriteIndex.DARK_ORB, radius, flight, 8, 0, 3.0, 3.0)
+	flight = _get_bomb_flight_time(definition.bomb_flight_time if definition else 0.8, 1.2)
+	_spawn_lob_at(bc, player.global_position, ObjSpriteIndex.DARK_ORB, radius, flight, 8, 0, 3.0, 1.5)
 
 ## WHIP_LASH: Quick sweeping arc of bullets fired in rapid sequence
 func _shoot_whip_lash(dir: Vector2) -> void:
@@ -3830,7 +4350,7 @@ func _shoot_whip_lash(dir: Vector2) -> void:
 ## POISON_CLOUD: Lobbed bomb that creates a lingering poison zone on impact
 func _shoot_poison_cloud() -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
-	var flight: float = 0.3
+	var flight := _get_bomb_flight_time(definition.bomb_flight_time if definition else 0.8, 1.0)
 	var sfx = get_node_or_null("/root/SFXManager")
 	var radius: int = 16
 	var bomb = bullet_scene.instantiate()
@@ -3902,19 +4422,22 @@ func _shoot_lance_thrust(dir: Vector2) -> void:
 
 ## SHIELD_WALL: 3-5 barrier bullets in arc facing player — defensive screen
 func _shoot_shield_wall(dir: Vector2) -> void:
-	var b = bullet_scene.instantiate()
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
-	var count: int = _get_active_bullet_count()
-	var center: Vector2 = global_position
-	var offset: Vector2 = Vector2.ZERO
+	var count: int = clampi(_get_active_bullet_count(), 3, 5)
 	if sfx:
 		sfx.play("spell_a", -5.0, 0.1)
 	if not bc:
 		return
 	var spacing = 8.0
+	var perp = Vector2(-dir.y, dir.x)  # perpendicular to player direction
+	var shield_dist = 10.0  # distance in front of enemy
 	for i in range(count):
-		b.global_position = center + offset
+		var b = bullet_scene.instantiate()
+		# Spread bullets in an arc in front of the enemy
+		var lateral = (i - (count - 1) * 0.5) * spacing
+		var offset = dir * shield_dist + perp * lateral
+		b.global_position = global_position + offset
 		b.direction = Vector2.ZERO
 		b.behavior = b.BulletBehavior.BARRIER
 		b.barrier_hp = shield_hp if shield_hp > 0 else 3
@@ -4734,13 +5257,13 @@ func _shoot_stomp_wave(_dir: Vector2) -> void:
 
 func _spawn_lob_at(container: Node, target: Vector2, sprite_idx: int,
 		aoe_radius: float, flight_time: float, ring_count: int, cluster_count: int,
-		lob_height: float = -1.0, damage_mult: float = 2.0) -> void:
+		lob_height: float = -1.0, damage_mult: float = 1.3) -> void:
 	var bomb = bullet_scene.instantiate()
 	bomb.global_position = global_position
 	bomb.direction = (target - global_position).normalized() if global_position.distance_to(target) > 1 else Vector2.RIGHT
 	bomb.behavior = bomb.BulletBehavior.LOBBED
 	bomb._target_pos = target
-	bomb._lob_duration = flight_time * 2.0  # moderate arcs, time to dodge but not too slow
+	bomb._lob_duration = flight_time * 2.0
 	bomb._lob_aoe_radius = aoe_radius
 	bomb._lob_ring_count = ring_count
 	bomb._lob_cluster_count = cluster_count
@@ -4754,14 +5277,14 @@ func _spawn_lob_at(container: Node, target: Vector2, sprite_idx: int,
 	bomb.damage = maxi(2, int(bomb.damage * damage_mult))  # bombs hit harder than regular bullets
 	bomb.bullet_sprite_index = sprite_idx  # override after apply so bomb sprite is always correct
 	container.add_child(bomb)
-	_spawn_landing_marker(target, aoe_radius, flight_time * 2.0)
+	_spawn_landing_marker(target, aoe_radius, bomb._lob_duration)
 
 ## BOMB_TOSS: Single bomb at player position, explodes into bullet ring
 func _shoot_bomb_toss() -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var radius: int = 16
 	var sfx = get_node_or_null("/root/SFXManager")
-	var flight: float = 0.3
+	var flight := _get_bomb_flight_time(definition.bomb_flight_time if definition else 0.8, 0.9)
 	if not is_instance_valid(player):
 		return
 	if sfx:
@@ -4775,9 +5298,8 @@ func _shoot_carpet_bomb(dir: Vector2) -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var radius: int = 16
 	var sfx = get_node_or_null("/root/SFXManager")
-	var flight: float = 0.3
-	var count: int = _get_active_bullet_count()
-	var target: Vector2 = player.global_position if is_instance_valid(player) else global_position
+	var flight := _get_bomb_flight_time(definition.bomb_flight_time if definition else 0.8, 1.0)
+	var count: int = _get_bomb_attack_count(3)
 	if not is_instance_valid(player):
 		return
 	if sfx:
@@ -4787,26 +5309,29 @@ func _shoot_carpet_bomb(dir: Vector2) -> void:
 	var dist_to_player = global_position.distance_to(player.global_position)
 	var step = maxf(dist_to_player / count, 10.0)
 	for i in range(count):
-		_spawn_lob_at(bc, target, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 1.8)
+		var target = global_position + dir * step * float(i + 1)
+		_spawn_lob_at(bc, target, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 1.3)
 
 ## FIRE_RAIN: 2-4 bombs scattered randomly around player position
 func _shoot_fire_rain() -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var radius: int = 16
 	var sfx = get_node_or_null("/root/SFXManager")
-	var flight: float = 0.3
-	var count: int = _get_active_bullet_count()
-	var offset: Vector2 = Vector2.ZERO
+	var count: int = _get_bomb_attack_count(3)
 	if not is_instance_valid(player):
 		return
 	if sfx:
 		sfx.play("scatter", -5.0, 0.1)
 	if not bc:
 		return
-	var base_flight = (definition.bomb_flight_time if definition else 0.8)
+	var base_flight = _get_bomb_flight_time(definition.bomb_flight_time if definition else 0.8, 1.0)
 	var center = player.global_position
 	for i in range(count):
-		_spawn_lob_at(bc, center + offset, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 2.0)
+		var angle = randf() * TAU
+		var dist = randf_range(8.0, 30.0)
+		var offset = Vector2.from_angle(angle) * dist
+		var flight = base_flight * randf_range(0.95, 1.15)
+		_spawn_lob_at(bc, center + offset, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 1.3)
 
 ## CLUSTER_BOMB: One big bomb that splits into 4 smaller bombs on impact
 func _shoot_cluster_bomb() -> void:
@@ -4819,15 +5344,14 @@ func _shoot_cluster_bomb() -> void:
 		sfx.play("bazooka", -4.0, 0.1)
 	if not bc:
 		return
-	var flight = (definition.bomb_flight_time if definition else 0.8) * 1.2
-	_spawn_lob_at(bc, player.global_position, ObjSpriteIndex.DARK_ORB, radius, flight, 0, 4, -1.0, 2.5)
+	var flight = _get_bomb_flight_time(definition.bomb_flight_time if definition else 0.8, 1.2)
+	_spawn_lob_at(bc, player.global_position, ObjSpriteIndex.DARK_ORB, radius, flight, 0, 4, -1.0, 1.5)
 
 ## MINE_DROP: 2-3 short-range lobs near self with bullet ring on landing
 func _shoot_mine_drop() -> void:
-	var count: int = _get_active_bullet_count()
+	var count: int = _get_bomb_attack_count(2)
 	var radius: int = 16
 	var sfx = get_node_or_null("/root/SFXManager")
-	var offset: Vector2 = Vector2.ZERO
 	if sfx:
 		sfx.play("ping", -6.0, 0.1)
 	var bc = _get_bullets_container()
@@ -4835,8 +5359,9 @@ func _shoot_mine_drop() -> void:
 		return
 	var target_base = player.global_position if is_instance_valid(player) else global_position
 	for i in range(count):
+		var offset = Vector2(randf_range(-18.0, 18.0), randf_range(-18.0, 18.0))
 		var target = target_base + offset
-		_spawn_lob_at(bc, target, ObjSpriteIndex.ENERGY_BALL, radius, 0.3, 6, 0)
+		_spawn_lob_at(bc, target, ObjSpriteIndex.ENERGY_BALL, radius, _get_bomb_flight_time(0.75, 0.9), 6, 0)
 
 ## Fire death bullet pattern at death position
 func _fire_death_pattern() -> void:
@@ -4956,6 +5481,15 @@ func _notify_bodyguards_ally_hit() -> void:
 			continue
 		if e._attached_ally == self and e._bodyguard_mode:
 			e._on_guarded_ally_hit()
+
+## Returns true if the given position is behind this enemy (for stealth kills)
+func is_back_exposed(from_pos: Vector2) -> bool:
+	var to_attacker = (from_pos - global_position).normalized()
+	return _facing_dir.dot(to_attacker) < -0.3
+
+## Returns current awareness level (0-1) for external queries
+func get_awareness() -> float:
+	return _awareness
 
 ## Update the awareness indicator (? or !) above sprite
 func _update_awareness_indicator() -> void:
@@ -5624,6 +6158,31 @@ func _die() -> void:
 			if definition.size_class >= EnemyDefinition.SizeClass.BOSS:
 				qm.on_boss_killed(kill_name)
 
+	# Boss perk token drop
+	if definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS:
+		var gm = get_node_or_null("/root/GameManager")
+		if gm and gm.save_data:
+			var boss_key = "boss_killed_" + (definition.enemy_name.to_lower().replace(" ", "_"))
+			var first_kill = not gm.save_data.world_flags.has(boss_key)
+			var drop_token = first_kill or randf() < 0.05
+			# Bounty Hunter perk doubles re-kill drop rate
+			if not first_kill and not drop_token:
+				var pm = get_node_or_null("/root/PerkManager")
+				if pm and pm.has_special("bounty_hunter"):
+					drop_token = randf() < 0.05  # second roll
+			if drop_token:
+				gm.save_data.perk_tokens += 1
+				gm.save_data.world_flags[boss_key] = true
+				var _scene_root = get_tree().current_scene if is_inside_tree() else null
+				if _scene_root:
+					FloatingText.spawn(_scene_root, global_position + Vector2(0, -16), "+1 PERK TOKEN", Color(1.0, 0.85, 0.0))
+				var vfx = get_node_or_null("/root/VFXManager")
+				if vfx:
+					vfx.gold_sparkle(global_position)
+				var sfx = get_node_or_null("/root/SFXManager")
+				if sfx:
+					sfx.play("level_up", -3.0)
+
 	# Floating text for XP/gold (with size class multiplier)
 	var xp_val = definition.xp_value if definition else 0
 	if definition:
@@ -5738,6 +6297,9 @@ func _die() -> void:
 
 	# Crafting material drops
 	_try_drop_crafting_material()
+
+	# Gem drops
+	_try_drop_gem()
 
 	# VFX: death burst
 	var vfx = get_node_or_null("/root/VFXManager")
@@ -5872,3 +6434,46 @@ func _try_drop_crafting_material() -> void:
 		var herb = load("res://resources/items/crafting/healing_herb.tres") as EquipmentItem
 		if herb:
 			mat_bag.items.append(herb.make_copy())
+
+func _try_drop_gem() -> void:
+	if not definition:
+		return
+	var drop_chance := 0.03  # 3% base for normal enemies
+	if definition.size_class == 1:
+		drop_chance = 0.15  # 15% for elites
+	elif definition.size_class >= 2:
+		drop_chance = 1.0  # guaranteed for bosses
+	if randf() >= drop_chance:
+		return
+
+	# Determine max eligible tier
+	var max_tier := 1
+	if definition.size_class >= 2:
+		max_tier = 2  # bosses can drop tier 2
+	elif definition.size_class == 1 and randf() < 0.25:
+		max_tier = 2  # elites have 25% chance for tier 2
+
+	# Pick a random gem from eligible tiers
+	var all_gems: Array[String] = ResourceRegistry.gems()
+	var eligible: Array[String] = []
+	for gem_path in all_gems:
+		var gem = load(gem_path) as GemDefinition
+		if gem and gem.tier <= max_tier:
+			eligible.append(gem_path)
+	if eligible.is_empty():
+		return
+
+	var chosen_path: String = eligible[randi() % eligible.size()]
+	var gm = get_node_or_null("/root/GameManager")
+	if gm:
+		gm.add_gem_to_bag(chosen_path)
+		var gem_def = load(chosen_path) as GemDefinition
+		if gem_def:
+			gm.discover_gem(gem_def.gem_id)
+			# Visual feedback
+			var scene_root = get_tree().current_scene if is_inside_tree() else null
+			if scene_root:
+				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "Gem: %s" % gem_def.gem_name, gem_def.color_hint)
+			var sfx = get_node_or_null("/root/SFXManager")
+			if sfx:
+				sfx.play("collect_a", -2.0, 0.1)

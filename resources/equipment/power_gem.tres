@@ -15,3 +15,6 @@ item_name = "Power Gem"
 description = "+1 attack damage"
 modifiers = Array[ExtResource("2")]([SubResource("mod_dmg")])
 rarity = 1
+archetype_tags = null
+socket_types = null
+socketed_gem_paths = null

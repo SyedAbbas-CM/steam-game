@@ -30,3 +30,6 @@ extends Resource
 
 @export_group("Overrides")
 @export var tile_overrides: Dictionary = {}  # {"x,y": sprite_idx} — hand-painted tile changes from web editor
+
+@export_group("Visuals")
+@export var mood_profile: AreaMoodProfile

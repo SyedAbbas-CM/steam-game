@@ -12,7 +12,7 @@ const THRESHOLDS = {
 	},
 	"power": {
 		5: {"name": "Heavy Hitter", "desc": "+15% Crit Damage", "bonuses": {13: {"flat": 0.15, "percent": 0.0}}},
-		10: {"name": "Crusher", "desc": "+20% ATK", "bonuses": {2: {"flat": 0.0, "percent": 0.2}}},
+		10: {"name": "Crusher", "desc": "+20% Attack", "bonuses": {2: {"flat": 0.0, "percent": 0.2}}},
 		15: {"name": "Executioner", "desc": "+1 Pierce", "bonuses": {7: {"flat": 1.0, "percent": 0.0}}},
 	},
 	"agility": {

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="BossSequenceStep" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/boss_sequence_step.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/movements/hold_ranged.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+step_id = "wall_raise"
+display_name = "Wall Raise"
+duration = 5.0
+movement_pattern = ExtResource("2")
+attack_mode = 1
+attack_type = 59
+attack_interval = 1.7
+require_line_of_sight = false
+min_attack_distance = 0.0
+max_attack_distance = 0.0

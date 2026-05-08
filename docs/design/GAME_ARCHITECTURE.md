@@ -135,3 +135,4 @@ docs/design/        # This documentation
 - [Overworld System](OVERWORLD_SYSTEM.md)
 - [Economy System](ECONOMY_SYSTEM.md)
 - [Data & Analytics](DATA_AND_ANALYTICS_SYSTEM.md)
+- [Multiplayer Architecture](MMO_ARCHITECTURE.md)

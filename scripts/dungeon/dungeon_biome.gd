@@ -46,3 +46,7 @@ extends Resource
 @export var loy_level_id: String = ""
 @export var loy_tileset_offset: int = 0
 @export var floor_count: int = 1  # total floors in this dungeon zone
+
+@export_group("Visuals")
+@export var mood_profile: AreaMoodProfile
+@export_range(0.0, 1.0, 0.05) var darkness_level: float = 0.25  # 0=bright, 1=pitch black. Normal dungeons default 0.25 (mild)

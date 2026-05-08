@@ -188,9 +188,8 @@ static func _paint_blacksmith(dm, origin: Vector2i, mask: Array,
 	var dummy_x = zx + zw / 2
 	_place(dm, origin, mask, w, h, dummy_x, zy + zh - 3, DecoTiles.DECO_TRAINING_DUMMY, placed)
 
-	var barrel_tiles: Array = [DecoTiles.DECO_BARREL, DecoTiles.DECO_BARREL_CLUSTER_2,
-		DecoTiles.DECO_BARREL_CLUSTER_3, DecoTiles.DECO_SMALL_BARREL]
-	_scatter_items(dm, origin, mask, w, h, zx, zy + zh / 2, zw, zh / 2, barrel_tiles, randi_range(2, 4), placed)
+	var storage_tiles: Array = [DecoTiles.DECO_CRATE, DecoTiles.DECO_SACKS, DecoTiles.DECO_BUCKET]
+	_scatter_items(dm, origin, mask, w, h, zx, zy + zh / 2, zw, zh / 2, storage_tiles, randi_range(2, 4), placed)
 
 # =========================================================================
 # 4. PRISON BLOCK
@@ -422,11 +421,10 @@ static func _paint_tavern(dm, origin: Vector2i, mask: Array,
 		_place(dm, origin, mask, w, h, tx + 1, ty, DecoTiles.DECO_STOOL_FLIPPED, placed)
 
 	var bar_y = zy + 1
-	var barrel_tiles: Array = [DecoTiles.DECO_BARREL, DecoTiles.DECO_BARREL_CLUSTER_2,
-		DecoTiles.DECO_BARREL_CLUSTER_3, DecoTiles.DECO_SMALL_BARREL]
+	var storage_tiles: Array = [DecoTiles.DECO_CRATE, DecoTiles.DECO_SACKS, DecoTiles.DECO_BUCKET]
 	for bx in range(zx + 1, mini(zx + 5, zx + zw - 2)):
 		if _safe(mask, bx, bar_y, w, h) and dm._has_wall_neighbor(mask, bx, bar_y, w, h):
-			_place(dm, origin, mask, w, h, bx, bar_y, barrel_tiles[randi() % barrel_tiles.size()], placed)
+			_place(dm, origin, mask, w, h, bx, bar_y, storage_tiles[randi() % storage_tiles.size()], placed)
 
 	for bx in range(zx + 2, zx + zw - 2, 2):
 		if _safe(mask, bx, zy + zh - 2, w, h):

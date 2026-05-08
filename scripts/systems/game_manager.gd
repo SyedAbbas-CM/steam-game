@@ -1,17 +1,22 @@
 extends Node
 
+const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+
 # Autoload singleton: manages game state across scenes
 
 var save_data: SaveData = null
 var selected_class: String = "warrior"
 var active_slot: int = -1  # -1 = no slot loaded
 var pending_biome_name: String = ""  # set before transitioning to dungeon
+var pending_mine_id: String = ""  # optional explicit mine override for dungeon runs
 var overworld_return_position: Vector2 = Vector2.ZERO  # player position to restore when exiting dungeon
 var battle_config: Dictionary = {}  # set before transitioning to battle arena
 var enemy_armies: Dictionary = {}  # zone_id -> { "name": String, "budget": int }
 var _loading_screen: CanvasLayer
 var _auto_save_timer: float = 0.0
+var _pending_coop_join_biome: String = ""
 const AUTO_SAVE_INTERVAL: float = 60.0
+const COOP_BOSS_ARENA_BIOME: String = "Test-Arena-Boss"
 
 signal gold_changed(amount: int)
 signal relics_changed(amount: int)
@@ -20,10 +25,139 @@ signal character_died
 signal slot_loaded(slot: int)
 signal battle_ended(result: Dictionary)
 
+func queue_dungeon_run(biome_name: String, mine_id: String = "") -> void:
+	pending_biome_name = biome_name
+	pending_mine_id = mine_id
+
+func _get_blueprint_definitions() -> Dictionary:
+	var defs: Dictionary = {}
+	for path in ResourceRegistry.blueprints():
+		var def = load(path) as BlueprintDefinition
+		if def and def.blueprint_id != "":
+			defs[def.blueprint_id] = def
+	return defs
+
+func get_blueprint_definition(blueprint_id: String) -> BlueprintDefinition:
+	if blueprint_id == "":
+		return null
+	return _get_blueprint_definitions().get(blueprint_id, null) as BlueprintDefinition
+
+func has_blueprint(blueprint_id: String) -> bool:
+	return save_data != null and blueprint_id in save_data.discovered_blueprints
+
+func get_blueprint_progress(blueprint_id: String) -> int:
+	if not save_data or blueprint_id == "":
+		return 0
+	return int(save_data.blueprint_progress.get(blueprint_id, 0))
+
+func discover_blueprint(blueprint_id: String) -> bool:
+	if not save_data or blueprint_id == "":
+		return false
+	if blueprint_id in save_data.discovered_blueprints:
+		return false
+	save_data.discovered_blueprints.append(blueprint_id)
+	save_data.save_to_slot()
+	return true
+
+func _try_unlock_blueprint(blueprint_id: String) -> bool:
+	if not save_data or blueprint_id == "" or blueprint_id in save_data.discovered_blueprints:
+		return false
+	var def = get_blueprint_definition(blueprint_id)
+	if not def:
+		return false
+	var progress := int(save_data.blueprint_progress.get(blueprint_id, 0))
+	if not def.can_unlock(progress, save_data.salvage_points):
+		return false
+	save_data.discovered_blueprints.append(blueprint_id)
+	save_data.save_to_slot()
+	return true
+
+func add_blueprint_progress(blueprint_id: String, amount: int = 1) -> Dictionary:
+	if not save_data or blueprint_id == "" or amount <= 0:
+		return {"progress": 0, "unlocked": false}
+	if blueprint_id in save_data.discovered_blueprints:
+		return {"progress": get_blueprint_progress(blueprint_id), "unlocked": false}
+	var current := int(save_data.blueprint_progress.get(blueprint_id, 0))
+	current += amount
+	save_data.blueprint_progress[blueprint_id] = current
+	var unlocked := _try_unlock_blueprint(blueprint_id)
+	save_data.save_to_slot()
+	return {"progress": current, "unlocked": unlocked}
+
+# --- Gem Bag ---
+
+func add_gem_to_bag(gem_path: String) -> void:
+	if not save_data or gem_path == "":
+		return
+	save_data.gem_bag.append(gem_path)
+	save_data.save_to_slot()
+
+func remove_gem_from_bag(gem_path: String) -> bool:
+	if not save_data or gem_path == "":
+		return false
+	var idx = save_data.gem_bag.find(gem_path)
+	if idx < 0:
+		return false
+	save_data.gem_bag.remove_at(idx)
+	save_data.save_to_slot()
+	return true
+
+func get_gem_bag() -> Array[String]:
+	if not save_data:
+		return []
+	return save_data.gem_bag
+
+# --- Salvage Points ---
+
+func add_salvage_points(amount: int) -> void:
+	if save_data and amount > 0:
+		save_data.salvage_points += amount
+		for blueprint_id in save_data.blueprint_progress.keys():
+			_try_unlock_blueprint(String(blueprint_id))
+		save_data.save_to_slot()
+
+func get_salvage_points() -> int:
+	return save_data.salvage_points if save_data else 0
+
+func discover_gem(gem_id: String) -> bool:
+	if not save_data or gem_id == "":
+		return false
+	if gem_id in save_data.discovered_gems:
+		return false
+	save_data.discovered_gems.append(gem_id)
+	save_data.save_to_slot()
+	return true
+
+func record_crafted_item(item_key: String, amount: int = 1) -> void:
+	if not save_data or item_key == "" or amount <= 0:
+		return
+	save_data.crafted_item_counts[item_key] = int(save_data.crafted_item_counts.get(item_key, 0)) + amount
+	save_data.save_to_slot()
+
+func record_material_discovery(material_id: String, source: String = "seen") -> void:
+	if not save_data or material_id == "":
+		return
+	var entry: Dictionary = save_data.material_codex.get(material_id, {})
+	entry["seen"] = true
+	if source == "mined":
+		entry["mined"] = int(entry.get("mined", 0)) + 1
+	elif source == "crafted_with":
+		entry["crafted_with"] = int(entry.get("crafted_with", 0)) + 1
+	save_data.material_codex[material_id] = entry
+	save_data.save_to_slot()
+
 func _ready() -> void:
 	# Don't auto-load save data; title screen handles slot selection
 	save_data = null
 	_migrate_legacy_save()
+	var coop = get_node_or_null("/root/CoopSession")
+	if coop:
+		if not coop.joined_server.is_connected(_on_coop_joined_server):
+			coop.joined_server.connect(_on_coop_joined_server)
+		if not coop.connection_failed.is_connected(_on_coop_connection_failed):
+			coop.connection_failed.connect(_on_coop_connection_failed)
+		if not coop.session_closed.is_connected(_on_coop_session_closed):
+			coop.session_closed.connect(_on_coop_session_closed)
 
 func _process(delta: float) -> void:
 	if save_data and active_slot >= 0:
@@ -115,12 +249,19 @@ func start_new_character(class_id: String) -> void:
 	save_data.stat_allocations.clear()
 	save_data.equipped_items.clear()
 	save_data.inventory_items.clear()
+	save_data.inventory_item_states.clear()
 	save_data.secondary_weapon_path = ""
 	save_data.quickbar_items = ["", "", "", "", "", ""]
 	save_data.learned_spells.clear()
 	save_data.equipped_spell_slots = ["", "", "", "", "", ""]
 	save_data.pet_data.clear()
 	selected_class = class_id
+	# Give starter gems for testing
+	save_data.gem_bag = [
+		"res://resources/gems/chipped_ruby.tres",
+		"res://resources/gems/chipped_sapphire.tres",
+		"res://resources/gems/chipped_emerald.tres",
+	] as Array[String]
 	save_data.save_to_slot()
 	print("GameManager: Started new character as %s in slot %d" % [class_id, active_slot])
 
@@ -141,21 +282,52 @@ func auto_save() -> void:
 
 # --- Scene transitions ---
 
-func start_dungeon_run(biome_name: String) -> void:
+func start_dungeon_run(biome_name: String, mine_id: String = "") -> void:
 	pending_biome_name = biome_name
+	pending_mine_id = mine_id
 	# Remember where the player was so we can return them here
-	var player = get_tree().get_first_node_in_group("player")
+	var player = PlayerQuery.get_primary_player(get_tree())
 	if player:
 		overworld_return_position = player.global_position
 	_save_player_level()
-	_transition_to_scene("res://scenes/dungeon/dungeon.tscn", "Entering dungeon...")
+	var scene_path := "res://scenes/dungeon/mine.tscn" if mine_id != "" else "res://scenes/dungeon/dungeon.tscn"
+	_transition_to_scene(scene_path, "Entering dungeon...")
+
+func host_coop_boss_arena(slot: int, port: int = 24567, desired_max_players: int = 4, use_upnp: bool = false) -> Dictionary:
+	var coop = get_node_or_null("/root/CoopSession")
+	if coop == null:
+		return {"error": ERR_UNAVAILABLE}
+	if not load_slot(slot):
+		return {"error": ERR_CANT_OPEN}
+	_pending_coop_join_biome = ""
+	var result: Dictionary = coop.host_with_optional_upnp(port, desired_max_players, use_upnp)
+	var err: Error = int(result.get("error", OK))
+	if err != OK:
+		return result
+	start_dungeon_run(COOP_BOSS_ARENA_BIOME)
+	return result
+
+func join_coop_boss_arena(slot: int, address: String, port: int = 24567) -> Error:
+	var coop = get_node_or_null("/root/CoopSession")
+	if coop == null:
+		return ERR_UNAVAILABLE
+	if not load_slot(slot):
+		return ERR_CANT_OPEN
+	_pending_coop_join_biome = COOP_BOSS_ARENA_BIOME
+	var err: Error = coop.join_direct(address, port)
+	if err != OK:
+		_pending_coop_join_biome = ""
+		return err
+	return OK
 
 func respawn_dungeon() -> void:
 	# Restart the dungeon run with the same biome (keeps pending_biome_name)
-	_transition_to_scene("res://scenes/dungeon/dungeon.tscn", "Respawning...")
+	var scene_path := "res://scenes/dungeon/mine.tscn" if pending_mine_id != "" else "res://scenes/dungeon/dungeon.tscn"
+	_transition_to_scene(scene_path, "Respawning...")
 
 func return_to_overworld() -> void:
 	pending_biome_name = ""
+	pending_mine_id = ""
 	_save_player_level()
 	# Use .scn (binary) for faster parsing than .tscn (text)
 	if ResourceLoader.exists("res://scenes/overworld/overworld.scn"):
@@ -163,8 +335,25 @@ func return_to_overworld() -> void:
 	else:
 		_transition_to_scene("res://scenes/overworld/overworld.tscn", "Loading world...")
 
+func _on_coop_joined_server(_address: String, _port: int) -> void:
+	if _pending_coop_join_biome == "":
+		return
+	var biome := _pending_coop_join_biome
+	_pending_coop_join_biome = ""
+	start_dungeon_run(biome)
+
+func _on_coop_connection_failed() -> void:
+	_pending_coop_join_biome = ""
+
+func _on_coop_session_closed() -> void:
+	_pending_coop_join_biome = ""
+
 func go_to_start_screen() -> void:
 	pending_biome_name = ""
+	pending_mine_id = ""
+	# Ensure tree is unpaused and any stale loading screen is cleared
+	get_tree().paused = false
+	_hide_loading_screen()
 	get_tree().change_scene_to_file("res://scenes/ui/title_screen.tscn")
 
 func _transition_to_scene(scene_path: String, message: String) -> void:
@@ -207,7 +396,7 @@ func _hide_loading_screen() -> void:
 func start_battle(config: Dictionary) -> void:
 	# config = { "zone_name": String, "player_army": [...], "enemy_army": [...] }
 	battle_config = config
-	var player = get_tree().get_first_node_in_group("player")
+	var player = PlayerQuery.get_primary_player(get_tree())
 	if player:
 		overworld_return_position = player.global_position
 	_save_player_level()
@@ -317,7 +506,7 @@ func _load_enemy_armies() -> void:
 
 func add_gold(amount: int, apply_mult: bool = false) -> void:
 	if apply_mult:
-		var player = get_tree().get_first_node_in_group("player")
+		var player = PlayerQuery.get_primary_player(get_tree())
 		if player and player.get("equipment_manager"):
 			amount = int(amount * player.equipment_manager.get_gold_mult())
 	save_data.gold += amount
@@ -376,14 +565,34 @@ func save_level_data(level_system: LevelSystem) -> void:
 	save_data.stat_allocations = level_system.allocated.duplicate()
 	save_data.save_to_slot()
 
+func save_perk_data() -> void:
+	if not save_data:
+		return
+	var pm = get_node_or_null("/root/PerkManager")
+	if pm:
+		save_data.perk_tokens = pm.perk_tokens
+		save_data.unlocked_perks = pm.unlocked_perks.duplicate()
+		save_data.save_to_slot()
+
+func load_perk_data() -> void:
+	if not save_data:
+		return
+	var pm = get_node_or_null("/root/PerkManager")
+	if pm:
+		pm.perk_tokens = save_data.perk_tokens
+		pm.unlocked_perks.clear()
+		for pid in save_data.unlocked_perks:
+			pm.unlocked_perks.append(pid)
+
 func _save_player_level() -> void:
-	var player = get_tree().get_first_node_in_group("player")
+	var player = PlayerQuery.get_primary_player(get_tree())
 	if player and player.get_node_or_null("LevelSystem"):
 		save_level_data(player.get_node("LevelSystem"))
 	if player and player.get_node_or_null("EquipmentManager"):
 		save_equipment(player.get_node("EquipmentManager"))
 	if player and player.get_node_or_null("SpellBook"):
 		save_spellbook(player.get_node("SpellBook") as SpellBook)
+	save_perk_data()
 	# Save secondary weapon (mercenary/ranger weapon swap)
 	if player and player.get("_secondary_weapon"):
 		var sec = player._secondary_weapon as EquipmentItem
@@ -414,6 +623,7 @@ func save_equipment(equip_mgr: EquipmentManager) -> void:
 	# Save all inventory items (equipped ones live in inventory too)
 	save_data.inventory_items.clear()
 	save_data.inventory_quantities.clear()
+	save_data.inventory_item_states.clear()
 	var inv_idx := 0
 	for item in equip_mgr.inventory:
 		if not item:
@@ -425,6 +635,9 @@ func save_equipment(equip_mgr: EquipmentManager) -> void:
 			# Persist ammo quantity so arrow stacks survive scene transitions
 			if item.slot_type == EquipmentItem.SlotType.AMMO and item.quantity > 0:
 				save_data.inventory_quantities[inv_idx] = item.quantity
+			var item_state = item.get_item_instance_state()
+			if not item_state.is_empty():
+				save_data.inventory_item_states[inv_idx] = item_state
 			inv_idx += 1
 	# Save which inventory indices are equipped (inv_index -> slot_type)
 	save_data.equipped_items.clear()
@@ -462,6 +675,8 @@ func load_equipment(equip_mgr: EquipmentManager) -> bool:
 			# Restore saved ammo quantity (arrows survive scene transitions)
 			if save_data.inventory_quantities.has(load_idx):
 				copy.quantity = save_data.inventory_quantities[load_idx]
+			if save_data.inventory_item_states.has(load_idx):
+				copy.apply_item_instance_state(save_data.inventory_item_states[load_idx])
 			equip_mgr.inventory.append(copy)
 		load_idx += 1
 	# Mark equipped items by index

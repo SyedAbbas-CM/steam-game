@@ -16,6 +16,11 @@ commands = [{
 "zone": "haven"
 }]
 }, {
+"name": "Train (Perks)",
+"script": [{
+"cmd": "openPerkTree"
+}]
+}, {
 "name": "About Aria",
 "script": [{
 "cmd": "showDialog",

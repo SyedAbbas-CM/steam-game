@@ -1,4 +1,3 @@
-class_name DungeonManager
 extends Node2D
 
 signal floor_changed(floor_number: int)
@@ -18,14 +17,17 @@ var _TrapLeverScript: GDScript
 var _RailTrapScript: GDScript
 var _BellTrapScript: GDScript
 var _ExplosiveBarrelScript: GDScript
+var _SpearTrapScript: GDScript
 # _DungeonTrapScript not needed — duck-typing used instead
 
 var run_state: RunState
 var current_biome: DungeonBiome
+var current_mine: MineDefinition
 var starting_biome_name: String = ""
+var preferred_mine_id: String = ""
 
 func _is_test_dungeon() -> bool:
-	return starting_biome_name.begins_with("Test-Arena") or starting_biome_name == "TestCombo" or starting_biome_name == "TestMovement"
+	return starting_biome_name.begins_with("Test-Arena") or starting_biome_name == "TestCombo" or starting_biome_name == "TestMovement" or starting_biome_name == "HeightTest"
 
 # Persistent tilemap layers (children in scene tree)
 @onready var floor_layer: TileMapLayer = $Floor
@@ -38,10 +40,12 @@ func _is_test_dungeon() -> bool:
 @onready var player: CharacterBody2D = $Player
 
 var biomes: Array[DungeonBiome] = []
+var mines: Array[MineDefinition] = []
 var level_data: Array[DungeonLevelData] = []
 var dungeon_levels: Array[DungeonLevelData] = []
 var current_level: DungeonLevelData
 var _item_pool: ItemPool
+var mine_runtime
 
 # Room state: grid_pos -> { "visited", "spawned", "alive", "cleared", "liquid_mask", "web_positions" }
 var room_states: Dictionary = {}
@@ -89,6 +93,7 @@ const TRAP_LEVEL_GATES = {
 	"bell": 1,
 	"rail_trap": 1,
 	"flame_jet": 3,
+	"spear": 1,
 }
 
 const GUARANTEED_RAIL_CHAINS := {
@@ -101,6 +106,10 @@ var _corridor_midpoints: Array[Dictionary] = []
 var _elite_deco_budget: int = 0  # how many elite rooms get luxury furnishings this floor
 
 var wall_body: StaticBody2D
+var shadow_occluders: Node2D
+var _shadow_occluders_dirty: bool = false
+var _shadow_occluder_rebuild_timer: float = 0.0
+const SHADOW_OCCLUDER_REBUILD_INTERVAL := 0.18
 var nav: DungeonNav  # flow-field navigation for enemies
 var events # DungeonEvents - untyped to avoid circular dependency
 var _flow_timer: float = 0.0
@@ -261,6 +270,15 @@ func _process(delta: float) -> void:
 		if nav and nav.is_ready() and player:
 			nav.update_flow_field(player.global_position)
 
+	if mine_runtime:
+		mine_runtime.process(delta)
+
+	if _shadow_occluders_dirty:
+		_shadow_occluder_rebuild_timer -= delta
+		if _shadow_occluder_rebuild_timer <= 0.0:
+			_shadow_occluders_dirty = false
+			_generate_light_occluders()
+
 	# Animated tile frame swap
 	if _animated_tiles.size() > 0:
 		_anim_timer += delta
@@ -305,8 +323,9 @@ func _ready() -> void:
 	_RailTrapScript = load("res://scripts/dungeon/traps/rail_trap.gd")
 	_BellTrapScript = load("res://scripts/dungeon/traps/bell_trap.gd")
 	_ExplosiveBarrelScript = load("res://scripts/dungeon/traps/explosive_barrel.gd")
+	_SpearTrapScript = load("res://scripts/dungeon/traps/spear_trap.gd")
 	# Debug: verify trap scripts loaded
-	for s_name in ["_TrapTileScript", "_ArrowTrapScript", "_DartTrapScript", "_PoisonGasScript", "_CollapsingFloorScript", "_FlameJetScript", "_SwingingAxeScript", "_TrapLeverScript", "_RailTrapScript", "_BellTrapScript", "_ExplosiveBarrelScript"]:
+	for s_name in ["_TrapTileScript", "_ArrowTrapScript", "_DartTrapScript", "_PoisonGasScript", "_CollapsingFloorScript", "_FlameJetScript", "_SwingingAxeScript", "_TrapLeverScript", "_RailTrapScript", "_BellTrapScript", "_ExplosiveBarrelScript", "_SpearTrapScript"]:
 		if get(s_name) == null:
 			push_error("TRAP SCRIPT FAILED TO LOAD: " + s_name)
 		else:
@@ -314,10 +333,17 @@ func _ready() -> void:
 	var t0 = Time.get_ticks_msec()
 	_load_biomes()
 	print("TIMING: _load_biomes took %d ms" % (Time.get_ticks_msec() - t0))
+	t0 = Time.get_ticks_msec()
+	_load_mines()
+	print("TIMING: _load_mines took %d ms" % (Time.get_ticks_msec() - t0))
 	# Create transition container
 	transition_container = Node2D.new()
 	transition_container.name = "Transitions"
 	add_child(transition_container)
+
+	shadow_occluders = Node2D.new()
+	shadow_occluders.name = "ShadowOccluders"
+	add_child(shadow_occluders)
 
 	# Create tile inspector for decoration interaction
 	_tile_inspector = TileInspector.new()
@@ -331,6 +357,13 @@ func _load_biomes() -> void:
 			biomes.append(res)
 	biomes.sort_custom(func(a: DungeonBiome, b: DungeonBiome) -> bool: return a.min_floor < b.min_floor)
 	print("TIMING: loaded %d biomes in %d ms" % [biomes.size(), Time.get_ticks_msec() - t0])
+
+func _load_mines() -> void:
+	mines.clear()
+	for path in ResourceRegistry.mines():
+		var res = load(path) as MineDefinition
+		if res:
+			mines.append(res)
 
 var _levels_loaded_for: String = ""  # tracks which dungeon we loaded levels for
 
@@ -383,6 +416,21 @@ func start_run() -> void:
 			current_biome.biome_name, current_biome.enemy_pool.size(), current_biome.loy_level_id])
 	else:
 		print("Dungeon: WARNING - No biome found for starting_biome_name='%s'" % starting_biome_name)
+
+	current_mine = _find_mine_by_name(preferred_mine_id)
+	if current_mine == null:
+		current_mine = _find_mine_by_name(starting_biome_name)
+	if current_mine == null and current_biome:
+		current_mine = _find_mine_by_name(current_biome.biome_name)
+		if current_mine == null:
+			current_mine = _find_mine_by_name(current_biome.loy_level_id)
+	if current_mine:
+		var mine_runtime_script = load("res://scripts/dungeon/mine_runtime.gd")
+		mine_runtime = mine_runtime_script.new()
+		mine_runtime.setup(self, current_mine)
+		print("Dungeon: Mine runtime active for '%s'" % current_mine.mine_name)
+	else:
+		mine_runtime = null
 
 	# Use starting_biome_name (zone dungeon_base) for level chain — level files use new names
 	var level_id = starting_biome_name
@@ -446,6 +494,18 @@ func _find_biome_by_name(biome_name: String) -> DungeonBiome:
 			if b.loy_level_id == remapped:
 				return b
 	print("Dungeon: No biome found for '%s' (even after remap)" % biome_name)
+	return null
+
+func _find_mine_by_name(name: String) -> MineDefinition:
+	if name == "":
+		return null
+	var lowered := name.to_lower()
+	for mine in mines:
+		if mine.mine_name.to_lower() == lowered or mine.mine_id.to_lower() == lowered:
+			return mine
+		for alias in mine.biome_aliases:
+			if alias.to_lower() == lowered:
+				return mine
 	return null
 
 const MAX_DUNGEON_FLOORS = 4
@@ -525,12 +585,23 @@ func _get_biome_for_floor(floor_num: int) -> DungeonBiome:
 var _add_stairs_down_to_start: bool = false  # set when going up a floor
 
 func _generate_floor(floor_num: int) -> void:
+	if starting_biome_name == "HeightTest":
+		_generate_height_test_floor()
+		return
 	var t0 = Time.get_ticks_msec()
 	var level = _get_level_for_floor(floor_num)
 	current_level = level
 	current_biome = _get_biome_for_floor(floor_num)
 	if events:
 		events.on_floor_changed()
+	# Apply dungeon lighting mood
+	var lm = get_node_or_null("/root/LightingManager")
+	if lm:
+		lm.clear_torches()
+		if current_mine:
+			lm.apply_mine_mood(current_mine)
+		else:
+			lm.apply_dungeon_mood(current_biome)
 	_clear_floor()
 	_corridor_midpoints.clear()
 
@@ -546,12 +617,16 @@ func _generate_floor(floor_num: int) -> void:
 	var room_override = -1
 	if level:
 		room_override = level.rooms
+	if current_mine:
+		room_override = randi_range(current_mine.room_count_min, current_mine.room_count_max)
 
 	var t1 = Time.get_ticks_msec()
 	var map: Dictionary
 	var _is_test_arena = _is_test_dungeon()
 	if level and level.fixed_monsters.size() > 0:
-		var room_scale = 2 if starting_biome_name in ["TestCombo", "TestMovement"] else 1
+		var room_scale = clampi(int(level.arena_room_scale), 1, 4)
+		if room_scale <= 1 and starting_biome_name in ["TestCombo", "TestMovement"]:
+			room_scale = 2
 		var branch = level.branch_monsters if level.branch_monsters.size() > 0 else []
 		var west = level.west_branch if level.west_branch.size() > 0 else []
 		var south = level.south_branch if level.south_branch.size() > 0 else []
@@ -566,23 +641,54 @@ func _generate_floor(floor_num: int) -> void:
 			GRID_CELL_W = DEFAULT_GRID_CELL_W
 			GRID_CELL_H = DEFAULT_GRID_CELL_H
 	else:
-		map = FloorGenerator.generate_floor_map(floor_num, room_override, current_biome, get_total_floors())
-		# Use larger grid cells if any SUPER_ELITE room exists (GRAND_HALL shape needs more space)
-		var has_grand = false
-		for rpos in map["rooms"]:
-			if (map["rooms"][rpos] as RoomData).type == RoomData.RoomType.SUPER_ELITE:
-				has_grand = true
-				break
-		if has_grand:
-			GRID_CELL_W = GRAND_GRID_CELL_W
-			GRID_CELL_H = GRAND_GRID_CELL_H
+		if current_mine:
+			map = MineGenerator.generate_excavation_map(floor_num, current_mine, get_total_floors())
+			GRID_CELL_W = int(map.get("grid_cell_w", GRAND_GRID_CELL_W))
+			GRID_CELL_H = int(map.get("grid_cell_h", GRAND_GRID_CELL_H))
 		else:
-			GRID_CELL_W = DEFAULT_GRID_CELL_W
-			GRID_CELL_H = DEFAULT_GRID_CELL_H
+			map = FloorGenerator.generate_floor_map(floor_num, room_override, current_biome, get_total_floors())
+			# Use larger grid cells if any SUPER_ELITE room exists (GRAND_HALL shape needs more space)
+			var has_grand = false
+			for rpos in map["rooms"]:
+				if (map["rooms"][rpos] as RoomData).type == RoomData.RoomType.SUPER_ELITE:
+					has_grand = true
+					break
+			if has_grand:
+				GRID_CELL_W = GRAND_GRID_CELL_W
+				GRID_CELL_H = GRAND_GRID_CELL_H
+			else:
+				GRID_CELL_W = DEFAULT_GRID_CELL_W
+				GRID_CELL_H = DEFAULT_GRID_CELL_H
 	print("TIMING: generate_floor_map took %d ms (%d rooms, grid=%dx%d)" % [Time.get_ticks_msec() - t1, map["rooms"].size(), GRID_CELL_W, GRID_CELL_H])
 	run_state.floor_map = map["rooms"]
 	run_state.current_grid_pos = map["start"]
 	run_state.stairs_pos = map["stairs"]
+
+	# Mine cave rooms: for normal dungeon floors we aggressively convert to irregular caves.
+	# Dedicated mine maps already generate cavern masks directly.
+	if current_mine and current_mine.prefer_cave_rooms and not bool(map.get("solid_mass_mode", false)):
+		for rpos in run_state.floor_map:
+			var rd = run_state.floor_map[rpos] as RoomData
+			if rpos == map["start"] or rd.type == RoomData.RoomType.SHOP:
+				continue  # keep start + shop rooms rectangular
+			if rd.shape_width >= 21:
+				continue  # dedicated mine caverns are already large and irregular
+			var make_grand = (
+				rd.type in [RoomData.RoomType.BOSS, RoomData.RoomType.SUPER_ELITE]
+				or randf() < current_mine.grand_cavern_chance
+			)
+			if make_grand:
+				rd.shape = RoomData.RoomShape.GRAND_HALL
+				var grand_shape = RoomShapeGenerator.generate_mine_cavern(true)
+				rd.floor_mask = grand_shape["mask"]
+				rd.shape_width = grand_shape["width"]
+				rd.shape_height = grand_shape["height"]
+			else:
+				rd.shape = RoomData.RoomShape.ARENA
+				var cave_shape = RoomShapeGenerator.generate_mine_cavern(false)
+				rd.floor_mask = cave_shape["mask"]
+				rd.shape_width = cave_shape["width"]
+				rd.shape_height = cave_shape["height"]
 
 	# When player went upstairs, the start room also needs stairs down
 	if _add_stairs_down_to_start:
@@ -591,9 +697,11 @@ func _generate_floor(floor_num: int) -> void:
 			start_room.has_stairs_down = true
 		_add_stairs_down_to_start = false
 
-	# Determine theme row
+	# Determine theme row — mine overrides with its own biome_theme
 	var theme_row = 0
-	if level:
+	if current_mine and current_mine.biome_theme != "":
+		theme_row = THEME_ROWS.get(current_mine.biome_theme, 0)
+	elif level:
 		theme_row = level.tileset / 8
 		if theme_row >= 14:
 			theme_row = theme_row % 14
@@ -631,16 +739,40 @@ func _generate_floor(floor_num: int) -> void:
 				_paint_corridor(grid_pos, neighbor_pos, dir_name, theme_row)
 	print("TIMING: paint corridors took %d ms" % (Time.get_ticks_msec() - t1))
 
-	# Corridor traps (swinging axes with levers) — skip in test arena
-	if not _is_test_dungeon():
+	# Spawn lights at corridor midpoints (+ extra lights along corridors for normal dungeons)
+	if lm:
+		var is_mine_run := current_mine != null
+		for cdata in _corridor_midpoints:
+			var mid = cdata["midpoint"] as Vector2i
+			var world_pos = Vector2(mid.x * TILE_SIZE + TILE_SIZE / 2, mid.y * TILE_SIZE + TILE_SIZE / 2)
+			lm.spawn_torch_light(world_pos, self)
+			# Normal dungeons: add 2 extra lights offset along the corridor
+			if not is_mine_run:
+				# Try both axes — whichever has floor tiles is the corridor direction
+				for offset in [Vector2i(6, 0), Vector2i(0, 6)]:
+					var pos_a = mid + offset
+					var pos_b = mid - offset
+					if floor_layer.get_cell_source_id(pos_a) >= 0:
+						lm.spawn_torch_light(Vector2(pos_a.x * TILE_SIZE + TILE_SIZE / 2, pos_a.y * TILE_SIZE + TILE_SIZE / 2), self)
+					if floor_layer.get_cell_source_id(pos_b) >= 0:
+						lm.spawn_torch_light(Vector2(pos_b.x * TILE_SIZE + TILE_SIZE / 2, pos_b.y * TILE_SIZE + TILE_SIZE / 2), self)
+
+	if mine_runtime:
+		mine_runtime.on_floor_generated()
+
+	# Mines should feel rougher and less manufactured than trap-heavy castle floors.
+	if current_mine and not _is_test_dungeon():
+		_spawn_corridor_debris(theme_row)
+	# Corridor traps (swinging axes with levers) — skip in test arena and mines
+	elif not _is_test_dungeon():
 		_paint_corridor_traps(theme_row)
 
-	# Cross-room rail traps
-	if not _is_test_dungeon():
+	# Cross-room rail traps — keep them off mine runs so the silhouette reads as a cave branch.
+	if not _is_test_dungeon() and current_mine == null:
 		_spawn_cross_room_rail_traps(theme_row)
 
 	# Corridor patrol enemies (floor 2+)
-	if not _is_test_dungeon():
+	if not _is_test_dungeon() and current_mine == null:
 		_spawn_corridor_enemies()
 
 	# Create transitions between rooms
@@ -651,6 +783,12 @@ func _generate_floor(floor_num: int) -> void:
 	# Cleanup: erase any wall tile that overlaps a floor tile (prevents blocked corridors)
 	for cell in floor_layer.get_used_cells():
 		wall_layer.erase_cell(cell)
+
+	# Mine height system — subtle cave terrain elevation
+	if current_mine and not _is_test_dungeon():
+		t1 = Time.get_ticks_msec()
+		_build_mine_heights(theme_row)
+		print("TIMING: mine heights took %d ms" % (Time.get_ticks_msec() - t1))
 
 	# Generate wall collisions (row-merged for performance)
 	t1 = Time.get_ticks_msec()
@@ -667,6 +805,10 @@ func _generate_floor(floor_num: int) -> void:
 	# Place player at start room center
 	var start_world = _grid_to_world_center(map["start"])
 	player.global_position = start_world
+
+	# Setup player lantern for dark dungeons
+	if lm:
+		lm.setup_player_lantern(player)
 
 	# Build initial flow field from player spawn
 	nav.force_update(start_world)
@@ -707,12 +849,202 @@ func _generate_floor(floor_num: int) -> void:
 	if events:
 		events.on_floor_ready(map["start"])
 
+var _height_system = null
+
+func _new_height_system() -> Node2D:
+	var height_script := load("res://scripts/overworld/height_system.gd")
+	if height_script == null:
+		push_error("Failed to load height_system.gd")
+		return Node2D.new()
+	return height_script.new()
+
+func _generate_height_test_floor() -> void:
+	## Generate an outdoor terrain floor with height levels instead of rooms.
+	_clear_floor()
+	if _height_system:
+		_height_system.queue_free()
+		_height_system = null
+
+	# Lighting — bright outdoor mood
+	var lm = get_node_or_null("/root/LightingManager")
+	if lm:
+		lm.clear_torches()
+		lm.reset()
+		var mood = AreaMoodProfile.new()
+		mood.ambient_color = Color(0.95, 1.0, 0.92)
+		mood.glow_enabled = true
+		mood.glow_intensity = 0.3
+		mood.glow_bloom = 0.1
+		lm.apply_mood(mood)
+
+	# Map dimensions (in tiles, at 8px per tile)
+	var MAP_W = 60
+	var MAP_H = 50
+	var GRASS = Vector2i(6, 14)  # grass_green from environment_tileset
+
+	# Paint all grass
+	for y in range(MAP_H):
+		for x in range(MAP_W):
+			floor_layer.set_cell(Vector2i(x, y), 0, GRASS)
+
+	# Height layout
+	var height_layout: Array = []
+	for y in range(MAP_H):
+		var row: Array = []
+		for x in range(MAP_W):
+			row.append(0)
+		height_layout.append(row)
+
+	# Layout: lowland left, hills middle, plateau right, peak top-right
+	for y in range(MAP_H):
+		for x in range(MAP_W):
+			if x >= 40 and x <= 54 and y >= 4 and y <= 12:
+				height_layout[y][x] = 3
+			elif x >= 36 and x <= 56:
+				height_layout[y][x] = 2
+			elif x >= 20 and x <= 38:
+				height_layout[y][x] = 1
+
+	# Ramps — short (1 tile wide, 1-2 tiles tall)
+	var ramp_cells_arr: Array = []
+	# 0→1 ramps (west edge of hills at x=20)
+	ramp_cells_arr.append(Vector2i(20, 24))
+	height_layout[24][20] = 0
+	ramp_cells_arr.append(Vector2i(20, 25))
+	height_layout[25][20] = 0
+	# 1→2 ramp (east edge of hills at x=36)
+	ramp_cells_arr.append(Vector2i(36, 24))
+	height_layout[24][36] = 1
+	ramp_cells_arr.append(Vector2i(36, 25))
+	height_layout[25][36] = 1
+	# 2→3 ramp (south edge of peak at y=12)
+	ramp_cells_arr.append(Vector2i(47, 12))
+	height_layout[12][47] = 2
+	ramp_cells_arr.append(Vector2i(48, 12))
+	height_layout[12][48] = 2
+
+	# Build height system
+	_height_system = _new_height_system()
+	_height_system.name = "HeightSystem"
+	_height_system.tile_size = TILE_SIZE
+	_height_system.height_px = 8
+	_height_system.cliff_px = 8
+	add_child(_height_system)
+
+	for y in range(MAP_H):
+		for x in range(MAP_W):
+			_height_system.set_height(Vector2i(x, y), height_layout[y][x])
+
+	for rc in ramp_cells_arr:
+		_height_system.set_ramp(rc)
+
+	_height_system.build(floor_layer)
+
+	# Generate wall collisions
+	_generate_wall_collisions()
+
+	# Build nav
+	nav = DungeonNav.new()
+	nav.build(floor_layer, deco_layer, SOLID_DECO_ROWS)
+
+	# Place player at lowland center
+	var start_pos = Vector2(10 * TILE_SIZE + TILE_SIZE / 2, 25 * TILE_SIZE + TILE_SIZE / 2)
+	player.global_position = start_pos
+	nav.force_update(start_pos)
+
+	# Setup run state so exit works
+	run_state.current_floor = 1
+	run_state.floor_map = {Vector2i(0, 0): RoomData.new()}
+
+	# Hide loading screen
+	var gm = get_node_or_null("/root/GameManager")
+	if gm and gm.has_method("_hide_loading_screen"):
+		gm._hide_loading_screen()
+
+	print("Height test floor generated: %dx%d tiles" % [MAP_W, MAP_H])
+
+func _build_mine_heights(theme_row: int) -> void:
+	## Generate subtle height variations for mine rooms using noise.
+	## Interior tiles can be raised (height 1), edges/corridors stay at 0.
+	## Creates natural cave-terrace look with stone-themed cliff faces.
+	if _height_system and is_instance_valid(_height_system):
+		_height_system.queue_free()
+	_height_system = _new_height_system()
+	_height_system.name = "MineHeights"
+	_height_system.tile_size = TILE_SIZE
+	_height_system.height_px = 4
+	_height_system.cliff_px = 4
+	_height_system.theme = HeightSystem.HeightTheme.STONE
+	_height_system.ramp_atlas = Vector2i(12, theme_row)  # dirt tile as ramp
+
+	# Noise for natural-looking elevation
+	var noise = FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.08
+	noise.seed = randi()
+
+	var floor_cells = floor_layer.get_used_cells()
+	var floor_set: Dictionary = {}
+	for cell in floor_cells:
+		floor_set[cell] = true
+
+	# Find interior cells by erosion: cells that have all 4 cardinal neighbors as floor,
+	# then erode 2 more times to get tiles 3+ tiles from any edge.
+	var current_set: Dictionary = floor_set.duplicate()
+	for _pass in range(3):
+		var next_set: Dictionary = {}
+		for cell in current_set:
+			if current_set.has(cell + Vector2i(1, 0)) and current_set.has(cell + Vector2i(-1, 0)) \
+				and current_set.has(cell + Vector2i(0, 1)) and current_set.has(cell + Vector2i(0, -1)):
+				next_set[cell] = true
+		current_set = next_set
+	var interior_cells: Dictionary = current_set
+
+	# Assign heights based on noise, only for interior cells
+	var raised_cells: Dictionary = {}
+	for cell in floor_cells:
+		_height_system.set_height(cell, 0)
+		if not interior_cells.has(cell):
+			continue
+		var n = noise.get_noise_2d(float(cell.x), float(cell.y))
+		if n > 0.15:
+			_height_system.set_height(cell, 1)
+			raised_cells[cell] = true
+
+	# Create ramps at edges of raised areas (raised cell adjacent to non-raised floor)
+	for cell in raised_cells:
+		for dir in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var nb = cell + dir
+			if floor_set.has(nb) and not raised_cells.has(nb) and interior_cells.has(nb):
+				# Check if this neighbor is also near raised tiles (transitional)
+				var near_raised = 0
+				for d2 in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+					if raised_cells.has(nb + d2):
+						near_raised += 1
+				if near_raised >= 2:
+					_height_system.set_ramp(nb)
+
+	# Skip decoration tiles — don't raise cells that have deco on them
+	for cell in raised_cells:
+		if deco_layer.get_cell_source_id(cell) >= 0:
+			_height_system.set_height(cell, 0)
+
+	add_child(_height_system)
+	_height_system.build(floor_layer)
+	# floor_layer is hidden by build() but data remains for nav/collision queries
+
 func _clear_floor() -> void:
+	floor_layer.visible = true  # restore if height system hid it
 	floor_layer.clear()
 	wall_layer.clear()
 	deco_layer.clear()
 	liquid_layer.clear()
 	room_states.clear()
+	if mine_runtime:
+		mine_runtime.clear_runtime()
+	if _height_system and is_instance_valid(_height_system):
+		_height_system.queue_free()
+		_height_system = null
 	transitions.clear()
 	_floor_tile_set.clear()
 	_animated_tiles.clear()
@@ -722,6 +1054,9 @@ func _clear_floor() -> void:
 	if wall_body:
 		wall_body.queue_free()
 		wall_body = null
+	if shadow_occluders:
+		for child in shadow_occluders.get_children():
+			child.queue_free()
 
 	for child in transition_container.get_children():
 		child.queue_free()
@@ -741,6 +1076,14 @@ func _clear_floor() -> void:
 	_hide_stairs_prompt()
 	_nearby_interact_areas.clear()
 	_searched_tiles.clear()
+
+func has_breakable_mine_cell(tile_pos: Vector2i) -> bool:
+	return mine_runtime != null and mine_runtime.has_breakable_cell(tile_pos)
+
+func damage_breakable_mine_cell_at(world_pos: Vector2, damage: int = 1) -> Dictionary:
+	if mine_runtime == null:
+		return {"ok": false}
+	return mine_runtime.damage_breakable_cell_at(world_pos, damage)
 
 func _generate_wall_collisions() -> void:
 	if wall_body:
@@ -795,8 +1138,14 @@ func _generate_wall_collisions() -> void:
 				run_start = xs[i]
 				run_end = xs[i]
 		_add_wall_shape(run_start, run_end, y)
+	_generate_light_occluders()
+
+func _has_live_wall_body() -> bool:
+	return wall_body != null and is_instance_valid(wall_body)
 
 func _add_wall_shape(x_start: int, x_end: int, y: int) -> void:
+	if not _has_live_wall_body():
+		return
 	var run_len = x_end - x_start + 1
 	var rect = RectangleShape2D.new()
 	rect.size = Vector2(TILE_SIZE * run_len, TILE_SIZE)
@@ -808,10 +1157,41 @@ func _add_wall_shape(x_start: int, x_end: int, y: int) -> void:
 	)
 	wall_body.add_child(shape)
 
+func _queue_light_occluder_rebuild() -> void:
+	_shadow_occluders_dirty = true
+	_shadow_occluder_rebuild_timer = minf(_shadow_occluder_rebuild_timer, SHADOW_OCCLUDER_REBUILD_INTERVAL) if _shadow_occluders_dirty and _shadow_occluder_rebuild_timer > 0.0 else SHADOW_OCCLUDER_REBUILD_INTERVAL
+
+func _generate_light_occluders() -> void:
+	if shadow_occluders == null:
+		return
+	for child in shadow_occluders.get_children():
+		child.queue_free()
+	if not _has_live_wall_body():
+		return
+	for child in wall_body.get_children():
+		if not (child is CollisionShape2D):
+			continue
+		var shape_node := child as CollisionShape2D
+		if not (shape_node.shape is RectangleShape2D):
+			continue
+		var rect := shape_node.shape as RectangleShape2D
+		var half := rect.size * 0.5
+		var polygon := OccluderPolygon2D.new()
+		polygon.polygon = PackedVector2Array([
+			Vector2(-half.x, -half.y),
+			Vector2(half.x, -half.y),
+			Vector2(half.x, half.y),
+			Vector2(-half.x, half.y),
+		])
+		var occluder := LightOccluder2D.new()
+		occluder.occluder = polygon
+		occluder.position = shape_node.position
+		shadow_occluders.add_child(occluder)
+
 ## Remove collision shapes that overlap any of the given tile positions.
 ## Splits merged row shapes so non-overlapping portions keep their collision.
 func _remove_collision_at_tiles(tiles: Array[Vector2i]) -> void:
-	if not wall_body:
+	if not _has_live_wall_body():
 		return
 	var tile_set: Dictionary = {}
 	for t in tiles:
@@ -851,6 +1231,7 @@ func _remove_collision_at_tiles(tiles: Array[Vector2i]) -> void:
 		child.queue_free()
 	for run in to_add:
 		_add_wall_shape(run[0], run[1], run[2])
+	_queue_light_occluder_rebuild()
 
 # Decoration atlas rows that are solid objects (not flat floor decor)
 const SOLID_DECO_ROWS = [0, 1, 2, 3]  # barrels, furniture, chairs, stone pots
@@ -907,6 +1288,7 @@ func flush_deco_collisions() -> void:
 		_deco_dirty = false
 		_generate_wall_collisions()
 		_generate_deco_collisions()
+		_queue_light_occluder_rebuild()
 		if nav:
 			nav.invalidate()
 
@@ -980,10 +1362,12 @@ func smash_area(world_pos: Vector2, radius_tiles: int) -> bool:
 
 	# Phase 3: Incremental collision update — remove shapes covering smashed tiles,
 	# DON'T rebuild everything (full rebuild ejects players from tunnels).
-	_remove_collision_at_tiles(new_floors)
-	# Add collision for new edge walls (simple per-tile shapes, no merging needed)
-	for wt in wall_set:
-		_add_wall_shape(wt.x, wt.x, wt.y)
+	if _has_live_wall_body():
+		_remove_collision_at_tiles(new_floors)
+		# Add collision for new edge walls (simple per-tile shapes, no merging needed)
+		for wt in wall_set:
+			_add_wall_shape(wt.x, wt.x, wt.y)
+		_queue_light_occluder_rebuild()
 
 	# VFX + SFX
 	var vfx = get_node_or_null("/root/VFXManager")
@@ -1081,8 +1465,16 @@ func _paint_room(grid_pos: Vector2i, room_data: RoomData, theme_row: int, is_sta
 				if stair_cx > 0 and stair_cx < w and mask[cy][stair_cx]:
 					deco_layer.set_cell(origin + Vector2i(stair_cx, cy), 0, stairs_up)
 
-	# Biome-driven liquid flows (skip for test dungeons — they shouldn't have liquids)
-	if current_biome and current_biome.liquid_type != "" and current_biome.hazard_intensity > 0 and not _is_test_dungeon():
+	# Liquid flows — mine overrides biome liquid type
+	var eff_liquid_type = ""
+	var eff_hazard_intensity = 0.0
+	if current_mine and current_mine.liquid_type != "":
+		eff_liquid_type = current_mine.liquid_type
+		eff_hazard_intensity = 0.3  # moderate liquid presence in mines
+	elif current_biome and current_biome.liquid_type != "":
+		eff_liquid_type = current_biome.liquid_type
+		eff_hazard_intensity = current_biome.hazard_intensity
+	if eff_liquid_type != "" and eff_hazard_intensity > 0 and not _is_test_dungeon():
 		# Use directional flow for combat rooms, pool fill for shrines/others
 		var liquid_mask = []
 		if room_data.type == RoomData.RoomType.COMBAT and room_data.connections.size() > 0:
@@ -1094,12 +1486,12 @@ func _paint_room(grid_pos: Vector2i, room_data: RoomData, theme_row: int, is_sta
 				"south": flow_dir = Vector2(0, 1)
 				"east": flow_dir = Vector2(1, 0)
 				"west": flow_dir = Vector2(-1, 0)
-			liquid_mask = LiquidGenerator.generate_directional_flow(mask, current_biome.hazard_intensity, grid_pos.x * 1000 + grid_pos.y, flow_dir)
+			liquid_mask = LiquidGenerator.generate_directional_flow(mask, eff_hazard_intensity, grid_pos.x * 1000 + grid_pos.y, flow_dir)
 		else:
-			liquid_mask = LiquidGenerator.generate_liquid_fill(mask, current_biome.hazard_intensity, grid_pos.x * 1000 + grid_pos.y)
+			liquid_mask = LiquidGenerator.generate_liquid_fill(mask, eff_hazard_intensity, grid_pos.x * 1000 + grid_pos.y)
 		var web_positions = WebBridgeGenerator.generate_bridges(mask, liquid_mask, 0.08, room_data.connections, w, h)
 
-		_paint_liquid_tiles(origin, liquid_mask, current_biome.liquid_type, w, h)
+		_paint_liquid_tiles(origin, liquid_mask, eff_liquid_type, w, h)
 		_paint_web_bridges(origin, web_positions)
 		_create_liquid_hazards(origin, liquid_mask, web_positions, w, h)
 
@@ -1132,7 +1524,9 @@ func _paint_room(grid_pos: Vector2i, room_data: RoomData, theme_row: int, is_sta
 
 	# Blueprint-based room decoration for elite/super-elite/decorated rooms
 	var _use_blueprints = false
-	if room_data.type == RoomData.RoomType.SUPER_ELITE:
+	if current_mine:
+		_use_blueprints = false
+	elif room_data.type == RoomData.RoomType.SUPER_ELITE:
 		_use_blueprints = true
 	elif room_data.type == RoomData.RoomType.ELITE or room_data.type == RoomData.RoomType.BOSS:
 		if _elite_deco_budget > 0:
@@ -1342,6 +1736,8 @@ func _create_liquid_hazards(origin: Vector2i, liquid_mask: Array, web_positions:
 func _apply_hazard_status(hazard: HazardArea, liquid_type: String) -> void:
 	match liquid_type:
 		"lava":
+			hazard.damage = 5
+			hazard.interval = 0.6
 			hazard.status_effect_type = StatusEffect.Type.BURNING
 			hazard.status_strength = 1.0
 			hazard.status_duration = 3.0
@@ -1523,12 +1919,14 @@ func _paint_advanced_traps(origin: Vector2i, mask: Array, w: int, h: int, room_d
 				hazard_container.add_child(trap)
 
 			"collapsing_floor":
-				# Faint crack overlay
-				deco_layer.set_cell(origin + pos, 1, Vector2i(2, 4))
+				var collapse_tile = Vector2i(13, theme_row)
+				deco_layer.set_cell(origin + pos, 0, collapse_tile)
 				var trap = _CollapsingFloorScript.new()
 				trap.tile_pos = pos
 				trap.origin = origin
 				trap.deco_layer = deco_layer
+				trap.trap_atlas = collapse_tile
+				trap.trap_source_id = 0
 				trap.floor_layer = floor_layer
 				trap.liquid_layer = liquid_layer
 				trap.floor_number = floor_num
@@ -1564,6 +1962,8 @@ func _paint_advanced_traps(origin: Vector2i, mask: Array, w: int, h: int, room_d
 						break
 				if jet_pos == Vector2i(-1, -1):
 					continue
+				var wall_local = jet_pos - Vector2i(int(fire_dir.x), int(fire_dir.y))
+				var wall_world = Vector2((origin.x + wall_local.x) * TILE_SIZE + 4, (origin.y + wall_local.y) * TILE_SIZE + 4)
 
 				# Torch marker on the floor tile near wall
 				deco_layer.set_cell(origin + jet_pos, 1, Vector2i(6, 1))
@@ -1574,7 +1974,7 @@ func _paint_advanced_traps(origin: Vector2i, mask: Array, w: int, h: int, room_d
 				trap.fire_direction = fire_dir
 				trap.floor_number = floor_num
 				trap.room_grid_pos = grid_pos
-				trap.position = Vector2((origin.x + jet_pos.x) * TILE_SIZE + 4, (origin.y + jet_pos.y) * TILE_SIZE + 4)
+				trap.position = wall_world + fire_dir * 2.0
 				hazard_container.add_child(trap)
 
 			"bell":
@@ -1595,6 +1995,7 @@ func _paint_advanced_traps(origin: Vector2i, mask: Array, w: int, h: int, room_d
 				bell.room_grid_pos = grid_pos
 				bell.position = world_pos
 				hazard_container.add_child(bell)
+				bell.activate()
 
 		placed += 1
 	print("TRAPS: placed %d advanced traps (allowed: %s, level: %d) in room %s" % [placed, str(room_traps), _get_effective_level(), str(grid_pos)])
@@ -1668,11 +2069,14 @@ func _paint_showcase_trap(origin: Vector2i, mask: Array, w: int, h: int, room_da
 			trap.position = world_pos
 			hazard_container.add_child(trap)
 		"collapsing_floor":
-			deco_layer.set_cell(origin + pos, 1, Vector2i(2, 4))
+			var collapse_tile = Vector2i(13, theme_row)
+			deco_layer.set_cell(origin + pos, 0, collapse_tile)
 			var trap = _CollapsingFloorScript.new()
 			trap.tile_pos = pos
 			trap.origin = origin
 			trap.deco_layer = deco_layer
+			trap.trap_atlas = collapse_tile
+			trap.trap_source_id = 0
 			trap.floor_layer = floor_layer
 			trap.liquid_layer = liquid_layer
 			trap.floor_number = floor_num
@@ -1688,7 +2092,7 @@ func _paint_showcase_trap(origin: Vector2i, mask: Array, w: int, h: int, room_da
 			trap.fire_direction = Vector2(0, 1)
 			trap.floor_number = floor_num
 			trap.room_grid_pos = grid_pos
-			trap.position = world_pos
+			trap.position = world_pos + trap.fire_direction * 2.0
 			hazard_container.add_child(trap)
 		"bell":
 			deco_layer.set_cell(origin + pos, 1, Vector2i(9, 8))
@@ -1700,6 +2104,7 @@ func _paint_showcase_trap(origin: Vector2i, mask: Array, w: int, h: int, room_da
 			bell.room_grid_pos = grid_pos
 			bell.position = world_pos
 			hazard_container.add_child(bell)
+			bell.activate()
 		"explosive_barrel":
 			var barrel_atlas = Vector2i(6, 8)
 			deco_layer.set_cell(origin + pos, 1, barrel_atlas)
@@ -1712,6 +2117,7 @@ func _paint_showcase_trap(origin: Vector2i, mask: Array, w: int, h: int, room_da
 			barrel.room_grid_pos = grid_pos
 			barrel.position = world_pos
 			hazard_container.add_child(barrel)
+			barrel.activate()
 		"swinging_axe":
 			var axe = _SwingingAxeScript.new()
 			axe.floor_number = floor_num
@@ -1764,89 +2170,394 @@ func _find_wall_adjacent_to_floor(mask: Array, w: int, h: int, min_floor_neighbo
 	return Vector2i(-1, -1)
 
 func _paint_corridor_traps(theme_row: int) -> void:
-	var allowed = _get_allowed_traps()
-	# Filter to corridor-appropriate traps
-	var corridor_traps: Array[String] = []
-	for t in ["swinging_axe", "spike", "arrow", "dart", "flame_jet", "collapsing_floor"]:
-		if t in allowed:
-			corridor_traps.append(t)
-	if corridor_traps.size() == 0:
-		return
-
 	var floor_num = run_state.current_floor if run_state else 1
 
 	for corridor in _corridor_midpoints:
-		# 50-70% of corridors have traps (scales with floor)
-		var trap_chance = 0.50 + floor_num * 0.04
-		trap_chance = minf(trap_chance, 0.70)
-		if randf() > trap_chance:
+		var floor_tiles = corridor.get("floor_tiles", []) as Array
+		if floor_tiles.size() < 6:
+			continue
+		var corr_dir = str(corridor.get("direction", "east"))
+		var centerline = _get_sorted_corridor_centerline_tiles(corridor)
+		if centerline.size() < 4:
+			continue
+		var wall_mounts = _get_corridor_wall_mounts(corridor)
+
+		# Common collapsing-floor runs: these should define corridor danger.
+		var collapse_runs = 2 if centerline.size() >= 12 else 1
+		if centerline.size() >= 20:
+			collapse_runs = 3
+		for run_idx in range(collapse_runs):
+			var run_len = clampi(3 + floor_num / 3 + randi_range(0, 1), 3, 5)
+			var start_idx = clampi(2 + run_idx * maxi(3, centerline.size() / max(2, collapse_runs)) + randi_range(0, 2), 1, maxi(centerline.size() - run_len - 1, 1))
+			_spawn_corridor_collapsing_run(centerline, start_idx, run_len, floor_num, theme_row)
+
+		# Floor spike runs and explosive tiles/barrels layered in.
+		var spike_len = clampi(2 + floor_num / 3, 2, 5)
+		var spike_start = clampi(centerline.size() / 3 + randi_range(-1, 1), 1, maxi(centerline.size() - spike_len - 1, 1))
+		_spawn_corridor_spike_run(centerline, spike_start, spike_len, floor_num, theme_row)
+		if centerline.size() >= 12:
+			var spike_start_2 = clampi((centerline.size() * 2) / 3 + randi_range(-1, 1), 1, maxi(centerline.size() - spike_len - 1, 1))
+			_spawn_corridor_spike_run(centerline, spike_start_2, spike_len, floor_num, theme_row)
+		_spawn_corridor_explosive_tiles(centerline, floor_num)
+		_spawn_corridor_poison_tiles(centerline, floor_num, theme_row)
+
+		# Wall-anchored trap lanes: flame jets, darts, spears, arrows.
+		_spawn_corridor_wall_lanes(wall_mounts, corr_dir, floor_num, theme_row)
+
+func _get_sorted_corridor_centerline_tiles(corridor: Dictionary) -> Array[Vector2i]:
+	var floor_tiles = corridor.get("floor_tiles", []) as Array
+	var corr_dir = str(corridor.get("direction", "east"))
+	var axis_groups: Dictionary = {}
+	for tile in floor_tiles:
+		var t = tile as Vector2i
+		var key = t.x if corr_dir == "south" else t.y
+		if not axis_groups.has(key):
+			axis_groups[key] = []
+		axis_groups[key].append(t)
+	var best_key = 0
+	var best_count = -1
+	for key in axis_groups:
+		var count = (axis_groups[key] as Array).size()
+		if count > best_count:
+			best_count = count
+			best_key = key
+	var centerline: Array[Vector2i] = []
+	for t in axis_groups.get(best_key, []):
+		centerline.append(t as Vector2i)
+	centerline.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return a.y < b.y if corr_dir == "south" else a.x < b.x
+	)
+	return centerline
+
+func _get_corridor_wall_mounts(corridor: Dictionary) -> Array[Dictionary]:
+	var wall_tiles = corridor.get("wall_tiles", []) as Array
+	var centerline = _get_sorted_corridor_centerline_tiles(corridor)
+	var mounts: Array[Dictionary] = []
+	if wall_tiles.is_empty() or centerline.is_empty():
+		return mounts
+	var corr_dir = str(corridor.get("direction", "east"))
+	var center_set: Dictionary = {}
+	for c in centerline:
+		center_set[c] = true
+	if corr_dir == "east":
+		var by_x: Dictionary = {}
+		for wt in wall_tiles:
+			var wtile = wt as Vector2i
+			if not by_x.has(wtile.x):
+				by_x[wtile.x] = []
+			by_x[wtile.x].append(wtile)
+		for center_idx in range(centerline.size()):
+			if center_idx < 2 or center_idx > centerline.size() - 3:
+				continue
+			var center = centerline[center_idx]
+			var candidates = by_x.get(center.x, []) as Array
+			if candidates.is_empty():
+				continue
+			var top_wall = Vector2i.ZERO
+			var bottom_wall = Vector2i.ZERO
+			var top_ok = false
+			var bottom_ok = false
+			for cand in candidates:
+				var wtile = cand as Vector2i
+				if wtile.y < center.y and (not top_ok or wtile.y > top_wall.y):
+					top_wall = wtile
+					top_ok = true
+				elif wtile.y > center.y and (not bottom_ok or wtile.y < bottom_wall.y):
+					bottom_wall = wtile
+					bottom_ok = true
+			if top_ok:
+				mounts.append({"wall": top_wall, "floor": center, "fire_dir": Vector2.DOWN, "corridor_direction": "east"})
+			if bottom_ok:
+				mounts.append({"wall": bottom_wall, "floor": center, "fire_dir": Vector2.UP, "corridor_direction": "east"})
+	else:
+		var by_y: Dictionary = {}
+		for wt in wall_tiles:
+			var wtile = wt as Vector2i
+			if not by_y.has(wtile.y):
+				by_y[wtile.y] = []
+			by_y[wtile.y].append(wtile)
+		for center_idx in range(centerline.size()):
+			if center_idx < 2 or center_idx > centerline.size() - 3:
+				continue
+			var center = centerline[center_idx]
+			var candidates = by_y.get(center.y, []) as Array
+			if candidates.is_empty():
+				continue
+			var left_wall = Vector2i.ZERO
+			var right_wall = Vector2i.ZERO
+			var left_ok = false
+			var right_ok = false
+			for cand in candidates:
+				var wtile = cand as Vector2i
+				if wtile.x < center.x and (not left_ok or wtile.x > left_wall.x):
+					left_wall = wtile
+					left_ok = true
+				elif wtile.x > center.x and (not right_ok or wtile.x < right_wall.x):
+					right_wall = wtile
+					right_ok = true
+			if left_ok:
+				mounts.append({"wall": left_wall, "floor": center, "fire_dir": Vector2.RIGHT, "corridor_direction": "south"})
+			if right_ok:
+				mounts.append({"wall": right_wall, "floor": center, "fire_dir": Vector2.LEFT, "corridor_direction": "south"})
+	mounts.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var af = a.get("floor", Vector2i.ZERO) as Vector2i
+		var bf = b.get("floor", Vector2i.ZERO) as Vector2i
+		return af.y < bf.y if corr_dir == "south" else af.x < bf.x
+	)
+	return mounts
+
+func _spawn_corridor_collapsing_run(centerline: Array[Vector2i], start_idx: int, run_len: int, floor_num: int, theme_row: int) -> void:
+	if not _CollapsingFloorScript:
+		return
+	var collapse_tile = Vector2i(13, theme_row)
+	for i in range(run_len):
+		var idx = start_idx + i
+		if idx < 0 or idx >= centerline.size():
+			break
+		var tile_pos = centerline[idx]
+		deco_layer.set_cell(tile_pos, 0, collapse_tile)
+		var cf = _CollapsingFloorScript.new()
+		cf.tile_pos = tile_pos
+		cf.origin = Vector2i.ZERO
+		cf.deco_layer = deco_layer
+		cf.trap_atlas = collapse_tile
+		cf.trap_source_id = 0
+		cf.floor_number = floor_num
+		cf.position = Vector2(tile_pos.x * TILE_SIZE + 4, tile_pos.y * TILE_SIZE + 4)
+		hazard_container.add_child(cf)
+		cf.activate()
+
+func _spawn_corridor_spike_run(centerline: Array[Vector2i], start_idx: int, run_len: int, floor_num: int, theme_row: int) -> void:
+	if not _TrapTileScript:
+		return
+	var trap_atlas = Vector2i(13, theme_row)
+	for i in range(run_len):
+		var idx = start_idx + i
+		if idx < 0 or idx >= centerline.size():
+			break
+		var tile_pos = centerline[idx]
+		deco_layer.set_cell(tile_pos, 0, trap_atlas)
+		var spike = _TrapTileScript.new()
+		spike.tile_pos = tile_pos
+		spike.origin = Vector2i.ZERO
+		spike.deco_layer = deco_layer
+		spike.trap_atlas = trap_atlas
+		spike.trap_source_id = 0
+		spike.floor_number = floor_num
+		spike.position = Vector2(tile_pos.x * TILE_SIZE + 4, tile_pos.y * TILE_SIZE + 4)
+		hazard_container.add_child(spike)
+		spike.activate()
+
+func _spawn_corridor_explosive_tiles(centerline: Array[Vector2i], floor_num: int) -> void:
+	if not _ExplosiveBarrelScript:
+		return
+	var barrel_atlas = Vector2i(6, 8)
+	for idx in range(3, centerline.size() - 3, 6):
+		if randf() > 0.62:
+			continue
+		var tile_pos = centerline[idx]
+		deco_layer.set_cell(tile_pos, 1, barrel_atlas)
+		var barrel = _ExplosiveBarrelScript.new()
+		barrel.tile_pos = tile_pos
+		barrel.origin = Vector2i.ZERO
+		barrel.deco_layer = deco_layer
+		barrel.floor_layer = floor_layer
+		barrel.floor_number = floor_num
+		barrel.position = Vector2(tile_pos.x * TILE_SIZE + 4, tile_pos.y * TILE_SIZE + 4)
+		hazard_container.add_child(barrel)
+		barrel.activate()
+
+func _spawn_corridor_poison_tiles(centerline: Array[Vector2i], floor_num: int, theme_row: int) -> void:
+	if not _PoisonGasScript or centerline.size() < 8:
+		return
+	var poison_atlas = Vector2i(7, 8)
+	var runs = 2 if centerline.size() >= 18 else 1
+	for run_idx in range(runs):
+		var idx = clampi(2 + run_idx * max(4, centerline.size() / max(1, runs)) + randi_range(0, 2), 1, centerline.size() - 2)
+		var tile_pos = centerline[idx]
+		deco_layer.set_cell(tile_pos, 1, poison_atlas)
+		var trap = _PoisonGasScript.new()
+		trap.floor_number = floor_num
+		trap.tile_pos = tile_pos
+		trap.origin = Vector2i.ZERO
+		trap.deco_layer = deco_layer
+		trap.trap_source_id = 1
+		trap.trap_atlas = poison_atlas
+		trap.position = Vector2(tile_pos.x * TILE_SIZE + 4, tile_pos.y * TILE_SIZE + 4)
+		hazard_container.add_child(trap)
+		trap.activate()
+
+func _spawn_corridor_wall_lanes(mounts: Array[Dictionary], corr_dir: String, floor_num: int, theme_row: int) -> void:
+	if mounts.is_empty():
+		return
+	var plate_atlas = Vector2i(13, theme_row)
+	var pack_count = 1
+	if mounts.size() >= 8:
+		pack_count = 2
+	if mounts.size() >= 16:
+		pack_count = 3
+	var pack_span = maxi(2, mounts.size() / max(1, pack_count))
+	var placed = 0
+	var max_traps = clampi(4 + floor_num / 2, 5, 9)
+	var heavy_traps = 0
+	var spawned_any = false
+	for pack_idx in range(pack_count):
+		if placed >= max_traps:
+			break
+		var pack_start = clampi(pack_idx * pack_span, 0, max(mounts.size() - 1, 0))
+		var pack_len = mini(4, max(2, pack_span))
+		var pack_step = 1 if pack_span <= 4 else 2
+		var spear_sync_offset = 0.45 * float(pack_idx % 3)
+		for offset in range(pack_len):
+			var idx = pack_start + offset * pack_step
+			if idx < 0 or idx >= mounts.size() or placed >= max_traps:
+				break
+			var mount = mounts[idx]
+			var wall_tile = mount.get("wall", Vector2i.ZERO) as Vector2i
+			var floor_tile = mount.get("floor", Vector2i.ZERO) as Vector2i
+			var fire_dir = mount.get("fire_dir", Vector2.DOWN) as Vector2
+			var wall_world = Vector2(wall_tile.x * TILE_SIZE + 4, wall_tile.y * TILE_SIZE + 4) + fire_dir * 2.0
+			var floor_world = Vector2(floor_tile.x * TILE_SIZE + 4, floor_tile.y * TILE_SIZE + 4)
+			var spawn_flame = _FlameJetScript != null and heavy_traps < 2 and offset == pack_len - 1 and (pack_idx % 2 == 0)
+			var spawn_spear = _SpearTrapScript != null and not spawn_flame
+			if spawn_flame:
+				var fj = _FlameJetScript.new()
+				fj.floor_number = floor_num
+				fj.fire_direction = fire_dir
+				fj.position = wall_world
+				hazard_container.add_child(fj)
+				fj.activate()
+				heavy_traps += 1
+				spawned_any = true
+			elif spawn_spear:
+				var spear = _SpearTrapScript.new()
+				spear.floor_number = floor_num
+				spear.corridor_direction = corr_dir
+				spear.thrust_direction = fire_dir
+				spear.sync_offset = spear_sync_offset
+				spear.position = wall_world
+				hazard_container.add_child(spear)
+				heavy_traps += 1
+				spawned_any = true
+			elif _DartTrapScript and ((idx + pack_idx) % 2 == 0):
+				var dart = _DartTrapScript.new()
+				dart.floor_number = floor_num
+				dart.position = floor_world
+				dart.tile_pos = floor_tile
+				dart.origin = Vector2i.ZERO
+				dart.deco_layer = deco_layer
+				dart.trap_atlas = plate_atlas
+				dart.trap_source_id = 0
+				dart.wall_pos = wall_tile
+				deco_layer.set_cell(floor_tile, 0, dart.trap_atlas)
+				hazard_container.add_child(dart)
+				spawned_any = true
+			elif _ArrowTrapScript:
+				var arrow = _ArrowTrapScript.new()
+				arrow.floor_number = floor_num
+				arrow.position = floor_world
+				arrow.tile_pos = floor_tile
+				arrow.origin = Vector2i.ZERO
+				arrow.deco_layer = deco_layer
+				arrow.trap_source_id = 0
+				arrow.trap_atlas = plate_atlas
+				deco_layer.set_cell(floor_tile, 0, arrow.trap_atlas)
+				hazard_container.add_child(arrow)
+				spawned_any = true
+			placed += 1
+	if not spawned_any:
+		_spawn_guaranteed_corridor_spear_pair(mounts, corr_dir, floor_num)
+
+func _spawn_guaranteed_corridor_spear_pair(mounts: Array[Dictionary], corr_dir: String, floor_num: int) -> void:
+	if not _SpearTrapScript or mounts.is_empty():
+		return
+	var picks: Array[int] = []
+	picks.append(clampi(mounts.size() / 3, 0, mounts.size() - 1))
+	if mounts.size() > 2:
+		picks.append(clampi((mounts.size() * 2) / 3, 0, mounts.size() - 1))
+	for idx in picks:
+		var mount = mounts[idx]
+		var wall_tile = mount.get("wall", Vector2i.ZERO) as Vector2i
+		var fire_dir = mount.get("fire_dir", Vector2.DOWN) as Vector2
+		var wall_world = Vector2(wall_tile.x * TILE_SIZE + 4, wall_tile.y * TILE_SIZE + 4) + fire_dir * 2.0
+		var spear = _SpearTrapScript.new()
+		spear.floor_number = floor_num
+		spear.corridor_direction = corr_dir
+		spear.thrust_direction = fire_dir
+		spear.sync_offset = 0.0
+		spear.position = wall_world
+		hazard_container.add_child(spear)
+
+## --- Corridor Debris Blockages ---
+
+func _spawn_corridor_debris(theme_row: int) -> void:
+	var floor_num = run_state.current_floor if run_state else 1
+	var wall_tile = Vector2i(4, theme_row)
+	var floor_tile_atlas = Vector2i(5, theme_row)
+
+	for corridor in _corridor_midpoints:
+		# 25% chance on floor 1, scaling up to 40% on floor 5+
+		var debris_chance = 0.25 + floor_num * 0.03
+		debris_chance = minf(debris_chance, 0.40)
+		if randf() > debris_chance:
 			continue
 
-		var trap_positions = corridor.get("trap_positions", []) as Array
-		if trap_positions.size() == 0:
-			# Fallback: use midpoint
-			trap_positions = [{"position": corridor.get("position", Vector2.ZERO), "direction": corridor.get("direction", "east")}]
+		var corridor_floors = corridor.get("floor_tiles", []) as Array
+		if corridor_floors.size() < 20:
+			continue  # Too short for debris
 
-		# 1-3 traps per corridor, scaling with floor
-		var num_traps = clampi(1 + floor_num / 3, 1, 3)
-		num_traps = mini(num_traps, trap_positions.size())
+		var direction = str(corridor.get("direction", "east"))
+		var half_w = 1  # Debris is always 3 tiles wide
 
-		for i in range(num_traps):
-			var trap_type = corridor_traps[randi() % corridor_traps.size()]
-			var pos_data = trap_positions[i]
-			var pos = pos_data.get("position", Vector2.ZERO) as Vector2
-			var direction = str(pos_data.get("direction", "east"))
+		# Pick a position ~30-70% along the corridor
+		var t = randf_range(0.3, 0.7)
+		var idx = int(t * (corridor_floors.size() - 1))
+		# Find the center tile at this index
+		var center = corridor_floors[idx] as Vector2i
 
-			match trap_type:
-				"swinging_axe":
-					var axe = _SwingingAxeScript.new()
-					axe.floor_number = floor_num
-					axe.corridor_direction = direction
-					axe.position = pos
-					hazard_container.add_child(axe)
-					# Lever
-					var lever_dist = randi_range(3, 5) * TILE_SIZE * (1 if randf() > 0.5 else -1)
-					var lever_offset = Vector2(lever_dist, 0) if direction == "east" else Vector2(0, lever_dist)
-					var lever = _TrapLeverScript.new()
-					lever.axe = axe
-					lever.position = pos + lever_offset
-					hazard_container.add_child(lever)
-				"spike":
-					var tile_pos = Vector2i(int(pos.x) / TILE_SIZE, int(pos.y) / TILE_SIZE)
-					var trap_atlas = Vector2i(13, theme_row)
-					deco_layer.set_cell(tile_pos, 0, trap_atlas)
-					var spike = _TrapTileScript.new()
-					spike.tile_pos = tile_pos
-					spike.origin = Vector2i.ZERO
-					spike.deco_layer = deco_layer
-					spike.trap_atlas = trap_atlas
-					spike.floor_number = floor_num
-					spike.position = pos
-					hazard_container.add_child(spike)
-				"arrow":
-					if _ArrowTrapScript:
-						var arrow = _ArrowTrapScript.new()
-						arrow.floor_number = floor_num
-						arrow.position = pos
-						hazard_container.add_child(arrow)
-				"dart":
-					if _DartTrapScript:
-						var dart = _DartTrapScript.new()
-						dart.floor_number = floor_num
-						dart.position = pos
-						hazard_container.add_child(dart)
-				"flame_jet":
-					if _FlameJetScript:
-						var fj = _FlameJetScript.new()
-						fj.floor_number = floor_num
-						fj.position = pos
-						hazard_container.add_child(fj)
-				"collapsing_floor":
-					if _CollapsingFloorScript:
-						var cf = _CollapsingFloorScript.new()
-						cf.floor_number = floor_num
-						cf.position = pos
-						hazard_container.add_child(cf)
+		# Build a wall of debris tiles across the corridor (3 wide x 2 deep)
+		var debris_tiles: Array[Vector2i] = []
+		var depth = 2
+		for d in range(depth):
+			for w in range(-half_w, half_w + 1):
+				var tile: Vector2i
+				if direction == "east":
+					tile = Vector2i(center.x + d, center.y + w)
+				else:
+					tile = Vector2i(center.x + w, center.y + d)
+				# Only place debris on existing floor tiles
+				if floor_layer.get_cell_source_id(tile) >= 0:
+					debris_tiles.append(tile)
+
+		if debris_tiles.is_empty():
+			continue
+
+		# Paint wall tiles over the debris positions
+		for tile_pos in debris_tiles:
+			wall_layer.set_cell(tile_pos, 0, wall_tile)
+			floor_layer.erase_cell(tile_pos)
+			_floor_tile_set.erase(tile_pos)
+
+		# Create the debris entity
+		var debris = preload("res://scripts/dungeon/corridor_debris.gd").new()
+		debris.hp = 25
+		debris.tile_positions = debris_tiles
+		debris.wall_layer_ref = wall_layer
+		debris.floor_layer_ref = floor_layer
+		debris.floor_tile = floor_tile_atlas
+		hazard_container.add_child(debris)
+
+		# Add collision shapes
+		for tile_pos in debris_tiles:
+			var rect = RectangleShape2D.new()
+			var shape_node = CollisionShape2D.new()
+			rect.size = Vector2(TILE_SIZE, TILE_SIZE)
+			shape_node.shape = rect
+			shape_node.position = Vector2(tile_pos.x * TILE_SIZE + 4, tile_pos.y * TILE_SIZE + 4)
+			debris.add_child(shape_node)
+
+		# Setup the dark semi-transparent sprite overlay
+		debris.setup_sprite(TILE_SIZE)
 
 ## --- Cross-Room Rail Traps ---
 
@@ -1906,14 +2617,14 @@ func _spawn_cross_room_rail_traps(theme_row: int) -> void:
 	if eff_level < TRAP_LEVEL_GATES.get("rail_trap", 4) and not force_rail:
 		return
 
-	# Collect eligible rooms (COMBAT/ELITE only, skip start room)
+	# Collect eligible rooms across most of the floor. Only skip obvious safe/utility rooms.
 	var eligible: Array[Vector2i] = []
 	var start_grid = run_state.current_grid_pos
 	for grid_pos in run_state.floor_map:
 		if grid_pos == start_grid:
 			continue
 		var rd = run_state.floor_map[grid_pos] as RoomData
-		if rd.type in [RoomData.RoomType.COMBAT, RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS]:
+		if _is_rail_eligible_room(rd):
 			eligible.append(grid_pos)
 
 	if eligible.size() < 2:
@@ -1921,18 +2632,136 @@ func _spawn_cross_room_rail_traps(theme_row: int) -> void:
 			_spawn_single_room_rail_trap(eligible)
 		return
 
-	# Pick a chain of 2-4 connected rooms
-	var target_len = mini(randi_range(2, 4), eligible.size())
-	var chain = _pick_rail_room_chain(eligible, target_len)
-	if chain.size() < 2:
-		if force_rail:
-			_spawn_single_room_rail_trap(eligible)
-		return
+	var spawned_any = false
+	# First pass: build one floor-spanning network rail from the largest connected component.
+	if _spawn_floor_network_rail_track(eligible, force_rail):
+		spawned_any = true
 
-	# Build the full track through rooms and corridors
+	var system_count = 4 if force_rail else 3 + int(randf() < 0.60 + minf(0.30, eff_level * 0.03))
+	for _system_idx in range(system_count):
+		if eligible.size() < 2:
+			break
+		var target_len = mini(randi_range(3, 6), eligible.size())
+		var chain = _pick_rail_room_chain(eligible, target_len)
+		if chain.size() < 2:
+			continue
+		var built = _build_and_spawn_rail_track(chain, force_rail)
+		if built:
+			spawned_any = true
+	if not spawned_any:
+		_spawn_multi_room_rail_fallback(eligible, 3)
+
+func _is_rail_eligible_room(room_data: RoomData) -> bool:
+	if room_data == null:
+		return false
+	return room_data.type != RoomData.RoomType.SHOP
+
+func _spawn_floor_network_rail_track(eligible: Array[Vector2i], force_rail: bool) -> bool:
+	var best_chain = _build_floor_rail_chain(eligible)
+	if best_chain.size() < 2:
+		return false
+	# Try the full floor chain first, then progressively shorten if a specific room/corridor route fails.
+	var working = best_chain.duplicate()
+	while working.size() >= 2:
+		if _build_and_spawn_rail_track(working, force_rail):
+			print("RAIL_TRAPS: floor-network track across %d rooms" % working.size())
+			return true
+		if working.size() <= 3:
+			break
+		working.remove_at(working.size() - 1)
+	return false
+
+func _build_floor_rail_chain(eligible: Array[Vector2i]) -> Array[Vector2i]:
+	var components = _get_rail_components(eligible)
+	if components.is_empty():
+		return []
+	components.sort_custom(func(a: Array, b: Array) -> bool:
+		return a.size() > b.size()
+	)
+	var largest: Array[Vector2i] = []
+	for gp in components[0]:
+		largest.append(gp as Vector2i)
+	if largest.size() < 2:
+		return largest
+	var start = largest[0]
+	var first_pass = _bfs_farthest_rail_room(start, largest)
+	var second_pass = _bfs_farthest_rail_room(first_pass["room"] as Vector2i, largest)
+	return _reconstruct_rail_path(second_pass["room"] as Vector2i, second_pass["parents"] as Dictionary)
+
+func _get_rail_components(eligible: Array[Vector2i]) -> Array:
+	var eligible_set: Dictionary = {}
+	for gp in eligible:
+		eligible_set[gp] = true
+	var visited: Dictionary = {}
+	var components: Array = []
+	for seed in eligible:
+		if visited.has(seed):
+			continue
+		var queue: Array[Vector2i] = [seed]
+		var component: Array[Vector2i] = []
+		visited[seed] = true
+		var idx := 0
+		while idx < queue.size():
+			var current = queue[idx]
+			idx += 1
+			component.append(current)
+			var rd = run_state.floor_map.get(current) as RoomData
+			if rd == null:
+				continue
+			for dir_name in rd.connections:
+				var neighbor = rd.connections[dir_name] as Vector2i
+				if not eligible_set.has(neighbor) or visited.has(neighbor):
+					continue
+				visited[neighbor] = true
+				queue.append(neighbor)
+		components.append(component)
+	return components
+
+func _bfs_farthest_rail_room(start: Vector2i, component: Array[Vector2i]) -> Dictionary:
+	var component_set: Dictionary = {}
+	for gp in component:
+		component_set[gp] = true
+	var queue: Array[Vector2i] = [start]
+	var parents: Dictionary = {start: Vector2i(999999, 999999)}
+	var dist: Dictionary = {start: 0}
+	var idx := 0
+	var farthest = start
+	while idx < queue.size():
+		var current = queue[idx]
+		idx += 1
+		var current_dist = int(dist[current])
+		if current_dist > int(dist[farthest]):
+			farthest = current
+		var rd = run_state.floor_map.get(current) as RoomData
+		if rd == null:
+			continue
+		for dir_name in rd.connections:
+			var neighbor = rd.connections[dir_name] as Vector2i
+			if not component_set.has(neighbor) or dist.has(neighbor):
+				continue
+			dist[neighbor] = current_dist + 1
+			parents[neighbor] = current
+			queue.append(neighbor)
+	return {"room": farthest, "parents": parents}
+
+func _reconstruct_rail_path(goal: Vector2i, parents: Dictionary) -> Array[Vector2i]:
+	var sentinel = Vector2i(999999, 999999)
+	var path: Array[Vector2i] = []
+	var current = goal
+	while true:
+		path.append(current)
+		if not parents.has(current):
+			break
+		var prev = parents[current] as Vector2i
+		if prev == sentinel:
+			break
+		current = prev
+	path.reverse()
+	return path
+
+func _build_and_spawn_rail_track(chain: Array[Vector2i], force_rail: bool) -> bool:
 	var full_track: Array[Vector2i] = []
 	var chain_rooms: Array[Vector2i] = []
-
 	for i in range(chain.size()):
 		var grid_pos = chain[i]
 		var room_data = run_state.floor_map[grid_pos] as RoomData
@@ -1940,79 +2769,47 @@ func _spawn_cross_room_rail_traps(theme_row: int) -> void:
 		var mask = room_data.floor_mask
 		var w = room_data.shape_width
 		var h = room_data.shape_height
-
-		# Determine entry/exit directions
 		var entry_dir = ""
 		var exit_dir = ""
 		if i > 0:
 			entry_dir = _direction_between(chain[i - 1], grid_pos)
 		if i < chain.size() - 1:
 			exit_dir = _direction_between(grid_pos, chain[i + 1])
-
-		# Route track through this room
 		var room_track = _route_track_through_room(origin, mask, w, h, entry_dir, exit_dir, room_data)
 		if room_track.size() == 0:
-			# L-path failed — abort entire track (silent, rail traps are bonus)
-			if force_rail:
-				_spawn_single_room_rail_trap(eligible)
-			return
-
-		# Append room track (skip first tile if it duplicates last corridor tile)
+			return false
 		if full_track.size() > 0 and room_track.size() > 0 and full_track[-1] == room_track[0]:
 			room_track.remove_at(0)
 		full_track.append_array(room_track)
 		chain_rooms.append(grid_pos)
-
-		# Route corridor to next room
 		if i < chain.size() - 1:
 			var next_grid = chain[i + 1]
 			var direction = _direction_between(grid_pos, next_grid)
 			var corridor_track = _route_track_through_corridor(grid_pos, next_grid, direction)
 			if corridor_track.size() == 0:
-				if force_rail:
-					_spawn_single_room_rail_trap(eligible)
-				return  # corridor routing failed
-			# Skip first tile if duplicate
+				return false
 			if full_track.size() > 0 and corridor_track.size() > 0 and full_track[-1] == corridor_track[0]:
 				corridor_track.remove_at(0)
 			full_track.append_array(corridor_track)
-
-	# Deduplicate consecutive tiles
 	full_track = _deduplicate_track(full_track)
-
 	if full_track.size() < 10:
-		if force_rail:
-			_spawn_single_room_rail_trap(eligible)
-		return  # track too short
-
-	# Validate all tiles are walkable floor and no deco overlap
+		return false
 	for tile in full_track:
 		if not _floor_tile_set.has(tile):
-			if force_rail:
-				_spawn_single_room_rail_trap(eligible)
-			return
+			return false
 		if deco_layer.get_cell_source_id(tile) != -1:
-			if force_rail:
-				_spawn_single_room_rail_trap(eligible)
-			return
-
-	# Check circuit: does last room connect back to first?
+			deco_layer.erase_cell(tile)
 	var is_circuit = false
 	if chain.size() >= 3:
 		var first_room = run_state.floor_map[chain[0]] as RoomData
 		if first_room.connections.values().has(chain[-1]) or chain[-1] in first_room.connections.values():
 			is_circuit = true
-
-	# Paint track tiles on deco_layer
 	for i in range(full_track.size()):
 		var atlas = _get_track_tile_atlas(full_track, i)
 		deco_layer.set_cell(full_track[i], 1, atlas)
-
-	# Spawn 1-5 rail traps evenly spaced
-	var trap_count = clampi(full_track.size() / 20, 1, 5)
+	var trap_count = clampi(full_track.size() / 10, 3, 12)
 	var spacing = full_track.size() / trap_count
 	var floor_num = run_state.current_floor if run_state else 1
-
 	for t_idx in range(trap_count):
 		var start_idx = int(t_idx * spacing)
 		var rail = _RailTrapScript.new()
@@ -2021,13 +2818,13 @@ func _spawn_cross_room_rail_traps(theme_row: int) -> void:
 		rail.is_circuit = is_circuit
 		rail.start_track_index = start_idx
 		rail.room_grid_positions = chain_rooms.duplicate()
-		rail.rail_type = 0 if randf() < 0.6 else 1  # 60% saw, 40% electric
+		rail.rail_type = 0 if randf() < 0.6 else 1
 		rail.move_speed = randf_range(25.0, 40.0)
 		var start_tile = full_track[start_idx]
 		rail.position = Vector2(start_tile.x * TILE_SIZE + 4, start_tile.y * TILE_SIZE + 4)
 		hazard_container.add_child(rail)
-
 	print("RAIL_TRAPS: track=%d tiles, traps=%d, rooms=%s, circuit=%s" % [full_track.size(), trap_count, str(chain_rooms), str(is_circuit)])
+	return true
 
 func _should_force_rail_trap() -> bool:
 	if not current_level:
@@ -2084,6 +2881,48 @@ func _spawn_single_room_rail_trap(eligible: Array[Vector2i]) -> void:
 	hazard_container.add_child(rail)
 
 	print("RAIL_TRAPS: forced single-room rail in %s (%d tiles)" % [str(best_room), best_track.size()])
+
+func _spawn_multi_room_rail_fallback(eligible: Array[Vector2i], count: int) -> void:
+	var candidates: Array = []
+	for grid_pos in eligible:
+		var room_data = run_state.floor_map.get(grid_pos) as RoomData
+		if room_data == null:
+			continue
+		var origin = _grid_to_tile_origin(grid_pos)
+		var track = _generate_room_edge_rails(origin, room_data.floor_mask, room_data.shape_width, room_data.shape_height)
+		if track.size() >= 6:
+			candidates.append({"room": grid_pos, "track": track})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return (a.get("track", []) as Array).size() > (b.get("track", []) as Array).size()
+	)
+	var spawned := 0
+	for entry in candidates:
+		if spawned >= count:
+			break
+		var room = entry.get("room", Vector2i.ZERO) as Vector2i
+		var track = entry.get("track", []) as Array
+		var best_track: Array[Vector2i] = []
+		for tile in track:
+			best_track.append(tile as Vector2i)
+		if best_track.size() < 6:
+			continue
+		for i in range(best_track.size()):
+			if deco_layer.get_cell_source_id(best_track[i]) != -1:
+				deco_layer.erase_cell(best_track[i])
+			deco_layer.set_cell(best_track[i], 1, _get_track_tile_atlas(best_track, i))
+		var floor_num = run_state.current_floor if run_state else 1
+		var rail = _RailTrapScript.new()
+		rail.floor_number = floor_num
+		rail.track_tiles = best_track
+		rail.is_circuit = true
+		rail.start_track_index = 0
+		rail.room_grid_pos = room
+		rail.rail_type = 0 if randf() < 0.6 else 1
+		rail.move_speed = randf_range(25.0, 40.0)
+		var start_tile = best_track[0]
+		rail.position = Vector2(start_tile.x * TILE_SIZE + 4, start_tile.y * TILE_SIZE + 4)
+		hazard_container.add_child(rail)
+		spawned += 1
 
 func _pick_rail_room_chain(eligible: Array[Vector2i], target_len: int) -> Array[Vector2i]:
 	## Random walk through connected eligible rooms to build a chain of target_len rooms.
@@ -2283,6 +3122,7 @@ func _random_interior_floor_tile(mask: Array, w: int, h: int, border: int) -> Ve
 
 # Source 1 decoration tiles (lofi_dungeon_features.png, 20x12 grid)
 const DECO_BARRELS = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
+const DECO_CLUTTER = [Vector2i(1, 0), Vector2i(4, 0), Vector2i(13, 5)]
 const DECO_PILLARS = [Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)]
 const DECO_BONES = [Vector2i(0, 2), Vector2i(1, 2), Vector2i(2, 2), Vector2i(3, 2)]
 const DECO_RUBBLE = [Vector2i(0, 4), Vector2i(1, 4), Vector2i(2, 4)]
@@ -2293,11 +3133,19 @@ const DECO_SKULLS = [Vector2i(0, 6), Vector2i(1, 6), Vector2i(9, 6)]
 func _paint_room_decorations(origin: Vector2i, mask: Array, w: int, h: int, room_data: RoomData, grid_pos: Vector2i = Vector2i.ZERO) -> void:
 	# Use biome-specific decorations if available, otherwise default set
 	var tiles: Array[Vector2i] = []
-	if current_biome and current_biome.decoration_tiles.size() > 0:
+	var is_mine_run := current_mine != null
+	if is_mine_run:
+		for t in DECO_RUBBLE:
+			tiles.append(t)
+		for t in DECO_BONES:
+			tiles.append(t)
+		for t in DECO_SKULLS:
+			tiles.append(t)
+	elif current_biome and current_biome.decoration_tiles.size() > 0:
 		tiles.assign(current_biome.decoration_tiles)
 	else:
-		# Default: mix of barrels, bones, rubble, skulls
-		for t in DECO_BARRELS:
+		# Default: general clutter only. Barrels are reserved for actual hazards.
+		for t in DECO_CLUTTER:
 			tiles.append(t)
 		for t in DECO_BONES:
 			tiles.append(t)
@@ -2315,7 +3163,13 @@ func _paint_room_decorations(origin: Vector2i, mask: Array, w: int, h: int, room
 		for x in range(w):
 			if mask[y][x]:
 				floor_count += 1
-	var deco_count = clampi(floor_count / 30, 3, 8)
+	var deco_count: int
+	if is_mine_run:
+		deco_count = clampi(floor_count / 55, 1, 4)
+		if room_data.type in [RoomData.RoomType.TREASURE, RoomData.RoomType.SHRINE]:
+			deco_count += 1
+	else:
+		deco_count = clampi(floor_count / 30, 3, 8)
 
 	# Track placed positions to avoid overlaps with exits, stairs, traps
 	var placed_positions: Dictionary = {}
@@ -2350,23 +3204,7 @@ func _paint_room_decorations(origin: Vector2i, mask: Array, w: int, h: int, room
 		if deco_layer.get_cell_source_id(origin + pos) != -1:
 			continue
 		var tile = tiles[randi() % tiles.size()]
-		# 10% chance: barrels become explosive (level 2+)
-		var allowed_traps = _get_allowed_traps()
-		if tile in DECO_BARRELS and "explosive_barrel" in allowed_traps and randf() < 0.10:
-			var explosive_atlas = Vector2i(6, 8)  # explosive barrel sprite
-			deco_layer.set_cell(origin + pos, 1, explosive_atlas)
-			var floor_num = run_state.current_floor if run_state else 1
-			var barrel = _ExplosiveBarrelScript.new()
-			barrel.tile_pos = pos
-			barrel.origin = origin
-			barrel.deco_layer = deco_layer
-			barrel.floor_layer = floor_layer
-			barrel.floor_number = floor_num
-			barrel.room_grid_pos = grid_pos
-			barrel.position = Vector2((origin.x + pos.x) * TILE_SIZE + 4, (origin.y + pos.y) * TILE_SIZE + 4)
-			hazard_container.add_child(barrel)
-		else:
-			deco_layer.set_cell(origin + pos, 1, tile)
+		deco_layer.set_cell(origin + pos, 1, tile)
 		placed_positions[pos] = true
 
 func _paint_corridor(from_grid: Vector2i, to_grid: Vector2i, direction: String, theme_row: int) -> void:
@@ -2440,12 +3278,6 @@ func _paint_corridor(from_grid: Vector2i, to_grid: Vector2i, direction: String, 
 	# Open walls at room exits
 	_open_exit_wall(from_origin, from_exit_local, from_room.floor_mask, from_room.shape_width, from_room.shape_height, floor_tile, half_w)
 	_open_exit_wall(to_origin, to_exit_local, to_room.floor_mask, to_room.shape_width, to_room.shape_height, floor_tile, half_w)
-
-	# Paint pillars along corridor walls
-	if corridor_data.has("pillar_tiles"):
-		for pillar_pos in corridor_data["pillar_tiles"]:
-			if floor_layer.get_cell_source_id(pillar_pos) >= 0 and deco_layer.get_cell_source_id(pillar_pos) == -1:
-				deco_layer.set_cell(pillar_pos, 1, DECO_PILLARS[randi() % DECO_PILLARS.size()])
 
 	# Store corridor data for trap/enemy placement
 	corridor_data["position"] = Vector2(corridor_data["midpoint"].x * TILE_SIZE + 4, corridor_data["midpoint"].y * TILE_SIZE + 4)
@@ -2930,7 +3762,7 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 	var spawn_positions = _get_formation_positions(grid_pos, room_data, count)
 	var enemy_scene = preload("res://scenes/enemy.tscn")
 	var loy_pool = _get_loy_enemy_pool()
-	var pool = current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+	var pool = _get_active_enemy_pool_for_room(room_data)
 	var fallback_def = EnemyDefinition.new()
 	fallback_def.enemy_name = "Default"
 	fallback_def.max_hp = 3
@@ -3075,7 +3907,7 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 			def.move_speed *= 1.1
 			if is_bomb_se:
 				def.attack_speed *= 1.6
-				def.attack_damage = int(def.attack_damage * 3.0)
+				def.attack_damage = int(def.attack_damage * 1.5)
 				def.bomb_aoe_radius *= 1.4
 			else:
 				def.attack_speed *= 0.7
@@ -3108,7 +3940,7 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 			def.move_speed *= 1.3
 			if is_bomb_elite:
 				def.attack_speed *= 1.5  # SLOWER bombs, heavier hits
-				def.attack_damage = int(def.attack_damage * 2.5)
+				def.attack_damage = int(def.attack_damage * 1.4)
 				def.bomb_aoe_radius *= 1.3
 			else:
 				def.attack_speed *= 0.8  # faster attacks
@@ -3133,7 +3965,7 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 			def.move_speed *= 0.85
 			if is_bomb_boss:
 				def.attack_speed *= 1.8  # MUCH slower bombs, devastating hits
-				def.attack_damage = int(def.attack_damage * 3.0)
+				def.attack_damage = int(def.attack_damage * 1.8)
 				def.bomb_aoe_radius *= 1.5
 			else:
 				def.attack_speed *= 0.7  # faster attacks
@@ -3308,14 +4140,34 @@ func _pick_enemy_for_room(room_data: RoomData, loy_pool: Array, pool: Array, ind
 			def = fallback_def.duplicate()
 	return def
 
+func _get_active_enemy_pool_for_room(room_data: RoomData) -> Array:
+	if current_mine:
+		if room_data and room_data.type in [
+			RoomData.RoomType.ELITE,
+			RoomData.RoomType.SUPER_ELITE,
+			RoomData.RoomType.BOSS,
+		] and current_mine.elite_enemy_pool.size() > 0:
+			return current_mine.elite_enemy_pool
+		if current_mine.enemy_pool.size() > 0:
+			return current_mine.enemy_pool
+	return current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+
 func _get_encounter_scaling() -> Dictionary:
 	var rec_level = current_level.recommended_level if current_level else 0
 	var player_level = player.level_system.level if player and player.level_system else 1
 	var effective_level = rec_level + player_level
+	var floor_idx: int = run_state.current_floor if run_state else 1
+	# Attack speed multiplier: based on dungeon recommended_level.
+	# rec_level 1: 1.4x interval (40% slower attacks).
+	# Each rec_level reduces by 0.03 → reaches normal (1.0x) at rec_level ~14.
+	# This means early dungeons (Haven=1, Barrows=4, Shroud=5) feel relaxed,
+	# while mid-game dungeons (Farm=10+) are near-normal speed.
+	var atk_speed_mult: float = maxf(1.0, 1.4 - maxf(0, rec_level - 1) * 0.03)
 	return {
 		"level_scale": 1.0 + effective_level * 0.15,
 		"dmg_scale": 1.0 + effective_level * 0.08,
-		"floor_idx": run_state.current_floor if run_state else 1,
+		"atk_speed_mult": atk_speed_mult,
+		"floor_idx": floor_idx,
 		"bd": current_biome.base_difficulty if current_biome else 0,
 	}
 
@@ -3324,6 +4176,7 @@ func _spawn_encounter_enemy(grid_pos: Vector2i, room_data: RoomData, spawn_pos: 
 	# Apply scaling
 	def.max_hp = maxi(1, int(def.max_hp * room_data.enemy_hp_mult * scaling["level_scale"]))
 	def.attack_damage = maxi(1, int(def.attack_damage * room_data.enemy_damage_mult * scaling["dmg_scale"]))
+	def.attack_speed = def.attack_speed * scaling.get("atk_speed_mult", 1.0)
 	def.xp_value = maxi(def.xp_value, int(def.xp_value * (1.0 + scaling["floor_idx"] * 0.15)))
 
 	# 30% melee secondary for normal enemies
@@ -3352,6 +4205,48 @@ func _spawn_encounter_enemy(grid_pos: Vector2i, room_data: RoomData, spawn_pos: 
 	room_states[grid_pos]["alive"] += 1
 	return enemy
 
+func spawn_mine_intrusion_wave(grid_pos: Vector2i, room_data: RoomData, count: int, tier: String = "normal") -> Dictionary:
+	if current_mine == null or room_data == null:
+		return {"ok": false}
+	var spawn_positions = _get_perimeter_positions(grid_pos, room_data, count)
+	if spawn_positions.is_empty():
+		return {"ok": false}
+	var pool = current_mine.enemy_pool if current_mine.enemy_pool.size() > 0 else _get_active_enemy_pool_for_room(room_data)
+	var elite_pool = current_mine.elite_enemy_pool if current_mine.elite_enemy_pool.size() > 0 else pool
+	if pool.is_empty() and elite_pool.is_empty():
+		return {"ok": false}
+	var scaling = _get_encounter_scaling()
+	var spawned = 0
+	for i in range(mini(count, spawn_positions.size())):
+		var def: EnemyDefinition = null
+		match tier:
+			"super":
+				if elite_pool.size() > 0:
+					def = elite_pool[randi() % elite_pool.size()].duplicate()
+					def.size_class = EnemyDefinition.SizeClass.BOSS
+					def.boss_phases = maxi(def.boss_phases, 2)
+					def.max_hp = int(def.max_hp * 1.8)
+					def.attack_damage = int(def.attack_damage * 1.35)
+					def.enemy_name = _generate_eldritch_name(def.enemy_name)
+					def.sprite_color = def.sprite_color.lightened(0.28)
+			"elite":
+				if elite_pool.size() > 0:
+					def = elite_pool[randi() % elite_pool.size()].duplicate()
+					def.size_class = EnemyDefinition.SizeClass.LARGE
+					def.max_hp = int(def.max_hp * 1.35)
+					def.attack_damage = int(def.attack_damage * 1.15)
+					def.sprite_color = def.sprite_color.lightened(0.18)
+		if def == null:
+			if pool.size() > 0:
+				def = _pick_weighted_enemy(pool)
+			elif elite_pool.size() > 0:
+				def = elite_pool[randi() % elite_pool.size()].duplicate()
+		if def == null:
+			continue
+		_spawn_encounter_enemy(grid_pos, room_data, spawn_positions[i], def, scaling)
+		spawned += 1
+	return {"ok": spawned > 0, "spawned": spawned, "tier": tier}
+
 func _get_encounter_enemy_count(grid_pos: Vector2i, room_data: RoomData) -> int:
 	var count = room_data.enemy_count
 	if count == 0:
@@ -3378,7 +4273,7 @@ func _activate_ambush(grid_pos: Vector2i, room_data: RoomData) -> void:
 	var spawn_positions = _get_perimeter_positions(grid_pos, room_data, count)
 	var center = _grid_to_world_center(grid_pos)
 	var loy_pool = _get_loy_enemy_pool()
-	var pool = current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+	var pool = _get_active_enemy_pool_for_room(room_data)
 	var scaling = _get_encounter_scaling()
 
 	# SFX cue
@@ -3412,7 +4307,7 @@ func _activate_gauntlet(grid_pos: Vector2i, room_data: RoomData) -> void:
 
 	var center = _grid_to_world_center(grid_pos)
 	var loy_pool = _get_loy_enemy_pool()
-	var pool = current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+	var pool = _get_active_enemy_pool_for_room(room_data)
 	var scaling = _get_encounter_scaling()
 
 	# SFX + announce
@@ -3458,7 +4353,7 @@ func _spawn_gauntlet_wave(grid_pos: Vector2i) -> void:
 
 	var wave_size = mini(2, remaining)
 	var loy_pool = _get_loy_enemy_pool()
-	var pool = current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+	var pool = _get_active_enemy_pool_for_room(room_data)
 	var scaling = _get_encounter_scaling()
 
 	var spawn_positions = _get_valid_spawn_positions(grid_pos, room_data, wave_size)
@@ -3485,7 +4380,7 @@ func _activate_arena(grid_pos: Vector2i, room_data: RoomData) -> void:
 	var center = _grid_to_world_center(grid_pos)
 	var spawn_positions = _get_ring_positions(grid_pos, room_data, count)
 	var loy_pool = _get_loy_enemy_pool()
-	var pool = current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+	var pool = _get_active_enemy_pool_for_room(room_data)
 	var scaling = _get_encounter_scaling()
 
 	# Camera shake + SFX
@@ -3520,41 +4415,46 @@ func _spawn_corridor_enemies() -> void:
 	if floor_num < 2:
 		return  # No corridor enemies on floor 1
 
-	var loy_pool = _get_loy_enemy_pool()
-	var pool = current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
+	var shield_skel_def = load("res://resources/enemies/basic/shield_skeleton.tres") as EnemyDefinition
 	var scaling = _get_encounter_scaling()
 	var enemy_scene = preload("res://scenes/enemy.tscn")
 	var spawned_count = 0
 
 	for corridor in _corridor_midpoints:
-		var corridor_type = corridor.get("type", 0)
-		# WIDE_CHAMBER corridors: 50% enemy chance, others: 30%
-		var enemy_chance = 0.50 if corridor_type == CorridorGenerator.CorridorType.WIDE_CHAMBER else 0.30
-		if randf() > enemy_chance:
+		# 95% of corridors get guards — corridors are heavily patrolled
+		if randf() > 0.95:
 			continue
 
 		var floor_tiles = corridor.get("floor_tiles", []) as Array
-		if floor_tiles.size() < 6:
-			continue  # Too short for enemies
+		if floor_tiles.size() < 4:
+			continue
 
-		var enemy_count = randi_range(1, 2)
-		# Floor 3+: 10% chance of elite in corridor
-		var has_elite = floor_num >= 3 and randf() < 0.10
+		# 5-10 enemies per corridor, scaling with floor
+		var enemy_count = clampi(4 + floor_num, 5, 10)
+		enemy_count = mini(enemy_count, floor_tiles.size() / 2)
+		enemy_count = maxi(enemy_count, 4)
+		# Floor 2+: 30% chance one is an elite
+		var has_elite = floor_num >= 2 and randf() < 0.30
+
+		# Space enemies evenly along corridor
+		var step = floor_tiles.size() / (enemy_count + 1)
 
 		for i in range(enemy_count):
-			var tile = floor_tiles[randi() % floor_tiles.size()] as Vector2i
+			var tile_idx = clampi((i + 1) * step, 0, floor_tiles.size() - 1)
+			var tile = floor_tiles[tile_idx] as Vector2i
 			var world_pos = Vector2(tile.x * TILE_SIZE + 4, tile.y * TILE_SIZE + 4)
 
-			var def = _pick_enemy_for_room(null, loy_pool, pool, i)
-			# Apply scaling
+			var def = shield_skel_def.duplicate() as EnemyDefinition
 			def.max_hp = maxi(1, int(def.max_hp * scaling["level_scale"]))
 			def.attack_damage = maxi(1, int(def.attack_damage * scaling["dmg_scale"]))
+			def.attack_speed = def.attack_speed * scaling.get("atk_speed_mult", 1.0)
 
 			if has_elite and i == 0:
+				def.enemy_name = "Corridor Guardian"
 				def.max_hp = int(def.max_hp * 3.0)
 				def.attack_damage = int(def.attack_damage * 1.5)
 				def.size_class = EnemyDefinition.SizeClass.LARGE
-				def.sprite_color = def.sprite_color.lightened(0.3)
+				def.sprite_color = Color(0.6, 0.8, 1.0)
 
 			if _item_pool and not def.drop_table:
 				def.drop_table = _item_pool.create_drop_table(scaling["floor_idx"], false, scaling["bd"])
@@ -3570,7 +4470,7 @@ func _spawn_corridor_enemies() -> void:
 			spawned_count += 1
 
 	if spawned_count > 0:
-		print("CORRIDORS: spawned %d corridor enemies" % spawned_count)
+		print("CORRIDORS: spawned %d shield skeleton guards" % spawned_count)
 
 # --- End Encounter & Corridor Systems ---
 
@@ -3838,6 +4738,15 @@ func _get_weakest_enemy(loy_pool: Array, biome_pool: Array) -> EnemyDefinition:
 	return weakest
 
 func _pick_weighted_enemy(pool: Array) -> EnemyDefinition:
+	if pool.is_empty():
+		var fb = EnemyDefinition.new()
+		fb.enemy_name = "Skeleton"
+		fb.max_hp = 3
+		return fb
+	if pool[0] is EnemyDefinition:
+		var direct = pool[randi() % pool.size()] as EnemyDefinition
+		return direct.duplicate() if direct else EnemyDefinition.new()
+
 	var total_weight = 0
 	for entry in pool:
 		total_weight += int(entry.get("chance", 1))
@@ -4094,6 +5003,8 @@ func _go_prev_floor() -> void:
 	floor_changed.emit(run_state.current_floor)
 
 func get_total_floors() -> int:
+	if current_mine and current_mine.floor_count > 0:
+		return current_mine.floor_count
 	if dungeon_levels.size() > 0:
 		return dungeon_levels.size()
 	if current_biome and current_biome.floor_count > 1:
@@ -4251,11 +5162,32 @@ func _register_animated_tile(abs_pos: Vector2i, frame_a: Vector2i, frame_b: Vect
 # --- Ambient Lighting (braziers/floor candles in all rooms) ---
 
 func _paint_ambient_lighting(origin: Vector2i, mask: Array, w: int, h: int, room_data: RoomData) -> void:
-	# Place 1-2 braziers or floor candles per room
-	var count = randi_range(1, 2)
+	# Scale light count by room area — more lights in bigger rooms
+	# Mines get fewer lights (they should feel dark and oppressive)
+	var area = w * h
+	var is_mine := current_mine != null
+	var count: int
+	if is_mine:
+		# Mines: sparse lighting — 1-2 per room
+		count = randi_range(1, 2)
+	elif area <= 200:
+		count = randi_range(3, 5)  # small rooms
+	elif area <= 400:
+		count = randi_range(5, 7)  # medium rooms
+	else:
+		count = randi_range(6, 9)  # large rooms (elite/boss)
+	var placed: Dictionary = {}  # track placed positions to avoid clustering
 	for i in range(count):
 		var pos = _find_wall_adjacent_floor(mask, w, h)
 		if pos == Vector2i(-1, -1):
+			continue
+		# Skip if too close to an already-placed light (min 4 tiles apart)
+		var too_near_existing = false
+		for prev in placed:
+			if abs(pos.x - prev.x) + abs(pos.y - prev.y) < 4:
+				too_near_existing = true
+				break
+		if too_near_existing:
 			continue
 		var abs_pos = origin + pos
 		# Don't overlap existing deco
@@ -4270,11 +5202,17 @@ func _paint_ambient_lighting(origin: Vector2i, mask: Array, w: int, h: int, room
 				break
 		if too_close:
 			continue
+		placed[pos] = true
 		# Pick random light source
 		if randf() < 0.5:
 			_register_animated_tile(abs_pos, ANIM_BRAZIER_A, ANIM_BRAZIER_B)
 		else:
 			_register_animated_tile(abs_pos, ANIM_FLOOR_CANDLE_A, ANIM_FLOOR_CANDLE_B)
+		# Spawn PointLight2D at this torch/brazier position
+		var lm = get_node_or_null("/root/LightingManager")
+		if lm:
+			var world_pos = Vector2(abs_pos.x * TILE_SIZE + TILE_SIZE / 2, abs_pos.y * TILE_SIZE + TILE_SIZE / 2)
+			lm.spawn_torch_light(world_pos, self)
 
 func _paint_carpet_section(origin: Vector2i, mask: Array, w: int, h: int, left: int, top: int, right: int, bot: int, color: String) -> void:
 	## Paint carpet on FLOOR LAYER (source 1) so it renders under furniture on deco layer.

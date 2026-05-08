@@ -1,16 +1,19 @@
 extends Node2D
 
-@onready var dungeon_manager: DungeonManager = $DungeonManager
+const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+
+@onready var dungeon_manager = $DungeonManager
 @onready var reward_screen: RewardScreen = $RewardScreen
 @onready var death_screen: DeathScreen = $DeathScreen
 @onready var inventory_screen: InventoryScreen = $InventoryScreen
 
 var game_hud: GameHUD
+var _mine_help_shown: bool = false
 
 var companion_scene: PackedScene
 
 func _ready() -> void:
-	var player = get_tree().get_first_node_in_group("player")
+	var player = PlayerQuery.get_primary_player(get_tree())
 	var t_start = Time.get_ticks_msec()
 	print("TIMING: dungeon_scene _ready START")
 	companion_scene = preload("res://scenes/companions/companion.tscn")
@@ -22,7 +25,10 @@ func _ready() -> void:
 	dungeon_manager.run_ended.connect(_on_dungeon_complete)
 
 	player.in_dungeon = true
-	player.player_died.connect(_on_player_died)
+	for p in PlayerQuery.get_active_players(get_tree()):
+		p.in_dungeon = true
+		if not p.player_died.is_connected(_on_player_died):
+			p.player_died.connect(_on_player_died)
 	reward_screen.reward_chosen.connect(_on_reward_chosen)
 	inventory_screen.setup(player.equipment_manager)
 	player.equipment_manager.use_effect_triggered.connect(_on_use_effect)
@@ -64,15 +70,23 @@ func _ready() -> void:
 	if has_node("TouchControls"):
 		player.touch_controls = $TouchControls
 
+	var lm = get_node_or_null("/root/LightingManager")
+	if lm and lm.has_method("apply_outline_to_subtree"):
+		lm.apply_outline_to_subtree(self)
+
 	# Scale player for dungeon (8px tiles vs 32px overworld = 0.25 ratio)
 	player.equipment_manager.base_stats.move_speed *= 0.25
 	player.equipment_manager.base_stats.bullet_speed *= 0.25
 
 	if GameManager and GameManager.pending_biome_name != "":
 		dungeon_manager.starting_biome_name = GameManager.pending_biome_name
+	if GameManager and GameManager.pending_mine_id != "":
+		dungeon_manager.preferred_mine_id = GameManager.pending_mine_id
 
 	print("TIMING: dungeon_scene setup took %d ms, calling start_run..." % (Time.get_ticks_msec() - t_start))
 	dungeon_manager.start_run()
+	if GameManager:
+		GameManager.pending_mine_id = ""
 
 	# Test Arena: add chest UI + spawn test chests in start room
 	if GameManager and (GameManager.pending_biome_name.begins_with("Test-Arena") or GameManager.pending_biome_name == "TestCombo" or GameManager.pending_biome_name == "TestMovement"):
@@ -102,9 +116,17 @@ func _on_floor_changed(floor_num: int) -> void:
 	var rec_level = dungeon_manager.current_level.recommended_level if dungeon_manager.current_level else 0
 	var player_level = dungeon_manager.player.level_system.level if dungeon_manager.player and dungeon_manager.player.level_system else 1
 	var effective = rec_level + player_level
-	game_hud.set_floor_info(floor_num, effective)
-	# Setup minimap for this floor
-	if dungeon_manager.run_state and dungeon_manager.run_state.floor_map:
+	var area_name := ""
+	if dungeon_manager.current_mine:
+		area_name = dungeon_manager.current_mine.mine_name
+	game_hud.set_floor_info(floor_num, effective, area_name)
+	if dungeon_manager.current_mine and floor_num == 1 and not _mine_help_shown:
+		_mine_help_shown = true
+		game_hud.flash_text("%s: mine cracked walls with shots or press E nearby" % dungeon_manager.current_mine.mine_name, Color(0.8, 0.9, 1.0), 2.8)
+	# Setup minimap for normal dungeons only; mines should not expose room/stairs graph.
+	if dungeon_manager.current_mine:
+		game_hud.hide_minimap()
+	elif dungeon_manager.run_state and dungeon_manager.run_state.floor_map:
 		game_hud.setup_minimap(
 			dungeon_manager.run_state.floor_map,
 			dungeon_manager.run_state.current_grid_pos
@@ -126,9 +148,12 @@ func _on_room_changed(room_index: int, room_data: RoomData) -> void:
 		RoomData.RoomType.SUPER_ELITE: type_name = "SUPER ELITE"
 		RoomData.RoomType.BOSS: type_name = "BOSS"
 		RoomData.RoomType.SHOP: type_name = "Shop"
-	var suffix = " [Stairs]" if room_data.has_stairs_down else ""
-	game_hud.set_room_info(type_name + " Room" + suffix)
-	game_hud.update_minimap_room(room_data.grid_pos)
+	if dungeon_manager.current_mine:
+		game_hud.set_room_info("Mine Cavern")
+	else:
+		var suffix = " [Stairs]" if room_data.has_stairs_down else ""
+		game_hud.set_room_info(type_name + " Room" + suffix)
+		game_hud.update_minimap_room(room_data.grid_pos)
 
 func _on_reward_requested(room_data: RoomData) -> void:
 	var rewards: Array[Dictionary]
@@ -149,7 +174,7 @@ func _on_reward_requested(room_data: RoomData) -> void:
 	reward_screen.show_rewards(rewards, title)
 
 func _on_reward_chosen(reward: Dictionary) -> void:
-	var player = get_tree().get_first_node_in_group("player")
+	var player = PlayerQuery.get_primary_player(get_tree())
 
 	var sfx_rw = get_node_or_null("/root/SFXManager")
 	match reward["type"]:
@@ -204,7 +229,7 @@ func _on_reward_chosen(reward: Dictionary) -> void:
 			room_data.cleared = true
 
 func _spawn_companion(companion_id: String) -> void:
-	var player = get_tree().get_first_node_in_group("player")
+	var player = PlayerQuery.get_primary_player(get_tree())
 	var existing = get_tree().get_nodes_in_group("companion")
 	if existing.size() >= 3:
 		return
@@ -225,6 +250,9 @@ func _on_dungeon_complete(_run_state: RunState) -> void:
 
 func _on_player_died() -> void:
 	dungeon_manager.run_state.end_time = Time.get_ticks_msec()
+	var alive_players = PlayerQuery.get_alive_players(get_tree())
+	if not alive_players.is_empty():
+		return
 
 	# Character death: wipe character data, keep world progress
 	if GameManager:

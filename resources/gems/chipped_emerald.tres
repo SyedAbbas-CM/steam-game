@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="GemDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/gem_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="StatModifier_luck"]
+script = ExtResource("2")
+stat = 12
+flat_bonus = 1.0
+
+[resource]
+script = ExtResource("1")
+gem_id = "chipped_emerald"
+gem_name = "Chipped Emerald"
+description = "A green stone prized by scouts, thieves, and fortune-seekers."
+family = 2
+tier = 1
+color_hint = Color(0.16, 0.82, 0.35, 1)
+modifiers = [SubResource("StatModifier_luck")]
+tags = PackedStringArray("luck", "wealth", "emerald")
+buy_price = 45
+sell_value = 18

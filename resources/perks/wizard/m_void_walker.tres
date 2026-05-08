@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "m_void_walker"
+perk_name = "Void Walker"
+description = "Dash becomes a short teleport"
+class_required = "wizard"
+tier = 3
+prerequisites = ["m_mana_shield"]
+stat_bonuses = {}
+special_effect = "void_walker"
+is_percent = false

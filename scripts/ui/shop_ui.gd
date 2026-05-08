@@ -298,13 +298,13 @@ func _find_item(item_name: String) -> Resource:
 
 func _get_item_price(item: Resource, item_name: String) -> int:
 	if item and item.get("buy_price") and int(item.buy_price) > 0:
-		return int(item.buy_price * 2.5)  # Mark-up: items cost 2.5x base price
+		return int(item.buy_price * 4.0)  # Mark-up: items cost 4x base price in shops
 	var prices = {
-		"Apple": 25, "Meat": 60, "Red Potion": 120, "Blue Potion": 250,
-		"Green Potion": 180, "Town Portal": 350, "Trap": 75, "Powder Keg": 200,
-		"Fishing Pole": 500, "Spade": 250, "Pet Food": 120,
+		"Apple": 40, "Meat": 100, "Red Potion": 200, "Blue Potion": 420,
+		"Green Potion": 300, "Town Portal": 600, "Trap": 120, "Powder Keg": 350,
+		"Fishing Pole": 800, "Spade": 400, "Pet Food": 200,
 	}
-	return prices.get(item_name, 250)
+	return prices.get(item_name, 400)
 
 func _on_buy(item: EquipmentItem, item_name: String, price: int) -> void:
 	var gm = get_node_or_null("/root/GameManager")

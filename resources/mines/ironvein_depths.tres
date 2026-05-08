@@ -1,0 +1,54 @@
+[gd_resource type="Resource" script_class="MineDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/mine_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/enemies/mountain/mine_bat.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/enemies/mountain/rock_hurler.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/enemies/mountain/mountain_troll.tres" id="4"]
+
+[resource]
+script = ExtResource("1")
+mine_id = "ironvein_depths"
+mine_name = "Ironvein Depths"
+description = "A dark extraction site rich in iron, crystal seams, and unstable tunnels."
+darkness_level = 0.5
+danger_tier = 1
+base_difficulty = 8
+biome_theme = "grey"
+liquid_type = "lava"
+floor_count = 4
+prefer_cave_rooms = true
+room_count_min = 5
+room_count_max = 7
+grand_cavern_chance = 0.3
+bounds_cells_w = 8
+bounds_cells_h = 7
+carve_density_bias = 0.78
+blocked_connection_chance = 0.42
+secret_pocket_chance = 0.24
+biome_aliases = PackedStringArray("Ironvein Depths", "Iron-Dungeons", "Mine", "Mines", "Cave")
+enemy_pool = [ExtResource("2"), ExtResource("3")]
+elite_enemy_pool = [ExtResource("4")]
+material_drop_paths = PackedStringArray("res://resources/items/crafting/iron_ore.tres", "res://resources/items/crafting/cave_crystal.tres")
+rare_material_drop_paths = PackedStringArray("res://resources/items/crafting/magic_essence.tres")
+blueprint_ids = PackedStringArray("iron_dagger_blueprint")
+gem_hint_ids = PackedStringArray("chipped_ruby", "chipped_sapphire", "chipped_emerald")
+node_spawn_rooms_min = 4
+node_spawn_rooms_max = 6
+node_count_per_room_min = 1
+node_count_per_room_max = 3
+gem_node_chance = 0.25
+blueprint_fragment_chance = 0.2
+soft_wall_hp = 2
+ore_wall_hp = 3
+gem_wall_hp = 4
+gas_pocket_chance = 0.04
+cave_in_chance = 0.02
+breakable_clusters_min = 5
+breakable_clusters_max = 9
+breakable_cluster_radius_min = 1
+breakable_cluster_radius_max = 2
+intrusion_interval = 26.0
+intrusion_wave_size_min = 1
+intrusion_wave_size_max = 2
+intrusion_elite_time = 48.0
+intrusion_super_time = 82.0

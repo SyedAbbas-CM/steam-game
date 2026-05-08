@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "m_spellweave"
+perk_name = "Spellweave"
+description = "Casting a spell buffs next spell +30% damage"
+class_required = "wizard"
+tier = 3
+prerequisites = ["m_elemental_mastery"]
+stat_bonuses = {}
+special_effect = "spellweave"
+is_percent = false
