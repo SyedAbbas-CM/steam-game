@@ -319,3 +319,30 @@
   specific role (e.g. graphics engineer, gameplay engineer,
   network engineer, generalist) or trim them to one-line
   resume length.
+
+
+
+  Cross-Platform Action-Roguelike + RTS Hybrid (Godot 4.6) —
+  Solo Engineer
+
+  GDScript · GLSL · ENet · Procedural generation · 76 K LOC
+  across 6 platforms
+
+  - Built a data-oriented RTS engine for 2,000 concurrent
+  units with SoA packing, 80-px spatial hashing, BFS
+  flow-field pathfinding, and 5-doctrine AI driven by
+  damage/formation counter matrices.
+  - Implemented authoritative ENet co-op with UPnP, 30/20 Hz
+  snapshot RPCs, seeded deterministic generation for peer
+  parity, and split bullet sync (damaging host bullets vs.
+  visual ghosts).
+  - Engineered a streaming overworld + procedural dungeon
+  stack — chunked async loads with LRU cache and
+  2,000-op/frame tile budget, plus cellular-automata caves,
+  Voronoi mine carving, and blueprint-driven decoration
+  across 10 themed room templates.
+  - Wrote production GLSL shaders (polar-coordinate warp
+  vortex, world-space Perlin liquid with player wake field,
+  8-tap outline) and a two-tier performance telemetry system
+  with spike detection and baseline-delta regression
+  snapshots.
