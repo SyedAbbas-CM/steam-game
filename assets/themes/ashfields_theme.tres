@@ -1,0 +1,283 @@
+[gd_resource type="Theme" load_steps=23 format=3]
+
+[ext_resource type="FontFile" path="res://assets/fonts/VT323-Regular.ttf" id="font_body"]
+
+; Ashfields theme. Gothic dark + gold accent. Generated from ui-ux-pro-max query
+; "gothic dark fantasy" (palette: Theater/Cinema + Luxury). Hex below is the
+; canonical palette for the game's UI work.
+;
+;   bg_deep      #0F0F1A
+;   bg_panel     #1C1917
+;   bg_hover     #312E81
+;   border       #44403C
+;   border_lit   #78716C
+;   text         #F8FAFC
+;   text_muted   #A8A29E
+;   accent_gold  #CA8A04
+;   accent_gold2 #EAB308   (brighter, for hover)
+;   accent_blood #991B1B   (HP / danger)
+;   accent_mp    #7C3AED   (MP / arcane)
+
+; -- StyleBoxFlat: panel surface --
+[sub_resource type="StyleBoxFlat" id="sb_panel"]
+bg_color = Color(0.110, 0.098, 0.090, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.267, 0.251, 0.235, 1.0)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 10.0
+
+; -- StyleBoxFlat: button normal --
+[sub_resource type="StyleBoxFlat" id="sb_btn_normal"]
+bg_color = Color(0.110, 0.098, 0.090, 1.0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.471, 0.443, 0.420, 1.0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+content_margin_left = 14.0
+content_margin_top = 8.0
+content_margin_right = 14.0
+content_margin_bottom = 8.0
+
+; -- StyleBoxFlat: button hover (gold border) --
+[sub_resource type="StyleBoxFlat" id="sb_btn_hover"]
+bg_color = Color(0.149, 0.137, 0.122, 1.0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.792, 0.541, 0.016, 1.0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+content_margin_left = 14.0
+content_margin_top = 8.0
+content_margin_right = 14.0
+content_margin_bottom = 8.0
+
+; -- StyleBoxFlat: button pressed --
+[sub_resource type="StyleBoxFlat" id="sb_btn_pressed"]
+bg_color = Color(0.075, 0.067, 0.060, 1.0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.918, 0.702, 0.031, 1.0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+content_margin_left = 14.0
+content_margin_top = 8.0
+content_margin_right = 14.0
+content_margin_bottom = 8.0
+
+; -- StyleBoxFlat: button disabled --
+[sub_resource type="StyleBoxFlat" id="sb_btn_disabled"]
+bg_color = Color(0.082, 0.075, 0.067, 1.0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.267, 0.251, 0.235, 1.0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+content_margin_left = 14.0
+content_margin_top = 8.0
+content_margin_right = 14.0
+content_margin_bottom = 8.0
+
+; -- StyleBoxFlat: button focus ring --
+[sub_resource type="StyleBoxFlat" id="sb_btn_focus"]
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.792, 0.541, 0.016, 1.0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+; -- StyleBoxFlat: tooltip panel --
+[sub_resource type="StyleBoxFlat" id="sb_tooltip"]
+bg_color = Color(0.059, 0.059, 0.102, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.471, 0.443, 0.420, 1.0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+
+; -- StyleBoxFlat: progress bar bg --
+[sub_resource type="StyleBoxFlat" id="sb_progress_bg"]
+bg_color = Color(0.075, 0.067, 0.060, 1.0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.267, 0.251, 0.235, 1.0)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+; -- StyleBoxFlat: progress bar fill (gold) --
+[sub_resource type="StyleBoxFlat" id="sb_progress_fill"]
+bg_color = Color(0.792, 0.541, 0.016, 1.0)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+; -- StyleBoxFlat: LineEdit normal --
+[sub_resource type="StyleBoxFlat" id="sb_input_normal"]
+bg_color = Color(0.059, 0.059, 0.102, 1.0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.267, 0.251, 0.235, 1.0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+content_margin_left = 8.0
+content_margin_top = 6.0
+content_margin_right = 8.0
+content_margin_bottom = 6.0
+
+; -- StyleBoxFlat: LineEdit focus --
+[sub_resource type="StyleBoxFlat" id="sb_input_focus"]
+bg_color = Color(0.059, 0.059, 0.102, 1.0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.792, 0.541, 0.016, 1.0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+content_margin_left = 8.0
+content_margin_top = 6.0
+content_margin_right = 8.0
+content_margin_bottom = 6.0
+
+; -- ScrollBar grabber --
+[sub_resource type="StyleBoxFlat" id="sb_scroll_grabber"]
+bg_color = Color(0.267, 0.251, 0.235, 1.0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="sb_scroll_grabber_hover"]
+bg_color = Color(0.471, 0.443, 0.420, 1.0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="sb_scroll_bg"]
+bg_color = Color(0.059, 0.059, 0.102, 0.6)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="sb_separator"]
+bg_color = Color(0.267, 0.251, 0.235, 1.0)
+
+[resource]
+; -- Global default font + sizes (VT323 reads small; bumped again to 28) --
+default_font = ExtResource("font_body")
+default_font_size = 28
+
+; -- Label --
+Label/colors/font_color = Color(0.973, 0.980, 0.984, 1.0)
+Label/colors/font_outline_color = Color(0, 0, 0, 1.0)
+Label/colors/font_shadow_color = Color(0, 0, 0, 0)
+Label/constants/outline_size = 2
+
+; -- Button --
+Button/colors/font_color = Color(0.973, 0.980, 0.984, 1.0)
+Button/colors/font_hover_color = Color(0.918, 0.702, 0.031, 1.0)
+Button/colors/font_pressed_color = Color(0.792, 0.541, 0.016, 1.0)
+Button/colors/font_disabled_color = Color(0.659, 0.635, 0.616, 0.6)
+Button/colors/font_outline_color = Color(0, 0, 0, 1.0)
+Button/constants/outline_size = 2
+Button/font_sizes/font_size = 26
+Button/styles/normal = SubResource("sb_btn_normal")
+Button/styles/hover = SubResource("sb_btn_hover")
+Button/styles/pressed = SubResource("sb_btn_pressed")
+Button/styles/disabled = SubResource("sb_btn_disabled")
+Button/styles/focus = SubResource("sb_btn_focus")
+
+; -- Panel / PanelContainer --
+Panel/styles/panel = SubResource("sb_panel")
+PanelContainer/styles/panel = SubResource("sb_panel")
+
+; -- TooltipPanel --
+TooltipPanel/styles/panel = SubResource("sb_tooltip")
+TooltipLabel/colors/font_color = Color(0.973, 0.980, 0.984, 1.0)
+
+; -- ProgressBar --
+ProgressBar/styles/background = SubResource("sb_progress_bg")
+ProgressBar/styles/fill = SubResource("sb_progress_fill")
+ProgressBar/colors/font_color = Color(0.973, 0.980, 0.984, 1.0)
+
+; -- LineEdit --
+LineEdit/colors/font_color = Color(0.973, 0.980, 0.984, 1.0)
+LineEdit/colors/font_selected_color = Color(0.110, 0.098, 0.090, 1.0)
+LineEdit/colors/font_placeholder_color = Color(0.659, 0.635, 0.616, 0.7)
+LineEdit/colors/caret_color = Color(0.918, 0.702, 0.031, 1.0)
+LineEdit/colors/selection_color = Color(0.792, 0.541, 0.016, 0.5)
+LineEdit/styles/normal = SubResource("sb_input_normal")
+LineEdit/styles/focus = SubResource("sb_input_focus")
+
+; -- ScrollContainer --
+HScrollBar/styles/grabber = SubResource("sb_scroll_grabber")
+HScrollBar/styles/grabber_highlight = SubResource("sb_scroll_grabber_hover")
+HScrollBar/styles/grabber_pressed = SubResource("sb_scroll_grabber_hover")
+HScrollBar/styles/scroll = SubResource("sb_scroll_bg")
+VScrollBar/styles/grabber = SubResource("sb_scroll_grabber")
+VScrollBar/styles/grabber_highlight = SubResource("sb_scroll_grabber_hover")
+VScrollBar/styles/grabber_pressed = SubResource("sb_scroll_grabber_hover")
+VScrollBar/styles/scroll = SubResource("sb_scroll_bg")
+
+; -- HSeparator / VSeparator --
+HSeparator/styles/separator = SubResource("sb_separator")
+VSeparator/styles/separator = SubResource("sb_separator")
+
+; -- ItemList (inventory grid) --
+ItemList/colors/font_color = Color(0.973, 0.980, 0.984, 1.0)
+ItemList/colors/font_selected_color = Color(0.918, 0.702, 0.031, 1.0)
+ItemList/colors/font_hovered_color = Color(0.918, 0.702, 0.031, 1.0)
+ItemList/colors/guide_color = Color(0.267, 0.251, 0.235, 0.5)
+ItemList/styles/panel = SubResource("sb_panel")
+ItemList/styles/focus = SubResource("sb_btn_focus")

@@ -250,13 +250,23 @@ func _ready() -> void:
 	create_btn.pressed.connect(_on_create_pressed)
 	right.add_child(create_btn)
 
-	# Close button
+	# Bottom row: Manage Spells (opens inventory SPELLS tab) + Close
 	var bottom = HBoxContainer.new()
 	bottom.alignment = BoxContainer.ALIGNMENT_END
+	bottom.add_theme_constant_override("separation", 10)
 	main_vbox.add_child(bottom)
+
+	var manage_btn = Button.new()
+	manage_btn.text = "Manage Spells"
+	manage_btn.custom_minimum_size = Vector2(180, 40)
+	manage_btn.add_theme_font_size_override("font_size", 18)
+	manage_btn.pressed.connect(_open_spell_management)
+	bottom.add_child(manage_btn)
+
 	var close_btn = Button.new()
 	close_btn.text = "Close"
-	close_btn.custom_minimum_size = Vector2(80, 30)
+	close_btn.custom_minimum_size = Vector2(100, 40)
+	close_btn.add_theme_font_size_override("font_size", 18)
 	close_btn.pressed.connect(close)
 	bottom.add_child(close_btn)
 
@@ -280,6 +290,27 @@ func close() -> void:
 
 func is_open() -> bool:
 	return _is_open
+
+## Open the player's SPELLS inventory tab (spell-equipping flow lives there).
+## Closes this UI so the two screens don't stack on top of each other.
+func _open_spell_management() -> void:
+	close()
+	var inv = get_tree().get_first_node_in_group("inventory_screen") as InventoryScreen
+	if not inv:
+		var inv_scene = load("res://scenes/ui/inventory_screen.tscn") as PackedScene
+		if inv_scene:
+			inv = inv_scene.instantiate() as InventoryScreen
+			get_tree().current_scene.add_child(inv)
+	# Spells appear inline in the items grid now, so just open the inventory.
+	if inv:
+		var player = get_tree().get_first_node_in_group("player")
+		if player:
+			var em = player.get_node_or_null("EquipmentManager") as EquipmentManager
+			if em:
+				inv.setup(em)
+		if inv.has_method("toggle"):
+			if inv.has_method("is_open") and not inv.is_open():
+				inv.toggle()
 
 func _on_effect_selected(idx: int) -> void:
 	_selected_effect = idx as SpellDefinition.EffectType

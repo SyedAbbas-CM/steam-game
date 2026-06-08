@@ -7,10 +7,10 @@ script = ExtResource("1")
 id = "frost_flask"
 recipe_name = "Frost Flask"
 recipe_type = "alchemist"
-ingredients = Array[Dictionary]([{{
+ingredients = Array[Dictionary]([{
 "item_name": "Magic Essence",
 "count": 2
-}}])
+}])
 gold_cost = 40
 result_item_path = "res://resources/items/crafted/frost_flask.tres"
 result_count = 1

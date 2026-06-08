@@ -13,7 +13,8 @@ commands = [{
 "name": "Quests",
 "script": [{
 "cmd": "offerZoneQuests",
-"zone": "haven"
+"zone": "haven",
+"npc": "Elder"
 }]
 }, {
 "name": "Train (Perks)",

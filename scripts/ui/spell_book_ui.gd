@@ -146,7 +146,7 @@ func _refresh() -> void:
 	var ls = player.get_node_or_null("LevelSystem") as LevelSystem
 	if ls:
 		level = ls.level
-		spirit = ls.allocated.get("spirit", 0)
+		spirit = ls.allocated.get("intellect", 0)
 	var max_slots = sb.get_max_slots(level, spirit)
 
 	# Update slot displays

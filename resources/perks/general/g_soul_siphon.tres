@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "g_soul_siphon"
+perk_name = "Soul Siphon"
+description = "Each kill restores 4 MP."
+class_required = ""
+tier = 1
+prerequisites = []
+stat_requirements = {
+"intellect": 5
+}
+stat_bonuses = {}
+special_effect = "soul_siphon"
+is_percent = false

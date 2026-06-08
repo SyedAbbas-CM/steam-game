@@ -15,6 +15,8 @@ func _on_room_trigger_entered(body: Node2D, grid_pos: Vector2i) -> void:
 	var room_data = run_state.floor_map.get(grid_pos) as RoomData
 	run_state.current_grid_pos = grid_pos
 	room_changed.emit(0, room_data)
+	if mine_runtime and mine_runtime.has_method("on_room_entered"):
+		mine_runtime.on_room_entered(grid_pos, room_data)
 	if state.get("visited", false):
 		return
 	_visit_room(grid_pos)

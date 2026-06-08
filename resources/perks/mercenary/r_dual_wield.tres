@@ -11,5 +11,6 @@ class_required = "mercenary"
 tier = 1
 prerequisites = []
 stat_bonuses = {}
+stat_requirements = {}
 special_effect = "dual_wield"
 is_percent = false

@@ -13,4 +13,4 @@ base_cost = 20
 cost_per_level = 15
 required_class = "wizard"
 required_upgrade = ""
-stat_bonuses = [{stat = 9, flat = 10.0, percent = 0.0}, {stat = 11, flat = 1.0, percent = 0.0}]
+stat_bonuses = [{"stat": 9, "flat": 10.0, "percent": 0.0}, {"stat": 11, "flat": 1.0, "percent": 0.0}]

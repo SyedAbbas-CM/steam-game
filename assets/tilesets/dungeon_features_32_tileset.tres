@@ -1,6 +1,6 @@
-[gd_resource type="TileSet" format=3]
+[gd_resource type="TileSet" format=3 uid="uid://bqudmcw8pthbo"]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/lofi_dungeon_features_32.png" id="1_3lvmw"]
+[ext_resource type="Texture2D" uid="uid://ck2nwkjt6shdo" path="res://assets/sprites/lofi_dungeon_features_32.png" id="1_3lvmw"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_1"]
 texture = ExtResource("1_3lvmw")

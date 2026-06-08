@@ -117,20 +117,26 @@ func try_shoot(origin: Vector2, aim_direction: Vector2) -> void:
 	if not bullets_container:
 		return
 
-	# SFX: fire sound based on weapon type
+	# SFX: fire sound based on weapon type. If the player has 0 proficiency
+	# (off-class weapon with no stats allocated), play the error chime instead so
+	# the swing/shoot still happens but feels obviously wrong.
 	var sfx = get_node_or_null("/root/SFXManager")
+	var _prof_zero = equipment_manager.has_method("get_proficiency_mult") and equipment_manager.get_proficiency_mult() <= 0.0
 	if sfx:
 		var weapon = equipment_manager.get_equipped_weapon()
 		if weapon:
-			match weapon.slot_type:
-				EquipmentItem.SlotType.WEAPON_MELEE:
-					sfx.play("swing", -9.0, 0.1)
-				EquipmentItem.SlotType.WEAPON_RANGED:
-					sfx.play("shoot_a", -9.0, 0.1)
-				EquipmentItem.SlotType.WEAPON_MAGIC:
-					sfx.play("spell_a", -9.0, 0.1)
-				_:
-					sfx.play("shoot_a", -9.0, 0.1)
+			if _prof_zero:
+				sfx.play("error", -6.0, 0.0)
+			else:
+				match weapon.slot_type:
+					EquipmentItem.SlotType.WEAPON_MELEE:
+						sfx.play("swing", -9.0, 0.1)
+					EquipmentItem.SlotType.WEAPON_RANGED:
+						sfx.play("shoot_a", -9.0, 0.1)
+					EquipmentItem.SlotType.WEAPON_MAGIC:
+						sfx.play("spell_a", -9.0, 0.1)
+					_:
+						sfx.play("shoot_a", -9.0, 0.1)
 
 	for data in fire_data:
 		if data["delay"] > 0.0:
@@ -164,6 +170,38 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	# High-ground combat bonus: +20% damage per height level
 	if p and p.has_method("get_high_ground_damage_mult"):
 		base_damage = int(base_damage * p.get_high_ground_damage_mult())
+	# Class-meter damage hooks — passive ramps that scale with current stack.
+	# Meters are NEVER consumed; they decay over time so the player stays in
+	# their "rhythm zone" by repeating the build-action (kills, casts, focused
+	# hits, swaps). At 100 stacks the effect peaks; at 0 there's no bonus.
+	if p and "class_meter" in p:
+		var pc = p._get_player_class() if p.has_method("_get_player_class") else ""
+		var stack: float = p.class_meter
+		if pc == "warrior":
+			# Rage: up to +30% damage at full stack
+			base_damage = int(base_damage * (1.0 + stack * 0.003))
+		elif pc == "wizard":
+			# Mana Flow: up to +25% damage at full stack
+			base_damage = int(base_damage * (1.0 + stack * 0.0025))
+			# Arcane Surge meter-full move — next 3 spells +75% damage and free MP
+			if p.has_meta("arcane_surge_charges"):
+				var charges = int(p.get_meta("arcane_surge_charges"))
+				if charges > 0:
+					base_damage = int(base_damage * 1.75)
+					p.set_meta("arcane_surge_charges", charges - 1)
+					if charges - 1 <= 0:
+						p.remove_meta("arcane_surge_charges")
+		elif pc == "ranger" or pc == "archer":
+			# Focus: up to +35% damage at full stack (precision builds)
+			base_damage = int(base_damage * (1.0 + stack * 0.0035))
+			# Killshot meter-full move — next shot is a 5× crit that pierces all
+			if p.has_meta("killshot_charge"):
+				base_damage = int(base_damage * 5.0)
+				bullet.set("_hits_remaining", 9999)
+				p.remove_meta("killshot_charge")
+		elif pc == "mercenary":
+			# Adrenaline: up to +25% damage at full stack
+			base_damage = int(base_damage * (1.0 + stack * 0.0025))
 	# Per-bullet damage split from pattern (e.g. shotgun pellets share total damage)
 	if data.has("damage_mult"):
 		base_damage = maxi(1, int(base_damage * data["damage_mult"]))
@@ -259,13 +297,25 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 			_apply_arrow_effects(bullet, ammo)
 			equipment_manager.consume_ammo()
 
-	# Melee/swing bullets are blocked by cliff walls; thrown/javelin still count as ranged
-	# so they can clear elevation gaps.
-	if weapon and weapon.slot_type == EquipmentItem.SlotType.WEAPON_MELEE \
-		and weapon.weapon_type not in ["throwing", "javelin"]:
-		bullet.is_melee = true
+	# Cliff respect: default is slot-based (melee blocked, ranged passes through). Designers
+	# can override per-weapon via EquipmentItem.cliff_respect (Auto / Blocked / Passes).
+	if weapon:
+		match weapon.cliff_respect:
+			1:  # forced blocked
+				bullet.is_melee = true
+			2:  # forced pass-through
+				bullet.is_melee = false
+			_:  # auto: slot-based default
+				if weapon.slot_type == EquipmentItem.SlotType.WEAPON_MELEE \
+					and weapon.weapon_type not in ["throwing", "javelin"]:
+					bullet.is_melee = true
 
 	container.add_child(bullet)
+	# Coop: notify peers so they can render a visual ghost of this player bullet.
+	# Damage routing for any hit on enemies stays inside bullet.gd (RPC to host).
+	var coop_rt = get_node_or_null("/root/CoopRuntime")
+	if coop_rt and coop_rt.has_method("broadcast_player_bullet"):
+		coop_rt.broadcast_player_bullet(bullet.global_position, bullet.direction, bullet.speed, bullet.bullet_sprite_index)
 
 func _apply_arrow_effects(bullet, ammo: EquipmentItem) -> void:
 	# Arrows add +50% bonus damage on top of weapon base
@@ -274,24 +324,36 @@ func _apply_arrow_effects(bullet, ammo: EquipmentItem) -> void:
 		"fire":
 			bullet.set_meta("apply_burning", 5.0)
 			bullet.set_meta("fire_arrow_spread", true)
+			bullet.set_meta("projectile_fx_kind", "fire")
+			bullet.set_meta("projectile_fx_energy", 0.95)
 			bullet.modulate = Color(1.0, 0.6, 0.2)
 		"freeze":
 			bullet.set_meta("apply_frozen", 3.0)  # 3s full freeze
+			bullet.set_meta("projectile_fx_kind", "frost")
+			bullet.set_meta("projectile_fx_energy", 0.9)
 			bullet.modulate = Color(0.5, 0.9, 1.0)
 		"explosion":
 			bullet.set_meta("fireball_aoe", true)
 			bullet.set_meta("fireball_aoe_radius", 48.0)  # 6 tiles in dungeon
 			bullet.set_meta("fireball_aoe_dmg_pct", 1.2)  # 120% weapon damage AoE
+			bullet.set_meta("projectile_fx_kind", "fire")
+			bullet.set_meta("projectile_fx_energy", 1.15)
 			bullet.modulate = Color(1.0, 0.4, 0.1)
 		"poison":
 			bullet.set_meta("apply_poison", 6.0)  # 6s poison, stackable
 			bullet.set_meta("poison_stackable", true)
+			bullet.set_meta("projectile_fx_kind", "poison")
+			bullet.set_meta("projectile_fx_energy", 0.95)
 			bullet.modulate = Color(0.4, 1.0, 0.3)
 		"lightning":
 			bullet.set_meta("chain_lightning_arrow", true)  # custom chain, not enchant
+			bullet.set_meta("projectile_fx_kind", "lightning")
+			bullet.set_meta("projectile_fx_energy", 1.05)
 			bullet.modulate = Color(0.8, 0.8, 1.0)
 		"slow":
 			bullet.set_meta("apply_slowed", 5.0)  # 5s heavy slow
+			bullet.set_meta("projectile_fx_kind", "frost")
+			bullet.set_meta("projectile_fx_energy", 0.8)
 			bullet.modulate = Color(0.4, 0.6, 1.0)
 		"throwing_knife":
 			bullet.damage = int(ceil(bullet.damage * 0.87))  # 1.5 * 0.87 ≈ 1.3x total

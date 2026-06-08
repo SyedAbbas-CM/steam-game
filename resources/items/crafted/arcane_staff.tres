@@ -18,4 +18,5 @@ modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 1
 buy_price = 400
 sell_value = 100
+blueprint_id = "arcane_staff_blueprint"
 weapon_range = 4.0

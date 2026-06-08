@@ -38,6 +38,10 @@ static func is_equippable(slot: SlotType) -> bool:
 @export var bullet_sprite_index: int = -1  # index into lofi_obj.png (8x8 tiles, 16x16 grid). -1 = default
 @export var weapon_range: float = 0.0  # effective range override (0 = use default bullet_lifetime)
 @export var weapon_type: String = ""  # sword, dagger, axe, club, hammer, flail, spear, throwing, bow, short_bow, crossbow, staff
+## Height system override: 0=auto (melee blocked / ranged passes through cliffs),
+## 1=force blocked by cliffs, 2=force passes through cliffs. Lets designers tag
+## individual weapons against the default slot-type rule.
+@export_enum("Auto", "Blocked by cliffs", "Passes through cliffs") var cliff_respect: int = 0
 @export var archetype_tags: PackedStringArray = PackedStringArray()
 @export var blueprint_id: String = ""
 @export var salvage_research_family: String = ""
@@ -166,11 +170,11 @@ func get_weapon_type() -> String:
 func get_scaling_stat() -> String:
 	match weapon_type:
 		"sword", "axe", "hammer", "club", "flail", "spear", "dagger", "halberd", "greatsword", "great_axe", "scythe":
-			return "power"
+			return "strength"
 		"bow", "short_bow", "crossbow", "throwing", "javelin", "sling", "whip", "claws":
-			return "agility"
+			return "speed"
 		"staff", "wand", "tome":
-			return "spirit"
+			return "intellect"
 	return ""
 
 func get_display_name() -> String:

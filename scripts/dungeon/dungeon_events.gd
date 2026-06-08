@@ -143,9 +143,13 @@ func _try_horde(grid_pos: Vector2i) -> void:
 		enemy.global_position = positions[i]
 		enemy.setup(def)
 		enemy._nav = dm.nav
+		enemy._dm = dm  # so the AI can pathfind / break obstacles
 		enemy.set_meta("grid_pos", spawn_grid)
 		# NOT bound to room alive counter — independent bonus kills
 		dm.enemy_container.add_child(enemy)
+		# Horde-spawned enemies are pre-aggro'd so they actively chase the player
+		# instead of wandering aimlessly in their spawn room.
+		enemy.call_deferred("force_aggro_player")
 
 func _find_horde_spawn_room(from: Vector2i) -> Vector2i:
 	# BFS to find a visited room ~2 rooms away
@@ -923,7 +927,8 @@ func _tick_timed_buffs(delta: float) -> void:
 
 # ── Helpers ────────────────────────────────────────────────
 
-func _get_hud() -> GameHUD:
+func _get_hud() -> CanvasLayer:
+	# Accepts either GameHUD or SigilHUD — both expose `set_non_quickbar_visible` etc.
 	var scene = dm.get_parent()
 	if scene and "game_hud" in scene:
 		return scene.game_hud

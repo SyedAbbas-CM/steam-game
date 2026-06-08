@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "g_phoenix"
+perk_name = "Phoenix"
+description = "On lethal hit, revive with 25% HP (once per dungeon)."
+class_required = ""
+tier = 3
+prerequisites = []
+stat_requirements = {
+"intellect": 12,
+"health": 8
+}
+stat_bonuses = {}
+special_effect = "phoenix"
+is_percent = false

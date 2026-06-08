@@ -7,13 +7,13 @@ script = ExtResource("1")
 id = "xp_elixir"
 recipe_name = "XP Elixir"
 recipe_type = "alchemist"
-ingredients = Array[Dictionary]([{{
+ingredients = Array[Dictionary]([{
 "item_name": "Magic Essence",
 "count": 1
-}}, {{
+}, {
 "item_name": "Healing Herb",
 "count": 1
-}}])
+}])
 gold_cost = 100
 result_item_path = "res://resources/items/crafted/xp_elixir.tres"
 result_count = 1

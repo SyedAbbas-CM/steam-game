@@ -11,5 +11,9 @@ class_required = "mercenary"
 tier = 3
 prerequisites = ["r_survivor"]
 stat_bonuses = {}
+stat_requirements = {
+"endurance": 8,
+"luck": 4
+}
 special_effect = "jack_of_trades"
 is_percent = false

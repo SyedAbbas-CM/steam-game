@@ -165,4 +165,5 @@ func _clear_enemies() -> void:
 
 func _update_info_text() -> void:
 	info_label.text = "PUSH TEST ARENA\n" \
+		+ "Hold Ctrl/Cmd: braced push mode (slow, more inertia, shove enemies)\n" \
 		+ "R: respawn lineup   1/2/3/4: add light/normal/large/boss   5: packed row   F1: toggle labels   ESC/Q: exit"

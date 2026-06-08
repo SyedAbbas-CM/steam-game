@@ -5,9 +5,14 @@ extends Resource
 @export var perk_name: String = ""
 @export var description: String = ""
 @export var icon_index: int = 0  # LoY sprite index for icon
-@export var class_required: String = ""  # "warrior", "archer", "wizard", "mercenary"
+@export var class_required: String = ""  # "warrior"/"archer"/"wizard"/"mercenary" or "" for cross-class
 @export var tier: int = 1  # 1-3 (capstone = tier 4)
 @export var prerequisites: Array[String] = []  # perk_ids that must be unlocked first
+
+# Stat allocation requirements: keys are stat names from LevelSystem.ALLOCATION_CATEGORIES
+# (health, defense, strength, speed, movement, intellect, luck, endurance).
+# Values are minimum allocated points required. e.g. {"health": 15} = needs 15 HP allocated.
+@export var stat_requirements: Dictionary = {}
 
 # Stat bonuses: key = StatModifier.StatType enum value (int), value = bonus amount
 @export var stat_bonuses: Dictionary = {}

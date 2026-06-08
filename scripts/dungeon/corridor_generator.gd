@@ -8,10 +8,15 @@ enum LengthClass { SHORT, LONG }
 # Uses axis-aligned segments (never diagonal) to guarantee connectivity.
 static func generate_corridor(
 	from_exit: Vector2i, to_exit: Vector2i,
-	direction: String, half_w: int, floor_number: int
+	direction: String, half_w: int, floor_number: int,
+	complexity: float = 1.0
 ) -> Dictionary:
-	var length_class = LengthClass.SHORT if randf() < 0.5 else LengthClass.LONG
-	var corridor_type = _roll_type(floor_number, length_class)
+	# Complexity 0..2 biases the SHORT/LONG roll and the bend type roll.
+	# 0.0 → always SHORT + STRAIGHT, 1.0 → 50/50 default, 2.0 → almost always LONG + bendy.
+	var c: float = clampf(complexity, 0.0, 2.0)
+	var long_chance: float = clampf(c * 0.5, 0.0, 1.0)
+	var length_class = LengthClass.LONG if randf() < long_chance else LengthClass.SHORT
+	var corridor_type = _roll_type_complex(floor_number, length_class, c)
 
 	var result = _empty_result()
 	var waypoints: Array[Vector2i] = _build_waypoints(from_exit, to_exit, direction, corridor_type, length_class)
@@ -42,6 +47,15 @@ static func generate_corridor(
 	var lc_name = "LONG" if length_class == LengthClass.LONG else "SHORT"
 	print("  Corridor %s: %s %s w=%d (%d floor)" % [direction, lc_name, CorridorType.keys()[corridor_type], half_w * 2 + 1, result["floor_tiles"].size()])
 	return result
+
+## Complexity-aware roll. Low c → STRAIGHT bias; high c → more WINDING / ZIGZAG.
+static func _roll_type_complex(floor_number: int, length_class: LengthClass, c: float) -> CorridorType:
+	# At c=0, force STRAIGHT 80% / L_BEND 20% — beginner dungeons stay readable.
+	if c < 0.35:
+		return CorridorType.STRAIGHT if randf() < 0.8 else CorridorType.L_BEND
+	# Otherwise fall back to the existing weighted table.
+	return _roll_type(floor_number, length_class)
+
 
 static func _roll_type(floor_number: int, length_class: LengthClass) -> CorridorType:
 	var roll = randf()

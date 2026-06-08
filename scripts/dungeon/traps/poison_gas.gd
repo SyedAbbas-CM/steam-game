@@ -15,6 +15,8 @@ var player: Node2D
 var _cloud: Node2D
 var _cloud_timer: float = 0.0
 var _damage_timer: float = 0.0
+var _ring: Polygon2D
+var _ring_timer: float = 0.0
 
 func _ready() -> void:
 	super._ready()
@@ -44,6 +46,8 @@ func _physics_process(delta: float) -> void:
 	if _cloud and is_instance_valid(_cloud):
 		_cloud_timer += delta
 		_damage_timer += delta
+		_ring_timer += delta
+		_update_ring_visual()
 
 		# Damage player and enemies inside cloud
 		if _damage_timer >= DAMAGE_INTERVAL:
@@ -87,10 +91,11 @@ func _spawn_cloud() -> void:
 	# Create cloud visual with CPUParticles2D
 	_cloud = Node2D.new()
 	_cloud.global_position = global_position
+	_cloud.add_to_group("poison_cloud")
 
 	var particles = CPUParticles2D.new()
 	particles.emitting = true
-	particles.amount = 20
+	particles.amount = 28
 	particles.lifetime = 1.5
 	particles.one_shot = false
 	particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
@@ -105,8 +110,28 @@ func _spawn_cloud() -> void:
 	particles.color = Color(0.2, 0.8, 0.2, 0.4)
 	_cloud.add_child(particles)
 
+	_ring = Polygon2D.new()
+	_ring.color = Color(0.25, 0.95, 0.35, 0.16)
+	_ring.polygon = _make_circle_points(CLOUD_RADIUS * 0.95, 18)
+	_cloud.add_child(_ring)
+
 	get_tree().current_scene.add_child(_cloud)
 
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
 		vfx.status_puff(global_position, "POISONED")
+
+func _update_ring_visual() -> void:
+	if _ring == null:
+		return
+	var pulse = 0.92 + 0.12 * sin(_ring_timer * 3.5)
+	_ring.scale = Vector2.ONE * pulse
+	_ring.rotation += 0.01
+	_ring.color.a = 0.12 + 0.07 * (0.5 + 0.5 * sin(_ring_timer * 5.0))
+
+func _make_circle_points(radius: float, segments: int) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in range(segments):
+		var a := TAU * float(i) / float(segments)
+		pts.append(Vector2(cos(a), sin(a)) * radius)
+	return pts

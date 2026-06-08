@@ -11,5 +11,6 @@ class_required = "warrior"
 tier = 1
 prerequisites = []
 stat_bonuses = {2: 20.0}
+stat_requirements = {}
 special_effect = ""
 is_percent = true

@@ -24,42 +24,53 @@ func setup(equip_mgr: EquipmentManager) -> void:
 	_equipment_manager = equip_mgr
 
 func _build_ui() -> void:
-	_panel = PanelContainer.new()
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.55)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.visible = false
+	overlay.name = "Overlay"
+	add_child(overlay)
+
+	# Ornate panel with arcane-purple corner ornaments
+	_panel = AshfieldsUI.ornate_panel(20)
 	_panel.visible = false
 	_panel.anchor_left = 0.2
 	_panel.anchor_right = 0.8
 	_panel.anchor_top = 0.1
 	_panel.anchor_bottom = 0.9
-
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.04, 0.14, 0.94)
-	style.border_color = Color(0.5, 0.3, 0.8)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(4)
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 10
-	style.content_margin_bottom = 10
-	_panel.add_theme_stylebox_override("panel", style)
+	_panel.theme = load("res://assets/themes/ashfields_theme.tres") as Theme
+	# Tint the corner brackets purple for the spellcraft vibe
+	for child in _panel.get_children():
+		if "col" in child:
+			child.col = AshfieldsUI.ARCANE
+			child.queue_redraw()
 	add_child(_panel)
 
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_theme_constant_override("separation", 10)
 	_panel.add_child(vbox)
 
-	_title_label = Label.new()
-	_title_label.text = "Enchanting Station"
-	_title_label.add_theme_color_override("font_color", Color(0.7, 0.5, 1.0))
-	_title_label.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(_title_label)
+	var title_block = AshfieldsUI.section_title("ENCHANTING STATION", 18)
+	vbox.add_child(title_block)
+	_title_label = title_block.get_child(0) as Label
+	# Override title gold → arcane purple for the enchanter
+	var ls := _title_label.label_settings as LabelSettings
+	if ls:
+		ls.font_color = AshfieldsUI.ARCANE.lightened(0.3)
+	# Adjust the underline rule to purple too
+	if title_block.get_child_count() >= 2:
+		var rule := title_block.get_child(1) as ColorRect
+		if rule:
+			rule.color = AshfieldsUI.ARCANE
 
 	_gold_label = Label.new()
 	_gold_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
-	_gold_label.add_theme_font_size_override("font_size", 12)
+	_gold_label.add_theme_font_size_override("font_size", 30)
 	vbox.add_child(_gold_label)
 
 	_status_label = Label.new()
-	_status_label.add_theme_font_size_override("font_size", 11)
+	_status_label.add_theme_font_size_override("font_size", 28)
 	vbox.add_child(_status_label)
 
 	var scroll = ScrollContainer.new()
@@ -85,7 +96,7 @@ func _build_ui() -> void:
 	_back_btn = Button.new()
 	_back_btn.focus_mode = Control.FOCUS_NONE
 	_back_btn.text = "Back"
-	_back_btn.add_theme_font_size_override("font_size", 12)
+	_back_btn.add_theme_font_size_override("font_size", 30)
 	_back_btn.pressed.connect(_show_item_list)
 	_back_btn.visible = false
 	btn_row.add_child(_back_btn)
@@ -93,7 +104,7 @@ func _build_ui() -> void:
 	_close_btn = Button.new()
 	_close_btn.focus_mode = Control.FOCUS_NONE
 	_close_btn.text = "Close"
-	_close_btn.add_theme_font_size_override("font_size", 12)
+	_close_btn.add_theme_font_size_override("font_size", 30)
 	_close_btn.pressed.connect(_close)
 	btn_row.add_child(_close_btn)
 
@@ -105,6 +116,9 @@ func open() -> void:
 	_update_gold()
 	_show_item_list()
 	_panel.visible = true
+	var overlay = get_node_or_null("Overlay")
+	if overlay:
+		overlay.visible = true
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("open", -3.0, 0.0)
@@ -139,21 +153,21 @@ func _show_item_list() -> void:
 		var name_label = Label.new()
 		name_label.text = item.get_display_name()
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_label.add_theme_font_size_override("font_size", 11)
+		name_label.add_theme_font_size_override("font_size", 28)
 		name_label.add_theme_color_override("font_color", _rarity_color(item.rarity))
 		hbox.add_child(name_label)
 
 		if item.enchantment:
 			var ench_label = Label.new()
 			ench_label.text = "[" + item.enchantment.get_prefix() + " T" + str(item.enchantment.tier) + "]"
-			ench_label.add_theme_font_size_override("font_size", 10)
+			ench_label.add_theme_font_size_override("font_size", 28)
 			ench_label.add_theme_color_override("font_color", item.enchantment.get_color())
 			hbox.add_child(ench_label)
 
 		var select_btn = Button.new()
 		select_btn.focus_mode = Control.FOCUS_NONE
 		select_btn.text = "Select"
-		select_btn.add_theme_font_size_override("font_size", 10)
+		select_btn.add_theme_font_size_override("font_size", 28)
 		select_btn.pressed.connect(_select_item.bind(i))
 		hbox.add_child(select_btn)
 
@@ -174,7 +188,7 @@ func _select_item(inv_index: int) -> void:
 	# Enchantment options
 	var enchant_header = Label.new()
 	enchant_header.text = "Apply Enchantment:"
-	enchant_header.add_theme_font_size_override("font_size", 12)
+	enchant_header.add_theme_font_size_override("font_size", 30)
 	enchant_header.add_theme_color_override("font_color", Color(0.7, 0.5, 1.0))
 	_enchant_options.add_child(enchant_header)
 
@@ -193,26 +207,26 @@ func _select_item(inv_index: int) -> void:
 		var name_label = Label.new()
 		name_label.text = enchant.get_prefix() + " (T" + str(next_tier) + ")"
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_label.add_theme_font_size_override("font_size", 11)
+		name_label.add_theme_font_size_override("font_size", 28)
 		name_label.add_theme_color_override("font_color", enchant.get_color())
 		hbox.add_child(name_label)
 
 		var info_label = Label.new()
 		info_label.text = "+" + str(enchant.bonus_damage) + " dmg, " + str(int(enchant.proc_chance)) + "% proc"
-		info_label.add_theme_font_size_override("font_size", 10)
+		info_label.add_theme_font_size_override("font_size", 28)
 		info_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 		hbox.add_child(info_label)
 
 		var cost_label = Label.new()
 		cost_label.text = str(cost) + "g"
-		cost_label.add_theme_font_size_override("font_size", 10)
+		cost_label.add_theme_font_size_override("font_size", 28)
 		cost_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
 		hbox.add_child(cost_label)
 
 		var btn = Button.new()
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.text = "Enchant"
-		btn.add_theme_font_size_override("font_size", 10)
+		btn.add_theme_font_size_override("font_size", 28)
 		btn.pressed.connect(_apply_enchant.bind(inv_index, etype, next_tier, cost))
 		hbox.add_child(btn)
 
@@ -232,26 +246,26 @@ func _select_item(inv_index: int) -> void:
 		var label = Label.new()
 		label.text = "Upgrade to " + rarity_names[item.rarity + 1]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		label.add_theme_font_size_override("font_size", 11)
+		label.add_theme_font_size_override("font_size", 28)
 		label.add_theme_color_override("font_color", _rarity_color(item.rarity + 1))
 		hbox.add_child(label)
 
 		var info = Label.new()
 		info.text = "+20% all modifiers"
-		info.add_theme_font_size_override("font_size", 10)
+		info.add_theme_font_size_override("font_size", 28)
 		info.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 		hbox.add_child(info)
 
 		var cost_label = Label.new()
 		cost_label.text = str(upgrade_cost) + "g"
-		cost_label.add_theme_font_size_override("font_size", 10)
+		cost_label.add_theme_font_size_override("font_size", 28)
 		cost_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
 		hbox.add_child(cost_label)
 
 		var btn = Button.new()
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.text = "Upgrade"
-		btn.add_theme_font_size_override("font_size", 10)
+		btn.add_theme_font_size_override("font_size", 28)
 		btn.pressed.connect(_upgrade_rarity.bind(inv_index, upgrade_cost))
 		hbox.add_child(btn)
 
@@ -322,6 +336,9 @@ func _rarity_color(rarity: int) -> Color:
 
 func _close() -> void:
 	_panel.visible = false
+	var overlay = get_node_or_null("Overlay")
+	if overlay:
+		overlay.visible = false
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("close", -4.0, 0.0)

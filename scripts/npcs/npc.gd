@@ -221,35 +221,29 @@ func _offer_zone_quests() -> void:
 		if ls:
 			player_level = ls.level
 
-	# First: check if player has any active quests to report on in this zone
-	var had_active_quest = false
+	# Fire any reminder/turn-in for quests bound to THIS npc (or zone-wide ones).
+	# Quests with a non-empty giver_npc that doesn't match are skipped, so
+	# talking to Telos doesn't pop Solmund's reminder.
 	for quest_id in qm.active_quests:
 		if not qm.active_quests[quest_id].get("active", false):
 			continue
 		var quest = qm.definitions.get(quest_id) as QuestDefinition
-		if quest and (quest.target_location == zone_id or quest.location == zone_id):
-			had_active_quest = true
-			await qm.check_zone_quests(zone_id)
-			break
-	# If a quest was just completed during check, fall through to offer the next one
-	if had_active_quest:
-		# Re-check: if the quest was completed, don't return — offer next quest below
-		var still_has_active = false
-		for quest_id in qm.active_quests:
-			if not qm.active_quests[quest_id].get("active", false):
-				continue
-			var quest = qm.definitions.get(quest_id) as QuestDefinition
-			if quest and (quest.target_location == zone_id or quest.location == zone_id):
-				still_has_active = true
-				break
-		if still_has_active:
-			return  # quest still active, don't offer a new one
+		if not quest:
+			continue
+		if quest.target_location != zone_id and quest.location != zone_id:
+			continue
+		if quest.giver_npc != "" and quest.giver_npc != npc_name:
+			continue
+		await qm.check_zone_quests(zone_id, npc_name)
+		break
 
-	# Collect all available quests for this zone (prerequisite-filtered)
+	# Collect all available quests for this zone (prereq + npc-filtered)
 	var available: Array = []
 	for quest_id in qm.definitions:
 		var quest = qm.definitions[quest_id] as QuestDefinition
 		if quest.location != zone_id:
+			continue
+		if quest.giver_npc != "" and quest.giver_npc != npc_name:
 			continue
 		if qm.is_quest_active(quest_id) or qm.is_quest_completed(quest_id):
 			continue

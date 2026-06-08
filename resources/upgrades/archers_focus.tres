@@ -13,4 +13,4 @@ base_cost = 20
 cost_per_level = 15
 required_class = "archer"
 required_upgrade = ""
-stat_bonuses = [{stat = 17, flat = 5.0, percent = 0.0}, {stat = 4, flat = 0.0, percent = 0.1}]
+stat_bonuses = [{"stat": 17, "flat": 5.0, "percent": 0.0}, {"stat": 4, "flat": 0.0, "percent": 0.1}]

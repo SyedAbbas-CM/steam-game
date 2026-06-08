@@ -44,3 +44,6 @@ func _spawn_enemy() -> void:
 	enemy.global_position = spawn_pos
 	enemy.drop_table = default_drop_table
 	enemies_container.add_child(enemy)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.warp_portal(spawn_pos, Color(0.84, 0.08, 0.05, 0.96), 16.0, 0.45)

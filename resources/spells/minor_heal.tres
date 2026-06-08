@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "minor_heal"
+spell_name = "Minor Heal"
+description = "Quick small heal +8 HP. Low mana, short cooldown."
+effect_type = 6
+delivery = 2
+magnitude = 8
+duration = 0.0
+mp_cost = 5.0
+cooldown = 2.5
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

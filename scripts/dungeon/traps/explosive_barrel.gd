@@ -7,6 +7,7 @@ const BARREL_SPRITE = Vector2i(6, 8)  # source 1
 const FUSE_TIME = 0.5
 const EXPLOSION_RADIUS_TILES = 3
 const CHAIN_DELAY = 0.15
+const FIRE_PATCH_SCENE := preload("res://scripts/dungeon/traps/fire_patch.gd")
 
 const PUSH_SPEED = 30.0
 const THROW_SPEED = 160.0
@@ -15,11 +16,16 @@ const THROW_MAX_TILES = 6
 const CONTACT_COOLDOWN = 0.25
 
 var floor_layer: TileMapLayer  # passed from dungeon_manager for walkability checks
+var wall_layer: TileMapLayer
+var liquid_layer: TileMapLayer
 
 var _fuse_active: bool = false
 var _fuse_timer: float = 0.0
 var _blink_timer: float = 0.0
 var _exploded: bool = false
+## Dummy barrels still rumble + puff smoke + play a sound, but deal no damage.
+## Set by dungeon_manager's spawn site so most barrels are harmless decoy.
+var is_dummy: bool = false
 
 var _moving: bool = false
 var _is_thrown: bool = false
@@ -60,7 +66,16 @@ func _on_body_entered(body: Node2D) -> void:
 	if _contact_cooldown > 0.0:
 		return
 	if body.is_in_group("player"):
-		_try_player_push(body)
+		# Fast-moving player gets the push/throw treatment. Slow contact (just
+		# brushing into a barrel) lights the fuse so the barrel actually goes off
+		# instead of sitting there looking dangerous and doing nothing.
+		var pvel := Vector2.ZERO
+		if "velocity" in body:
+			pvel = body.velocity
+		if pvel.length() >= 60.0:
+			_try_player_push(body)
+		else:
+			_light_fuse()
 
 func _try_player_push(player: Node2D) -> void:
 	var player_vel := Vector2.ZERO
@@ -251,6 +266,15 @@ func _explode() -> void:
 	if _sprite:
 		_sprite.visible = false
 
+	# Dummy: harmless dud. Plays a click + small puff, no damage / shake.
+	if is_dummy:
+		var vfx_d = get_node_or_null("/root/VFXManager")
+		if vfx_d:
+			vfx_d.status_puff(global_position, Color(0.8, 0.8, 0.8, 0.7))
+		_play_sfx("click", -2.0, 0.05)
+		queue_free()
+		return
+
 	# VFX
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
@@ -279,7 +303,34 @@ func _explode() -> void:
 			if global_position.distance_to(trap.global_position) <= explosion_radius:
 				trap.chain_explode()
 
+	_spawn_fire_patches(cur_tile, explosion_radius, damage)
+
 	queue_free()
+
+func _spawn_fire_patches(center_tile: Vector2i, explosion_radius: float, source_damage: int) -> void:
+	if floor_layer == null or wall_layer == null or liquid_layer == null or get_parent() == null:
+		return
+	var fire_tiles: Array[Vector2i] = [center_tile]
+	for dir in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+		var cell: Vector2i = center_tile + dir
+		if floor_layer.get_cell_source_id(cell) < 0:
+			continue
+		if wall_layer.get_cell_source_id(cell) >= 0:
+			continue
+		if liquid_layer.get_cell_source_id(cell) >= 0:
+			continue
+		fire_tiles.append(cell)
+	for cell in fire_tiles:
+		var patch = FIRE_PATCH_SCENE.new()
+		patch.floor_layer = floor_layer
+		patch.wall_layer = wall_layer
+		patch.liquid_layer = liquid_layer
+		patch.origin_tile = cell
+		patch.duration = 2.8 if cell == center_tile else 2.1
+		patch.damage = maxi(1, int(source_damage * 0.18))
+		patch.spread_generations = 1 if cell == center_tile else 0
+		patch.global_position = Vector2(cell.x * TILE_SIZE + 4, cell.y * TILE_SIZE + 4)
+		get_parent().add_child(patch)
 
 func _get_bodies_in_radius(radius: float) -> Array:
 	var result: Array = []

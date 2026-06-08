@@ -7,13 +7,13 @@ script = ExtResource("1")
 id = "venom_bow"
 recipe_name = "Venom Bow"
 recipe_type = "blacksmith"
-ingredients = Array[Dictionary]([{{
+ingredients = Array[Dictionary]([{
 "item_name": "Venom Sac",
 "count": 2
-}}, {{
+}, {
 "item_name": "Leather Scraps",
 "count": 3
-}}])
+}])
 gold_cost = 200
 result_item_path = "res://resources/items/crafted/venom_bow.tres"
 result_count = 1

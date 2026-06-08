@@ -13,7 +13,10 @@ var _tooltip_desc: Label
 var _tooltip_stats: Label
 var _tooltip_req: Label
 var _stats_label: Label
+var _show_combat_stats: bool = false
+var _combat_stats_toggle: Button
 var _close_btn: Button
+var _menu_btn: Button
 var _inv_scroll: ScrollContainer
 var _stat_alloc_container: VBoxContainer
 var _stat_points_label: Label
@@ -68,15 +71,17 @@ const SLOT_SIZE = 108
 const INV_COLS = 8
 const INV_ROWS = 6
 const ICON_SIZE = 64
-const PANEL_BG = Color(0.06, 0.05, 0.1, 0.96)
-const BORDER_COLOR = Color(0.45, 0.35, 0.15)
-const EQUIPPED_BG = Color(0.08, 0.22, 0.08)
-const NORMAL_BG = Color(0.09, 0.08, 0.13)
+## Ashfields palette — keep in sync with assets/themes/ashfields_theme.tres
+const PANEL_BG = Color(0.110, 0.098, 0.090, 0.97)   # bg_panel
+const BORDER_COLOR = Color(0.471, 0.443, 0.420)     # border_lit
+const EQUIPPED_BG = Color(0.094, 0.137, 0.075, 1.0) # warm green tint
+const NORMAL_BG = Color(0.075, 0.067, 0.060, 1.0)   # bg_deep warm
 
+## Rarity colors keyed to gold/blood/arcane palette
 const RARITY_COLORS = [
-	Color(0.65, 0.65, 0.65),  # common
-	Color(0.3, 0.9, 0.3),     # uncommon
-	Color(0.4, 0.85, 1.0),    # rare
+	Color(0.659, 0.635, 0.616),   # 0 common — muted bone
+	Color(0.792, 0.541, 0.016),   # 1 uncommon — gold
+	Color(0.486, 0.227, 0.929),   # 2 rare — arcane purple
 ]
 const RARITY_NAMES = ["Common", "Uncommon", "Rare"]
 const TIER_COLORS = [
@@ -109,6 +114,7 @@ func _ready() -> void:
 	_overlay.visible = false
 	_root_panel.visible = false
 	_close_btn.visible = false
+	_menu_btn.visible = false
 
 func setup(equip_mgr: EquipmentManager) -> void:
 	equipment_manager = equip_mgr
@@ -117,6 +123,8 @@ func setup(equip_mgr: EquipmentManager) -> void:
 	equipment_manager.equip_failed.connect(_on_equip_failed)
 
 func _build_ui() -> void:
+	var ashfields_theme = load("res://assets/themes/ashfields_theme.tres") as Theme
+
 	# Full-screen dark overlay — blocks game input when inventory is open
 	_overlay = ColorRect.new()
 	_overlay.color = Color(0, 0, 0, 0.6)
@@ -126,6 +134,8 @@ func _build_ui() -> void:
 
 	# Main centered panel
 	_root_panel = PanelContainer.new()
+	if ashfields_theme:
+		_root_panel.theme = ashfields_theme
 	var style = StyleBoxFlat.new()
 	style.bg_color = PANEL_BG
 	style.border_color = BORDER_COLOR
@@ -146,13 +156,22 @@ func _build_ui() -> void:
 	_root_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	add_child(_root_panel)
 
-	# Main horizontal layout: [Center (tabs) | Quickslots | Stats]
+	# Root layout: a vertical column with the main HBox on top and the tooltip
+	# pinned to the bottom. This way the tooltip has its OWN dedicated space
+	# and showing it never shrinks the inventory grid.
+	var root_vbox = VBoxContainer.new()
+	root_vbox.add_theme_constant_override("separation", 6)
+	root_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_root_panel.add_child(root_vbox)
+
+	# Main horizontal layout: [Center (tabs) | Stats]
 	var main_hbox = HBoxContainer.new()
 	main_hbox.add_theme_constant_override("separation", 24)
 	main_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	main_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	main_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	_root_panel.add_child(main_hbox)
+	root_vbox.add_child(main_hbox)
 
 	# ===== CENTER: Tabbed content (Items / Spells) =====
 	var center_vbox = VBoxContainer.new()
@@ -183,18 +202,17 @@ func _build_ui() -> void:
 	_tab_salvage_btn.pressed.connect(_switch_tab.bind("salvage"))
 	tab_bar.add_child(_tab_salvage_btn)
 
-	# Items tab content
+	# Items tab content — gets all of the center column vertical space now.
 	_items_content = _build_inventory_panel()
 	_items_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_items_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	center_vbox.add_child(_items_content)
 
-	# Spells tab content
+	# Spells panel still built (so refresh code keeps working) but never added
+	# to the layout. Spells now appear as tiles INSIDE the inventory grid —
+	# they're listed alongside items so the big inventory area can hold everything.
 	_spells_content = _build_spells_tab()
-	_spells_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_spells_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_spells_content.visible = false
-	center_vbox.add_child(_spells_content)
 
 	# Socket tab content
 	_socket_content = _build_socket_tab()
@@ -210,21 +228,29 @@ func _build_ui() -> void:
 	_salvage_content.visible = false
 	center_vbox.add_child(_salvage_content)
 
-	# ===== RIGHT-MID: Quickslots column =====
-	var qs_panel = _build_quickslot_panel()
-	qs_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	main_hbox.add_child(qs_panel)
+	# Quickslot sidebar removed — the HUD quickbar (bottom of screen) stays
+	# visible while inventory is open, and number keys 1-6 / clicks on it
+	# handle equip + use. We still build the panel for `_refresh_quickslots`
+	# to update internally; just don't add it to the layout.
+	_build_quickslot_panel()
 
 	# ===== RIGHT: Stats =====
 	var right_panel = _build_stats_panel()
 	right_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	main_hbox.add_child(right_panel)
 
+	# Tooltip lives at the bottom of root_vbox, OUTSIDE the inventory column.
+	# It has dedicated reserved height so showing the description never resizes
+	# the inventory grid above (which was scrolling itself off-screen).
+	var tooltip_panel := _build_tooltip_panel()
+	tooltip_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root_vbox.add_child(tooltip_panel)
+
 	# Close button
 	_close_btn = Button.new()
 	_close_btn.text = "X"
 	_close_btn.focus_mode = Control.FOCUS_NONE
-	_close_btn.add_theme_font_size_override("font_size", 20)
+	_close_btn.add_theme_font_size_override("font_size", 34)
 	_close_btn.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3))
 	_close_btn.flat = true
 	_close_btn.custom_minimum_size = Vector2(36, 36)
@@ -239,12 +265,42 @@ func _build_ui() -> void:
 	_close_btn.pressed.connect(toggle)
 	add_child(_close_btn)
 
+	# Main Menu button — sits next to the X, saves and returns to title
+	_menu_btn = Button.new()
+	_menu_btn.text = "Main Menu"
+	_menu_btn.focus_mode = Control.FOCUS_NONE
+	_menu_btn.add_theme_font_size_override("font_size", 18)
+	_menu_btn.add_theme_color_override("font_color", Color(0.85, 0.75, 0.4))
+	_menu_btn.flat = true
+	_menu_btn.anchor_left = 0.99
+	_menu_btn.anchor_right = 0.99
+	_menu_btn.anchor_top = 0.01
+	_menu_btn.anchor_bottom = 0.01
+	_menu_btn.offset_left = -188
+	_menu_btn.offset_right = -50
+	_menu_btn.offset_top = 12
+	_menu_btn.offset_bottom = 40
+	_menu_btn.pressed.connect(_on_main_menu_pressed)
+	add_child(_menu_btn)
+
+func _on_main_menu_pressed() -> void:
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("select_a", -4.0)
+	var gm = get_node_or_null("/root/GameManager")
+	if gm and gm.save_data and gm.active_slot >= 0:
+		gm.save_data.save_to_slot()
+	if gm and gm.has_method("go_to_start_screen"):
+		gm.go_to_start_screen()
+	else:
+		get_tree().change_scene_to_file("res://scenes/ui/title_screen.tscn")
+
 func _create_tab_button(text: String, active: bool) -> Button:
 	var btn = Button.new()
 	btn.text = text
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.custom_minimum_size = Vector2(120, 36)
-	btn.add_theme_font_size_override("font_size", 20)
+	btn.add_theme_font_size_override("font_size", 34)
 	var sty = StyleBoxFlat.new()
 	sty.set_corner_radius_all(4)
 	sty.content_margin_left = 16
@@ -271,8 +327,11 @@ func _create_tab_button(text: String, active: bool) -> Button:
 
 func _switch_tab(tab_name: String) -> void:
 	_current_tab = tab_name
-	_items_content.visible = tab_name == "items"
-	_spells_content.visible = tab_name == "spells"
+	# Spells live on the inventory tab now — show both together. Socket/salvage
+	# stay isolated because the blacksmith opens them in a focused mode.
+	var show_items_and_spells := tab_name == "items" or tab_name == "spells"
+	_items_content.visible = show_items_and_spells
+	_spells_content.visible = show_items_and_spells
 	_socket_content.visible = tab_name == "socket"
 	_salvage_content.visible = tab_name == "salvage"
 	_update_tab_style(_tab_items_btn, tab_name == "items")
@@ -288,6 +347,32 @@ func _switch_tab(tab_name: String) -> void:
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("click", -4.0)
+
+func open_to_tab(tab_name: String) -> void:
+	if not _root_panel.visible:
+		_root_panel.visible = true
+		_overlay.visible = true
+		_close_btn.visible = true
+		_menu_btn.visible = true
+		var sfx = get_node_or_null("/root/SFXManager")
+		if sfx:
+			sfx.play("paper", -4.0, 0.0)
+		_refresh()
+		var hud = _get_hud()
+		if hud:
+			hud.set_non_quickbar_visible(false)
+	_apply_tab_visibility(tab_name)
+	_switch_tab(tab_name)
+
+## Tab visibility:
+## - "items" → ITEMS tab only (spells now embedded inside the items view, not a tab)
+## - "socket"  → ITEMS + SOCKET (opened from blacksmith only)
+## - "salvage" → ITEMS + SALVAGE (opened from blacksmith only)
+func _apply_tab_visibility(mode_tab: String) -> void:
+	_tab_items_btn.visible = true
+	_tab_spells_btn.visible = false  # spells are inline on the items tab
+	_tab_socket_btn.visible = mode_tab == "socket"
+	_tab_salvage_btn.visible = mode_tab == "salvage"
 
 func _update_tab_style(btn: Button, active: bool) -> void:
 	var sty = btn.get_theme_stylebox("normal") as StyleBoxFlat
@@ -309,7 +394,7 @@ func _build_inventory_panel() -> VBoxContainer:
 
 	var title = Label.new()
 	title.text = "INVENTORY"
-	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_font_size_override("font_size", 40)
 	title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
@@ -345,7 +430,7 @@ func _build_inventory_panel() -> VBoxContainer:
 	_drop_zone.text = "DROP"
 	_drop_zone.focus_mode = Control.FOCUS_NONE
 	_drop_zone.custom_minimum_size = Vector2(0, 50)
-	_drop_zone.add_theme_font_size_override("font_size", 18)
+	_drop_zone.add_theme_font_size_override("font_size", 32)
 	_drop_zone.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 	var drop_style = StyleBoxFlat.new()
 	drop_style.bg_color = Color(0.2, 0.05, 0.05)
@@ -360,48 +445,54 @@ func _build_inventory_panel() -> VBoxContainer:
 	_drop_zone.visible = false
 	vbox.add_child(_drop_zone)
 
-	# Tooltip below inventory — larger fonts
-	_tooltip_panel = PanelContainer.new()
-	var tstyle = StyleBoxFlat.new()
-	tstyle.bg_color = Color(0.08, 0.07, 0.12, 0.97)
-	tstyle.border_color = Color(0.6, 0.5, 0.25)
-	tstyle.set_border_width_all(2)
-	tstyle.set_corner_radius_all(4)
-	tstyle.content_margin_left = 14
-	tstyle.content_margin_right = 14
-	tstyle.content_margin_top = 10
-	tstyle.content_margin_bottom = 10
-	_tooltip_panel.add_theme_stylebox_override("panel", tstyle)
-	_tooltip_panel.custom_minimum_size = Vector2(0, 100)
-	_tooltip_panel.visible = false
-	vbox.add_child(_tooltip_panel)
+	# Tooltip is built separately and anchored to the bottom of _root_panel so
+	# it has dedicated space and doesn't push the inventory grid around.
+	return vbox
+
+
+## Build the item-details tooltip. The caller (_build_ui) anchors it to
+## the bottom of _root_panel so showing/hiding the tooltip never reflows
+## the inventory grid above it.
+func _build_tooltip_panel() -> Control:
+	_tooltip_panel = AshfieldsUI.ornate_panel(14)
+	_tooltip_panel.custom_minimum_size = Vector2(0, 180)
+	_tooltip_panel.modulate.a = 0.0
+	_tooltip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var tip_vbox = VBoxContainer.new()
-	tip_vbox.add_theme_constant_override("separation", 6)
+	tip_vbox.add_theme_constant_override("separation", 8)
 	_tooltip_panel.add_child(tip_vbox)
 
 	_tooltip_name = Label.new()
-	_tooltip_name.add_theme_font_size_override("font_size", 22)
-	_tooltip_name.add_theme_color_override("font_color", Color(1, 0.9, 0.5))
+	_tooltip_name.add_theme_font_size_override("font_size", 36)
+	_tooltip_name.add_theme_color_override("font_color", AshfieldsUI.GOLD)
+	_tooltip_name.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_tooltip_name.add_theme_constant_override("outline_size", 2)
 	tip_vbox.add_child(_tooltip_name)
 
+	var under := ColorRect.new()
+	under.color = AshfieldsUI.GOLD_DARK
+	under.custom_minimum_size = Vector2(0, 1)
+	under.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tip_vbox.add_child(under)
+
 	_tooltip_desc = Label.new()
-	_tooltip_desc.add_theme_font_size_override("font_size", 17)
-	_tooltip_desc.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	_tooltip_desc.add_theme_font_size_override("font_size", 30)
+	_tooltip_desc.add_theme_color_override("font_color", AshfieldsUI.TEXT_MUTED)
 	_tooltip_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
 	tip_vbox.add_child(_tooltip_desc)
 
 	_tooltip_stats = Label.new()
-	_tooltip_stats.add_theme_font_size_override("font_size", 17)
-	_tooltip_stats.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
+	_tooltip_stats.add_theme_font_size_override("font_size", 30)
+	_tooltip_stats.add_theme_color_override("font_color", Color(0.6, 0.95, 0.55))
 	tip_vbox.add_child(_tooltip_stats)
 
 	_tooltip_req = Label.new()
-	_tooltip_req.add_theme_font_size_override("font_size", 15)
-	_tooltip_req.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	_tooltip_req.add_theme_font_size_override("font_size", 26)
+	_tooltip_req.add_theme_color_override("font_color", AshfieldsUI.BLOOD.lightened(0.25))
 	tip_vbox.add_child(_tooltip_req)
 
-	return vbox
+	return _tooltip_panel
 
 func _build_spells_tab() -> VBoxContainer:
 	var vbox = VBoxContainer.new()
@@ -410,7 +501,7 @@ func _build_spells_tab() -> VBoxContainer:
 	# Spell equip slots — horizontal row at top
 	var slots_label = Label.new()
 	slots_label.text = "EQUIPPED SPELLS  (click to unequip)"
-	slots_label.add_theme_font_size_override("font_size", 18)
+	slots_label.add_theme_font_size_override("font_size", 32)
 	slots_label.add_theme_color_override("font_color", Color(0.6, 0.7, 1.0))
 	slots_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(slots_label)
@@ -446,7 +537,7 @@ func _build_spells_tab() -> VBoxContainer:
 
 	var learned_label = Label.new()
 	learned_label.text = "LEARNED SPELLS  (drag to equip)"
-	learned_label.add_theme_font_size_override("font_size", 16)
+	learned_label.add_theme_font_size_override("font_size", 28)
 	learned_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.7))
 	learned_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(learned_label)
@@ -494,7 +585,7 @@ func _refresh_spells_tab() -> void:
 
 			var name_lbl = Label.new()
 			name_lbl.text = spell.spell_name.substr(0, 8) if spell.spell_name.length() > 8 else spell.spell_name
-			name_lbl.add_theme_font_size_override("font_size", 12)
+			name_lbl.add_theme_font_size_override("font_size", 24)
 			name_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 1.0))
 			name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			name_lbl.position = Vector2(0, SLOT_SIZE - 20)
@@ -504,7 +595,7 @@ func _refresh_spells_tab() -> void:
 
 			var mp_lbl = Label.new()
 			mp_lbl.text = "MP:%.0f" % spell.mp_cost
-			mp_lbl.add_theme_font_size_override("font_size", 10)
+			mp_lbl.add_theme_font_size_override("font_size", 20)
 			mp_lbl.add_theme_color_override("font_color", Color(0.4, 0.6, 1.0))
 			mp_lbl.position = Vector2(SLOT_SIZE - 42, 2)
 			mp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -512,7 +603,7 @@ func _refresh_spells_tab() -> void:
 
 		var key_lbl = Label.new()
 		key_lbl.text = SPELL_SLOT_KEYS[i]
-		key_lbl.add_theme_font_size_override("font_size", 14)
+		key_lbl.add_theme_font_size_override("font_size", 26)
 		key_lbl.add_theme_color_override("font_color", Color(0.4, 0.4, 0.6) if not spell else Color(0.7, 0.7, 0.9))
 		key_lbl.position = Vector2(4, 2)
 		key_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -561,7 +652,7 @@ func _refresh_spells_tab() -> void:
 
 		var name_lbl = Label.new()
 		name_lbl.text = spell.spell_name.substr(0, 8) if spell.spell_name.length() > 8 else spell.spell_name
-		name_lbl.add_theme_font_size_override("font_size", 12)
+		name_lbl.add_theme_font_size_override("font_size", 24)
 		var name_color = Color(0.5, 1.0, 0.5) if equipped_slot >= 0 else Color(0.75, 0.75, 0.9)
 		name_lbl.add_theme_color_override("font_color", name_color)
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -573,7 +664,7 @@ func _refresh_spells_tab() -> void:
 		if equipped_slot >= 0:
 			var eq_lbl = Label.new()
 			eq_lbl.text = "[%s]" % SPELL_SLOT_KEYS[equipped_slot]
-			eq_lbl.add_theme_font_size_override("font_size", 11)
+			eq_lbl.add_theme_font_size_override("font_size", 22)
 			eq_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
 			eq_lbl.position = Vector2(2, 0)
 			eq_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -581,7 +672,7 @@ func _refresh_spells_tab() -> void:
 
 		var mp_lbl = Label.new()
 		mp_lbl.text = "MP:%.0f" % spell.mp_cost
-		mp_lbl.add_theme_font_size_override("font_size", 10)
+		mp_lbl.add_theme_font_size_override("font_size", 20)
 		mp_lbl.add_theme_color_override("font_color", Color(0.4, 0.6, 1.0))
 		mp_lbl.position = Vector2(SLOT_SIZE - 42, 2)
 		mp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -671,7 +762,7 @@ func _build_quickslot_panel() -> VBoxContainer:
 
 	var title = Label.new()
 	title.text = "ITEMS"
-	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_font_size_override("font_size", 28)
 	title.add_theme_color_override("font_color", Color(0.7, 0.6, 0.4))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
@@ -715,7 +806,7 @@ func _refresh_quickslots() -> void:
 		if item_name == "":
 			var num_lbl = Label.new()
 			num_lbl.text = str(i + 1)
-			num_lbl.add_theme_font_size_override("font_size", 12)
+			num_lbl.add_theme_font_size_override("font_size", 24)
 			num_lbl.add_theme_color_override("font_color", Color(0.3, 0.3, 0.35))
 			num_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			num_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -734,7 +825,7 @@ func _refresh_quickslots() -> void:
 		if not item:
 			var ghost = Label.new()
 			ghost.text = item_name.substr(0, 5)
-			ghost.add_theme_font_size_override("font_size", 9)
+			ghost.add_theme_font_size_override("font_size", 20)
 			ghost.add_theme_color_override("font_color", Color(0.35, 0.3, 0.3))
 			ghost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			ghost.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -756,7 +847,7 @@ func _refresh_quickslots() -> void:
 
 		var name_lbl = Label.new()
 		name_lbl.text = item_name.substr(0, 6) if item_name.length() > 6 else item_name
-		name_lbl.add_theme_font_size_override("font_size", 9)
+		name_lbl.add_theme_font_size_override("font_size", 20)
 		name_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_lbl.position = Vector2(0, QS_SIZE - 14)
@@ -767,7 +858,7 @@ func _refresh_quickslots() -> void:
 		if count > 1:
 			var cnt_lbl = Label.new()
 			cnt_lbl.text = "x%d" % count
-			cnt_lbl.add_theme_font_size_override("font_size", 10)
+			cnt_lbl.add_theme_font_size_override("font_size", 20)
 			cnt_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 0.6))
 			cnt_lbl.position = Vector2(QS_SIZE - 22, 0)
 			cnt_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -787,7 +878,7 @@ func _build_stats_panel() -> VBoxContainer:
 
 	var title = Label.new()
 	title.text = "STATS"
-	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_font_size_override("font_size", 36)
 	title.add_theme_color_override("font_color", Color(0.7, 0.8, 0.7))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
@@ -797,9 +888,17 @@ func _build_stats_panel() -> VBoxContainer:
 	vbox.add_child(sep)
 
 	_stats_label = Label.new()
-	_stats_label.add_theme_font_size_override("font_size", 18)
+	_stats_label.add_theme_font_size_override("font_size", 26)
 	_stats_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 	vbox.add_child(_stats_label)
+
+	# Combat-stats toggle — hides 12+ lines of detail by default
+	_combat_stats_toggle = Button.new()
+	_combat_stats_toggle.text = "Show Combat Stats"
+	_combat_stats_toggle.add_theme_font_size_override("font_size", 22)
+	_combat_stats_toggle.focus_mode = Control.FOCUS_NONE
+	_combat_stats_toggle.pressed.connect(_on_toggle_combat_stats)
+	vbox.add_child(_combat_stats_toggle)
 
 	# Stat allocation section
 	var alloc_sep = HSeparator.new()
@@ -807,7 +906,7 @@ func _build_stats_panel() -> VBoxContainer:
 	vbox.add_child(alloc_sep)
 
 	_stat_points_label = Label.new()
-	_stat_points_label.add_theme_font_size_override("font_size", 17)
+	_stat_points_label.add_theme_font_size_override("font_size", 30)
 	_stat_points_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
 	_stat_points_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(_stat_points_label)
@@ -873,6 +972,35 @@ func _build_display_list() -> void:
 		else:
 			var is_eq = equipment_manager.is_equipped(item)
 			_display_list.append({"item": item, "count": 1, "inv_index": i, "is_equipped": is_eq})
+	# Append spells as inline tiles so the inventory grid holds everything.
+	# Spells are tagged is_spell=true and cannot be dragged, dropped, or sold.
+	var sb := _get_spell_book()
+	if sb:
+		for spell in sb.learned_spells:
+			if spell == null:
+				continue
+			var slot_idx := -1
+			for s_i in range(sb.spell_slots.size()):
+				if sb.spell_slots[s_i] == spell:
+					slot_idx = s_i
+					break
+			_display_list.append({
+				"item": null,
+				"is_spell": true,
+				"spell": spell,
+				"spell_slot": slot_idx,
+				"count": 1,
+				"inv_index": -1,
+				"is_equipped": slot_idx >= 0,
+			})
+
+
+## Returns the player's SpellBook node or null when none exists.
+func _get_spell_book() -> SpellBook:
+	var player = get_tree().get_first_node_in_group("player")
+	if player == null:
+		return null
+	return player.get_node_or_null("SpellBook") as SpellBook
 
 # ---- Refresh ----
 func _refresh() -> void:
@@ -917,6 +1045,56 @@ func _refresh_inv_grid() -> void:
 
 		if i < _display_list.size():
 			var entry = _display_list[i]
+			var is_spell_entry := bool(entry.get("is_spell", false))
+
+			# Spell tile: purple frame, sigil-style icon, treated as locked content
+			# (no drag, no drop, no salvage). Click toggles equip into a slot.
+			if is_spell_entry:
+				var spell := entry.get("spell") as SpellDefinition
+				if spell == null:
+					continue
+				var equipped_spell := bool(entry.get("is_equipped", false))
+				if sty:
+					if equipped_spell:
+						sty.bg_color = Color(0.094, 0.067, 0.137, 0.95)
+						sty.border_color = AshfieldsUI.ARCANE.lightened(0.3)
+						sty.set_border_width_all(2)
+					else:
+						sty.bg_color = Color(0.075, 0.067, 0.090, 0.85)
+						sty.border_color = AshfieldsUI.ARCANE.darkened(0.2)
+						sty.set_border_width_all(1)
+				# Sigil placeholder — diamond in arcane purple. Future: per-spell icon.
+				var sigil := ColorRect.new()
+				sigil.color = AshfieldsUI.ARCANE
+				sigil.position = Vector2(SLOT_SIZE * 0.5 - ICON_SIZE * 0.3, SLOT_SIZE * 0.2)
+				sigil.size = Vector2(ICON_SIZE * 0.6, ICON_SIZE * 0.6)
+				sigil.rotation = PI * 0.25
+				sigil.pivot_offset = sigil.size * 0.5
+				sigil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(sigil)
+				# Spell name
+				var name_lbl := Label.new()
+				name_lbl.text = spell.spell_name.substr(0, 8) if spell.spell_name.length() > 8 else spell.spell_name
+				name_lbl.add_theme_font_size_override("font_size", 24)
+				name_lbl.add_theme_color_override("font_color", AshfieldsUI.ARCANE.lightened(0.4))
+				name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				name_lbl.position = Vector2(0, SLOT_SIZE - 20)
+				name_lbl.size = Vector2(SLOT_SIZE, 18)
+				name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(name_lbl)
+				# Slot key marker if equipped
+				if equipped_spell:
+					var slot_lbl := Label.new()
+					var keys := ["F", "G", "H", "J", "K", "L"]
+					var sk := int(entry.get("spell_slot", -1))
+					slot_lbl.text = keys[sk] if sk >= 0 and sk < keys.size() else "E"
+					slot_lbl.add_theme_font_size_override("font_size", 22)
+					slot_lbl.add_theme_color_override("font_color", AshfieldsUI.ARCANE.lightened(0.5))
+					slot_lbl.position = Vector2(2, 0)
+					slot_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					btn.add_child(slot_lbl)
+				continue
+
 			var item = entry["item"] as EquipmentItem
 			var is_eq = entry["is_equipped"] as bool
 			var count = entry["count"] as int
@@ -940,7 +1118,7 @@ func _refresh_inv_grid() -> void:
 			# Item name below icon
 			var name_lbl = Label.new()
 			name_lbl.text = item.item_name.substr(0, 8) if item.item_name.length() > 8 else item.item_name
-			name_lbl.add_theme_font_size_override("font_size", 12)
+			name_lbl.add_theme_font_size_override("font_size", 24)
 			var name_color = Color(0.4, 1.0, 0.4) if is_eq else RARITY_COLORS[clampi(item.rarity, 0, 2)]
 			name_lbl.add_theme_color_override("font_color", name_color)
 			name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -953,7 +1131,7 @@ func _refresh_inv_grid() -> void:
 			if is_eq:
 				var eq_lbl = Label.new()
 				eq_lbl.text = "E"
-				eq_lbl.add_theme_font_size_override("font_size", 10)
+				eq_lbl.add_theme_font_size_override("font_size", 20)
 				eq_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
 				eq_lbl.position = Vector2(2, 0)
 				eq_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -967,7 +1145,7 @@ func _refresh_inv_grid() -> void:
 			if show_count > 0:
 				var count_lbl = Label.new()
 				count_lbl.text = "x" + str(show_count)
-				count_lbl.add_theme_font_size_override("font_size", 13)
+				count_lbl.add_theme_font_size_override("font_size", 24)
 				count_lbl.add_theme_color_override("font_color", Color(1, 1, 0.6))
 				count_lbl.position = Vector2(SLOT_SIZE - 36, 2)
 				count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -977,7 +1155,7 @@ func _refresh_inv_grid() -> void:
 			var tier = ChestUI._get_item_tier(item)
 			var tier_lbl = Label.new()
 			tier_lbl.text = "T" + str(tier)
-			tier_lbl.add_theme_font_size_override("font_size", 11)
+			tier_lbl.add_theme_font_size_override("font_size", 22)
 			tier_lbl.add_theme_color_override("font_color", TIER_COLORS[clampi(tier, 0, 5)])
 			tier_lbl.position = Vector2(SLOT_SIZE - 28, SLOT_SIZE - 34) if not is_eq else Vector2(14, 0)
 			tier_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -988,7 +1166,7 @@ func _refresh_inv_grid() -> void:
 			if rating > 0 and count <= 1:
 				var pow_lbl = Label.new()
 				pow_lbl.text = str(int(rating))
-				pow_lbl.add_theme_font_size_override("font_size", 10)
+				pow_lbl.add_theme_font_size_override("font_size", 20)
 				pow_lbl.add_theme_color_override("font_color", Color(0.9, 0.6, 0.3))
 				pow_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 				pow_lbl.position = Vector2(SLOT_SIZE - 28, 2)
@@ -1002,6 +1180,11 @@ func _refresh_inv_grid() -> void:
 				sty.border_color = Color(0.25, 0.25, 0.3)
 				sty.set_border_width_all(1)
 
+func _on_toggle_combat_stats() -> void:
+	_show_combat_stats = not _show_combat_stats
+	_combat_stats_toggle.text = "Hide Combat Stats" if _show_combat_stats else "Show Combat Stats"
+	_refresh_stats()
+
 func _refresh_stats() -> void:
 	if not equipment_manager:
 		return
@@ -1009,30 +1192,28 @@ func _refresh_stats() -> void:
 	var player = get_tree().get_first_node_in_group("player")
 	var level_system = equipment_manager.level_system
 
+	# Attributes are already shown by the allocation buttons below — don't duplicate.
 	if player:
 		lines.append("Health: %d / %d" % [player.hp, player.max_hp])
-	if level_system:
-		var alloc = level_system.allocated
-		lines.append("--- Attributes ---")
-		lines.append("Vitality: %d" % int(alloc.get("vitality", 0)))
-		lines.append("Power: %d" % int(alloc.get("power", 0)))
-		lines.append("Agility: %d" % int(alloc.get("agility", 0)))
-		lines.append("Spirit: %d" % int(alloc.get("spirit", 0)))
-		lines.append("Fortune: %d" % int(alloc.get("fortune", 0)))
-		lines.append("Bulk: %d" % int(alloc.get("bulk", 0)))
-	lines.append("--- Combat Stats ---")
-	lines.append("Attack: %d" % equipment_manager.get_damage())
-	lines.append("Move Speed: %d" % int(equipment_manager.get_move_speed()))
-	lines.append("Attack Interval: %.2f s" % equipment_manager.get_attack_speed())
-	lines.append("Projectile Speed: %d" % int(equipment_manager.get_bullet_speed()))
-	lines.append("Pierce: %d" % equipment_manager.get_pierce_count())
-	lines.append("Crit Damage: %.0f%%" % (equipment_manager.get_crit_damage() * 100))
-	lines.append("Armor: %.0f" % equipment_manager.get_armor())
-	lines.append("Dodge: %.0f%%" % equipment_manager.get_dodge_chance())
-	lines.append("Luck: %.0f" % equipment_manager.get_luck())
-	lines.append("XP Gain: %.0f%%" % (equipment_manager.get_xp_mult() * 100))
-	lines.append("Gold Gain: %.0f%%" % (equipment_manager.get_gold_mult() * 100))
-	lines.append("Pickup Radius: %.0f" % equipment_manager.get_pickup_radius())
+	if _show_combat_stats:
+		lines.append("--- Combat Stats ---")
+		var atk_line = "Attack: %d" % equipment_manager.get_damage()
+		if equipment_manager.has_method("get_proficiency_mult"):
+			var prof = equipment_manager.get_proficiency_mult()
+			if prof < 1.0:
+				atk_line += "  (proficiency %d%%)" % int(prof * 100)
+		lines.append(atk_line)
+		lines.append("Move Speed: %d" % int(equipment_manager.get_move_speed()))
+		lines.append("Attack Interval: %.2f s" % equipment_manager.get_attack_speed())
+		lines.append("Projectile Speed: %d" % int(equipment_manager.get_bullet_speed()))
+		lines.append("Pierce: %d" % equipment_manager.get_pierce_count())
+		lines.append("Crit Damage: %.0f%%" % (equipment_manager.get_crit_damage() * 100))
+		lines.append("Armor: %.0f" % equipment_manager.get_armor())
+		lines.append("Dodge: %.0f%%" % equipment_manager.get_dodge_chance())
+		lines.append("Luck: %.0f" % equipment_manager.get_luck())
+		lines.append("XP Gain: %.0f%%" % (equipment_manager.get_xp_mult() * 100))
+		lines.append("Gold Gain: %.0f%%" % (equipment_manager.get_gold_mult() * 100))
+		lines.append("Pickup Radius: %.0f" % equipment_manager.get_pickup_radius())
 	# Show active stat threshold passives
 	if level_system:
 		var passives = StatThresholds.get_all_passives(level_system.allocated)
@@ -1053,12 +1234,14 @@ func _refresh_stats() -> void:
 	_refresh_stat_allocation()
 
 const STAT_DESCRIPTIONS = {
-	"vitality": "+10 Max Health, +0.3 Health Regen, +1 Armor",
-	"power": "+1 Attack, +5 Projectile Speed, +10% Crit Damage",
-	"agility": "+3 Move Speed, +1 Dodge, +15 Stamina",
-	"spirit": "+10 Max MP, +0.5 MP Regen, +3% Cooldown Reduction",
-	"fortune": "+3 Luck, +10% XP Gain, +10% Gold Gain",
-	"bulk": "+5 Max Health, +2 Pickup Radius, +3 Tenacity",
+	"health": "+4 Max HP, +0.12 HP Regen",
+	"defense": "+0.7 Armor, +0.8 Tenacity",
+	"strength": "+0.4 Attack, +0.03 Crit Damage",
+	"speed": "-0.002 Attack Interval, +2 Bullet Speed",
+	"movement": "+1.2 Move Speed, +0.4 Dodge",
+	"intellect": "+2.5 Max MP, +0.12 MP Regen, +0.7% CDR",
+	"luck": "+0.8 Luck, +2.5% Gold, +2.5% XP",
+	"endurance": "+2.5 Max Stamina, +0.25 Stam Regen, +1 Pickup",
 }
 
 func _refresh_stat_allocation() -> void:
@@ -1081,7 +1264,7 @@ func _refresh_stat_allocation() -> void:
 	for child in _stat_alloc_container.get_children():
 		child.queue_free()
 
-	for cat in ["vitality", "power", "agility", "spirit", "fortune", "bulk"]:
+	for cat in LevelSystem.ALLOCATION_CATEGORIES.keys():
 		var pts = alloc.get(cat, 0)
 		var row = HBoxContainer.new()
 		row.add_theme_constant_override("separation", 4)
@@ -1089,7 +1272,7 @@ func _refresh_stat_allocation() -> void:
 
 		var name_lbl = Label.new()
 		name_lbl.text = "%s: %d" % [cat.capitalize(), pts]
-		name_lbl.add_theme_font_size_override("font_size", 16)
+		name_lbl.add_theme_font_size_override("font_size", 28)
 		name_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		name_lbl.tooltip_text = STAT_DESCRIPTIONS.get(cat, "")
@@ -1099,7 +1282,7 @@ func _refresh_stat_allocation() -> void:
 			var plus_btn = Button.new()
 			plus_btn.text = "+"
 			plus_btn.custom_minimum_size = Vector2(28, 28)
-			plus_btn.add_theme_font_size_override("font_size", 16)
+			plus_btn.add_theme_font_size_override("font_size", 28)
 			plus_btn.focus_mode = Control.FOCUS_NONE
 			plus_btn.pressed.connect(_on_allocate_stat.bind(cat))
 			row.add_child(plus_btn)
@@ -1148,6 +1331,10 @@ func _on_inv_slot_clicked(index: int) -> void:
 	if not equipment_manager or index >= _display_list.size():
 		return
 	var entry = _display_list[index]
+	# Spell tiles: clicking toggles equip-to-spell-slot instead of any item action.
+	if bool(entry.get("is_spell", false)):
+		_toggle_spell_equip(entry)
+		return
 	var item = entry["item"] as EquipmentItem
 	var inv_index = entry["inv_index"] as int
 	var sfx = get_node_or_null("/root/SFXManager")
@@ -1160,6 +1347,12 @@ func _on_inv_slot_clicked(index: int) -> void:
 
 func _start_drag(display_idx: int) -> void:
 	if display_idx < 0 or display_idx >= _display_list.size():
+		return
+	# Spells aren't draggable — they can't be dropped, sold, or salvaged.
+	if bool(_display_list[display_idx].get("is_spell", false)):
+		_drag_mouse_down = false
+		_drag_active = false
+		_drag_display_idx = -1
 		return
 	_drag_active = true
 	_drop_zone.visible = true
@@ -1260,11 +1453,12 @@ func _swap_display_items(from_display: int, to_display: int) -> void:
 		equipment_manager.inventory.append(item)
 	equipment_manager.inventory_changed.emit()
 
-func _get_hud() -> GameHUD:
+func _get_hud() -> CanvasLayer:
+	# Accepts GameHUD or SigilHUD — both live in the "game_hud" group.
 	var hud = get_tree().get_first_node_in_group("game_hud")
 	if not hud:
 		for node in get_tree().root.get_children():
-			if node is GameHUD:
+			if node is GameHUD or node is SigilHUD:
 				return node
 	return hud
 
@@ -1272,11 +1466,59 @@ func _on_inv_hovered(index: int) -> void:
 	if not equipment_manager or index >= _display_list.size():
 		_hide_tooltip()
 		return
+	var entry = _display_list[index]
+	if bool(entry.get("is_spell", false)):
+		_show_spell_tooltip(entry.get("spell") as SpellDefinition, bool(entry.get("is_equipped", false)))
+		return
 	_show_item_tooltip(_display_list[index]["item"] as EquipmentItem)
 
+
+## Toggle a spell between unequipped and equipped (in the first empty slot).
+## If already equipped, unequip it. If all 6 slots are full, swap into slot 0.
+func _toggle_spell_equip(entry: Dictionary) -> void:
+	var sb := _get_spell_book()
+	var spell := entry.get("spell") as SpellDefinition
+	if sb == null or spell == null:
+		return
+	var current_slot := int(entry.get("spell_slot", -1))
+	if current_slot >= 0:
+		sb.unequip_spell(current_slot)
+	else:
+		var target_slot := -1
+		for i in range(sb.spell_slots.size()):
+			if sb.spell_slots[i] == null:
+				target_slot = i
+				break
+		if target_slot < 0:
+			target_slot = 0  # all full → overwrite first slot
+		sb.equip_spell(spell, target_slot)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("click", -5.0)
+	_refresh()
+
+
+func _show_spell_tooltip(spell: SpellDefinition, equipped: bool) -> void:
+	if spell == null:
+		return
+	_tooltip_panel.modulate.a = 1.0
+	var status := " [EQUIPPED]" if equipped else ""
+	_tooltip_name.text = spell.spell_name + status
+	_tooltip_name.add_theme_color_override("font_color", AshfieldsUI.ARCANE.lightened(0.4))
+	_tooltip_desc.text = "Spell | MP %d | Cooldown %.1fs" % [int(spell.mp_cost), spell.cooldown]
+	if spell.description != "":
+		_tooltip_desc.text += "\n" + spell.description
+	var lines: Array[String] = []
+	lines.append("Magnitude: %d" % spell.magnitude)
+	if spell.duration > 0.0:
+		lines.append("Duration: %.1fs" % spell.duration)
+	lines.append("Click to %s" % ("unequip" if equipped else "equip"))
+	_tooltip_stats.text = "\n".join(lines)
+	_tooltip_req.text = ""
+
 func _show_item_tooltip(item: EquipmentItem) -> void:
-	var saved_scroll = _inv_scroll.scroll_vertical if _inv_scroll else 0
-	_tooltip_panel.visible = true
+	# Tooltip stays in the layout permanently — just fade alpha. No scroll jump.
+	_tooltip_panel.modulate.a = 1.0
 	var tier = ChestUI._get_item_tier(item)
 	var rating = ChestUI._get_item_rating(item)
 	var rarity_name = RARITY_NAMES[clampi(item.rarity, 0, 2)]
@@ -1375,16 +1617,12 @@ func _show_item_tooltip(item: EquipmentItem) -> void:
 		else:
 			_tooltip_req.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
 	_tooltip_req.text = req_text
-	if _inv_scroll:
-		_inv_scroll.scroll_vertical = saved_scroll
 
 func _hide_tooltip() -> void:
-	if _inv_scroll:
-		var saved_scroll = _inv_scroll.scroll_vertical
-		_tooltip_panel.visible = false
-		_inv_scroll.scroll_vertical = saved_scroll
-	else:
-		_tooltip_panel.visible = false
+	# Fade only — keep the tooltip in the layout so the scroll container above
+	# never reflows on hover-out.
+	if _tooltip_panel:
+		_tooltip_panel.modulate.a = 0.0
 
 func _on_equip_failed(_item: EquipmentItem) -> void:
 	var sfx = get_node_or_null("/root/SFXManager")
@@ -1412,10 +1650,14 @@ func toggle() -> void:
 	_root_panel.visible = opening
 	_overlay.visible = opening
 	_close_btn.visible = opening
+	_menu_btn.visible = opening
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("paper" if opening else "close", -4.0, 0.0)
 	if opening:
+		# Plain-inventory mode — hide SPELLS / SOCKET / SALVAGE tabs (NPC-only).
+		_apply_tab_visibility("items")
+		_switch_tab("items")
 		_refresh()
 	else:
 		_cancel_drag()
@@ -1428,9 +1670,10 @@ func is_open() -> bool:
 	return _root_panel.visible
 
 func _input(event: InputEvent) -> void:
-	# B/I/Tab open inventory from anywhere
+	# B is the sole inventory bind. Tab was moved to lock_on, I was dropped
+	# because other UIs use the "inventory" action for their own close behavior.
 	if event is InputEventKey and event.pressed:
-		if event.keycode == KEY_I or event.keycode == KEY_TAB or event.keycode == KEY_B:
+		if event.keycode == KEY_B:
 			toggle()
 			get_viewport().set_input_as_handled()
 			return
@@ -1505,62 +1748,67 @@ func _cancel_drag() -> void:
 # ===== SOCKET TAB =====
 
 func _build_socket_tab() -> VBoxContainer:
+	# Ashfields-themed socketing layout: header / item strip / detail focus / gem bag.
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", 14)
 
-	var title = Label.new()
-	title.text = "GEM SOCKETING"
-	title.add_theme_font_size_override("font_size", 26)
-	title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
+	# === Header: pixel-font title + gold underline ===
+	var title_block = AshfieldsUI.section_title("GEM SOCKETING", 30)
+	vbox.add_child(title_block)
 
-	var sep = HSeparator.new()
-	sep.add_theme_constant_override("separation", 4)
-	vbox.add_child(sep)
-
-	# Top: item selection scroll
-	var item_label = Label.new()
-	item_label.text = "SELECT ITEM WITH SOCKETS"
-	item_label.add_theme_font_size_override("font_size", 16)
-	item_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
-	item_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(item_label)
+	# === Section 1: item picker ===
+	var pick_header = Label.new()
+	pick_header.text = "1. SELECT A SOCKETED ITEM"
+	pick_header.add_theme_font_size_override("font_size", 26)
+	pick_header.add_theme_color_override("font_color", AshfieldsUI.GOLD_DARK)
+	pick_header.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	pick_header.add_theme_constant_override("outline_size", 2)
+	vbox.add_child(pick_header)
 
 	var item_scroll = ScrollContainer.new()
-	item_scroll.custom_minimum_size = Vector2(0, SLOT_SIZE + 16)
+	item_scroll.custom_minimum_size = Vector2(0, SLOT_SIZE + 24)
 	item_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vbox.add_child(item_scroll)
 
 	_socket_item_grid = HBoxContainer.new()
-	_socket_item_grid.add_theme_constant_override("separation", 4)
+	_socket_item_grid.add_theme_constant_override("separation", 8)
 	item_scroll.add_child(_socket_item_grid)
 
-	var sep2 = HSeparator.new()
-	sep2.add_theme_constant_override("separation", 4)
-	vbox.add_child(sep2)
+	vbox.add_child(AshfieldsUI.divider())
 
-	# Middle: socket detail panel
+	# === Section 2: selected-item detail (the focal point) ===
+	var detail_header = Label.new()
+	detail_header.text = "2. PLACE A GEM IN A SOCKET"
+	detail_header.add_theme_font_size_override("font_size", 26)
+	detail_header.add_theme_color_override("font_color", AshfieldsUI.GOLD_DARK)
+	detail_header.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	detail_header.add_theme_constant_override("outline_size", 2)
+	vbox.add_child(detail_header)
+
+	var detail_frame = AshfieldsUI.ornate_panel(14)
+	detail_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail_frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(detail_frame)
+
 	_socket_detail_panel = VBoxContainer.new()
-	_socket_detail_panel.add_theme_constant_override("separation", 6)
+	_socket_detail_panel.add_theme_constant_override("separation", 8)
 	_socket_detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(_socket_detail_panel)
+	detail_frame.add_child(_socket_detail_panel)
 
-	var sep3 = HSeparator.new()
-	sep3.add_theme_constant_override("separation", 4)
-	vbox.add_child(sep3)
+	vbox.add_child(AshfieldsUI.divider())
 
-	# Bottom: gem bag grid
-	var gem_label = Label.new()
-	gem_label.text = "AVAILABLE GEMS"
-	gem_label.add_theme_font_size_override("font_size", 16)
-	gem_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
-	gem_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(gem_label)
+	# === Section 3: gem bag ===
+	var gem_header = Label.new()
+	gem_header.text = "3. YOUR GEMS"
+	gem_header.add_theme_font_size_override("font_size", 26)
+	gem_header.add_theme_color_override("font_color", AshfieldsUI.GOLD_DARK)
+	gem_header.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	gem_header.add_theme_constant_override("outline_size", 2)
+	vbox.add_child(gem_header)
 
 	var gem_scroll = ScrollContainer.new()
 	gem_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	gem_scroll.custom_minimum_size = Vector2(0, SLOT_SIZE + 16)
+	gem_scroll.custom_minimum_size = Vector2(0, SLOT_SIZE + 24)
 	vbox.add_child(gem_scroll)
 
 	var gem_center = CenterContainer.new()
@@ -1569,8 +1817,8 @@ func _build_socket_tab() -> VBoxContainer:
 
 	_socket_gem_grid = GridContainer.new()
 	_socket_gem_grid.columns = INV_COLS
-	_socket_gem_grid.add_theme_constant_override("h_separation", 4)
-	_socket_gem_grid.add_theme_constant_override("v_separation", 4)
+	_socket_gem_grid.add_theme_constant_override("h_separation", 6)
+	_socket_gem_grid.add_theme_constant_override("v_separation", 6)
 	gem_center.add_child(_socket_gem_grid)
 
 	return vbox
@@ -1613,7 +1861,7 @@ func _refresh_socket_tab() -> void:
 
 		var name_lbl = Label.new()
 		name_lbl.text = item.item_name.substr(0, 8) if item.item_name.length() > 8 else item.item_name
-		name_lbl.add_theme_font_size_override("font_size", 12)
+		name_lbl.add_theme_font_size_override("font_size", 24)
 		name_lbl.add_theme_color_override("font_color", RARITY_COLORS[clampi(item.rarity, 0, 2)])
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_lbl.position = Vector2(0, SLOT_SIZE - 20)
@@ -1624,7 +1872,7 @@ func _refresh_socket_tab() -> void:
 		# Socket count badge
 		var sc_lbl = Label.new()
 		sc_lbl.text = "%d/%d" % [item.get_socketed_gem_count(), item.socket_count]
-		sc_lbl.add_theme_font_size_override("font_size", 11)
+		sc_lbl.add_theme_font_size_override("font_size", 22)
 		sc_lbl.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
 		sc_lbl.position = Vector2(SLOT_SIZE - 30, 2)
 		sc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1636,7 +1884,7 @@ func _refresh_socket_tab() -> void:
 	if socketed_items.is_empty():
 		var empty_lbl = Label.new()
 		empty_lbl.text = "No items with sockets in inventory"
-		empty_lbl.add_theme_font_size_override("font_size", 16)
+		empty_lbl.add_theme_font_size_override("font_size", 28)
 		empty_lbl.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
 		_socket_item_grid.add_child(empty_lbl)
 
@@ -1661,7 +1909,7 @@ func _refresh_socket_detail() -> void:
 	if not _socket_selected_item:
 		var hint = Label.new()
 		hint.text = "Select an item above to manage its sockets"
-		hint.add_theme_font_size_override("font_size", 16)
+		hint.add_theme_font_size_override("font_size", 28)
 		hint.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_socket_detail_panel.add_child(hint)
@@ -1670,7 +1918,7 @@ func _refresh_socket_detail() -> void:
 	var item = _socket_selected_item
 	var header = Label.new()
 	header.text = item.item_name + " - Sockets"
-	header.add_theme_font_size_override("font_size", 20)
+	header.add_theme_font_size_override("font_size", 34)
 	header.add_theme_color_override("font_color", RARITY_COLORS[clampi(item.rarity, 0, 2)])
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_socket_detail_panel.add_child(header)
@@ -1685,7 +1933,7 @@ func _refresh_socket_detail() -> void:
 		var gem_path = item.socketed_gem_paths[si] if si < item.socketed_gem_paths.size() else ""
 
 		var slot_label = Label.new()
-		slot_label.add_theme_font_size_override("font_size", 16)
+		slot_label.add_theme_font_size_override("font_size", 28)
 		slot_label.custom_minimum_size = Vector2(140, 0)
 
 		if gem_path != "":
@@ -1708,7 +1956,7 @@ func _refresh_socket_detail() -> void:
 			unsocket_btn.text = "Unsocket"
 			unsocket_btn.focus_mode = Control.FOCUS_NONE
 			unsocket_btn.custom_minimum_size = Vector2(90, 30)
-			unsocket_btn.add_theme_font_size_override("font_size", 14)
+			unsocket_btn.add_theme_font_size_override("font_size", 26)
 			var us_sty = StyleBoxFlat.new()
 			us_sty.bg_color = Color(0.25, 0.1, 0.1)
 			us_sty.border_color = Color(0.6, 0.25, 0.25)
@@ -1728,7 +1976,7 @@ func _refresh_socket_detail() -> void:
 			select_btn.text = "Select" if not is_active else "..."
 			select_btn.focus_mode = Control.FOCUS_NONE
 			select_btn.custom_minimum_size = Vector2(70, 30)
-			select_btn.add_theme_font_size_override("font_size", 14)
+			select_btn.add_theme_font_size_override("font_size", 26)
 			var sel_sty = StyleBoxFlat.new()
 			sel_sty.bg_color = Color(0.1, 0.15, 0.25) if not is_active else Color(0.15, 0.2, 0.35)
 			sel_sty.border_color = Color(0.3, 0.4, 0.6) if not is_active else Color(0.5, 0.7, 1.0)
@@ -1767,7 +2015,7 @@ func _refresh_gem_bag() -> void:
 	if bag.is_empty():
 		var empty = Label.new()
 		empty.text = "No gems in bag"
-		empty.add_theme_font_size_override("font_size", 16)
+		empty.add_theme_font_size_override("font_size", 28)
 		empty.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
 		_socket_gem_grid.add_child(empty)
 		return
@@ -1802,7 +2050,7 @@ func _refresh_gem_bag() -> void:
 
 		var name_lbl = Label.new()
 		name_lbl.text = gem.gem_name.substr(0, 10) if gem.gem_name.length() > 10 else gem.gem_name
-		name_lbl.add_theme_font_size_override("font_size", 11)
+		name_lbl.add_theme_font_size_override("font_size", 22)
 		name_lbl.add_theme_color_override("font_color", gem.color_hint)
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_lbl.position = Vector2(0, SLOT_SIZE - 20)
@@ -1819,7 +2067,7 @@ func _refresh_gem_bag() -> void:
 		if stat_text != "":
 			var stat_lbl = Label.new()
 			stat_lbl.text = stat_text
-			stat_lbl.add_theme_font_size_override("font_size", 10)
+			stat_lbl.add_theme_font_size_override("font_size", 20)
 			stat_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
 			stat_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			stat_lbl.position = Vector2(0, SLOT_SIZE - 34)
@@ -1856,12 +2104,12 @@ func _build_salvage_tab() -> VBoxContainer:
 
 	var title = Label.new()
 	title.text = "SALVAGE"
-	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_font_size_override("font_size", 40)
 	title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
 	title_row.add_child(title)
 
 	_salvage_points_label = Label.new()
-	_salvage_points_label.add_theme_font_size_override("font_size", 18)
+	_salvage_points_label.add_theme_font_size_override("font_size", 32)
 	_salvage_points_label.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
 	title_row.add_child(_salvage_points_label)
 
@@ -1884,7 +2132,7 @@ func _build_salvage_tab() -> VBoxContainer:
 
 	var grid_label = Label.new()
 	grid_label.text = "ITEMS (click to select)"
-	grid_label.add_theme_font_size_override("font_size", 16)
+	grid_label.add_theme_font_size_override("font_size", 28)
 	grid_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
 	grid_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	left_vbox.add_child(grid_label)
@@ -1917,7 +2165,7 @@ func _build_salvage_tab() -> VBoxContainer:
 
 	var bp_label = Label.new()
 	bp_label.text = "BLUEPRINT PROGRESS"
-	bp_label.add_theme_font_size_override("font_size", 16)
+	bp_label.add_theme_font_size_override("font_size", 28)
 	bp_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
 	bp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(bp_label)
@@ -1974,7 +2222,7 @@ func _refresh_salvage_tab() -> void:
 
 		var name_lbl = Label.new()
 		name_lbl.text = item.item_name.substr(0, 8) if item.item_name.length() > 8 else item.item_name
-		name_lbl.add_theme_font_size_override("font_size", 12)
+		name_lbl.add_theme_font_size_override("font_size", 24)
 		name_lbl.add_theme_color_override("font_color", RARITY_COLORS[clampi(item.rarity, 0, 2)])
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_lbl.position = Vector2(0, SLOT_SIZE - 20)
@@ -1988,7 +2236,7 @@ func _refresh_salvage_tab() -> void:
 	if salvageable.is_empty():
 		var empty = Label.new()
 		empty.text = "No items to salvage"
-		empty.add_theme_font_size_override("font_size", 16)
+		empty.add_theme_font_size_override("font_size", 28)
 		empty.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
 		_salvage_item_grid.add_child(empty)
 
@@ -2012,7 +2260,7 @@ func _refresh_salvage_preview() -> void:
 	if not _salvage_selected_item:
 		var hint = Label.new()
 		hint.text = "Select an item to see\nsalvage preview"
-		hint.add_theme_font_size_override("font_size", 16)
+		hint.add_theme_font_size_override("font_size", 28)
 		hint.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_salvage_preview.add_child(hint)
@@ -2023,7 +2271,7 @@ func _refresh_salvage_preview() -> void:
 	# Item header
 	var name_lbl = Label.new()
 	name_lbl.text = item.item_name
-	name_lbl.add_theme_font_size_override("font_size", 20)
+	name_lbl.add_theme_font_size_override("font_size", 34)
 	name_lbl.add_theme_color_override("font_color", RARITY_COLORS[clampi(item.rarity, 0, 2)])
 	_salvage_preview.add_child(name_lbl)
 
@@ -2038,7 +2286,7 @@ func _refresh_salvage_preview() -> void:
 	if stat_lines.size() > 0:
 		var stats_lbl = Label.new()
 		stats_lbl.text = "\n".join(stat_lines)
-		stats_lbl.add_theme_font_size_override("font_size", 14)
+		stats_lbl.add_theme_font_size_override("font_size", 26)
 		stats_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
 		_salvage_preview.add_child(stats_lbl)
 
@@ -2051,20 +2299,20 @@ func _refresh_salvage_preview() -> void:
 
 	var yield_title = Label.new()
 	yield_title.text = "Salvage yields:"
-	yield_title.add_theme_font_size_override("font_size", 16)
+	yield_title.add_theme_font_size_override("font_size", 28)
 	yield_title.add_theme_color_override("font_color", Color(0.8, 0.7, 0.4))
 	_salvage_preview.add_child(yield_title)
 
 	var gold_lbl = Label.new()
 	gold_lbl.text = "Gold: %d" % yields["gold"]
-	gold_lbl.add_theme_font_size_override("font_size", 16)
+	gold_lbl.add_theme_font_size_override("font_size", 28)
 	gold_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
 	_salvage_preview.add_child(gold_lbl)
 
 	if yields["salvage_points"] > 0:
 		var sp_lbl = Label.new()
 		sp_lbl.text = "Salvage Points: +%d" % yields["salvage_points"]
-		sp_lbl.add_theme_font_size_override("font_size", 16)
+		sp_lbl.add_theme_font_size_override("font_size", 28)
 		sp_lbl.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
 		_salvage_preview.add_child(sp_lbl)
 
@@ -2073,7 +2321,7 @@ func _refresh_salvage_preview() -> void:
 		if mat:
 			var mat_lbl = Label.new()
 			mat_lbl.text = "  + %s" % mat.item_name
-			mat_lbl.add_theme_font_size_override("font_size", 14)
+			mat_lbl.add_theme_font_size_override("font_size", 26)
 			mat_lbl.add_theme_color_override("font_color", Color(0.7, 0.85, 0.7))
 			_salvage_preview.add_child(mat_lbl)
 
@@ -2087,7 +2335,7 @@ func _refresh_salvage_preview() -> void:
 		var salvage_needed = bp_def.required_salvage_points if bp_def else 0
 		var salvage_have = gm.get_salvage_points() if gm else 0
 		bp_lbl.text = "Blueprint: %s (%d/%d fragments, %d/%d SP)" % [bp_name, progress, needed, salvage_have, salvage_needed]
-		bp_lbl.add_theme_font_size_override("font_size", 14)
+		bp_lbl.add_theme_font_size_override("font_size", 26)
 		bp_lbl.add_theme_color_override("font_color", Color(0.6, 0.7, 1.0))
 		_salvage_preview.add_child(bp_lbl)
 
@@ -2101,7 +2349,7 @@ func _refresh_salvage_preview() -> void:
 	salvage_btn.text = "SALVAGE"
 	salvage_btn.focus_mode = Control.FOCUS_NONE
 	salvage_btn.custom_minimum_size = Vector2(200, 44)
-	salvage_btn.add_theme_font_size_override("font_size", 20)
+	salvage_btn.add_theme_font_size_override("font_size", 34)
 	salvage_btn.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
 	var sal_sty = StyleBoxFlat.new()
 	sal_sty.bg_color = Color(0.3, 0.08, 0.08)
@@ -2159,7 +2407,7 @@ func _refresh_blueprint_list() -> void:
 	if bp_progress.is_empty() and discovered.is_empty():
 		var empty = Label.new()
 		empty.text = "No blueprints discovered yet"
-		empty.add_theme_font_size_override("font_size", 14)
+		empty.add_theme_font_size_override("font_size", 26)
 		empty.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
 		_salvage_bp_list.add_child(empty)
 		return
@@ -2181,7 +2429,7 @@ func _refresh_blueprint_list() -> void:
 
 		var name_lbl = Label.new()
 		name_lbl.text = bp_name
-		name_lbl.add_theme_font_size_override("font_size", 14)
+		name_lbl.add_theme_font_size_override("font_size", 26)
 		name_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3) if complete else Color(0.7, 0.7, 0.8))
 		name_lbl.custom_minimum_size = Vector2(180, 0)
 		row.add_child(name_lbl)
@@ -2203,7 +2451,7 @@ func _refresh_blueprint_list() -> void:
 
 		var detail_lbl = Label.new()
 		detail_lbl.text = "%d/%d fragments | %d/%d SP" % [progress, needed, salvage_have, salvage_needed]
-		detail_lbl.add_theme_font_size_override("font_size", 12)
+		detail_lbl.add_theme_font_size_override("font_size", 24)
 		detail_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6) if not complete else Color(0.4, 0.8, 0.4))
 		row.add_child(detail_lbl)
 
@@ -2217,14 +2465,14 @@ func _refresh_blueprint_list() -> void:
 
 		var name_lbl = Label.new()
 		name_lbl.text = bp_def.blueprint_name if bp_def else String(bp_id)
-		name_lbl.add_theme_font_size_override("font_size", 14)
+		name_lbl.add_theme_font_size_override("font_size", 26)
 		name_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
 		name_lbl.custom_minimum_size = Vector2(180, 0)
 		row.add_child(name_lbl)
 
 		var unlocked_lbl = Label.new()
 		unlocked_lbl.text = "Unlocked"
-		unlocked_lbl.add_theme_font_size_override("font_size", 12)
+		unlocked_lbl.add_theme_font_size_override("font_size", 24)
 		unlocked_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
 		row.add_child(unlocked_lbl)
 

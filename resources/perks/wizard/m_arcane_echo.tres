@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "m_arcane_echo"
+perk_name = "Arcane Echo"
+description = "Spells have a 20% chance to repeat at no cost."
+class_required = "wizard"
+tier = 2
+prerequisites = ["m_quick_cast"]
+stat_requirements = {
+"intellect": 8
+}
+stat_bonuses = {}
+special_effect = "arcane_echo"
+is_percent = false

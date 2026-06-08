@@ -21,8 +21,7 @@ func show_death(run_state: RunState) -> void:
 
 func _build_ui(run_state: RunState) -> void:
 	# Clear any previous UI
-	for c in get_children():
-		c.queue_free()
+	_clear_ui()
 
 	var vp_size = Vector2(1920, 1080)
 
@@ -110,8 +109,8 @@ func _build_ui(run_state: RunState) -> void:
 	btn_box.modulate.a = 0.0
 	_center.add_child(btn_box)
 
-	# Choose new class button (death wipes character, world persists)
-	_retry_btn = _make_button("Choose New Class")
+	# Enter Hall button (death wipes character, world persists)
+	_retry_btn = _make_button("Enter Hall of Ancestors")
 	_retry_btn.pressed.connect(_on_retry)
 	btn_box.add_child(_retry_btn)
 
@@ -142,14 +141,23 @@ func _make_button(text: String) -> Button:
 
 	return btn
 
+func _clear_ui() -> void:
+	for c in get_children():
+		c.queue_free()
+	_overlay = null
+	_center = null
+	_stats_label = null
+	_retry_btn = null
+
 func _on_retry() -> void:
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("click", -3.0)
+	_clear_ui()
 	visible = false
 	get_tree().paused = false
 	var gm = get_node_or_null("/root/GameManager")
 	if gm:
-		gm.go_to_start_screen()
+		gm.call_deferred("go_to_hall_of_ancestors")
 	else:
-		get_tree().call_deferred("change_scene_to_file", "res://scenes/ui/title_screen.tscn")
+		get_tree().call_deferred("change_scene_to_file", "res://scenes/ui/hall_of_ancestors.tscn")

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "g_iron_will"
+perk_name = "Iron Will"
+description = "+20 tenacity (status resistance)"
+class_required = ""
+tier = 1
+prerequisites = []
+stat_requirements = {
+"endurance": 8
+}
+stat_bonuses = {
+25: 20.0
+}
+special_effect = ""
+is_percent = false

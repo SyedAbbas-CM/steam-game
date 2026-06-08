@@ -11,5 +11,8 @@ class_required = "mercenary"
 tier = 2
 prerequisites = ["r_dual_wield"]
 stat_bonuses = {}
+stat_requirements = {
+"endurance": 5
+}
 special_effect = "combat_roll"
 is_percent = false

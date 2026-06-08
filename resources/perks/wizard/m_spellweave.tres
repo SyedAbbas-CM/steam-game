@@ -11,5 +11,9 @@ class_required = "wizard"
 tier = 3
 prerequisites = ["m_elemental_mastery"]
 stat_bonuses = {}
+stat_requirements = {
+"intellect": 8,
+"luck": 4
+}
 special_effect = "spellweave"
 is_percent = false

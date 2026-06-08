@@ -234,6 +234,10 @@ func _on_start() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	if GameManager:
-		GameManager.return_to_overworld()
+		# First-time chars run the tutorial dungeon once. Repeat saves skip it.
+		if GameManager.save_data and not GameManager.save_data.tutorial_completed:
+			GameManager.start_tutorial()
+		else:
+			GameManager.return_to_overworld()
 	else:
 		get_tree().change_scene_to_file("res://scenes/overworld/overworld.scn")

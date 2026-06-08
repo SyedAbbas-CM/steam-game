@@ -11,4 +11,5 @@ slot_type = 10
 rarity = 1
 buy_price = 140
 sell_value = 35
+blueprint_id = "natures_elixir_blueprint"
 use_effect = "speed_boost"

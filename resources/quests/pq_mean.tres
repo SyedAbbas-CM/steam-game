@@ -9,6 +9,7 @@ title = "The Balance"
 summary = "Telos wants you to kill exactly 5 Skeletons in the dungeon. Not 4, not 6. Five. Discipline is the foundation."
 level = 4
 location = "aria"
+giver_npc = "Telos"
 properties = [{
 "index": 0,
 "name": "Skeletons Killed",

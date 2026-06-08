@@ -7,6 +7,7 @@ extends Resource
 @export var level: int = 1
 @export var location: String = ""          # Zone where quest is offered
 @export var target_location: String = ""   # Zone for turn-in
+@export var giver_npc: String = ""         # NPC who offers/turns in this quest. Empty = any NPC in zone.
 @export var prerequisite: String = ""          # Single quest ID that must be completed first
 @export var prerequisite_list: Array[String] = []  # AND logic: ALL must be completed
 @export var boss_dungeon: String = ""          # Dungeon biome prefix for quest boss override

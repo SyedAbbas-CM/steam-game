@@ -11,5 +11,9 @@ class_required = "warrior"
 tier = 3
 prerequisites = ["w_regeneration"]
 stat_bonuses = {}
+stat_requirements = {
+"health": 8,
+"defense": 5
+}
 special_effect = "fortified"
 is_percent = false

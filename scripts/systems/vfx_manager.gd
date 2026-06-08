@@ -6,6 +6,8 @@ extends Node
 
 var enabled: bool = true
 var screen_shake_enabled: bool = true
+var _warp_quad_texture: Texture2D = null
+var _warp_shader: Shader = preload("res://shaders/vfx/warp_portal.gdshader")
 
 var _camera: Camera2D = null
 var _shake_intensity: float = 0.0
@@ -249,6 +251,101 @@ func frost_ring(pos: Vector2, radius: float = 32.0, parent: Node = null) -> void
 	_add_to_scene(particles, parent)
 	_auto_free(particles, 0.8)
 
+# ── Warp / Portal Spawn ──
+
+func warp_portal(pos: Vector2, color: Color = Color(0.82, 0.08, 0.06, 0.98), radius: float = 20.0, duration: float = 0.55, parent: Node = null, collapse: bool = false, duration_scale: float = 1.0) -> void:
+	if not enabled:
+		return
+	var actual_duration := duration * maxf(duration_scale, 0.1)
+	var root = Node2D.new()
+	root.global_position = pos
+	root.z_index = 18
+
+	var sprite = Sprite2D.new()
+	sprite.texture = _get_warp_quad_texture()
+	sprite.centered = true
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.scale = Vector2.ONE * maxf(radius * 2.0 / 96.0, 0.1)
+
+	var mat = ShaderMaterial.new()
+	mat.shader = _warp_shader
+	mat.set_shader_parameter("warp_color", color)
+	mat.set_shader_parameter("edge_color", color.lightened(0.45))
+	mat.set_shader_parameter("progress", 0.0)
+	mat.set_shader_parameter("collapse_bias", 0.25 if collapse else 0.0)
+	mat.set_shader_parameter("alpha_strength", 1.22)
+	mat.set_shader_parameter("crackle_strength", 1.5)
+	sprite.material = mat
+	root.add_child(sprite)
+	_add_to_scene(root, parent)
+
+	_spawn_storm_crackle(pos, color, radius, parent, actual_duration)
+	if duration_scale > 1.1:
+		_spawn_storm_crackle(pos, color.lightened(0.08), radius * 0.78, parent, actual_duration * 0.92)
+	if not collapse:
+		_schedule_storm_burst(pos, color, radius * 0.92, parent, actual_duration * 0.26, actual_duration * 0.78)
+		_schedule_storm_burst(pos, color.lightened(0.06), radius * 0.72, parent, actual_duration * 0.48, actual_duration * 0.62)
+
+	var tween = root.create_tween()
+	tween.tween_property(mat, "shader_parameter/progress", 0.76, actual_duration * 0.58)
+	tween.tween_property(mat, "shader_parameter/progress", 1.0, actual_duration * 0.42)
+	if collapse:
+		tween.parallel().tween_property(sprite, "scale", sprite.scale * 0.82, actual_duration)
+	else:
+		tween.parallel().tween_property(sprite, "scale", sprite.scale * 1.16, actual_duration)
+	tween.parallel().tween_interval(actual_duration * 0.52)
+	tween.parallel().tween_property(root, "modulate:a", 0.0, actual_duration * 0.48)
+	tween.tween_callback(root.queue_free)
+
+func warp_link(start_pos: Vector2, end_pos: Vector2, color: Color = Color(0.82, 0.08, 0.06, 0.98), start_radius: float = 16.0, end_radius: float = 22.0, parent: Node = null, duration_scale: float = 1.0) -> void:
+	if not enabled:
+		return
+	warp_portal(start_pos, color, start_radius, 0.42, parent, true, duration_scale)
+	warp_portal(end_pos, color.lightened(0.02), end_radius, 0.58, parent, false, duration_scale)
+	var particles = CPUParticles2D.new()
+	particles.emitting = true
+	particles.one_shot = true
+	particles.explosiveness = 1.0
+	particles.amount = 10
+	particles.lifetime = 0.22
+	particles.speed_scale = 1.6
+	particles.direction = (end_pos - start_pos).normalized()
+	particles.spread = 10.0
+	particles.initial_velocity_min = start_pos.distance_to(end_pos) * 1.8
+	particles.initial_velocity_max = start_pos.distance_to(end_pos) * 2.4
+	particles.gravity = Vector2.ZERO
+	particles.scale_amount_min = 0.18
+	particles.scale_amount_max = 0.42
+	particles.color = color.lightened(0.35)
+	particles.global_position = start_pos
+	_add_to_scene(particles, parent)
+	_auto_free(particles, 0.45 * maxf(duration_scale, 0.1))
+	_spawn_storm_bolt(start_pos, end_pos, color.lightened(0.3), parent)
+	_spawn_storm_bolt(
+		start_pos + Vector2(randf_range(-4.0, 4.0), randf_range(-6.0, 2.0)),
+		end_pos + Vector2(randf_range(-4.0, 4.0), randf_range(-2.0, 6.0)),
+		color.lightened(0.45),
+		parent,
+		0.16 * maxf(duration_scale, 0.1)
+	)
+
+func storm_arrival(pos: Vector2, color: Color = Color(0.84, 0.07, 0.05, 0.98), radius: float = 32.0, duration: float = 0.9, parent: Node = null) -> void:
+	if not enabled:
+		return
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("lightning_b", -5.0, 0.03)
+		sfx.play("teleport", -8.0, 0.02)
+	_spawn_storm_core(pos, radius * 0.32, duration, parent)
+	_spawn_storm_aura(pos, color, radius * 0.72, parent, duration * 0.9)
+	_spawn_storm_crackle(pos, color, radius * 0.82, parent, duration * 0.42)
+	_schedule_storm_cluster(pos, color, radius, parent, 0.0, duration * 0.34)
+	_schedule_storm_cluster(pos, color.lightened(0.06), radius * 0.92, parent, duration * 0.16, duration * 0.3)
+	_schedule_storm_cluster(pos, color.darkened(0.08), radius * 0.72, parent, duration * 0.33, duration * 0.26)
+	_schedule_storm_cluster(pos, color.lightened(0.12), radius * 0.58, parent, duration * 0.52, duration * 0.22)
+	_schedule_storm_aura_burst(pos, color, radius * 0.58, parent, duration * 0.22, duration * 0.34)
+	_schedule_storm_aura_burst(pos, color.lightened(0.08), radius * 0.46, parent, duration * 0.48, duration * 0.28)
+
 # ── Arrow Rain Markers ──
 
 func arrow_rain_burst(pos: Vector2, parent: Node = null) -> void:
@@ -406,7 +503,148 @@ func _spawn_ring(pos: Vector2, color: Color, radius: float, duration: float, par
 	tween.tween_property(ring, "modulate:a", 0.0, duration)
 	tween.tween_callback(ring.queue_free)
 
+func _spawn_storm_crackle(pos: Vector2, color: Color, radius: float, parent: Node = null, duration: float = 0.4) -> void:
+	var particles = CPUParticles2D.new()
+	particles.emitting = true
+	particles.one_shot = true
+	particles.explosiveness = 0.94
+	particles.amount = 20
+	particles.lifetime = maxf(0.22, duration * 0.55)
+	particles.speed_scale = 1.35
+	particles.direction = Vector2.UP
+	particles.spread = 180.0
+	particles.initial_velocity_min = radius * 0.35
+	particles.initial_velocity_max = radius * 0.95
+	particles.gravity = Vector2.ZERO
+	particles.scale_amount_min = 0.14
+	particles.scale_amount_max = 0.34
+	particles.color = color.lightened(0.4)
+	particles.global_position = pos
+	_add_to_scene(particles, parent)
+	_auto_free(particles, maxf(0.4, duration))
+	for i in range(6):
+		var angle = randf() * TAU
+		var dir = Vector2.from_angle(angle)
+		_spawn_storm_bolt(
+			pos + dir * randf_range(2.0, radius * 0.18),
+			pos + dir * randf_range(radius * 0.32, radius * 0.72),
+			color.lightened(0.22),
+			parent,
+			maxf(0.14, duration * 0.34)
+		)
+
+func _spawn_storm_aura(pos: Vector2, color: Color, radius: float, parent: Node = null, duration: float = 0.5) -> void:
+	var particles = CPUParticles2D.new()
+	particles.emitting = true
+	particles.one_shot = true
+	particles.explosiveness = 0.35
+	particles.amount = clampi(int(radius * 0.65), 18, 52)
+	particles.lifetime = maxf(0.28, duration * 0.75)
+	particles.speed_scale = 0.92
+	particles.direction = Vector2.UP
+	particles.spread = 180.0
+	particles.initial_velocity_min = radius * 0.06
+	particles.initial_velocity_max = radius * 0.24
+	particles.gravity = Vector2.ZERO
+	particles.scale_amount_min = 0.05
+	particles.scale_amount_max = 0.14
+	particles.color = Color(color.r, color.g * 0.7, color.b * 0.7, 0.42)
+	particles.global_position = pos + Vector2(randf_range(-radius * 0.12, radius * 0.12), randf_range(-radius * 0.12, radius * 0.12))
+	_add_to_scene(particles, parent)
+	_auto_free(particles, maxf(0.45, duration))
+
+func _schedule_storm_burst(pos: Vector2, color: Color, radius: float, parent: Node = null, delay: float = 0.1, duration: float = 0.35) -> void:
+	var timer := get_tree().create_timer(maxf(delay, 0.01))
+	timer.timeout.connect(func():
+		if not is_inside_tree():
+			return
+		_spawn_storm_crackle(pos, color, radius, parent, duration)
+	)
+
+func _schedule_storm_aura_burst(pos: Vector2, color: Color, radius: float, parent: Node = null, delay: float = 0.0, duration: float = 0.24) -> void:
+	var timer := get_tree().create_timer(maxf(delay, 0.0))
+	timer.timeout.connect(func():
+		if not is_inside_tree():
+			return
+		_spawn_storm_aura(
+			pos + Vector2(randf_range(-radius * 0.18, radius * 0.18), randf_range(-radius * 0.18, radius * 0.18)),
+			color,
+			radius * randf_range(0.82, 1.12),
+			parent,
+			duration
+		)
+	)
+
+func _schedule_storm_cluster(pos: Vector2, color: Color, radius: float, parent: Node = null, delay: float = 0.0, duration: float = 0.28) -> void:
+	var timer := get_tree().create_timer(maxf(delay, 0.0))
+	timer.timeout.connect(func():
+		if not is_inside_tree():
+			return
+		var offsets := [
+			Vector2(0, -radius * randf_range(0.45, 0.9)),
+			Vector2(0, radius * randf_range(0.35, 0.75)),
+			Vector2(-radius * randf_range(0.35, 0.85), randf_range(-radius * 0.25, radius * 0.25)),
+			Vector2(radius * randf_range(0.35, 0.85), randf_range(-radius * 0.25, radius * 0.25)),
+			Vector2(-radius * randf_range(0.18, 0.55), -radius * randf_range(0.18, 0.55)),
+			Vector2(radius * randf_range(0.18, 0.55), radius * randf_range(0.18, 0.55)),
+		]
+		for offset in offsets:
+			var start_pos: Vector2 = pos + offset * randf_range(0.45, 0.85)
+			var end_pos: Vector2 = pos + offset + Vector2(randf_range(-radius * 0.12, radius * 0.12), randf_range(-radius * 0.12, radius * 0.12))
+			_spawn_storm_bolt(start_pos, end_pos, color.lightened(randf_range(0.08, 0.22)), parent, maxf(0.12, duration * randf_range(0.72, 1.08)))
+		_spawn_storm_crackle(pos + Vector2(randf_range(-radius * 0.12, radius * 0.12), randf_range(-radius * 0.12, radius * 0.12)), color, radius * randf_range(0.38, 0.62), parent, duration)
+	)
+
+func _spawn_storm_core(pos: Vector2, radius: float, duration: float, parent: Node = null) -> void:
+	var core = _StormCoreDraw.new()
+	core.radius = radius
+	core.duration = duration
+	core.global_position = pos
+	core.z_index = 17
+	_add_to_scene(core, parent)
+	var tween = core.create_tween()
+	tween.tween_interval(duration * 0.58)
+	tween.tween_property(core, "modulate:a", 0.0, duration * 0.42)
+	tween.tween_callback(core.queue_free)
+
+func _spawn_storm_bolt(start_pos: Vector2, end_pos: Vector2, color: Color, parent: Node = null, duration: float = 0.22) -> void:
+	var bolt = _StormBoltDraw.new()
+	var bolt_len := start_pos.distance_to(end_pos)
+	bolt.global_position = start_pos
+	bolt.relative_points = PackedVector2Array(_build_bolt_points(start_pos, end_pos))
+	bolt.outer_width = clampf(bolt_len / 24.0, 0.5, 1.4)
+	bolt.inner_width = clampf(bolt_len / 48.0, 0.28, 0.75)
+	bolt.modulate = color
+	bolt.z_index = 19
+	_add_to_scene(bolt, parent)
+	var tween = bolt.create_tween()
+	tween.tween_property(bolt, "modulate:a", 0.0, duration)
+	tween.tween_callback(bolt.queue_free)
+
+func _build_bolt_points(start_pos: Vector2, end_pos: Vector2) -> Array[Vector2]:
+	var points: Array[Vector2] = []
+	var total = end_pos - start_pos
+	var dist = total.length()
+	var dir = total.normalized() if dist > 0.001 else Vector2.RIGHT
+	var perp = dir.orthogonal()
+	var segments = maxi(3, int(dist / 10.0))
+	for i in range(segments + 1):
+		var t = float(i) / float(segments)
+		var point = total * t
+		if i != 0 and i != segments:
+			point += perp * randf_range(-dist * 0.12, dist * 0.12)
+		points.append(point)
+	return points
+
 # ── Helpers ──
+
+func _get_warp_quad_texture() -> Texture2D:
+	if _warp_quad_texture:
+		return _warp_quad_texture
+	var img = Image.create(96, 96, false, Image.FORMAT_RGBA8)
+	img.fill(Color.WHITE)
+	_warp_quad_texture = ImageTexture.create_from_image(img)
+	return _warp_quad_texture
 
 func _add_to_scene(node: Node, parent: Node = null) -> void:
 	if parent and is_instance_valid(parent):
@@ -450,3 +688,28 @@ class _DashTrailLine extends Node2D:
 	func _draw() -> void:
 		# Draw a 1px tall black rectangle extending along local X axis
 		draw_rect(Rect2(0, -0.5, length, 1.0), Color.BLACK)
+
+class _StormBoltDraw extends Node2D:
+	var relative_points: PackedVector2Array = PackedVector2Array()
+	var outer_width: float = 2.0
+	var inner_width: float = 1.0
+
+	func _draw() -> void:
+		if relative_points.size() < 2:
+			return
+		draw_polyline(relative_points, Color(1.0, 0.92, 0.75, 0.85), outer_width, true)
+		draw_polyline(relative_points, Color(1.0, 0.2, 0.08, 0.95), inner_width, true)
+
+class _StormCoreDraw extends Node2D:
+	var radius: float = 8.0
+	var duration: float = 0.6
+	var _elapsed: float = 0.0
+
+	func _process(delta: float) -> void:
+		_elapsed += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		var t := clampf(_elapsed / maxf(duration, 0.01), 0.0, 1.0)
+		var wobble := 0.92 + sin(TAU * t * 2.5) * 0.05
+		draw_circle(Vector2.ZERO, radius * wobble, Color(0.08, 0.0, 0.0, 0.5 * (1.0 - t * 0.65)))

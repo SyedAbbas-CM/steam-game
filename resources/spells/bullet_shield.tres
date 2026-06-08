@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "bullet_shield"
+spell_name = "Bullet Shield"
+description = "Conjure a shield that absorbs the next 4 incoming bullets entirely."
+effect_type = 7
+delivery = 2
+magnitude = 4
+duration = 12.0
+mp_cost = 14.0
+cooldown = 14.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

@@ -64,8 +64,8 @@ npcs = Array[Dictionary]([{
 "shop": "haven-inn",
 "tile": 130,
 "type": "alchemist",
-"x": 6,
-"y": 16
+"x": 5,
+"y": 17
 }, {
 "name": "Old Man",
 "portrait": 160,
@@ -79,8 +79,8 @@ npcs = Array[Dictionary]([{
 "portrait": 171,
 "tile": 170,
 "type": "scriptfile",
-"x": 6,
-"y": 16
+"x": 7,
+"y": 17
 }, {
 "file": "scripts/jimbob.xml",
 "name": "Jimbob",

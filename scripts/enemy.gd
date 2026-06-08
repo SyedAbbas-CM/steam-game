@@ -4,6 +4,13 @@ const PlayerQuery = preload("res://scripts/systems/player_query.gd")
 
 enum State { IDLE, CHASE, ATTACK, COOLDOWN, CHARGING, DEAD, STEALTHED, INVESTIGATE }
 
+# Coop: host owns AI; clients hold proxies driven by host snapshots.
+# network_id is set by DungeonManager at spawn (derived from grid_pos + room index).
+var network_id: int = 0
+var _is_remote_proxy: bool = false
+var _remote_target_pos: Vector2 = Vector2.ZERO
+var _remote_has_state: bool = false
+
 var definition: EnemyDefinition
 var hp: int = 3
 var shield_hp: int = 0
@@ -111,6 +118,9 @@ var _boss_sequence_attack_timer: float = 0.0
 
 # Boss HP regen
 var _time_since_hit: float = 0.0
+static var _hit_stop_active: bool = false
+var _punch_tween: Tween = null
+var _original_sprite_scale: Vector2 = Vector2.ZERO  # captured lazily on first hit
 var _regen_accum: float = 0.0
 var _is_boss_or_large: bool = false
 
@@ -128,6 +138,7 @@ func _get_bullets_container() -> Node:
 	if not is_inside_tree():
 		return null
 	return get_tree().get_first_node_in_group("bullets")
+
 
 func _ready() -> void:
 	bullet_scene = preload("res://scenes/bullet.tscn")
@@ -221,7 +232,8 @@ func setup(def: EnemyDefinition) -> void:
 		_create_boss_name_label(def.enemy_name)
 		_create_boss_shadow()
 
-	# Assign random attack pool for elites/bosses only when they do not have an authored boss state machine.
+	# Assign attack pool for elites/bosses unless they are running authored attack slots/states.
+	# Generated elites can preload a curated pool through metadata.
 	if _is_boss_or_large and def.attack_slots.size() == 0 and not _uses_boss_state_machine():
 		_assign_random_attack_pool(def)
 
@@ -229,9 +241,9 @@ func setup(def: EnemyDefinition) -> void:
 	# Keep explicit authored test-arena movement resources intact.
 	var _movement_path := def.resource_path
 	var _is_test_movement_enemy := _movement_path.find("/resources/enemies/test/") != -1
-	if not _is_test_movement_enemy and not _uses_boss_state_machine():
+	if not _is_test_movement_enemy and not _uses_boss_state_machine() and not _locks_generated_identity():
 		_assign_random_movement(def)
-	elif not def.movement_pattern and not _uses_boss_state_machine():
+	elif not def.movement_pattern and not _uses_boss_state_machine() and not _locks_generated_identity():
 		_assign_random_movement(def)
 
 	# Awareness indicator (? or !) above sprite
@@ -469,6 +481,14 @@ func _assign_random_movement(def: EnemyDefinition) -> void:
 		def.movement_pattern = pool[randi() % pool.size()]
 
 func _assign_random_attack_pool(def: EnemyDefinition) -> void:
+	if def != null and def.has_meta("generated_attack_pool"):
+		var generated_pool = def.get_meta("generated_attack_pool")
+		if generated_pool is Array and not generated_pool.is_empty():
+			_attack_pool.clear()
+			for attack_id in generated_pool:
+				_attack_pool.append(int(attack_id))
+			_attack_pool_idx = 0
+			return
 	var is_boss = def.size_class >= EnemyDefinition.SizeClass.BOSS
 	var pool_size = 3 if is_boss else 2
 	# Always include the enemy's native attack (if it's interesting)
@@ -496,6 +516,9 @@ func _assign_random_attack_pool(def: EnemyDefinition) -> void:
 
 func _uses_boss_state_machine() -> bool:
 	return definition != null and definition.boss_states.size() > 0
+
+func _locks_generated_identity() -> bool:
+	return definition != null and definition.has_meta("generated_identity_locked") and bool(definition.get_meta("generated_identity_locked"))
 
 func _get_active_players() -> Array[Node2D]:
 	if not is_inside_tree():
@@ -559,6 +582,11 @@ func _next_pool_attack() -> int:
 	var atk = _attack_pool[_attack_pool_idx]
 	_attack_pool_idx = (_attack_pool_idx + 1) % _attack_pool.size()
 	return atk
+
+func _peek_pool_attack() -> int:
+	if _attack_pool.is_empty():
+		return EnemyDefinition.AttackType.BURST
+	return _attack_pool[_attack_pool_idx]
 
 func _create_boss_hp_bar() -> void:
 	var bar_w = 20.0  # fixed world pixels
@@ -674,6 +702,12 @@ func _physics_process(delta: float) -> void:
 	if not is_inside_tree():
 		return
 	if state == State.DEAD:
+		return
+	# Coop client: skip all AI, just lerp toward host's broadcast position.
+	# Damage / collision logic is gated to Phase 3 — proxy can still take visual hits later.
+	if _is_remote_proxy:
+		if _remote_has_state:
+			global_position = global_position.lerp(_remote_target_pos, clampf(22.0 * delta, 0.0, 1.0))
 		return
 	var nearest_player = _get_nearest_player()
 	if is_instance_valid(nearest_player):
@@ -1452,7 +1486,12 @@ func _apply_movement_pattern(p: MovementPattern, dir: Vector2, dist: float, delt
 	var ally_dist: float = 0.0
 	var center: Vector2 = global_position
 	if _enraged:
-		eff_speed *= (1.0 + p.enrage_speed_bonus)
+		# Bomb enemies get only 30% of the enrage speed bonus — they shouldn't kite the
+		# player with bombs at sprinting speed.
+		var _bonus = p.enrage_speed_bonus
+		if _is_bomb_attack_type(_get_active_attack_type()):
+			_bonus *= 0.30
+		eff_speed *= (1.0 + _bonus)
 
 	# Bodyguard override: follow ally instead of player
 	if _bodyguard_mode and is_instance_valid(_attached_ally):
@@ -1470,6 +1509,8 @@ func _apply_movement_pattern(p: MovementPattern, dir: Vector2, dist: float, delt
 			_move_orbit_target(_spawn_pos, p, eff_speed, delta)
 		MovementPattern.MoveType.ORBIT_ALLY:
 			var ally = _find_nearest_ally()
+			if ally:
+				center = ally.global_position
 			_move_orbit_target(center, p, eff_speed, delta)
 		MovementPattern.MoveType.PATROL_H:
 			_move_patrol(Vector2.RIGHT, p, eff_speed, delta)
@@ -1503,6 +1544,22 @@ func _apply_movement_pattern(p: MovementPattern, dir: Vector2, dist: float, delt
 			_move_ambush(dir, dist, p, eff_speed, delta)
 		_:
 			_move_weighted(p, dir, dist, delta, eff_speed)
+
+	# Generated and ranged enemies still need to commit toward the player eventually.
+	# Without this, hold/kite/orbit identities can devolve into stationary turret behavior.
+	if dist > 72.0:
+		var pursuit_dir := _steer_around_walls(dir)
+		var can_force_pursuit := p.move_type in [
+			MovementPattern.MoveType.WEIGHTED,
+			MovementPattern.MoveType.KITE,
+			MovementPattern.MoveType.ORBIT_POINT,
+			MovementPattern.MoveType.ORBIT_ALLY,
+			MovementPattern.MoveType.PATROL_H,
+			MovementPattern.MoveType.PATROL_V,
+			MovementPattern.MoveType.TELEPORT,
+		]
+		if can_force_pursuit and (_chase_timer > 2.5 or velocity.length() < eff_speed * 0.22):
+			velocity = (velocity * 0.45 + pursuit_dir * eff_speed * 0.9).limit_length(eff_speed)
 
 ## Orbit around a center point at orbit_radius — always tangential, corrects radius
 func _move_orbit_target(center: Vector2, p: MovementPattern, spd: float, delta: float) -> void:
@@ -1563,7 +1620,7 @@ func _move_wall_bounce(p: MovementPattern, spd: float, delta: float) -> void:
 
 ## Kite: maintain exact distance from player — retreat if too close, advance if too far
 func _move_kite(dir: Vector2, dist: float, p: MovementPattern, spd: float) -> void:
-	var perp: Vector2 = Vector2.ZERO
+	var perp := Vector2(-dir.y, dir.x)
 	var ideal = p.kite_distance
 	var margin = 10.0
 	if dist < ideal - margin:
@@ -1574,25 +1631,26 @@ func _move_kite(dir: Vector2, dist: float, p: MovementPattern, spd: float) -> vo
 		velocity = _steer_around_walls(dir) * spd * 0.7
 	else:
 		# At ideal range — strafe sideways
-		velocity = _steer_around_walls(perp) * spd * 0.8
+		var side := 1.0 if int(Engine.get_physics_frames() / 24) % 2 == 0 else -1.0
+		velocity = _steer_around_walls(perp * side) * spd * 0.8
 
 ## Swoop: fast arc that passes BESIDE the player (not through), loops wide, comes back
 func _move_swoop(dir: Vector2, dist: float, p: MovementPattern, delta: float) -> void:
-	var side: Vector2 = Vector2.ZERO
-	var perp: Vector2 = Vector2.ZERO
-	var timer = Timer.new()
 	# States: 0=looping out (wide arc away), 1=swooping in (fast pass beside player)
 	if not has_meta("swoop_state"):
 		set_meta("swoop_state", 1)
 		set_meta("swoop_side", 1.0 if randf() > 0.5 else -1.0)
 		set_meta("swoop_closest", 999.0)
-	var sw_state: int = get_meta("swoop_state")
+		set_meta("swoop_timer", 0.0)
+	var side: float = float(get_meta("swoop_side", 1.0))
+	var perp := Vector2(-dir.y, dir.x)
+	var sw_state: int = int(get_meta("swoop_state", 1))
 	if sw_state == 1:
-		# Aim beside the player — heavy lateral component so we pass at ~30px offset
-		var swoop_dir = (dir + perp * side * 2.5).normalized()
+		# Aim beside the player — lateral component biases the pass to one side
+		var swoop_dir := (dir + perp * side * 2.5).normalized()
 		velocity = swoop_dir * p.swoop_speed
 		# Track closest approach — once we start getting farther, we've passed
-		var prev_closest: float = float(get_meta("swoop_closest"))
+		var prev_closest: float = float(get_meta("swoop_closest", 999.0))
 		if dist < prev_closest:
 			set_meta("swoop_closest", dist)
 		elif dist > prev_closest + 15.0:
@@ -1603,8 +1661,9 @@ func _move_swoop(dir: Vector2, dist: float, p: MovementPattern, delta: float) ->
 			set_meta("swoop_closest", 999.0)
 	else:
 		# Looping out in a wide arc away from player
+		var timer: float = float(get_meta("swoop_timer", 0.0)) + delta
 		set_meta("swoop_timer", timer)
-		var arc_dir = (-dir + perp * side * 2.0).normalized()
+		var arc_dir := (-dir + perp * side * 2.0).normalized()
 		velocity = arc_dir * p.swoop_speed * 0.5
 		if timer > 1.5 or dist > p.swoop_arc_size:
 			set_meta("swoop_state", 1)
@@ -1638,7 +1697,7 @@ func _find_valid_floor_pos(center: Vector2, min_dist: float, max_dist: float) ->
 	var room_node = get_parent().get_parent() if get_parent() else null
 	var floor_tm: TileMapLayer = null
 	if room_node and room_node.has_node("Floor"):
-		floor_tm = room_node.get_node("Floor")
+		floor_tm = room_node.get_node("Floor") as TileMapLayer
 	for _i in range(15):
 		var candidate = center + offset
 		if floor_tm:
@@ -1651,6 +1710,7 @@ func _find_valid_floor_pos(center: Vector2, min_dist: float, max_dist: float) ->
 	return center  # couldn't find valid spot, stay put
 
 func _do_teleport_blink(p: MovementPattern) -> void:
+	var start_pos := global_position
 	var tw = create_tween()
 	global_position = _find_valid_floor_pos(_spawn_pos, 20.0, p.teleport_range)
 	velocity = Vector2.ZERO
@@ -1659,6 +1719,9 @@ func _do_teleport_blink(p: MovementPattern) -> void:
 	if spr:
 		tw.tween_property(spr, "modulate:a", 0.2, 0.05)
 		tw.tween_property(spr, "modulate:a", 1.0, 0.15)
+	var vfx_tp = get_node_or_null("/root/VFXManager")
+	if vfx_tp:
+		vfx_tp.warp_link(start_pos, global_position, Color(0.84, 0.09, 0.05, 0.96), 12.0, 18.0)
 
 ## Mirror: copies player movement + constantly pulls player toward self
 func _move_mirror(p: MovementPattern, spd: float, delta: float) -> void:
@@ -1993,7 +2056,7 @@ func _do_legacy_movement(dir: Vector2, dist: float, delta: float) -> void:
 					_melee_dodge_timer = randf_range(0.5, 1.2)
 					_melee_dodge_dir = -_melee_dodge_dir
 
-func _get_active_attack_type() -> EnemyDefinition.AttackType:
+func _get_active_attack_type(consume_pool: bool = false) -> EnemyDefinition.AttackType:
 	if not definition:
 		return EnemyDefinition.AttackType.RANGED
 	# Artillery enemies always use their native attack — no pool mixing
@@ -2001,7 +2064,7 @@ func _get_active_attack_type() -> EnemyDefinition.AttackType:
 		return EnemyDefinition.AttackType.ARTILLERY
 	# Elites/bosses cycle through their random attack pool
 	if _is_boss_or_large and not _attack_pool.is_empty():
-		return _next_pool_attack()
+		return _next_pool_attack() if consume_pool else _peek_pool_attack()
 	# Normal enemies with melee secondary: 40% chance to use melee when player is close
 	if definition.has_meta("melee_secondary") and is_instance_valid(player):
 		var _md = global_position.distance_to(player.global_position)
@@ -2027,14 +2090,66 @@ func _get_bomb_attack_count(default_count: int = 1) -> int:
 		return default_count
 	var raw = _get_active_bullet_count()
 	if definition.size_class >= EnemyDefinition.SizeClass.BOSS:
-		return clampi(raw, default_count, default_count + 2)
-	if definition.size_class >= EnemyDefinition.SizeClass.LARGE:
 		return clampi(raw, default_count, default_count + 1)
+	if definition.size_class >= EnemyDefinition.SizeClass.LARGE:
+		return clampi(raw, default_count, default_count)
 	return clampi(raw, default_count, default_count)
 
+func _is_bomb_attack_type(atk: int) -> bool:
+	return atk in [
+		EnemyDefinition.AttackType.BOMB_TOSS,
+		EnemyDefinition.AttackType.CARPET_BOMB,
+		EnemyDefinition.AttackType.FIRE_RAIN,
+		EnemyDefinition.AttackType.CLUSTER_BOMB,
+		EnemyDefinition.AttackType.MINE_DROP,
+		EnemyDefinition.AttackType.ARTILLERY,
+		EnemyDefinition.AttackType.POISON_CLOUD,
+	]
+
 func _get_bomb_flight_time(base_flight: float, extra_scale: float = 1.0) -> float:
-	var tuned = maxf(base_flight, 0.55) * extra_scale
-	return clampf(tuned, 0.55, 1.8)
+	# Bombs are reaction-time gates: the player has to recognize the marker and roll.
+	# Floor raised 0.9 → 1.4 and ceiling 2.4 → 3.2 (≈ 2.8–6.4s total lob duration).
+	var tuned = maxf(base_flight, 1.4) * extra_scale
+	if definition:
+		var lvl := maxi(definition.level, 1)
+		if lvl <= 3:
+			tuned *= 1.35
+		elif lvl <= 7:
+			tuned *= 1.18
+	return clampf(tuned, 1.4, 3.2)
+
+func _is_heavy_bomb_attack(atk: int) -> bool:
+	return atk in [
+		EnemyDefinition.AttackType.BOMB_TOSS,
+		EnemyDefinition.AttackType.CARPET_BOMB,
+		EnemyDefinition.AttackType.FIRE_RAIN,
+		EnemyDefinition.AttackType.CLUSTER_BOMB,
+		EnemyDefinition.AttackType.MINE_DROP,
+		EnemyDefinition.AttackType.ARTILLERY,
+		EnemyDefinition.AttackType.POISON_CLOUD,
+		EnemyDefinition.AttackType.MORTAR,
+		EnemyDefinition.AttackType.METEOR_SHOWER,
+	]
+
+func _get_effective_attack_range(atk: int) -> float:
+	var lvl := maxi(definition.level if definition else 1, 1)
+	match atk:
+		EnemyDefinition.AttackType.ARTILLERY:
+			return clampf(120.0 + float(lvl) * 10.0, 120.0, 280.0)
+		EnemyDefinition.AttackType.BOMB_TOSS:
+			return clampf(76.0 + float(lvl) * 4.0, 76.0, 140.0)
+		EnemyDefinition.AttackType.CARPET_BOMB:
+			return clampf(84.0 + float(lvl) * 5.0, 84.0, 150.0)
+		EnemyDefinition.AttackType.FIRE_RAIN:
+			return clampf(80.0 + float(lvl) * 4.0, 80.0, 145.0)
+		EnemyDefinition.AttackType.CLUSTER_BOMB:
+			return clampf(78.0 + float(lvl) * 4.0, 78.0, 140.0)
+		EnemyDefinition.AttackType.MINE_DROP:
+			return clampf(64.0 + float(lvl) * 2.0, 64.0, 104.0)
+		EnemyDefinition.AttackType.POISON_CLOUD:
+			return clampf(82.0 + float(lvl) * 4.0, 82.0, 145.0)
+		_:
+			return 120.0
 
 func _steer_around_walls(desired_dir: Vector2) -> Vector2:
 	var space = get_world_2d().direct_space_state
@@ -2120,7 +2235,11 @@ func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
 	# Boss enrage at <30% HP
 	_enraged = _is_boss_or_large and hp < _max_hp * 0.3
 	if _enraged and attack_timer > 0:
-		attack_timer -= delta  # double-tick attack timer when enraged
+		# Bomb attacks ignore enrage attack-speed boost (they already telegraphed/slow).
+		# Only non-bomb attacks get the double-tick.
+		var _atk_now = _get_active_attack_type()
+		if not _is_bomb_attack_type(_atk_now):
+			attack_timer -= delta  # double-tick non-bomb attacks when enraged
 
 	# --- Data-driven movement pattern ---
 	var runtime_movement = _get_runtime_movement_pattern()
@@ -2138,7 +2257,7 @@ func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
 	if definition and definition.attack_type == EnemyDefinition.AttackType.ARTILLERY and Engine.get_physics_frames() % 60 == 0:
 		_shared_vision_checked = false
 		_check_shared_vision_once()
-	var _atk_check = _get_active_attack_type() if attack_timer <= 0 else EnemyDefinition.AttackType.NONE
+	var _atk_check = _get_active_attack_type(false) if attack_timer <= 0 else EnemyDefinition.AttackType.NONE
 	var _no_los_attacks = [EnemyDefinition.AttackType.HEAL, EnemyDefinition.AttackType.SUMMON,
 		EnemyDefinition.AttackType.BOMB_TOSS, EnemyDefinition.AttackType.CARPET_BOMB,
 		EnemyDefinition.AttackType.FIRE_RAIN, EnemyDefinition.AttackType.CLUSTER_BOMB,
@@ -2146,7 +2265,7 @@ func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
 		EnemyDefinition.AttackType.POISON_CLOUD]
 	var _needs_los = _atk_check not in _no_los_attacks
 	# Artillery has extreme range (10-15 rooms ≈ 500px) and uses ally sight
-	var _attack_range = 500.0 if _atk_check == EnemyDefinition.AttackType.ARTILLERY else 120.0
+	var _attack_range = _get_effective_attack_range(_atk_check)
 	var _has_los = false
 	if not _needs_los:
 		_has_los = true
@@ -2451,13 +2570,32 @@ func _do_attack(dir: Vector2) -> void:
 	var _native_atk = definition.attack_type if definition else EnemyDefinition.AttackType.NONE
 	if _is_boss_or_large and _current_phase >= 2 and not _attack_pool.is_empty() and _native_atk != EnemyDefinition.AttackType.ARTILLERY:
 		_do_boss_combo_attack(dir)
-		attack_timer = shoot_interval * 0.25
+		# If the combo pool includes any bomb-type attack, the elite/boss has to
+		# use the full cooldown for the next combo — otherwise they spam 2-3
+		# bombs per second. Only "all bullet" pools keep the 0.25x rapid rate.
+		var _bomb_pool_types = [
+			EnemyDefinition.AttackType.BOMB_TOSS, EnemyDefinition.AttackType.CARPET_BOMB,
+			EnemyDefinition.AttackType.FIRE_RAIN, EnemyDefinition.AttackType.CLUSTER_BOMB,
+			EnemyDefinition.AttackType.MINE_DROP, EnemyDefinition.AttackType.ARTILLERY,
+			EnemyDefinition.AttackType.POISON_CLOUD, EnemyDefinition.AttackType.LEAPING_SLAM,
+			EnemyDefinition.AttackType.ARROW_VOLLEY, EnemyDefinition.AttackType.MORTAR,
+			EnemyDefinition.AttackType.METEOR_SHOWER,
+		]
+		var combo_has_bomb := false
+		for atk_in_pool in _attack_pool:
+			if atk_in_pool in _bomb_pool_types:
+				combo_has_bomb = true
+				break
+		if combo_has_bomb:
+			attack_timer = shoot_interval * 2.75  # heavy bomb combos need real downtime
+		else:
+			attack_timer = shoot_interval * 0.25
 		cooldown_timer = 0.1
 		state = State.COOLDOWN
 		return
 
 	# AttackSlot system: cycle through defined slots with per-attack modifiers
-	var atk = _get_active_attack_type()
+	var atk = _get_active_attack_type(true)
 	if definition and definition.attack_slots.size() > 0:
 		var slot = definition.attack_slots[_slot_idx % definition.attack_slots.size()]
 		atk = slot.attack_type
@@ -2625,7 +2763,7 @@ func _do_attack(dir: Vector2) -> void:
 		EnemyDefinition.AttackType.POISON_CLOUD, EnemyDefinition.AttackType.LEAPING_SLAM,
 		EnemyDefinition.AttackType.ARROW_VOLLEY]
 	if atk in _bomb_attacks:
-		attack_timer = shoot_interval * 1.0  # full cooldown for bombs
+		attack_timer = shoot_interval * 2.8  # bombs are AOE — keep them rare and readable
 	else:
 		attack_timer = shoot_interval * 0.25  # aggressive fire rate for bullet attacks
 	cooldown_timer = 0.1
@@ -2784,12 +2922,22 @@ func _do_boss_combo_attack(dir: Vector2) -> void:
 			combo_count = _attack_pool.size()  # all 3
 		if _enraged:
 			combo_count = _attack_pool.size()  # all attacks when enraged
+	var fired_any_heavy_bomb := false
+	var fired_count := 0
+	var attempts := 0
+	var max_attempts := maxi(_attack_pool.size() * 2, combo_count)
+	while fired_count < mini(combo_count, _attack_pool.size()) and attempts < max_attempts:
+		attempts += 1
+		var atk := _next_pool_attack()
+		if _is_heavy_bomb_attack(atk):
+			if fired_any_heavy_bomb:
+				continue
+			fired_any_heavy_bomb = true
+		_fire_attack_type(atk, dir)
+		fired_count += 1
 
-	for i in range(mini(combo_count, _attack_pool.size())):
-		_fire_attack_type(_next_pool_attack(), dir)
-
-	# Bosses add a nova on top in phase 2+, and when enraged
-	if is_boss and (_current_phase >= 2 or _enraged):
+	# Bosses add a nova on top only when the combo was not already a heavy bomb burst.
+	if is_boss and (_current_phase >= 2 or _enraged) and not fired_any_heavy_bomb:
 		_shoot_nova(dir)
 
 func _check_contact_damage(force_contact: bool = false) -> void:
@@ -2916,12 +3064,13 @@ func _start_charge(dir: Vector2) -> void:
 const MAX_SUMMONED_ENEMIES: int = 15
 
 func _do_summon() -> void:
-	var minion = bullet_scene.instantiate()
+	var enemy_scene = preload("res://scenes/enemy.tscn")
 	var dm = get_node_or_null("/root/DungeonManager")
 	var spawn_pos: Vector2 = global_position
-	var minion_def = definition
 	var gp = get_meta("grid_pos", Vector2i(-999, -999))
-	var container = get_parent()
+	var container = get_tree().get_first_node_in_group("enemies")
+	if not container:
+		container = get_parent()
 	if not definition:
 		return
 	# Cap total enemies in the room to prevent flooding
@@ -2929,6 +3078,7 @@ func _do_summon() -> void:
 		return
 	# Auto-create a weak minion if no summon_definition set
 	if not definition.summon_definition:
+		var minion_def := EnemyDefinition.new()
 		minion_def.enemy_name = "Minion"
 		minion_def.max_hp = maxi(1, definition.max_hp / 3)
 		minion_def.move_speed = definition.move_speed * 1.2
@@ -2948,6 +3098,7 @@ func _do_summon() -> void:
 	if sfx_sum:
 		sfx_sum.play("summon", -4.0, 0.1)
 	for i in range(definition.summon_count):
+		var minion = enemy_scene.instantiate()
 		minion.global_position = spawn_pos
 		minion.setup(definition.summon_definition.duplicate())
 		container.add_child(minion)
@@ -2984,12 +3135,16 @@ func _do_teleport() -> void:
 	var dist: float = 0.0
 	if not is_instance_valid(player):
 		return
+	var start_pos := global_position
 	var sfx_tp = get_node_or_null("/root/SFXManager")
 	if sfx_tp:
 		sfx_tp.play("teleport", -4.0, 0.15)
 	global_position = player.global_position + Vector2(cos(angle), sin(angle)) * dist
 	$Sprite2D.modulate.a = 0.3
 	tween.tween_property($Sprite2D, "modulate:a", 1.0, 0.3)
+	var vfx_tp = get_node_or_null("/root/VFXManager")
+	if vfx_tp:
+		vfx_tp.warp_link(start_pos, global_position, Color(0.94, 0.16, 0.08, 0.94), 14.0, 20.0)
 
 func _try_heal_nearby() -> void:
 	var orig: Vector2 = global_position
@@ -3392,6 +3547,7 @@ func _spawn_bullet(container: Node, dir: Vector2, spd: float) -> Area2D:
 		_last_fire_sfx_frame = frame
 		if sfx:
 			sfx.play("fire_a", -10.0, 0.2)
+	_coop_broadcast_enemy_bullet(bullet)
 	return bullet
 
 func _spawn_bullet_at(container: Node, pos: Vector2, dir: Vector2, spd: float) -> void:
@@ -3400,6 +3556,7 @@ func _spawn_bullet_at(container: Node, pos: Vector2, dir: Vector2, spd: float) -
 	bullet.direction = dir
 	_apply_enemy_bullet_props(bullet, spd)
 	container.add_child(bullet)
+	_coop_broadcast_enemy_bullet(bullet)
 
 func _spawn_behavior_bullet(container: Node, dir: Vector2, spd: float, bhv: int) -> void:
 	var bullet = bullet_scene.instantiate()
@@ -4466,19 +4623,21 @@ func _shoot_curse_bolt(dir: Vector2) -> void:
 ## SUMMON_WALL: Summon 2-3 weak minions in a line between self and player
 func _shoot_summon_wall(dir: Vector2) -> void:
 	var sfx = get_node_or_null("/root/SFXManager")
-	var minion = bullet_scene.instantiate()
-	var container = get_tree().get_first_node_in_group("bullets")
+	var enemy_scene = preload("res://scenes/enemy.tscn")
+	var container = get_tree().get_first_node_in_group("enemies")
 	var spawn_pos: Vector2 = global_position
 	var dm = get_node_or_null("/root/DungeonManager")
-	var minion_def = definition
 	var gp = get_meta("grid_pos", Vector2i(-999, -999))
 	var count: int = _get_active_bullet_count()
 	if not definition:
 		return
+	if not container:
+		container = get_parent()
 	if sfx:
 		sfx.play("summon", -4.0, 0.1)
 	# Auto-create minion def if needed
 	if not definition.summon_definition:
+		var minion_def := EnemyDefinition.new()
 		minion_def.enemy_name = "Minion"
 		minion_def.max_hp = maxi(1, definition.max_hp / 4)
 		minion_def.move_speed = definition.move_speed * 1.2
@@ -4497,6 +4656,7 @@ func _shoot_summon_wall(dir: Vector2) -> void:
 	var perp = dir.rotated(PI * 0.5)
 	var mid = global_position + dir * 20.0
 	for i in range(count):
+		var minion = enemy_scene.instantiate()
 		minion.global_position = spawn_pos
 		minion.setup(definition.summon_definition.duplicate())
 		container.add_child(minion)
@@ -5257,7 +5417,10 @@ func _shoot_stomp_wave(_dir: Vector2) -> void:
 
 func _spawn_lob_at(container: Node, target: Vector2, sprite_idx: int,
 		aoe_radius: float, flight_time: float, ring_count: int, cluster_count: int,
-		lob_height: float = -1.0, damage_mult: float = 1.3) -> void:
+		lob_height: float = -1.0, damage_mult: float = 1.35) -> void:
+	# Bomb damage mult dialed back from 1.8 → 1.35. With elite-room dmg_mult,
+	# level_scale, and the elite bomb buff already stacking, 1.8 produced 20+ damage
+	# bombs in starter dungeons. 1.35 keeps bombs meaningful without one-shotting.
 	var bomb = bullet_scene.instantiate()
 	bomb.global_position = global_position
 	bomb.direction = (target - global_position).normalized() if global_position.distance_to(target) > 1 else Vector2.RIGHT
@@ -5310,7 +5473,8 @@ func _shoot_carpet_bomb(dir: Vector2) -> void:
 	var step = maxf(dist_to_player / count, 10.0)
 	for i in range(count):
 		var target = global_position + dir * step * float(i + 1)
-		_spawn_lob_at(bc, target, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 1.3)
+		# Carpet bombs: dialed from 1.8 → 1.35 (multiple bombs already stack damage).
+		_spawn_lob_at(bc, target, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 1.35)
 
 ## FIRE_RAIN: 2-4 bombs scattered randomly around player position
 func _shoot_fire_rain() -> void:
@@ -5331,6 +5495,7 @@ func _shoot_fire_rain() -> void:
 		var dist = randf_range(8.0, 30.0)
 		var offset = Vector2.from_angle(angle) * dist
 		var flight = base_flight * randf_range(0.95, 1.15)
+		# Fire rain bombs: 1.7 → 1.3 (multiple bombs already stack damage)
 		_spawn_lob_at(bc, center + offset, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 1.3)
 
 ## CLUSTER_BOMB: One big bomb that splits into 4 smaller bombs on impact
@@ -5345,7 +5510,7 @@ func _shoot_cluster_bomb() -> void:
 	if not bc:
 		return
 	var flight = _get_bomb_flight_time(definition.bomb_flight_time if definition else 0.8, 1.2)
-	_spawn_lob_at(bc, player.global_position, ObjSpriteIndex.DARK_ORB, radius, flight, 0, 4, -1.0, 1.5)
+	_spawn_lob_at(bc, player.global_position, ObjSpriteIndex.DARK_ORB, radius, flight, 0, 4, -1.0, 1.2)
 
 ## MINE_DROP: 2-3 short-range lobs near self with bullet ring on landing
 func _shoot_mine_drop() -> void:
@@ -5483,6 +5648,64 @@ func _notify_bodyguards_ally_hit() -> void:
 			e._on_guarded_ally_hit()
 
 ## Returns true if the given position is behind this enemy (for stealth kills)
+## Per-enemy hit reaction. No engine-wide time_scale — your input stays free.
+## The enemy's sprite gets a quick scale-punch + slight position shake so the
+## hit reads as impact, plus a screen shake on big/killing blows.
+func _trigger_hit_stop(is_killing_blow: bool, damage_amt: int) -> void:
+	var spr = get_node_or_null("Sprite2D") as Node2D
+	if not spr:
+		return
+	# Capture the enemy's true base scale once (before any punch). All subsequent
+	# punches animate FROM and BACK TO this saved scale so multi-shot weapons
+	# can't compound the sprite size.
+	if _original_sprite_scale == Vector2.ZERO:
+		_original_sprite_scale = spr.scale
+	# Kill any in-progress punch so we restart cleanly from base — no stacking.
+	if _punch_tween and _punch_tween.is_valid():
+		_punch_tween.kill()
+	spr.scale = _original_sprite_scale
+	# Scale punch — strong/quick by default, harder on killing blows
+	var punch_scale := 1.20
+	var dur := 0.06
+	if is_killing_blow:
+		punch_scale = 1.55
+		dur = 0.14
+	elif damage_amt >= maxi(20, _max_hp / 4):
+		punch_scale = 1.35
+		dur = 0.10
+	_punch_tween = create_tween()
+	_punch_tween.set_trans(Tween.TRANS_BACK)
+	_punch_tween.set_ease(Tween.EASE_OUT)
+	_punch_tween.tween_property(spr, "scale", _original_sprite_scale * punch_scale, dur * 0.3)
+	_punch_tween.tween_property(spr, "scale", _original_sprite_scale, dur * 0.7)
+	# Screen shake on heavy hits — feels weighty without freezing anyone
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		if is_killing_blow:
+			vfx.shake(2.5, 0.12)
+		elif damage_amt >= maxi(20, _max_hp / 4):
+			vfx.shake(1.5, 0.08)
+	_hit_stop_active = false  # static flag no longer gates anything; clear immediately
+
+## Force this enemy to immediately aggro the player — used by hordes and wave-2
+## reinforcements so they actually chase from spawn instead of wandering.
+func force_aggro_player() -> void:
+	if state == State.DEAD:
+		return
+	# Deferred call may fire after the dungeon scene was torn down; bail safely.
+	if not is_inside_tree():
+		return
+	if not is_instance_valid(player):
+		var tree = get_tree()
+		if tree:
+			player = tree.get_first_node_in_group("player")
+	_awareness = 1.0
+	state = State.CHASE
+	_chase_timer = 0.0
+	if is_instance_valid(player):
+		_last_known_player_dir = (player.global_position - global_position).normalized()
+		_last_known_player_pos = player.global_position
+
 func is_back_exposed(from_pos: Vector2) -> bool:
 	var to_attacker = (from_pos - global_position).normalized()
 	return _facing_dir.dot(to_attacker) < -0.3
@@ -5664,6 +5887,9 @@ func take_damage(amount: int, from_player: bool = true, dmg_type: int = 0) -> vo
 	amount = CombatTypes.apply_combat_damage(amount, dmg_type, my_armor_type, armor, 1)
 	hp -= amount
 	_time_since_hit = 0.0
+	# Hit reaction: scale-punch on this enemy (no engine time_scale)
+	if from_player and amount > 0:
+		_trigger_hit_stop(hp <= 0, amount)
 	# Alert attached mummy bodyguards that this enemy was hit
 	_notify_bodyguards_ally_hit()
 	# Floating damage number
@@ -6477,3 +6703,23 @@ func _try_drop_gem() -> void:
 			var sfx = get_node_or_null("/root/SFXManager")
 			if sfx:
 				sfx.play("collect_a", -2.0, 0.1)
+
+# Coop: clients call this on receipt of a host snapshot.
+func apply_remote_state(world_pos: Vector2, hp_val: int) -> void:
+	_remote_target_pos = world_pos
+	_remote_has_state = true
+	if hp_val >= 0:
+		hp = hp_val
+
+# Coop: notify CoopRuntime to broadcast this enemy bullet spawn to clients so they
+# can spawn a local damaging copy. Host only — no-op offline or on client (proxies
+# don't fire because their AI is gated).
+func _coop_broadcast_enemy_bullet(bullet: Node) -> void:
+	if _is_remote_proxy or bullet == null:
+		return
+	var coop_rt = get_node_or_null("/root/CoopRuntime")
+	if coop_rt == null or not coop_rt.has_method("broadcast_enemy_bullet"):
+		return
+	var spr_idx: int = int(bullet.get("bullet_sprite_index")) if "bullet_sprite_index" in bullet else -1
+	var kingdom: String = String(bullet.get("enemy_kingdom")) if "enemy_kingdom" in bullet else ""
+	coop_rt.broadcast_enemy_bullet(bullet.global_position, bullet.direction, bullet.speed, bullet.damage, spr_idx, kingdom)

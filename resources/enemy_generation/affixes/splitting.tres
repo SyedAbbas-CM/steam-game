@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EliteAffixDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/elite_affix_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+affix_id = "splitting"
+display_prefix = "Splitting"
+allowed_roles = Array[String](["ranged", "support"])
+requires_projectiles = true
+add_attack_types = Array[int]([10, 32])
+damage_mult = 1.04
+bullet_count_bonus = 1
+color_tint = Color(0.92, 0.82, 1, 1)
+split_after = 0.35
+split_count = 3

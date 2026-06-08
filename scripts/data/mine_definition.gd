@@ -65,3 +65,5 @@ extends Resource
 @export var intrusion_wave_size_max: int = 3
 @export var intrusion_elite_time: float = 55.0
 @export var intrusion_super_time: float = 90.0
+@export var max_active_intruders: int = 3
+@export var intrusion_retry_interval: float = 6.0

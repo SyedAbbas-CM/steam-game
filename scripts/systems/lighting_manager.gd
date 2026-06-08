@@ -15,8 +15,17 @@ enum LightKind {
 	POISON,
 }
 
+enum LightingQuality {
+	FULL,
+	CHEAP,
+	MINIMAL,
+}
+
 var enabled: bool = true
 var outlines_enabled: bool = false
+var lighting_quality: int = LightingQuality.CHEAP
+var brightness_scalar: float = 1.0
+var darkness_scalar: float = 1.0
 
 var _canvas_mod: CanvasModulate = null
 var _light_texture: Texture2D = null
@@ -219,6 +228,7 @@ func apply_mood(profile: AreaMoodProfile, instant: bool = false) -> void:
 		return
 	_current_mood = profile
 	var target_color = profile.darkness_color if profile.is_dark else profile.ambient_color
+	target_color = _scale_mood_color(target_color, profile.is_dark)
 	if instant or _canvas_mod.color == Color.WHITE:
 		_canvas_mod.color = target_color
 	else:
@@ -233,7 +243,12 @@ func apply_mood(profile: AreaMoodProfile, instant: bool = false) -> void:
 		_environment.glow_bloom = profile.glow_bloom
 	if _vignette_rect and _vignette_rect.material is ShaderMaterial:
 		var sm := _vignette_rect.material as ShaderMaterial
-		sm.set_shader_parameter("vignette_strength", profile.vignette_strength)
+		var v_strength := profile.vignette_strength
+		if lighting_quality == LightingQuality.MINIMAL:
+			v_strength = 0.0
+		elif lighting_quality == LightingQuality.CHEAP:
+			v_strength *= 0.55
+		sm.set_shader_parameter("vignette_strength", v_strength)
 		sm.set_shader_parameter("vignette_softness", profile.vignette_softness)
 		sm.set_shader_parameter("vignette_color", profile.vignette_color)
 
@@ -356,11 +371,80 @@ func apply_mine_mood(mine: MineDefinition) -> void:
 	profile.torch_shadows = false
 	profile.player_light_radius = lerpf(132.0, 168.0, darkness)
 	profile.player_light_energy = lerpf(0.95, 1.20, darkness)
-	profile.player_light_shadows = true
+	profile.player_light_shadows = false
 	apply_mood(profile, true)
 
 func get_current_mood() -> AreaMoodProfile:
 	return _current_mood
+
+func requires_shadow_occluders() -> bool:
+	if not enabled:
+		return false
+	if lighting_quality != LightingQuality.FULL:
+		return false
+	if _player_lantern and is_instance_valid(_player_lantern) and _player_lantern.shadow_enabled:
+		return true
+	for torch in _active_torches:
+		if is_instance_valid(torch) and torch.shadow_enabled:
+			return true
+	return false
+
+func set_lighting_quality(quality: int) -> void:
+	lighting_quality = clampi(quality, LightingQuality.FULL, LightingQuality.MINIMAL)
+	if _current_mood != null:
+		apply_mood(_current_mood, true)
+
+func set_brightness_controls(brightness: float = 1.0, darkness: float = 1.0) -> void:
+	brightness_scalar = clampf(brightness, 0.7, 1.35)
+	darkness_scalar = clampf(darkness, 0.5, 1.6)
+	if _current_mood != null:
+		apply_mood(_current_mood, true)
+
+func apply_scene_lighting_policy(quality: int, brightness: float = 1.0, darkness: float = 1.0) -> void:
+	set_lighting_quality(quality)
+	set_brightness_controls(brightness, darkness)
+
+func get_darkness_gameplay_scalar() -> float:
+	if _current_mood == null:
+		return 0.0
+	var color := _canvas_mod.color
+	var luminance := color.r * 0.299 + color.g * 0.587 + color.b * 0.114
+	return clampf(1.0 - luminance, 0.0, 1.0)
+
+func get_visibility_gameplay_scalar() -> float:
+	return 1.0 - get_darkness_gameplay_scalar()
+
+func get_lighting_cost_hint() -> String:
+	match lighting_quality:
+		LightingQuality.FULL:
+			return "high"
+		LightingQuality.CHEAP:
+			return "medium"
+		LightingQuality.MINIMAL:
+			return "low"
+		_:
+			return "medium"
+
+func _scale_mood_color(base: Color, is_dark: bool) -> Color:
+	if is_dark:
+		var lifted := Color(
+			pow(base.r, 1.0 / darkness_scalar),
+			pow(base.g, 1.0 / darkness_scalar),
+			pow(base.b, 1.0 / darkness_scalar),
+			base.a
+		)
+		return Color(
+			clampf(lifted.r, 0.0, 1.0),
+			clampf(lifted.g, 0.0, 1.0),
+			clampf(lifted.b, 0.0, 1.0),
+			base.a
+		)
+	return Color(
+		clampf(base.r * brightness_scalar, 0.0, 1.0),
+		clampf(base.g * brightness_scalar, 0.0, 1.0),
+		clampf(base.b * brightness_scalar, 0.0, 1.0),
+		base.a
+	)
 
 func get_shadow_alpha_mult() -> float:
 	## How strong fake shadows / cliff shadows should read in the current mood.
@@ -530,11 +614,19 @@ func reset() -> void:
 	## Full reset — call when switching scenes (overworld ↔ dungeon).
 	clear_torches()
 	clear_player_lantern()
+	if _tween:
+		_tween.kill()
+		_tween = null
+	_current_mood = null
+	brightness_scalar = 1.0
+	darkness_scalar = 1.0
 	_canvas_mod.color = Color.WHITE
 	_environment.glow_enabled = false
 	if _vignette_rect and _vignette_rect.material is ShaderMaterial:
 		var sm := _vignette_rect.material as ShaderMaterial
 		sm.set_shader_parameter("vignette_strength", 0.0)
+		sm.set_shader_parameter("vignette_softness", 0.72)
+		sm.set_shader_parameter("vignette_color", Color(0.0, 0.0, 0.0, 0.72))
 
 # ─── Flicker ───
 

@@ -7,13 +7,13 @@ script = ExtResource("1")
 id = "crystal_wand"
 recipe_name = "Crystal Wand"
 recipe_type = "blacksmith"
-ingredients = Array[Dictionary]([{{
+ingredients = Array[Dictionary]([{
 "item_name": "Cave Crystal",
 "count": 2
-}}, {{
+}, {
 "item_name": "Magic Essence",
 "count": 1
-}}])
+}])
 gold_cost = 150
 result_item_path = "res://resources/items/crafted/crystal_wand.tres"
 result_count = 1

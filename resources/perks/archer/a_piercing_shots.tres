@@ -11,5 +11,8 @@ class_required = "archer"
 tier = 2
 prerequisites = ["a_eagle_eye"]
 stat_bonuses = {7: 1.0}
+stat_requirements = {
+"speed": 5
+}
 special_effect = ""
 is_percent = false

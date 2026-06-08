@@ -12,10 +12,10 @@ var rewards: Array[Dictionary] = []
 func _ready() -> void:
 	visible = false
 
-func show_rewards(reward_list: Array[Dictionary], title: String = "Choose a Reward") -> void:
+func show_rewards(reward_list: Array[Dictionary], title: String = "Treasure — Pick Anytime") -> void:
 	rewards = reward_list
 	title_label.text = title
-	get_tree().paused = true
+	# Non-blocking — combat continues while the picker sits at top-middle.
 	visible = true
 
 	# Clear old cards
@@ -48,5 +48,4 @@ func _on_card_pressed(index: int) -> void:
 		sfx.play("bonus", -2.0, 0.0)
 	var chosen = rewards[index]
 	visible = false
-	get_tree().paused = false
 	reward_chosen.emit(chosen)

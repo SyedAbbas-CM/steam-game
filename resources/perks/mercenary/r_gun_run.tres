@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "r_gun_run"
+perk_name = "Gun and Run"
+description = "Move speed not reduced while attacking."
+class_required = "mercenary"
+tier = 1
+prerequisites = []
+stat_requirements = {
+"movement": 5
+}
+stat_bonuses = {}
+special_effect = "gun_run"
+is_percent = false

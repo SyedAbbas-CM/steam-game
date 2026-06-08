@@ -11,5 +11,8 @@ class_required = "archer"
 tier = 3
 prerequisites = ["a_predator"]
 stat_bonuses = {}
+stat_requirements = {
+"luck": 10
+}
 special_effect = "assassin"
 is_percent = false

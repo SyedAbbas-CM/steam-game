@@ -4,11 +4,11 @@
 
 [resource]
 script = ExtResource("1")
-item_name = "Stamina Tonic"
+item_name = "Stamina Potion"
 loy_tile_index = 82
-description = "Fully restores stamina."
+description = "A green draught that fully restores stamina."
 slot_type = 10
 rarity = 0
 buy_price = 70
 sell_value = 18
-use_effect = "restore_stamina"
+use_effect = "restore_stamina_partial"

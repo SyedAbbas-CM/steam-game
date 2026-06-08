@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "g_frenzy"
+perk_name = "Berserker Frenzy"
+description = "Killing an enemy below 30% HP grants +40% attack speed for 4s."
+class_required = ""
+tier = 2
+prerequisites = []
+stat_requirements = {
+"strength": 10
+}
+stat_bonuses = {}
+special_effect = "frenzy"
+is_percent = false

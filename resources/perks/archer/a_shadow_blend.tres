@@ -11,5 +11,8 @@ class_required = "archer"
 tier = 2
 prerequisites = ["a_silent_step"]
 stat_bonuses = {}
+stat_requirements = {
+"movement": 5
+}
 special_effect = "shadow_blend"
 is_percent = false

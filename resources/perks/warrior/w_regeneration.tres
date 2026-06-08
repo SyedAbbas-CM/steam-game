@@ -11,5 +11,8 @@ class_required = "warrior"
 tier = 2
 prerequisites = ["w_iron_skin"]
 stat_bonuses = {10: 1.0}
+stat_requirements = {
+"health": 5
+}
 special_effect = ""
 is_percent = false

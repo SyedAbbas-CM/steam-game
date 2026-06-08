@@ -49,6 +49,18 @@ extends Resource
 @export var army_divisions: Array[Dictionary] = []
 @export var perk_tokens: int = 0
 @export var unlocked_perks: Array[String] = []
+@export var soul_points: int = 0
+@export var legacy_vault_items: Array[String] = []
+@export var legacy_vault_item_states: Dictionary = {}  # vault_index(int) -> per-instance state
+@export var pending_legacy_items: Array[String] = []
+@export var pending_legacy_item_states: Dictionary = {}  # pending_index(int) -> per-instance state
+@export var last_death_inventory_items: Array[String] = []
+@export var last_death_item_states: Dictionary = {}  # death_index(int) -> per-instance state
+@export var last_death_gold: int = 0
+@export var last_death_run_summary: Dictionary = {}
+@export var ancestor_records: Array[Dictionary] = []  # recent heroes/deaths for Hall display
+@export var tutorial_completed: bool = true  # default true so existing saves skip; create_new flips it false for fresh slots
+@export var tutorial_just_completed: bool = false  # one-shot — set true on tutorial exit, cleared after the Ravenhollow guidance dialogue plays
 
 # --- Future-proof (empty until implemented) ---
 @export var city_states: Dictionary = {}
@@ -79,6 +91,7 @@ static func create_new(slot: int) -> SaveData:
 	data.character_alive = false  # no character yet, need class selection
 	data.created_at = Time.get_datetime_string_from_system()
 	data.last_played = data.created_at
+	data.tutorial_completed = false  # fresh slot: tutorial runs once on first launch
 	return data
 
 func save_to_slot() -> void:
@@ -103,6 +116,11 @@ func wipe_character() -> void:
 	learned_spells.clear()
 	equipped_spell_slots = ["", "", "", "", "", ""]
 	pet_data.clear()
+	# Gold is wiped on death; finalize_hall_legacy_selection refunds a
+	# percentage based on the "gold_retention" hall upgrade (20% base, +10% per
+	# level, capped at 5 → up to 70% kept). `last_death_gold` already holds the
+	# pre-wipe amount via _snapshot_death_legacy().
+	gold = 0
 	save_to_slot()
 
 # Backward compat wrapper — existing code calls save_game()

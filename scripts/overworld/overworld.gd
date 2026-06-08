@@ -3,6 +3,7 @@ class_name Overworld
 extends Node2D
 
 const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+const LIQUID_SURFACE_SHADER = preload("res://shaders/dungeon/liquid_surface.gdshader")
 
 @onready var ground: TileMapLayer = $Ground
 @onready var paths: TileMapLayer = $Paths
@@ -22,6 +23,7 @@ var _nearby_entrance: Area2D = null  # entrance the player is standing near
 var _tile_inspector: TileInspector = null  # tile inspection popup
 var _zone_spawn_data: Array = []  # [{zone, spawn_data, enemy_def, ox, oy, s}] for respawning
 var _respawn_timer: float = 0.0
+var _water_shader_material: ShaderMaterial = null
 const RESPAWN_INTERVAL: float = 8.0  # seconds between spawn ticks (enemies appear gradually)
 const MAX_ENEMIES_PER_ZONE: int = 6
 const DEFAULT_TEST_MINE_ID: String = "ironvein_depths"
@@ -97,13 +99,14 @@ func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	add_to_group("overworld")
+	_setup_water_shader()
 
 	var t0 = Time.get_ticks_msec()
 	var player = $Player
 	# Scale visuals only — scaling CharacterBody2D breaks move_and_slide()
 	# Animated sprites (8x8) need 4x scale; static LoY chars.png (32x32) need 1x
 	var spr = player.get_node("Sprite2D")
-	if player._player_anim:
+	if player.get("_player_anim") != null:
 		spr.scale = Vector2(4, 4)  # 8x8 animated sprite — scale up to 32px
 	elif spr.texture is AtlasTexture:
 		spr.scale = Vector2(1, 1)  # 32x32 atlas from chars.png — already tile-sized
@@ -132,6 +135,7 @@ func _ready() -> void:
 		gm.overworld_return_position = Vector2.ZERO  # clear so next fresh load uses default
 	player.global_position = spawn_px
 	print("Player spawn: pixel %s" % spawn_px)
+	_play_player_spawn_warp(player, spawn_px)
 
 	# Spawn temporary town portal if returning from boss kill
 	if gm and gm.has_meta("spawn_overworld_portal") and gm.get_meta("spawn_overworld_portal"):
@@ -160,6 +164,11 @@ func _ready() -> void:
 	TileNames.load_fallbacks()
 
 	_setup_game_hud(player)
+	if PerfTelemetry.is_enabled():
+		_perf_overlay = PerfOverlay.new()
+		add_child(_perf_overlay)
+		_perf_overlay.setup()
+		PerfTelemetry.attach_scene(self, self)
 
 	# Pass zone data to QuestManager for objective position resolution + quest arrow
 	var qm = get_node_or_null("/root/QuestManager")
@@ -189,6 +198,19 @@ func _ready() -> void:
 		var won_zone: String = gm.get_meta("last_battle_victory_zone")
 		gm.remove_meta("last_battle_victory_zone")
 		_show_battle_victory_notification.call_deferred(won_zone)
+
+func _play_player_spawn_warp(player: Node2D, spawn_px: Vector2) -> void:
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.storm_arrival(spawn_px, Color(0.86, 0.08, 0.05, 0.98), 96.0, 1.15)
+		vfx.shockwave(spawn_px, 42.0, Color(1.0, 0.18, 0.08, 0.26))
+		vfx.shake(1.8, 0.18)
+
+	var spr = player.get_node_or_null("Sprite2D") as Sprite2D
+	if spr:
+		spr.modulate = Color(1.35, 0.72, 0.72, 0.22)
+		var tween = create_tween()
+		tween.tween_property(spr, "modulate", Color.WHITE, 0.36)
 
 var _use_file_chunks: bool = true  # true = load from .tres files, false = extracted from scene
 
@@ -428,6 +450,12 @@ func _async_init() -> void:
 	if gm and gm.has_method("_hide_loading_screen"):
 		gm._hide_loading_screen()
 
+	# One-shot post-tutorial guidance: point the new Penitent at the Elder.
+	if gm and gm.save_data and gm.save_data.tutorial_just_completed:
+		gm.save_data.tutorial_just_completed = false
+		gm.save_data.save_to_slot()
+		call_deferred("_show_post_tutorial_dialogue")
+
 func _load_zone_data() -> void:
 	for path in ResourceRegistry.zones():
 		var zone = load(path) as LoyZoneData
@@ -629,6 +657,10 @@ func _on_zone_gate_entered(body: Node, target_zone_id: String) -> void:
 		_switch_to_zone(target)
 
 func _switch_to_zone(zone: LoyZoneData) -> void:
+	PerfTelemetry.mark_checkpoint("zone_changed", {
+		"zone_id": zone.id,
+		"zone_name": zone.zone_name,
+	})
 	_current_zone = zone
 	_last_zone_change_msec = Time.get_ticks_msec()
 	_rebuild_allowed_zones()
@@ -1012,6 +1044,9 @@ func _spawn_overworld_enemy(enemy_scene: PackedScene, container: Node, enemy_def
 		enemy.set_meta("behavior", "wander")
 		enemy.set_meta("passive_until_hit", true)
 	container.add_child(enemy)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.warp_portal(pos, Color(0.84, 0.1, 0.05, 0.96), 22.0, 0.5)
 
 ## ── Quest Enemy Spawning ────────────────────────────────────────────────────
 
@@ -1387,6 +1422,9 @@ func _spawn_one_enemy(region: Dictionary, container: Node, enemy_scene: PackedSc
 	if not hostile or behavior == "passive":
 		enemy.set_meta("passive_until_hit", true)
 	container.add_child(enemy)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.warp_portal(pos, Color(0.84, 0.1, 0.05, 0.96), 22.0, 0.5)
 
 func _respawn_editor_enemies() -> void:
 	if _editor_spawn_regions.is_empty():
@@ -1575,6 +1613,7 @@ func _spawn_test_arena_entrance() -> void:
 		{"biome": "Test-Arena-Boss", "label": "Boss Arena", "tint": Color(1.0, 0.55, 0.35)},
 		{"biome": "TestCombo", "label": "Combo Arena", "tint": Color(0.4, 1.0, 0.4)},
 		{"biome": "PushTest", "label": "Push Arena", "tint": Color(1.0, 0.6, 1.0)},
+		{"biome": "StealthTest", "label": "Stealth Arena", "tint": Color(0.5, 0.9, 1.0)},
 	]
 	for i in range(entries.size()):
 		var entry = entries[i]
@@ -1593,6 +1632,23 @@ func _spawn_test_arena_entrance() -> void:
 
 
 ## Spawn Height Test entrance near player spawn
+func _show_post_tutorial_dialogue() -> void:
+	# Wait a couple frames so the QuestManager + DialogueUI are wired up before
+	# we ask them to render anything.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var qm = get_node_or_null("/root/QuestManager")
+	if not qm:
+		return
+	qm._waiting_for_dialogue = true
+	qm.show_dialogue_requested.emit(
+		"Confessor Elias",
+		147,
+		"You stand in Ravenhollow, Penitent. The work begins here. / / Find me in the chapel — the building marked with the Synod sigil. Walk north until you see the censer-smoke. We have words.",
+		["I'll find you"],
+	)
+
+
 func _spawn_height_test_entrance() -> void:
 	var spawn_px = Vector2(player_spawn_tile.x * 32 + 16, player_spawn_tile.y * 32 + 16)
 	var entrance_pos = spawn_px + Vector2(128, 128)
@@ -1756,6 +1812,11 @@ func _is_stairs_tile(atlas: Vector2i, tile_size: int) -> bool:
 var _nearby_door: Area2D = null
 
 func _unhandled_input(event: InputEvent) -> void:
+	# F11: toggle Sigil HUD ↔ classic HUD (live, no restart)
+	if event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_F11:
+		_toggle_hud_style()
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("interact"):
 		# Priority 0: Close tile inspector if open
 		if _tile_inspector and _tile_inspector.is_open():
@@ -1773,6 +1834,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			if biome_name == "PushTest":
 				get_viewport().set_input_as_handled()
 				get_tree().change_scene_to_file.call_deferred("res://scenes/test/push_test_arena.tscn")
+				return
+			if biome_name == "StealthTest":
+				get_viewport().set_input_as_handled()
+				get_tree().change_scene_to_file.call_deferred("res://scenes/test/stealth_test_arena.tscn")
 				return
 			var gm = get_node_or_null("/root/GameManager")
 			if gm:
@@ -2459,14 +2524,28 @@ func _open_door(cell: Vector2i, area: Area2D) -> void:
 	_door_areas.erase(area)
 	area.queue_free()
 
-var _game_hud: GameHUD
+var _game_hud: CanvasLayer  ## SigilHUD or GameHUD — both share the public API used here.
 var _quest_world_marker: Node2D
 var _quest_world_marker_pos: Vector2 = Vector2.ZERO
+var _perf_overlay: PerfOverlay = null
 
 func _setup_game_hud(player_node: CharacterBody2D) -> void:
-	_game_hud = GameHUD.new()
+	_game_hud = SigilHUD.new() if (UIPrefs.use_sigil_hud and not TouchControls.is_mobile()) else GameHUD.new()
 	add_child(_game_hud)
 	_game_hud.setup(player_node)
+
+## Live-swap between Sigil and classic HUD. Player keeps the active scene.
+func _toggle_hud_style() -> void:
+	var new_use_sigil := UIPrefs.toggle_hud()
+	var player_node = get_node_or_null("Player") as CharacterBody2D
+	if not player_node:
+		return
+	if _game_hud:
+		_game_hud.queue_free()
+		_game_hud = null
+	_setup_game_hud(player_node)
+	if _game_hud and _game_hud.has_method("flash_text"):
+		_game_hud.flash_text("HUD: " + ("Sigil" if new_use_sigil else "Classic"), Color(0.918, 0.702, 0.031), 2.0)
 	if not player_node.player_died.is_connected(_on_player_died):
 		player_node.player_died.connect(_on_player_died)
 	_update_gold_label()
@@ -2611,62 +2690,8 @@ func _on_player_died() -> void:
 	var death_overlay = _build_death_overlay()
 	add_child(death_overlay)
 
-	# Wait for player to click Respawn (overlay removes itself)
+	# Wait for player to leave the overlay (Hall transition)
 	await death_overlay.tree_exited
-
-	# Drop all equipment — fresh start
-	player_node.equipment_manager.equipped.clear()
-	player_node.equipment_manager.inventory.clear()
-	player_node.equipment_manager.stats_changed.emit()
-	player_node.equipment_manager.inventory_changed.emit()
-
-	# Give fresh starting items
-	player_node._give_starting_items()
-
-	# Reset HP/MP/Stamina to new max
-	player_node.max_hp = player_node.equipment_manager.get_max_hp()
-	player_node.hp = player_node.max_hp
-	player_node.max_mp = player_node.equipment_manager.get_max_mp()
-	player_node.mp = player_node.max_mp
-	player_node.max_stamina = player_node.equipment_manager.get_max_stamina()
-	player_node.stamina = player_node.max_stamina
-	player_node.hp_changed.emit(player_node.hp)
-	player_node.mp_changed.emit(player_node.mp)
-	player_node.stamina_changed.emit(player_node.stamina)
-
-	# Reset level
-	player_node.level_system.level = 1
-	player_node.level_system.xp = 0
-	player_node.level_system.unspent_stat_points = 0
-	player_node.level_system.allocated.clear()
-	player_node.xp_changed.emit(0, player_node.level_system.xp_to_next_level())
-
-	# Reset quickbar
-	if _game_hud:
-		_game_hud._quickbar_items = ["", "", "", "", "", ""]
-		_game_hud._quickbar_items[0] = "Red Potion"
-		_game_hud._quickbar_items[1] = "Apple"
-		_game_hud._refresh_quickbar()
-
-	# Save cleared state
-	var gm = get_node_or_null("/root/GameManager")
-	if gm:
-		gm.save_equipment(player_node.equipment_manager)
-		gm.save_level_data(player_node.level_system)
-		if _game_hud:
-			gm.save_quickbar(_game_hud)
-
-	# Teleport to spawn point and unpause
-	player_node.global_position = Vector2(player_spawn_tile.x * 32 + 16, player_spawn_tile.y * 32 + 16)
-	player_node.process_mode = Node.PROCESS_MODE_INHERIT
-	player_node.invincible = true
-	get_tree().paused = false
-
-	var tween = create_tween()
-	for i in range(8):
-		tween.tween_property(player_node.sprite, "modulate:a", 0.2, 0.1)
-		tween.tween_property(player_node.sprite, "modulate:a", 1.0, 0.1)
-	tween.tween_callback(func(): player_node.invincible = false)
 
 func _build_death_overlay() -> CanvasLayer:
 	var layer = CanvasLayer.new()
@@ -2730,9 +2755,9 @@ func _build_death_overlay() -> CanvasLayer:
 	s_tw.tween_interval(1.2)
 	s_tw.tween_property(sub, "modulate:a", 1.0, 0.5)
 
-	# Respawn button
+	# Hall button
 	var btn = Button.new()
-	btn.text = "Respawn"
+	btn.text = "Enter Hall of Ancestors"
 	btn.custom_minimum_size = Vector2(200, 50)
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn.add_theme_font_size_override("font_size", 22)
@@ -2756,7 +2781,14 @@ func _build_death_overlay() -> CanvasLayer:
 	b_tw.tween_interval(2.0)
 	b_tw.tween_property(btn, "modulate:a", 1.0, 0.4)
 
-	btn.pressed.connect(func(): layer.queue_free())
+	btn.pressed.connect(func():
+		var gm = get_node_or_null("/root/GameManager")
+		get_tree().paused = false
+		layer.queue_free()
+		if gm:
+			gm.on_character_death()
+			gm.call_deferred("go_to_hall_of_ancestors")
+	)
 	return layer
 
 func _update_gold_label() -> void:
@@ -2769,6 +2801,7 @@ func _update_gold_label() -> void:
 func _process(_delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
+	_update_water_shader()
 	_update_gold_label()
 	_poll_async_loads()
 	_update_current_zone()
@@ -2780,6 +2813,23 @@ func _process(_delta: float) -> void:
 	_check_pending_attack_auto_resolve()
 	if _debug_tile_labels_visible:
 		_debug_update_labels()
+
+func _setup_water_shader() -> void:
+	if water == null:
+		return
+	_water_shader_material = ShaderMaterial.new()
+	_water_shader_material.shader = LIQUID_SURFACE_SHADER
+	_water_shader_material.set_shader_parameter("tile_size", 32.0)
+	_water_shader_material.set_shader_parameter("active_liquid_type", 1)
+	_water_shader_material.set_shader_parameter("player_world_pos", Vector2.ZERO)
+	water.material = _water_shader_material
+
+func _update_water_shader() -> void:
+	if _water_shader_material == null:
+		return
+	var player = get_node_or_null("Player")
+	if player and is_instance_valid(player):
+		_water_shader_material.set_shader_parameter("player_world_pos", player.global_position)
 
 func _drain_unload_queue() -> void:
 	# Unload max 2 chunks per frame to avoid stutters
@@ -3273,3 +3323,7 @@ func _spawn_temp_portal(pos: Vector2) -> void:
 	fade_tween.tween_property(sprite, "modulate:a", 0.0, 2.0)
 	fade_tween.tween_callback(portal.queue_free)
 	print("Overworld: Temporary town portal spawned at %s (10s lifetime)" % pos)
+
+func _exit_tree() -> void:
+	if has_node("/root/PerfTelemetry"):
+		PerfTelemetry.detach_scene(self)

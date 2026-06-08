@@ -7,13 +7,13 @@ script = ExtResource("1")
 id = "greater_mana_potion"
 recipe_name = "Greater Mana Potion"
 recipe_type = "alchemist"
-ingredients = Array[Dictionary]([{{
+ingredients = Array[Dictionary]([{
 "item_name": "Magic Essence",
 "count": 2
-}}, {{
-"item_name": "Green Potion",
+}, {
+"item_name": "Blue Potion",
 "count": 1
-}}])
+}])
 gold_cost = 50
 result_item_path = "res://resources/items/crafted/greater_mana_potion.tres"
 result_count = 1

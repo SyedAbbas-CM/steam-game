@@ -1,7 +1,29 @@
 class_name LevelSystem
 extends Node
 
-const MAX_LEVEL = 99
+const MAX_LEVEL = 100
+
+# Display names for the 8 pure stats. Internal keys are full words.
+const CATEGORY_DISPLAY_NAMES: Dictionary = {
+	"health": "HP",
+	"defense": "DEF",
+	"strength": "STR",
+	"speed": "SPD",
+	"movement": "MOV",
+	"intellect": "INT",
+	"luck": "LCK",
+	"endurance": "END",
+}
+
+# Map old bundled-stat keys to the closest new pure-stat for save migration.
+const LEGACY_CATEGORY_MAP: Dictionary = {
+	"vitality": "health",
+	"power": "strength",
+	"agility": "movement",
+	"spirit": "intellect",
+	"fortune": "luck",
+	"bulk": "endurance",
+}
 
 var level: int = 1
 var xp: int = 0
@@ -11,67 +33,74 @@ var allocated: Dictionary = {}  # "vitality" -> count, "power" -> count, etc.
 signal leveled_up(new_level: int)
 signal xp_gained(amount: int, total: int)
 
-# Per-level auto-gains (added per level above 1)
+# Per-level auto-gains (added per level above 1).
+# Rebalanced for the 1-100 curve: lvl 30 ≈ early game power, lvl 100 = capped.
+# Most progression is meant to come from allocated stat points + perks, not auto-gains.
 const LEVEL_BONUSES: Dictionary = {
-	StatModifier.StatType.MAX_HP: 3.0,
-	StatModifier.StatType.MOVE_SPEED: 1.5,
-	StatModifier.StatType.ATTACK_DAMAGE: 0.15,
-	StatModifier.StatType.ATTACK_SPEED: -0.003,  # negative = faster
-	StatModifier.StatType.BULLET_SPEED: 1.0,
-	StatModifier.StatType.MAX_MP: 2.0,
-	# HP_REGEN removed — only increases via vitality allocation or potions
-	StatModifier.StatType.MP_REGEN: 0.03,
-	StatModifier.StatType.LUCK: 0.5,
-	StatModifier.StatType.CRIT_DAMAGE: 0.02,
-	StatModifier.StatType.ARMOR: 0.2,
-	StatModifier.StatType.DODGE_CHANCE: 0.15,
-	StatModifier.StatType.PICKUP_RADIUS: 0.5,
-	StatModifier.StatType.COOLDOWN_REDUCTION: 0.2,
-	StatModifier.StatType.MAX_STAMINA: 5.0,     # +5 max stamina per level
-	StatModifier.StatType.STAMINA_REGEN: 0.5,   # +0.5 regen/s per level
+	StatModifier.StatType.MAX_HP: 1.0,
+	StatModifier.StatType.MOVE_SPEED: 0.5,
+	StatModifier.StatType.ATTACK_DAMAGE: 0.06,
+	StatModifier.StatType.ATTACK_SPEED: -0.0012,
+	StatModifier.StatType.BULLET_SPEED: 0.4,
+	StatModifier.StatType.MAX_MP: 0.8,
+	StatModifier.StatType.MP_REGEN: 0.012,
+	StatModifier.StatType.LUCK: 0.2,
+	StatModifier.StatType.CRIT_DAMAGE: 0.008,
+	StatModifier.StatType.ARMOR: 0.08,
+	StatModifier.StatType.DODGE_CHANCE: 0.06,
+	StatModifier.StatType.PICKUP_RADIUS: 0.2,
+	StatModifier.StatType.COOLDOWN_REDUCTION: 0.08,
+	StatModifier.StatType.MAX_STAMINA: 2.0,
+	StatModifier.StatType.STAMINA_REGEN: 0.2,
 }
 
-# Stat point allocation categories — each gives a bundle of stat bonuses per point
+# Stat point allocation categories — 8 pure stats, each governs 1-3 closely related things.
+# Per-point values tuned for the 1-100 cap so end-game (99 points) stays manageable.
 const ALLOCATION_CATEGORIES: Dictionary = {
-	"vitality": {
-		StatModifier.StatType.MAX_HP: 10.0,
-		StatModifier.StatType.HP_REGEN: 0.3,
-		StatModifier.StatType.ARMOR: 1.0,
+	"health": {
+		StatModifier.StatType.MAX_HP: 4.0,
+		StatModifier.StatType.HP_REGEN: 0.12,
 	},
-	"power": {
-		StatModifier.StatType.ATTACK_DAMAGE: 1.0,
-		StatModifier.StatType.BULLET_SPEED: 5.0,
-		StatModifier.StatType.CRIT_DAMAGE: 0.1,
+	"defense": {
+		StatModifier.StatType.ARMOR: 0.7,
+		StatModifier.StatType.TENACITY: 0.8,
 	},
-	"agility": {
-		StatModifier.StatType.MOVE_SPEED: 3.0,
-		StatModifier.StatType.ACCELERATION: 0.3,
-		StatModifier.StatType.DODGE_CHANCE: 1.0,
-		StatModifier.StatType.MAX_STAMINA: 15.0,
-		StatModifier.StatType.STAMINA_REGEN: 2.0,
+	"strength": {
+		StatModifier.StatType.ATTACK_DAMAGE: 0.4,
+		StatModifier.StatType.CRIT_DAMAGE: 0.03,
 	},
-	"spirit": {
-		StatModifier.StatType.MAX_MP: 10.0,
-		StatModifier.StatType.MP_REGEN: 0.5,
-		StatModifier.StatType.COOLDOWN_REDUCTION: 3.0,
+	"speed": {
+		StatModifier.StatType.ATTACK_SPEED: -0.002,  # negative = faster
+		StatModifier.StatType.BULLET_SPEED: 2.0,
 	},
-	"fortune": {
-		StatModifier.StatType.LUCK: 3.0,
-		StatModifier.StatType.XP_MULT: 0.1,
-		StatModifier.StatType.GOLD_MULT: 0.1,
+	"movement": {
+		StatModifier.StatType.MOVE_SPEED: 1.2,
+		StatModifier.StatType.DODGE_CHANCE: 0.4,
 	},
-	"bulk": {
-		StatModifier.StatType.WEIGHT: 0.5,
-		StatModifier.StatType.MAX_HP: 5.0,
-		StatModifier.StatType.PICKUP_RADIUS: 2.0,
-		StatModifier.StatType.TENACITY: 3.0,
-		StatModifier.StatType.THORNS: 1.0,
+	"intellect": {
+		StatModifier.StatType.MAX_MP: 2.5,
+		StatModifier.StatType.MP_REGEN: 0.12,
+		StatModifier.StatType.COOLDOWN_REDUCTION: 0.7,
+		StatModifier.StatType.ATTACK_DAMAGE: 0.3,  # scales staff/wand/tome damage
+	},
+	"luck": {
+		StatModifier.StatType.LUCK: 0.8,
+		StatModifier.StatType.GOLD_MULT: 0.025,
+		StatModifier.StatType.XP_MULT: 0.025,
+	},
+	"endurance": {
+		StatModifier.StatType.MAX_STAMINA: 2.5,
+		StatModifier.StatType.STAMINA_REGEN: 0.25,
+		StatModifier.StatType.PICKUP_RADIUS: 1.0,
 	},
 }
 
 func xp_to_next_level() -> int:
-	# Early levels are fast, scales up gradually
-	return 100 + (level - 1) * 50
+	# Stretched curve for 1-100: early levels fast, late levels meaningful grind.
+	# Lvl 1→2: 150 XP. Lvl 30→31: ~2500 XP. Lvl 100→cap: ~30000 XP.
+	# Cumulative to 100 ≈ 1M XP.
+	var lv = level - 1
+	return 150 + lv * 80 + int(lv * lv * 2.4)
 
 func gain_xp(amount: int, xp_mult: float = 1.0) -> void:
 	if level >= MAX_LEVEL:
@@ -108,6 +137,20 @@ func get_total_allocated_points() -> int:
 	for cat in allocated:
 		total += allocated[cat] as int
 	return total
+
+## Returns points allocated to a category by either internal key or display name.
+## "vitality" or "VIT" both return vitality points.
+func get_allocation_points(name_or_key: String) -> int:
+	if allocated.has(name_or_key):
+		return allocated[name_or_key] as int
+	for key in CATEGORY_DISPLAY_NAMES:
+		if CATEGORY_DISPLAY_NAMES[key] == name_or_key:
+			return allocated.get(key, 0) as int
+	return 0
+
+## Display name for an internal category key ("vitality" -> "VIT")
+static func display_name(key: String) -> String:
+	return CATEGORY_DISPLAY_NAMES.get(key, key.to_upper())
 
 # Power level: represents overall player strength for dungeon scaling comparison
 # Formula: level * 10 + allocated_stat_points * 5
@@ -154,6 +197,19 @@ func load_from_dict(data: Dictionary) -> void:
 	xp = data.get("xp", 0)
 	unspent_stat_points = data.get("unspent_stat_points", 0)
 	allocated = data.get("allocated", {}).duplicate()
+	# Migrate legacy 6-bundle keys to new 8-stat keys (refund points if old keys exist).
+	var migrated_points = 0
+	var clean_allocated: Dictionary = {}
+	for key in allocated:
+		if ALLOCATION_CATEGORIES.has(key):
+			clean_allocated[key] = allocated[key]
+		else:
+			# Legacy or unknown key — refund the points
+			migrated_points += int(allocated[key])
+	if migrated_points > 0:
+		allocated = clean_allocated
+		unspent_stat_points += migrated_points
+		print("LevelSystem: migrated %d legacy stat points to refund pool" % migrated_points)
 	# Retroactive fix: ensure total points = level - 1 (1 per level after level 1)
 	var total_spent = get_total_allocated_points()
 	var expected_total = level - 1

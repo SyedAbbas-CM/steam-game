@@ -11,5 +11,9 @@ class_required = "archer"
 tier = 4
 prerequisites = ["a_assassin", "a_hawkeye"]
 stat_bonuses = {}
+stat_requirements = {
+"movement": 12,
+"luck": 5
+}
 special_effect = "death_from_shadows"
 is_percent = false

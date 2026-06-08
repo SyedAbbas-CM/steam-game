@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "g_quickfoot"
+perk_name = "Quickfoot"
+description = "+15% move speed and +10 dodge"
+class_required = ""
+tier = 2
+prerequisites = []
+stat_requirements = {
+"movement": 12
+}
+stat_bonuses = {
+1: 0.15,
+17: 10.0
+}
+special_effect = ""
+is_percent = true

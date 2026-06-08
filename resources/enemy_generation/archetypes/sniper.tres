@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EliteArchetypeDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/elite_archetype_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/movements/hold_ranged.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+archetype_id = "sniper"
+display_prefix = "Sniper"
+allowed_roles = Array[String](["ranged"])
+movement_pattern = ExtResource("2")
+attack_pool = Array[int]([16, 17, 61, 56])
+phase_2_attack = 61
+phase_3_attack = 17
+hp_mult = 1.05
+damage_mult = 1.2
+move_speed_mult = 1.0
+attack_speed_mult = 0.84
+bullet_speed_mult = 1.18
+bullet_count_bonus = 1
+armor_bonus = 1
+color_tint = Color(0.78, 0.86, 0.98, 1)

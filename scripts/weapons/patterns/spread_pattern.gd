@@ -10,7 +10,10 @@ func get_fire_data(aim_direction: Vector2, stats: EquipmentManager) -> Array[Dic
 	var total_angle: float = stats.get_spread_angle()
 
 	if total_angle <= 0.0:
-		total_angle = 0.25  # default ~15 degree fan (tight spread)
+		# Default spread scales with bullet count so 2-bullet weapons (wizard staff)
+		# stay nearly parallel, while 4+ bullet weapons get a real fan.
+		total_angle = 0.07 * float(count - 1)
+		total_angle = clampf(total_angle, 0.04, 0.30)
 
 	if count <= 1:
 		result.append({"direction": aim_direction, "delay": 0.0,

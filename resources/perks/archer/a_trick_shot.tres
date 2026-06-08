@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "a_trick_shot"
+perk_name = "Trick Shot"
+description = "Every 4th shot ricochets to the nearest enemy within 100px."
+class_required = "archer"
+tier = 2
+prerequisites = ["a_quick_draw"]
+stat_requirements = {
+"speed": 8
+}
+stat_bonuses = {}
+special_effect = "trick_shot"
+is_percent = false

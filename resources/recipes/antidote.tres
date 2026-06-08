@@ -7,13 +7,13 @@ script = ExtResource("1")
 id = "antidote"
 recipe_name = "Antidote"
 recipe_type = "alchemist"
-ingredients = Array[Dictionary]([{{
+ingredients = Array[Dictionary]([{
 "item_name": "Healing Herb",
 "count": 1
-}}, {{
+}, {
 "item_name": "Venom Sac",
 "count": 1
-}}])
+}])
 gold_cost = 20
 result_item_path = "res://resources/items/crafted/antidote.tres"
 result_count = 1

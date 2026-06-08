@@ -48,7 +48,7 @@ func _build_ui() -> void:
 	# --- Interact button (bottom center, hidden by default) ---
 	_interact_btn = _make_touch_btn("interact", "Interact", Vector2(280, 100), 34,
 		Color(0.1, 0.4, 0.15, 0.85), Color(0.3, 0.9, 0.4))
-	_interact_btn.position = Vector2(vp_size.x / 2.0 - 140, vp_size.y - margin - 120)
+	_interact_btn.position = Vector2(vp_size.x / 2.0 - 140, vp_size.y - margin - 290)
 	_interact_btn.visible = false
 	container.add_child(_interact_btn)
 
@@ -110,11 +110,16 @@ func _input(event: InputEvent) -> void:
 		if right_stick and right_stick.owns_touch(event.index):
 			return
 		if event.pressed:
-			_check_btn_touch(event.position, event.index)
+			if _check_btn_touch(event.position, event.index):
+				return
+			var vp_size = get_viewport().get_visible_rect().size
+			if _interact_visible and event.position.y > 140.0 and event.position.y < vp_size.y - 300.0:
+				_tap_action("interact")
+				get_viewport().set_input_as_handled()
 		else:
 			_release_btn_touch(event.index)
 
-func _check_btn_touch(pos: Vector2, index: int) -> void:
+func _check_btn_touch(pos: Vector2, index: int) -> bool:
 	var buttons = [_sprint_btn, _interact_btn, _shield_btn, _power_btn]
 	for btn in buttons:
 		if btn == null or not btn.visible:
@@ -124,7 +129,8 @@ func _check_btn_touch(pos: Vector2, index: int) -> void:
 			_btn_touch_map[action] = index
 			_on_btn_pressed(btn, action)
 			get_viewport().set_input_as_handled()
-			return
+			return true
+	return false
 
 func _release_btn_touch(index: int) -> void:
 	for action in _btn_touch_map.keys():
@@ -156,14 +162,29 @@ func _get_btn_for_action(action: String) -> Control:
 func _on_btn_pressed(btn: Control, action: String) -> void:
 	var bg_rect: ColorRect = btn.get_meta("bg_rect")
 	bg_rect.color = btn.get_meta("bg_color").lightened(0.3)
+	if action == "interact":
+		_tap_action(action)
+		return
 	Input.action_press(action)
 	if action == "sprint":
 		_sprint_held = true
 
 func _on_btn_released(action: String) -> void:
+	if action == "interact":
+		return
 	Input.action_release(action)
 	if action == "sprint":
 		_sprint_held = false
+
+func _tap_action(action: String) -> void:
+	var press := InputEventAction.new()
+	press.action = action
+	press.pressed = true
+	Input.parse_input_event(press)
+	var release := InputEventAction.new()
+	release.action = action
+	release.pressed = false
+	Input.parse_input_event(release)
 
 func show_interact_button(text: String = "Interact") -> void:
 	if _interact_btn:

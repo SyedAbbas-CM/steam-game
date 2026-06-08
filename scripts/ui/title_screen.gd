@@ -51,36 +51,47 @@ func _build_ui() -> void:
 	for c in get_children():
 		c.queue_free()
 
-	# Background
+	# Background — Ashfields theme bg_deep
 	var bg = ColorRect.new()
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0.03, 0.03, 0.08)
+	bg.color = Color(0.059, 0.059, 0.102)
 	add_child(bg)
+
+	# Faint vignette overlay for depth
+	var vignette = ColorRect.new()
+	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vignette.color = Color(0, 0, 0, 0.35)
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(vignette)
 
 	_container = VBoxContainer.new()
 	_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_container.add_theme_constant_override("separation", 20)
+	_container.add_theme_constant_override("separation", 18)
 	_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(_container)
 
-	# Title
+	# Title — gold display in Press Start 2P, deep outline
 	var title = Label.new()
-	title.text = "DUNGEON CRAWL"
+	title.text = "ETERNAL CONQUESTS"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var title_s = LabelSettings.new()
-	title_s.font_size = 72
-	title_s.font_color = Color(0.9, 0.8, 0.3)
-	title_s.outline_size = 4
-	title_s.outline_color = Color(0.3, 0.2, 0.0)
+	title_s.font = load("res://assets/fonts/PressStart2P-Regular.ttf")
+	title_s.font_size = 48
+	title_s.font_color = Color(0.918, 0.702, 0.031)
+	title_s.outline_size = 6
+	title_s.outline_color = Color(0.075, 0.067, 0.060)
+	title_s.shadow_color = Color(0, 0, 0, 0.6)
+	title_s.shadow_size = 2
+	title_s.shadow_offset = Vector2(3, 4)
 	title.label_settings = title_s
 	_container.add_child(title)
 
 	var subtitle = Label.new()
-	subtitle.text = "A Roguelike Adventure"
+	subtitle.text = "Refugees of the Sundering"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var sub_s = LabelSettings.new()
-	sub_s.font_size = 28
-	sub_s.font_color = Color(0.6, 0.6, 0.7)
+	sub_s.font_size = 22
+	sub_s.font_color = Color(0.659, 0.635, 0.616)
 	subtitle.label_settings = sub_s
 	_container.add_child(subtitle)
 
@@ -103,8 +114,10 @@ func _build_slot_select() -> void:
 	header.text = "SELECT WORLD"
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var hs = LabelSettings.new()
-	hs.font_size = 24
-	hs.font_color = Color(0.8, 0.75, 0.6)
+	hs.font_size = 22
+	hs.font_color = Color(0.792, 0.541, 0.016)
+	hs.outline_size = 2
+	hs.outline_color = Color(0, 0, 0, 0.8)
 	header.label_settings = hs
 	_container.add_child(header)
 
@@ -153,29 +166,34 @@ func _build_slot_panel(slot: int) -> VBoxContainer:
 	vbox.add_theme_constant_override("separation", 8)
 	vbox.custom_minimum_size = Vector2(320, 0)
 
-	# Panel background
+	# Panel background — Ashfields theme bg_panel + warm border
 	var panel_bg = PanelContainer.new()
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.06, 0.12)
-	style.border_color = Color(0.3, 0.3, 0.4)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
+	style.bg_color = Color(0.110, 0.098, 0.090, 0.96)
+	style.border_color = Color(0.471, 0.443, 0.420)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
 	style.content_margin_left = 16
 	style.content_margin_right = 16
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
+	style.content_margin_top = 14
+	style.content_margin_bottom = 14
+	style.shadow_color = Color(0, 0, 0, 0.5)
+	style.shadow_size = 6
+	style.shadow_offset = Vector2(0, 3)
 	panel_bg.add_theme_stylebox_override("panel", style)
 
 	var inner = VBoxContainer.new()
 	inner.add_theme_constant_override("separation", 6)
 	var data = gm.load_slot_preview(slot) if gm else null
 
-	# Slot title
+	# Slot title — gold accent
 	var slot_label = Label.new()
 	slot_label.text = "World %d" % slot
 	slot_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	slot_label.add_theme_font_size_override("font_size", 22)
-	slot_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
+	slot_label.add_theme_color_override("font_color", Color(0.918, 0.702, 0.031))
+	slot_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	slot_label.add_theme_constant_override("outline_size", 2)
 	inner.add_child(slot_label)
 
 	if data:
@@ -672,16 +690,19 @@ func _on_class_confirmed() -> void:
 	if not gm:
 		return
 	gm.start_new_character(_selected_class)
-	# Show loading then go to overworld
+	# Show loading then route: first-time chars take the tutorial; others go to overworld.
 	var loading = Label.new()
-	loading.text = "Loading world..."
+	loading.text = "Tutorial..." if (gm.save_data and not gm.save_data.tutorial_completed) else "Loading world..."
 	loading.set_anchors_preset(Control.PRESET_CENTER)
 	loading.add_theme_font_size_override("font_size", 24)
 	loading.add_theme_color_override("font_color", Color.WHITE)
 	add_child(loading)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	gm.return_to_overworld()
+	if gm.save_data and not gm.save_data.tutorial_completed:
+		gm.start_tutorial()
+	else:
+		gm.return_to_overworld()
 
 func _play_click() -> void:
 	var sfx = get_node_or_null("/root/SFXManager")

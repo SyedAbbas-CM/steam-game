@@ -11,5 +11,9 @@ class_required = "wizard"
 tier = 4
 prerequisites = ["m_arcane_surge", "m_spellweave"]
 stat_bonuses = {}
+stat_requirements = {
+"intellect": 12,
+"speed": 4
+}
 special_effect = "archmage"
 is_percent = false

@@ -11,5 +11,9 @@ class_required = "warrior"
 tier = 4
 prerequisites = ["w_berserker", "w_fortified"]
 stat_bonuses = {}
+stat_requirements = {
+"health": 12,
+"defense": 5
+}
 special_effect = "undying"
 is_percent = false

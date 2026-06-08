@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/death_screen.tscn" id="5_death"]
 [ext_resource type="PackedScene" path="res://scenes/ui/inventory_screen.tscn" id="7_inventory"]
 [ext_resource type="PackedScene" path="res://scenes/ui/touch_controls.tscn" id="8_touch"]
+[ext_resource type="PackedScene" path="res://scenes/ui/codex_screen.tscn" id="9_codex"]
 [ext_resource type="TileSet" path="res://assets/tilesets/environment_tileset.tres" id="6_tileset"]
 
 [node name="Main" type="Node2D"]
@@ -51,5 +52,7 @@ zoom = Vector2(7, 7)
 [node name="DeathScreen" parent="." instance=ExtResource("5_death")]
 
 [node name="InventoryScreen" parent="." instance=ExtResource("7_inventory")]
+
+[node name="CodexScreen" parent="." instance=ExtResource("9_codex")]
 
 [node name="TouchControls" parent="." instance=ExtResource("8_touch")]

@@ -7,10 +7,12 @@ const PlayerQuery = preload("res://scripts/systems/player_query.gd")
 @onready var death_screen: DeathScreen = $DeathScreen
 @onready var inventory_screen: InventoryScreen = $InventoryScreen
 
-var game_hud: GameHUD
+var game_hud: CanvasLayer  ## Either SigilHUD or GameHUD — both share the public API used here.
 var _mine_help_shown: bool = false
+var _last_profiled_major_room_key: String = ""
 
 var companion_scene: PackedScene
+var perf_overlay: PerfOverlay
 
 func _ready() -> void:
 	var player = PlayerQuery.get_primary_player(get_tree())
@@ -33,9 +35,14 @@ func _ready() -> void:
 	inventory_screen.setup(player.equipment_manager)
 	player.equipment_manager.use_effect_triggered.connect(_on_use_effect)
 
-	game_hud = GameHUD.new()
+	game_hud = SigilHUD.new() if (UIPrefs.use_sigil_hud and not TouchControls.is_mobile()) else GameHUD.new()
 	add_child(game_hud)
 	game_hud.setup(player)
+	if PerfTelemetry.is_enabled():
+		perf_overlay = PerfOverlay.new()
+		add_child(perf_overlay)
+		perf_overlay.setup()
+		PerfTelemetry.attach_scene(self, dungeon_manager)
 	# Show current gold and listen for changes
 	var gm = get_node_or_null("/root/GameManager")
 	if gm:
@@ -71,6 +78,10 @@ func _ready() -> void:
 		player.touch_controls = $TouchControls
 
 	var lm = get_node_or_null("/root/LightingManager")
+	if lm and lm.has_method("apply_scene_lighting_policy"):
+		lm.apply_scene_lighting_policy(1, 1.0, 1.0)
+		if lm.has_method("setup_player_lantern"):
+			lm.setup_player_lantern(player)
 	if lm and lm.has_method("apply_outline_to_subtree"):
 		lm.apply_outline_to_subtree(self)
 
@@ -87,6 +98,13 @@ func _ready() -> void:
 	dungeon_manager.start_run()
 	if GameManager:
 		GameManager.pending_mine_id = ""
+
+	# Coop hook: if a multiplayer session is active, wire up local-player ownership and
+	# spawn ghost copies for remote peers. No-op offline. Must run AFTER start_run so the
+	# local player is positioned at the generated start room.
+	var coop_rt = get_node_or_null("/root/CoopRuntime")
+	if coop_rt and coop_rt.has_method("setup_scene"):
+		coop_rt.setup_scene(dungeon_manager, player)
 
 	# Test Arena: add chest UI + spawn test chests in start room
 	if GameManager and (GameManager.pending_biome_name.begins_with("Test-Arena") or GameManager.pending_biome_name == "TestCombo" or GameManager.pending_biome_name == "TestMovement"):
@@ -112,7 +130,51 @@ func _ready() -> void:
 	if GameManager and GameManager.has_method("_hide_loading_screen"):
 		GameManager._hide_loading_screen()
 
+	_play_player_entry_warp(player)
+
+func _play_player_entry_warp(player: Node2D) -> void:
+	if not is_instance_valid(player):
+		return
+	var spawn_px := player.global_position
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.storm_arrival(spawn_px, Color(0.84, 0.07, 0.05, 0.98), 28.0, 0.88)
+		vfx.shockwave(spawn_px, 16.0, Color(0.85, 0.1, 0.08, 0.22))
+		vfx.shake(1.25, 0.16)
+	var spr = player.get_node_or_null("Sprite2D") as Sprite2D
+	if spr:
+		spr.modulate = Color(0.9, 0.35, 0.35, 0.12)
+		var tween = create_tween()
+		tween.tween_property(spr, "modulate", Color.WHITE, 0.46)
+
+func _unhandled_input(event: InputEvent) -> void:
+	# F11: toggle Sigil HUD ↔ classic HUD (live, no restart)
+	if event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_F11:
+		_toggle_hud_style()
+		get_viewport().set_input_as_handled()
+
+func _toggle_hud_style() -> void:
+	var new_use_sigil := UIPrefs.toggle_hud()
+	var player = PlayerQuery.get_primary_player(get_tree())
+	if not player:
+		return
+	if game_hud:
+		game_hud.queue_free()
+		game_hud = null
+	game_hud = SigilHUD.new() if (new_use_sigil and not TouchControls.is_mobile()) else GameHUD.new()
+	add_child(game_hud)
+	game_hud.setup(player)
+	var gm = get_node_or_null("/root/GameManager")
+	if gm:
+		game_hud.set_gold(gm.save_data.gold if gm.save_data else 0)
+	if game_hud.has_method("flash_text"):
+		game_hud.flash_text("HUD: " + ("Sigil" if new_use_sigil else "Classic"), Color(0.918, 0.702, 0.031), 2.0)
+
 func _on_floor_changed(floor_num: int) -> void:
+	PerfTelemetry.mark_checkpoint("floor_changed", {
+		"floor": floor_num,
+		"mode": "dungeon",
+	})
 	var rec_level = dungeon_manager.current_level.recommended_level if dungeon_manager.current_level else 0
 	var player_level = dungeon_manager.player.level_system.level if dungeon_manager.player and dungeon_manager.player.level_system else 1
 	var effective = rec_level + player_level
@@ -137,8 +199,22 @@ func _on_floor_changed(floor_num: int) -> void:
 		fpv.wall_layer = dungeon_manager.wall_layer
 		fpv.floor_layer = dungeon_manager.floor_layer
 		fpv.set_walkable(dungeon_manager.nav)
+	var player = PlayerQuery.get_primary_player(get_tree())
+	var lm = get_node_or_null("/root/LightingManager")
+	if player and lm and lm.has_method("setup_player_lantern"):
+		lm.setup_player_lantern(player)
 
 func _on_room_changed(room_index: int, room_data: RoomData) -> void:
+	if room_data and room_data.type in [RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS]:
+		var room_key := "%s:%s:%s:%s" % [room_index, room_data.type, room_data.grid_pos.x, room_data.grid_pos.y]
+		if room_key != _last_profiled_major_room_key:
+			_last_profiled_major_room_key = room_key
+			PerfTelemetry.mark_checkpoint("major_room_entered", {
+				"room_index": room_index,
+				"room_type": room_data.type,
+				"grid_x": room_data.grid_pos.x,
+				"grid_y": room_data.grid_pos.y,
+			})
 	var type_name = ""
 	match room_data.type:
 		RoomData.RoomType.COMBAT: type_name = "Combat"
@@ -337,3 +413,7 @@ func _on_merchant_opened(items: Array, grid_pos: Vector2i) -> void:
 		var angle = TAU * i / items.size()
 		pickup.global_position = center + Vector2(cos(angle), sin(angle)) * 12.0
 		dungeon_manager.add_child(pickup)
+
+func _exit_tree() -> void:
+	if has_node("/root/PerfTelemetry"):
+		PerfTelemetry.detach_scene(self)

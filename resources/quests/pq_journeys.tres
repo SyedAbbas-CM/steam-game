@@ -9,6 +9,7 @@ title = "The Pilgrim's Path"
 summary = "Muraad asks you to walk the four journeys: visit the Graveyard, then the Farmlands, return to Aria, and finally speak to someone in town."
 level = 7
 location = "aria"
+giver_npc = "Muraad"
 prerequisite = "pq_cave"
 properties = [{
 "index": 0,

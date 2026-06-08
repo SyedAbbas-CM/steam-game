@@ -3,6 +3,11 @@ extends CanvasLayer
 
 signal shop_closed
 
+const DEBUG_TEN_LEVELS_NAME := "Debug: +10 Levels"
+const DEBUG_TEN_LEVELS_PRICE := 1
+const DEBUG_PERK_TOKEN_NAME := "Perk Token"
+const DEBUG_PERK_TOKEN_PRICE := 500
+
 var _panel: PanelContainer
 var _title_label: Label
 var _items_container: VBoxContainer
@@ -30,83 +35,98 @@ func _load_shops() -> void:
 			_all_shops[shop.id] = shop
 
 func _build_ui() -> void:
-	_panel = PanelContainer.new()
+	# Backdrop dimmer
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.55)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.visible = false
+	overlay.name = "Overlay"
+	add_child(overlay)
+
+	# Main panel (ornate framed)
+	_panel = AshfieldsUI.ornate_panel(20)
 	_panel.visible = false
 	_panel.anchor_left = 0.15
 	_panel.anchor_right = 0.85
-	_panel.anchor_top = 0.1
-	_panel.anchor_bottom = 0.9
-
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.06, 0.12, 0.92)
-	style.border_color = Color(0.6, 0.5, 0.3)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(4)
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 10
-	style.content_margin_bottom = 10
-	_panel.add_theme_stylebox_override("panel", style)
+	_panel.anchor_top = 0.08
+	_panel.anchor_bottom = 0.92
+	_panel.theme = load("res://assets/themes/ashfields_theme.tres") as Theme
 	add_child(_panel)
 
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
 	_panel.add_child(vbox)
 
-	# Title
-	_title_label = Label.new()
-	_title_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
-	_title_label.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(_title_label)
+	# Header row: section title (left) + close X (right)
+	var header_row := HBoxContainer.new()
+	header_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(header_row)
 
-	# Gold display
-	_gold_label = Label.new()
-	_gold_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
-	_gold_label.add_theme_font_size_override("font_size", 12)
-	vbox.add_child(_gold_label)
+	var title_block := AshfieldsUI.section_title("SHOP", 20)
+	title_block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_title_label = title_block.get_child(0) as Label  # so existing open_shop assignment still works
+	header_row.add_child(title_block)
 
-	# Buy / Sell tabs
-	var tab_row = HBoxContainer.new()
-	tab_row.add_theme_constant_override("separation", 4)
-	vbox.add_child(tab_row)
+	var close_x := AshfieldsUI.pill_button("✕", AshfieldsUI.BLOOD)
+	close_x.custom_minimum_size = Vector2(46, 38)
+	close_x.pressed.connect(_close)
+	header_row.add_child(close_x)
 
-	_tab_buy = Button.new()
-	_tab_buy.focus_mode = Control.FOCUS_NONE
-	_tab_buy.text = "Buy"
-	_tab_buy.add_theme_font_size_override("font_size", 12)
+	# Sub-row: BUY / SELL pills + gold counter
+	var sub_row := HBoxContainer.new()
+	sub_row.add_theme_constant_override("separation", 10)
+	vbox.add_child(sub_row)
+
+	_tab_buy = AshfieldsUI.pill_button("BUY", AshfieldsUI.GOLD_DARK)
 	_tab_buy.pressed.connect(_switch_to_buy)
-	tab_row.add_child(_tab_buy)
+	sub_row.add_child(_tab_buy)
 
-	_tab_sell = Button.new()
-	_tab_sell.focus_mode = Control.FOCUS_NONE
-	_tab_sell.text = "Sell"
-	_tab_sell.add_theme_font_size_override("font_size", 12)
+	_tab_sell = AshfieldsUI.pill_button("SELL", AshfieldsUI.GOLD_DARK)
 	_tab_sell.pressed.connect(_switch_to_sell)
-	tab_row.add_child(_tab_sell)
+	sub_row.add_child(_tab_sell)
 
-	# Status message
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sub_row.add_child(sp)
+
+	_gold_label = Label.new()
+	_gold_label.add_theme_color_override("font_color", AshfieldsUI.GOLD)
+	_gold_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_gold_label.add_theme_constant_override("outline_size", 2)
+	_gold_label.add_theme_font_size_override("font_size", 38)
+	sub_row.add_child(_gold_label)
+
+	# Status message (success / failure)
 	_status_label = Label.new()
 	_status_label.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6))
-	_status_label.add_theme_font_size_override("font_size", 10)
+	_status_label.add_theme_font_size_override("font_size", 26)
 	vbox.add_child(_status_label)
 
+	vbox.add_child(AshfieldsUI.divider())
+
 	# Scrollable items
-	var scroll = ScrollContainer.new()
+	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(scroll)
 
 	_items_container = VBoxContainer.new()
 	_items_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_items_container.add_theme_constant_override("separation", 4)
+	_items_container.add_theme_constant_override("separation", 6)
 	scroll.add_child(_items_container)
 
-	# Close button
-	_close_btn = Button.new()
-	_close_btn.focus_mode = Control.FOCUS_NONE
-	_close_btn.text = "Close Shop"
-	_close_btn.add_theme_font_size_override("font_size", 12)
+	# Footer
+	vbox.add_child(AshfieldsUI.divider())
+
+	var footer_row := HBoxContainer.new()
+	footer_row.add_theme_constant_override("separation", 10)
+	footer_row.alignment = BoxContainer.ALIGNMENT_END
+	vbox.add_child(footer_row)
+
+	_close_btn = AshfieldsUI.pill_button("LEAVE", AshfieldsUI.GOLD_DARK)
+	_close_btn.custom_minimum_size = Vector2(160, 42)
 	_close_btn.pressed.connect(_close)
-	vbox.add_child(_close_btn)
+	footer_row.add_child(_close_btn)
 
 func setup(equip_mgr: EquipmentManager) -> void:
 	_equipment_manager = equip_mgr
@@ -128,6 +148,9 @@ func open_shop(shop_id: String) -> void:
 	_update_gold()
 	_populate_buy()
 	_panel.visible = true
+	var overlay = get_node_or_null("Overlay")
+	if overlay:
+		overlay.visible = true
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("open", -3.0, 0.0)
@@ -168,61 +191,40 @@ func _populate_buy() -> void:
 		var item = _find_item(item_name) as EquipmentItem
 		var price = _get_item_price(item, item_name)
 		_add_buy_row(item, item_name, price)
+	# Perk Token always available (any shop). Bought tokens grant 1 perk token directly.
+	_add_buy_row(null, DEBUG_PERK_TOKEN_NAME, DEBUG_PERK_TOKEN_PRICE)
+	if OS.is_debug_build():
+		_add_buy_row(null, DEBUG_TEN_LEVELS_NAME, DEBUG_TEN_LEVELS_PRICE)
 
 
 
 func _add_buy_row(item: EquipmentItem, item_name: String, price: int) -> void:
-	var row_panel = PanelContainer.new()
-	var row_style = StyleBoxFlat.new()
-	row_style.bg_color = Color(0, 0, 0, 0)
-	row_style.set_content_margin_all(4)
-	row_panel.add_theme_stylebox_override("panel", row_style)
-	row_panel.mouse_entered.connect(func(): row_style.bg_color = Color(0.2, 0.18, 0.1, 0.6))
-	row_panel.mouse_exited.connect(func(): row_style.bg_color = Color(0, 0, 0, 0))
-
-	var hbox = HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 8)
-	row_panel.add_child(hbox)
-
-	# Item icon
+	var display_name: String = item.get_display_name() if item else item_name
+	var rarity: int = item.rarity if item else 0
+	var icon: Texture2D = null
 	if item and item.loy_tile_index >= 0:
-		var icon_rect = TextureRect.new()
-		icon_rect.texture = ItemIconHelper.get_icon_texture(item)
-		icon_rect.custom_minimum_size = Vector2(20, 20)
-		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		hbox.add_child(icon_rect)
+		icon = ItemIconHelper.get_icon_texture(item)
 
-	var name_label = Label.new()
-	name_label.text = item.get_display_name() if item else item_name
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_label.add_theme_font_size_override("font_size", 11)
-	if item:
-		name_label.add_theme_color_override("font_color", _rarity_color(item.rarity))
-	hbox.add_child(name_label)
+	# Row container — card on the left, Buy pill on the right
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	# Slot type hint
+	var card := AshfieldsUI.item_card(display_name, price, rarity, icon, Vector2(0, 60))
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size = Vector2(0, 100)
+	# Tooltip slot hint via Godot's built-in tooltip
 	if item and EquipmentItem.is_equippable(item.slot_type):
-		var slot_label = Label.new()
-		slot_label.text = _slot_name(item.slot_type)
-		slot_label.add_theme_font_size_override("font_size", 9)
-		slot_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
-		hbox.add_child(slot_label)
+		card.tooltip_text = "Slot: " + _slot_name(item.slot_type)
+	card.pressed.connect(_on_buy.bind(item, item_name, price))
+	row.add_child(card)
 
-	var price_label = Label.new()
-	price_label.text = str(price) + "g"
-	price_label.add_theme_font_size_override("font_size", 11)
-	price_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
-	hbox.add_child(price_label)
-
-	var buy_btn = Button.new()
-	buy_btn.focus_mode = Control.FOCUS_NONE
-	buy_btn.text = "Buy"
-	buy_btn.add_theme_font_size_override("font_size", 10)
+	var buy_btn := AshfieldsUI.pill_button("BUY", AshfieldsUI.GOLD_DARK)
+	buy_btn.custom_minimum_size = Vector2(160, 100)
 	buy_btn.pressed.connect(_on_buy.bind(item, item_name, price))
-	hbox.add_child(buy_btn)
+	row.add_child(buy_btn)
 
-	_items_container.add_child(row_panel)
+	_items_container.add_child(row)
 
 func _populate_sell() -> void:
 	_clear_items()
@@ -233,56 +235,32 @@ func _populate_sell() -> void:
 		var item = _equipment_manager.inventory[i]
 		var sell_price = item.sell_value if item.sell_value > 0 else maxi(1, item.buy_price / 4)
 		var is_equipped = _equipment_manager.is_equipped(item)
-
-		var row_panel = PanelContainer.new()
-		var row_style = StyleBoxFlat.new()
-		row_style.bg_color = Color(0, 0, 0, 0)
-		row_style.set_content_margin_all(4)
-		row_panel.add_theme_stylebox_override("panel", row_style)
-		row_panel.mouse_entered.connect(func(): row_style.bg_color = Color(0.2, 0.18, 0.1, 0.6))
-		row_panel.mouse_exited.connect(func(): row_style.bg_color = Color(0, 0, 0, 0))
-
-		var hbox = HBoxContainer.new()
-		hbox.add_theme_constant_override("separation", 8)
-		row_panel.add_child(hbox)
-
-		# Item icon
+		var icon: Texture2D = null
 		if item.loy_tile_index >= 0:
-			var icon_rect = TextureRect.new()
-			icon_rect.texture = ItemIconHelper.get_icon_texture(item)
-			icon_rect.custom_minimum_size = Vector2(20, 20)
-			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			hbox.add_child(icon_rect)
-
-		var name_label = Label.new()
-		var display = item.get_display_name()
+			icon = ItemIconHelper.get_icon_texture(item)
+		var label_text: String = item.get_display_name()
 		if is_equipped:
-			display += " [E]"
-		name_label.text = display
-		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_label.add_theme_font_size_override("font_size", 11)
-		name_label.add_theme_color_override("font_color", _rarity_color(item.rarity))
-		hbox.add_child(name_label)
+			label_text += "  •  EQUIPPED"
 
-		var price_label = Label.new()
-		price_label.text = str(sell_price) + "g"
-		price_label.add_theme_font_size_override("font_size", 11)
-		price_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
-		hbox.add_child(price_label)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-		var sell_btn = Button.new()
-		sell_btn.focus_mode = Control.FOCUS_NONE
-		sell_btn.add_theme_font_size_override("font_size", 10)
+		var card := AshfieldsUI.item_card(label_text, sell_price, item.rarity, icon, Vector2(0, 82))
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.custom_minimum_size = Vector2(0, 100)
+		card.disabled = is_equipped
+		row.add_child(card)
+
+		var sell_btn := AshfieldsUI.pill_button("SELL", AshfieldsUI.GOLD_DARK)
+		sell_btn.custom_minimum_size = Vector2(160, 100)
 		if is_equipped:
-			sell_btn.text = "Equipped"
 			sell_btn.disabled = true
 		else:
-			sell_btn.text = "Sell"
 			sell_btn.pressed.connect(_on_sell.bind(i, sell_price))
-		hbox.add_child(sell_btn)
+		row.add_child(sell_btn)
 
-		_items_container.add_child(row_panel)
+		_items_container.add_child(row)
 
 func _clear_items() -> void:
 	for child in _items_container.get_children():
@@ -311,6 +289,13 @@ func _on_buy(item: EquipmentItem, item_name: String, price: int) -> void:
 	if not gm:
 		return
 
+	if item_name == DEBUG_TEN_LEVELS_NAME:
+		_buy_debug_levels(gm, price)
+		return
+	if item_name == DEBUG_PERK_TOKEN_NAME:
+		_buy_perk_token(gm, price)
+		return
+
 	if not _equipment_manager or _equipment_manager.inventory.size() >= _equipment_manager.MAX_INVENTORY:
 		_status_label.text = "Inventory full!"
 		_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
@@ -332,6 +317,59 @@ func _on_buy(item: EquipmentItem, item_name: String, price: int) -> void:
 		_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 		if sfx:
 			sfx.play("error", -3.0)
+
+func _buy_debug_levels(gm, price: int) -> void:
+	var player = get_tree().get_first_node_in_group("player")
+	if player == null or player.level_system == null:
+		_status_label.text = "No player to level."
+		_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+		return
+	var level_system: LevelSystem = player.level_system
+	if level_system.level >= LevelSystem.MAX_LEVEL:
+		_status_label.text = "Already max level."
+		_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+		return
+	if not gm.spend_gold(price):
+		_status_label.text = _shop_data.nomoney if _shop_data.nomoney != "" else "Not enough gold!"
+		_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+		var no_money_sfx = get_node_or_null("/root/SFXManager")
+		if no_money_sfx:
+			no_money_sfx.play("error", -3.0)
+		return
+	var levels_to_grant := mini(10, LevelSystem.MAX_LEVEL - level_system.level)
+	var total_xp := 0
+	var preview_level := level_system.level
+	for _i in range(levels_to_grant):
+		total_xp += 100 + (preview_level - 1) * 50
+		preview_level += 1
+	player.gain_xp(total_xp)
+	_status_label.text = "Bought +%d levels" % levels_to_grant
+	_status_label.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6))
+	_update_gold()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("gold", -3.0)
+
+func _buy_perk_token(gm, price: int) -> void:
+	var pm = get_node_or_null("/root/PerkManager")
+	if not pm:
+		_status_label.text = "PerkManager unavailable."
+		_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+		return
+	if not gm.spend_gold(price):
+		_status_label.text = _shop_data.nomoney if _shop_data.nomoney != "" else "Not enough gold!"
+		_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+		var err_sfx = get_node_or_null("/root/SFXManager")
+		if err_sfx:
+			err_sfx.play("error", -3.0)
+		return
+	pm.add_token(1)
+	_status_label.text = "Bought 1 Perk Token (now have %d)" % pm.perk_tokens
+	_status_label.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6))
+	_update_gold()
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("gold", -3.0)
 
 func _on_sell(inv_index: int, sell_price: int) -> void:
 	var gm = get_node_or_null("/root/GameManager")
@@ -384,6 +422,9 @@ func _rarity_color(rarity: int) -> Color:
 
 func _close() -> void:
 	_panel.visible = false
+	var overlay = get_node_or_null("Overlay")
+	if overlay:
+		overlay.visible = false
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("close", -4.0, 0.0)

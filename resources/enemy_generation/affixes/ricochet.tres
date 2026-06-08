@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EliteAffixDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/elite_affix_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+affix_id = "ricochet"
+display_prefix = "Ricochet"
+allowed_roles = Array[String](["ranged"])
+requires_projectiles = true
+add_attack_types = Array[int]([29, 37])
+bullet_speed_mult = 1.06
+color_tint = Color(0.82, 0.90, 1, 1)
+bounce_count = 2
+speed_mult = 1.05

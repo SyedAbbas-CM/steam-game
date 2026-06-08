@@ -16,6 +16,7 @@ signal connection_failed
 signal server_disconnected
 signal session_closed
 signal host_network_info_updated(info: Dictionary)
+signal dungeon_seed_ready(seed: int)
 
 const DEFAULT_PORT: int = 24567
 const DEFAULT_MAX_PLAYERS: int = 4
@@ -25,6 +26,7 @@ var listen_port: int = DEFAULT_PORT
 var max_players: int = DEFAULT_MAX_PLAYERS
 var connect_address: String = ""
 var room_code: String = ""
+var pending_dungeon_seed: int = 0  # host: set when starting a coop run. client: filled by RPC.
 var host_network_info: Dictionary = {
 	"port": DEFAULT_PORT,
 	"local_addresses": PackedStringArray(),
@@ -88,12 +90,21 @@ func get_host_network_summary() -> Dictionary:
 
 func host_direct(port: int = DEFAULT_PORT, desired_max_players: int = DEFAULT_MAX_PLAYERS) -> Error:
 	close_session()
-	listen_port = port
 	max_players = clampi(desired_max_players, 1, 32)
+	# Port fallback: if the requested port is held (OS hasn't released it after a previous
+	# session, or another process owns it), try the next few ports automatically. listen_port
+	# ends up holding whatever port actually bound, which is what host_network_info surfaces.
 	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_server(listen_port, max_players)
+	var err := ERR_CANT_CREATE
+	var bound_port := port
+	for offset in range(0, 6):
+		bound_port = port + offset
+		err = peer.create_server(bound_port, max_players)
+		if err == OK:
+			break
 	if err != OK:
 		return err
+	listen_port = bound_port
 	multiplayer.multiplayer_peer = peer
 	mode = SessionMode.HOST
 	host_network_info = {
@@ -175,11 +186,17 @@ func try_upnp(port: int = DEFAULT_PORT) -> Dictionary:
 
 func close_session() -> void:
 	if multiplayer.has_multiplayer_peer():
+		var p = multiplayer.multiplayer_peer
+		# Explicitly close ENet before dropping the ref so the UDP socket releases the port
+		# immediately. Without this, re-hosting on the same port can fail on rapid restart.
+		if p is ENetMultiplayerPeer:
+			p.close()
 		multiplayer.multiplayer_peer = null
 	var was_active := mode != SessionMode.OFFLINE
 	mode = SessionMode.OFFLINE
 	connect_address = ""
 	room_code = ""
+	pending_dungeon_seed = 0
 	host_network_info = {
 		"port": DEFAULT_PORT,
 		"local_addresses": PackedStringArray(),
@@ -191,7 +208,25 @@ func close_session() -> void:
 		session_mode_changed.emit(mode)
 		session_closed.emit()
 
+# Host: lock in the agreed seed. Replicates to any already-connected clients and
+# is auto-sent to clients that join later (see _on_peer_connected).
+func set_pending_seed(seed: int) -> void:
+	pending_dungeon_seed = seed
+	dungeon_seed_ready.emit(seed)
+	if is_host() and multiplayer.has_multiplayer_peer():
+		for peer_id in multiplayer.get_peers():
+			_rpc_receive_seed.rpc_id(peer_id, seed)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_receive_seed(seed: int) -> void:
+	# Client: trust the host's seed. Phase 1 has no anti-cheat.
+	pending_dungeon_seed = seed
+	dungeon_seed_ready.emit(seed)
+
 func _on_peer_connected(peer_id: int) -> void:
+	# Host: late-joining clients also need the agreed seed.
+	if is_host() and pending_dungeon_seed != 0:
+		_rpc_receive_seed.rpc_id(peer_id, pending_dungeon_seed)
 	peer_joined.emit(peer_id)
 
 func _on_peer_disconnected(peer_id: int) -> void:

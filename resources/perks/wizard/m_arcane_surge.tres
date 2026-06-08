@@ -11,5 +11,8 @@ class_required = "wizard"
 tier = 3
 prerequisites = ["m_mana_well", "m_quick_cast"]
 stat_bonuses = {}
+stat_requirements = {
+"intellect": 10
+}
 special_effect = "arcane_surge"
 is_percent = false

@@ -1,6 +1,7 @@
 extends Area2D
 
 const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+const PROJECTILE_FX_SHADER = preload("res://shaders/combat/projectile_fx.gdshader")
 
 var speed: float = 150.0
 var direction: Vector2 = Vector2.RIGHT
@@ -80,6 +81,7 @@ var movement_anchor_point: Vector2 = Vector2.ZERO
 var _movement_orbit_angle: float = 0.0
 var _movement_base_speed: float = 0.0
 var _projectile_scale_mult: float = 1.0
+var _projectile_fx_material: ShaderMaterial = null
 var _movement_dash_state: int = 0
 var _movement_dash_timer: float = 0.0
 var _movement_dash_cd: float = 0.0
@@ -195,6 +197,7 @@ func _ready() -> void:
 	var sprite_scale_mult := float(get_meta("sprite_scale_mult", 1.0))
 	if sprite_scale_mult != 1.0:
 		apply_projectile_scale(sprite_scale_mult)
+	_apply_projectile_fx(sprite)
 	_base_sprite_scale = sprite.scale
 
 	# Rotate sprite to face travel direction
@@ -270,6 +273,54 @@ func _ready() -> void:
 		trail.color_ramp.set_color(1, Color(1.0, 0.3, 0.0, 0.0))
 		add_child(trail)
 
+func _apply_projectile_fx(sprite: Sprite2D) -> void:
+	if sprite == null:
+		return
+	var fx_kind := _resolve_projectile_fx_kind()
+	if fx_kind == 0:
+		return
+	_projectile_fx_material = ShaderMaterial.new()
+	_projectile_fx_material.shader = PROJECTILE_FX_SHADER
+	_projectile_fx_material.set_shader_parameter("fx_kind", fx_kind)
+	_projectile_fx_material.set_shader_parameter("fx_energy", _resolve_projectile_fx_energy())
+	_projectile_fx_material.set_shader_parameter("travel_dir", direction)
+	sprite.material = _projectile_fx_material
+
+func _resolve_projectile_fx_kind() -> int:
+	if has_meta("projectile_fx_kind"):
+		match String(get_meta("projectile_fx_kind")):
+			"fire":
+				return 1
+			"poison":
+				return 2
+			"frost":
+				return 3
+			"lightning":
+				return 4
+			"arcane":
+				return 5
+	if has_meta("apply_burning") or has_meta("fireball_aoe"):
+		return 1
+	if has_meta("apply_poison") or has_meta("poison_stackable"):
+		return 2
+	if has_meta("apply_frozen") or has_meta("apply_slowed"):
+		return 3
+	if has_meta("chain_lightning_arrow") or has_meta("longshot_paralyze"):
+		return 4
+	if is_crit:
+		return 5
+	return 0
+
+func _resolve_projectile_fx_energy() -> float:
+	if has_meta("projectile_fx_energy"):
+		return float(get_meta("projectile_fx_energy"))
+	var energy := 0.65
+	if is_crit:
+		energy += 0.25
+	if has_meta("sprite_scale_mult"):
+		energy += clampf((float(get_meta("sprite_scale_mult")) - 1.0) * 0.35, 0.0, 0.5)
+	return clampf(energy, 0.3, 1.6)
+
 func apply_projectile_scale(mult: float) -> void:
 	if mult <= 0.0:
 		return
@@ -318,6 +369,8 @@ func _physics_process(delta: float) -> void:
 	var pattern_handled_movement := false
 	if movement_pattern != null:
 		pattern_handled_movement = _apply_movement_pattern(delta)
+	if _projectile_fx_material != null:
+		_projectile_fx_material.set_shader_parameter("travel_dir", direction)
 
 	# Advanced bullet behaviors
 	match behavior:
@@ -804,6 +857,8 @@ func _on_body_entered(body: Node2D) -> void:
 			var dm: Node = null
 			if tree and tree.current_scene:
 				dm = tree.current_scene.get_node_or_null("DungeonManager")
+				if dm == null:
+					dm = tree.current_scene.get_node_or_null("MineManager")
 			if dm and dm.has_method("has_breakable_mine_cell"):
 				var tile_pos := Vector2i(int(floor(global_position.x / 8.0)), int(floor(global_position.y / 8.0)))
 				# Check the tile we hit + neighbors in bullet direction
@@ -841,10 +896,15 @@ func _on_body_entered(body: Node2D) -> void:
 	if (is_player_bullet or hits_all) and body.has_method("take_damage"):
 		if body.is_in_group("enemy"):
 			var aggro_player_b = is_player_bullet and not hits_all
-			if has_meta("trap_true_damage") and get_meta("trap_true_damage"):
-				body.take_damage(_get_scaled_damage(), aggro_player_b, CombatTypes.DamageType.TRUE)
+			var dmg_b = _get_scaled_damage()
+			var is_true_b: bool = has_meta("trap_true_damage") and get_meta("trap_true_damage")
+			# Coop: if this enemy is a host-owned proxy on our peer, route damage to host.
+			if _coop_route_enemy_damage(body, dmg_b, is_true_b):
+				pass
+			elif is_true_b:
+				body.take_damage(dmg_b, aggro_player_b, CombatTypes.DamageType.TRUE)
 			else:
-				body.take_damage(_get_scaled_damage(), aggro_player_b)
+				body.take_damage(dmg_b, aggro_player_b)
 		else:
 			if has_meta("trap_true_damage") and get_meta("trap_true_damage"):
 				body.take_damage(_get_scaled_damage(), global_position, false, false, CombatTypes.DamageType.TRUE)
@@ -858,6 +918,18 @@ func _on_body_entered(body: Node2D) -> void:
 func _on_area_entered(area: Node2D) -> void:
 	if _spent:
 		return
+	# Off-hand throw: passes through enemy bullets, deletes them (up to N total).
+	# After the limit runs out, the throw still flies, but stops killing bullets.
+	if is_player_bullet and has_meta("offhand_throw"):
+		if area is Area2D and area.get("is_player_bullet") != null and not area.is_player_bullet:
+			var left = int(get_meta("destroys_bullets_left", 0))
+			if left > 0:
+				set_meta("destroys_bullets_left", left - 1)
+				var vfx_p = get_node_or_null("/root/VFXManager")
+				if vfx_p:
+					vfx_p.hit_spark(area.global_position, Color(1.0, 1.0, 1.0))
+				area.queue_free()
+				return
 	# Player bullets are absorbed by barrier bullets
 	if is_player_bullet and area.get("behavior") != null and area.behavior == BulletBehavior.BARRIER:
 		area.barrier_hp -= 1
@@ -913,8 +985,34 @@ func _on_area_entered(area: Node2D) -> void:
 			var total_dmg = _get_scaled_damage() + int(enchant_bonus_damage)
 			if trap_enemy_mult > 1:
 				total_dmg *= trap_enemy_mult
+			# Parry-marked vulnerability: enemies stunned by a player-parried bullet
+			# take 2× damage for 3 seconds. Mercenary identity: hits on a parry-
+			# marked enemy use an EXTRA 2× (4× total) and force-crit so crit perks
+			# (Lucky Strike, etc.) and crit-damage multiplier all layer on top.
+			if is_player_bullet and enemy.has_meta("parry_marked_until"):
+				var pm_until = float(enemy.get_meta("parry_marked_until"))
+				if Time.get_ticks_msec() / 1000.0 < pm_until:
+					var sr_pm = get_tree().current_scene if is_inside_tree() else null
+					var _p_pm = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
+					var merc_bonus = false
+					if _p_pm and _p_pm.has_method("_get_player_class") and _p_pm._get_player_class() == "mercenary":
+						total_dmg = int(total_dmg * 3.0)  # 3× base for merc + force crit
+						is_crit = true
+						merc_bonus = true
+					else:
+						total_dmg = int(total_dmg * 2.0)  # 2× for other classes
+					if sr_pm:
+						var label = "PARRY MARK!" if not merc_bonus else "PARRY CRIT!"
+						var col = Color(0.85, 0.4, 1.0) if not merc_bonus else Color(1.0, 0.55, 1.0)
+						FloatingText.spawn(sr_pm, enemy.global_position + Vector2(0, -10), label, col)
+				else:
+					enemy.remove_meta("parry_marked_until")
 			var aggro_player = is_player_bullet and not hits_all
-			if has_meta("trap_true_damage") and get_meta("trap_true_damage"):
+			var is_true_a: bool = has_meta("trap_true_damage") and get_meta("trap_true_damage")
+			# Coop: route through host if this is a proxy enemy on our peer.
+			if _coop_route_enemy_damage(enemy, total_dmg, is_true_a):
+				pass
+			elif is_true_a:
 				enemy.take_damage(total_dmg, aggro_player, CombatTypes.DamageType.TRUE)
 			else:
 				enemy.take_damage(total_dmg, aggro_player)
@@ -925,6 +1023,30 @@ func _on_area_entered(area: Node2D) -> void:
 				enemy.apply_status("BURNING", get_meta("apply_burning"))
 			if has_meta("apply_poison") and enemy.has_method("apply_status"):
 				enemy.apply_status("POISONED", get_meta("apply_poison"))
+			# Parried bullets carry parry_stun_on_hit — mini-stun any enemy they
+			# hit (0.7s) and mark them as "parry-vulnerable" for 3 seconds so the
+			# player's NEXT attacks against them deal 2× damage.
+			if has_meta("parry_stun_on_hit") and enemy.has_method("apply_status"):
+				enemy.apply_status("STUNNED", 0.7)
+				enemy.set_meta("parry_marked_until", Time.get_ticks_msec() / 1000.0 + 3.0)
+			# Off-hand throws weaken enemies on hit
+			if has_meta("apply_weaken") and enemy.has_method("apply_status"):
+				enemy.apply_status("WEAKENED", get_meta("apply_weaken"))
+			# Perk/Item passives: lifesteal, hemorrhage, pyromancer
+			if is_player_bullet:
+				_apply_player_passive_effects(enemy, total_dmg)
+			# Archer Focus meter: build by repeat hits on the same enemy
+			if is_player_bullet:
+				var _p_focus = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
+				if _p_focus and _p_focus.has_method("_get_player_class") and _p_focus._get_player_class() in ["ranger", "archer"]:
+					if _p_focus.get("_last_focus_target") == enemy:
+						_p_focus.class_meter = minf(_p_focus.class_meter + 8.0, _p_focus.class_meter_max)
+					else:
+						_p_focus.set("_last_focus_target", enemy)
+						# Switching targets caps the meter at half — encourage staying on target
+						_p_focus.class_meter = minf(_p_focus.class_meter + 4.0, _p_focus.class_meter_max * 0.5)
+					_p_focus.set("_rage_decay_grace", 2.0)
+					_p_focus.class_meter_changed.emit(_p_focus.class_meter, _p_focus.class_meter_max)
 			# Longshot paralyze — brief stun
 			if has_meta("longshot_paralyze") and enemy.has_method("apply_status"):
 				var stun_min = get_meta("longshot_stun_min") if has_meta("longshot_stun_min") else 1.0
@@ -952,6 +1074,10 @@ func _on_area_entered(area: Node2D) -> void:
 				player.take_damage(damage, global_position, false, false, CombatTypes.DamageType.TRUE)
 			else:
 				player.take_damage(damage, global_position)
+		# If the player parried us mid-call, take_damage flipped us into a
+		# player_bullet via reflect(). Survive — fly back at the source.
+		if is_player_bullet:
+			return
 		# Poison on hit from enemy bullets
 		if poison_on_hit and "status_effects" in player and player.status_effects:
 			player.status_effects.apply_status("POISONED", 4.0)
@@ -1228,6 +1354,9 @@ func _create_force_ring(color: Color, is_pull: bool) -> void:
 func reflect() -> void:
 	direction = -direction
 	is_player_bullet = true
+	# Parry-reflected shots fly back at least as fast as a typical player bullet
+	# (enemy projectiles are slow on purpose; bouncing one shouldn't feel limp).
+	speed = maxf(speed * 1.5, 480.0)
 	# Reset collision layers for player bullet
 	collision_layer = 4
 	collision_mask = 2 | 8 | 16 | 32  # enemies + enemy bullets + walls + traps
@@ -1289,3 +1418,59 @@ func _fireball_explode() -> void:
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("boom_b", 0.0)
+
+# Coop: route player-bullet damage through host when the hit enemy is a proxy on our
+# peer (i.e. host owns the authoritative copy). Returns true if routed — caller must
+# skip the local take_damage in that case. Returns false offline or for host-owned hits.
+func _coop_route_enemy_damage(enemy: Node, dmg: int, _is_true: bool) -> bool:
+	if not is_player_bullet:
+		return false
+	if enemy == null:
+		return false
+	var is_proxy: bool = bool(enemy.get("_is_remote_proxy")) if "_is_remote_proxy" in enemy else false
+	if not is_proxy:
+		return false
+	var nid: int = int(enemy.get("network_id")) if "network_id" in enemy else 0
+	if nid <= 0:
+		return false
+	var coop_rt = get_node_or_null("/root/CoopRuntime")
+	if coop_rt == null or not coop_rt.has_method("request_enemy_damage"):
+		return false
+	coop_rt.request_enemy_damage(nid, dmg)
+	return true
+
+## Lifesteal / Hemorrhage / Pyromancer triggers (perk OR enchant grants any of these).
+func _apply_player_passive_effects(enemy: Node2D, dmg_dealt: int) -> void:
+	var player = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
+	if not player or not player.has_method("_has_effect"):
+		return
+	var vfx = get_node_or_null("/root/VFXManager")
+	# Warrior Bloodthirst (meter-full move): heal 4% max HP per hit during window
+	if player.has_meta("bloodthirst_until"):
+		var bt_until = float(player.get_meta("bloodthirst_until"))
+		var now_bt = Time.get_ticks_msec() / 1000.0
+		if now_bt < bt_until:
+			if "max_hp" in player and player.has_method("heal"):
+				var heal_amt = maxi(1, int(player.max_hp * 0.04))
+				player.heal(heal_amt)
+		else:
+			player.remove_meta("bloodthirst_until")
+	# Lifesteal — heal 5% of damage dealt
+	if player._has_effect("lifesteal") and dmg_dealt > 0:
+		var heal = maxi(1, int(dmg_dealt * 0.05))
+		if player.has_method("heal"):
+			player.heal(heal)
+		if vfx and vfx.has_method("blood_splatter"):
+			vfx.blood_splatter(enemy.global_position, Vector2.ZERO, Color(0.8, 0.1, 0.3))
+	# Hemorrhage — 30% chance to apply BLEED (POISONED status with red splash)
+	if player._has_effect("hemorrhage") and randf() < 0.30:
+		if enemy.has_method("apply_status"):
+			enemy.apply_status("POISONED", 4.0)
+		if vfx and vfx.has_method("blood_splatter"):
+			vfx.blood_splatter(enemy.global_position, Vector2.ZERO, Color(1.0, 0.1, 0.1))
+	# Pyromancer — 30% chance to ignite (BURNING)
+	if player._has_effect("pyromancer") and randf() < 0.30:
+		if enemy.has_method("apply_status"):
+			enemy.apply_status("BURNING", 3.0)
+		if vfx and vfx.has_method("status_puff"):
+			vfx.status_puff(enemy.global_position, "BURNING")

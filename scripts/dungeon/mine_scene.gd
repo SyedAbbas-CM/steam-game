@@ -6,9 +6,10 @@ const PlayerQuery = preload("res://scripts/systems/player_query.gd")
 @onready var death_screen: DeathScreen = $DeathScreen
 @onready var inventory_screen: InventoryScreen = $InventoryScreen
 
-var game_hud: GameHUD
+var game_hud: CanvasLayer  ## SigilHUD or GameHUD — picked by UIPrefs.use_sigil_hud.
 var companion_scene: PackedScene
 var _mine_help_shown: bool = false
+var perf_overlay: PerfOverlay
 
 func _ready() -> void:
 	var player = PlayerQuery.get_primary_player(get_tree())
@@ -26,9 +27,14 @@ func _ready() -> void:
 	inventory_screen.setup(player.equipment_manager)
 	player.equipment_manager.use_effect_triggered.connect(_on_use_effect)
 
-	game_hud = GameHUD.new()
+	game_hud = SigilHUD.new() if (UIPrefs.use_sigil_hud and not TouchControls.is_mobile()) else GameHUD.new()
 	add_child(game_hud)
 	game_hud.setup(player)
+	if PerfTelemetry.is_enabled():
+		perf_overlay = PerfOverlay.new()
+		add_child(perf_overlay)
+		perf_overlay.setup()
+		PerfTelemetry.attach_scene(self, mine_manager)
 	var gm = get_node_or_null("/root/GameManager")
 	if gm:
 		var current_gold: int = gm.save_data.gold if gm.save_data else 0
@@ -60,6 +66,10 @@ func _ready() -> void:
 		player.touch_controls = $TouchControls
 
 	var lm = get_node_or_null("/root/LightingManager")
+	if lm and lm.has_method("apply_scene_lighting_policy"):
+		lm.apply_scene_lighting_policy(1, 1.0, 1.08)
+		if lm.has_method("setup_player_lantern"):
+			lm.setup_player_lantern(player)
 	if lm and lm.has_method("apply_outline_to_subtree"):
 		lm.apply_outline_to_subtree(self)
 
@@ -81,7 +91,28 @@ func _ready() -> void:
 	if GameManager and GameManager.has_method("_hide_loading_screen"):
 		GameManager._hide_loading_screen()
 
+	_play_player_entry_warp(player)
+
+func _play_player_entry_warp(player: Node2D) -> void:
+	if not is_instance_valid(player):
+		return
+	var spawn_px := player.global_position
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.storm_arrival(spawn_px, Color(0.84, 0.07, 0.05, 0.98), 28.0, 0.88)
+		vfx.shockwave(spawn_px, 16.0, Color(0.85, 0.1, 0.08, 0.22))
+		vfx.shake(1.25, 0.16)
+	var spr = player.get_node_or_null("Sprite2D") as Sprite2D
+	if spr:
+		spr.modulate = Color(0.9, 0.35, 0.35, 0.12)
+		var tween = create_tween()
+		tween.tween_property(spr, "modulate", Color.WHITE, 0.46)
+
 func _on_floor_changed(floor_num: int) -> void:
+	PerfTelemetry.mark_checkpoint("floor_changed", {
+		"floor": floor_num,
+		"mode": "mine",
+	})
 	var rec_level: int = mine_manager.current_level.recommended_level if mine_manager.current_level else 0
 	var player_level: int = mine_manager.player.level_system.level if mine_manager.player and mine_manager.player.level_system else 1
 	var effective: int = rec_level + player_level
@@ -96,6 +127,10 @@ func _on_floor_changed(floor_num: int) -> void:
 		fpv.wall_layer = mine_manager.wall_layer
 		fpv.floor_layer = mine_manager.floor_layer
 		fpv.set_walkable(mine_manager.nav)
+	var player = PlayerQuery.get_primary_player(get_tree())
+	var lm = get_node_or_null("/root/LightingManager")
+	if player and lm and lm.has_method("setup_player_lantern"):
+		lm.setup_player_lantern(player)
 
 func _on_room_changed(_room_index: int, _room_data: RoomData) -> void:
 	game_hud.set_room_info("Mine Depth")
@@ -126,3 +161,7 @@ func _on_use_effect(effect: String) -> void:
 			sfx_tp.play("teleport", -2.0, 0.0)
 		if GameManager:
 			GameManager.return_to_overworld()
+
+func _exit_tree() -> void:
+	if has_node("/root/PerfTelemetry"):
+		PerfTelemetry.detach_scene(self)

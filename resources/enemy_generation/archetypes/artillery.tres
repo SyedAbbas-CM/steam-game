@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EliteArchetypeDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/elite_archetype_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/movements/hold_ranged.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+archetype_id = "artillery"
+display_prefix = "Siege"
+allowed_roles = Array[String](["ranged"])
+movement_pattern = ExtResource("2")
+attack_pool = Array[int]([20, 44, 45, 52])
+phase_2_attack = 20
+phase_3_attack = 44
+hp_mult = 1.18
+damage_mult = 1.18
+move_speed_mult = 0.98
+attack_speed_mult = 1.08
+bullet_speed_mult = 0.94
+bullet_count_bonus = 0
+armor_bonus = 2
+color_tint = Color(1, 0.76, 0.62, 1)

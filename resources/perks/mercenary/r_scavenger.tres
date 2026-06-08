@@ -11,5 +11,6 @@ class_required = "mercenary"
 tier = 1
 prerequisites = []
 stat_bonuses = {19: 30.0}
+stat_requirements = {}
 special_effect = ""
 is_percent = true

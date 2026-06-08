@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "w_last_stand"
+perk_name = "Last Stand"
+description = "At 25% HP, gain +50% damage and 25% damage reduction."
+class_required = "warrior"
+tier = 3
+prerequisites = ["w_fortified"]
+stat_requirements = {
+"health": 10,
+"defense": 5
+}
+stat_bonuses = {}
+special_effect = "last_stand"
+is_percent = false

@@ -212,9 +212,9 @@ func _ready() -> void:
 	hud.fog_toggled.connect(func(on): if fog: fog.enabled = on)
 	add_child(hud)
 
-	# Real GameHUD
+	# Real GameHUD (or Sigil HUD if enabled)
 	if player:
-		game_hud = GameHUD.new()
+		game_hud = SigilHUD.new() if (UIPrefs.use_sigil_hud and not TouchControls.is_mobile()) else GameHUD.new()
 		add_child(game_hud)
 		game_hud.setup(player)
 		_hide_gamehud_clutter()

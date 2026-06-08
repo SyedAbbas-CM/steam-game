@@ -7,14 +7,14 @@ script = ExtResource("1")
 id = "swift_boots"
 recipe_name = "Swift Boots"
 recipe_type = "blacksmith"
-ingredients = Array[Dictionary]([{{
+ingredients = Array[Dictionary]([{
 "item_name": "Feather",
 "count": 2
-}}, {{
+}, {
 "item_name": "Leather Scraps",
 "count": 2
-}}])
+}])
 gold_cost = 100
 result_item_path = "res://resources/items/crafted/swift_boots.tres"
 result_count = 1
-required_level = 1000
+required_level = 4

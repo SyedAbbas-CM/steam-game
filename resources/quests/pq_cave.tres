@@ -9,6 +9,7 @@ title = "Shadows Below"
 summary = "Solmund wants you to observe the creatures in the dungeon. Go below and look carefully at what you're really fighting."
 level = 3
 location = "aria"
+giver_npc = "Solmund"
 properties = [{
 "index": 0,
 "name": "Creatures Observed",

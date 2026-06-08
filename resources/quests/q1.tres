@@ -10,7 +10,7 @@ summary = "The Elder has asked you to cull 20 Skeletons that have risen near the
 level = 1
 location = "haven"
 target_location = "barrows"
-target_location = "barrows"
+giver_npc = "Elder"
 properties = [{
 "index": 0,
 "name": "Skeletons Killed",

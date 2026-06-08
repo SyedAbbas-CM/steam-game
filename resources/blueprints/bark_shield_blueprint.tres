@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="BlueprintDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/blueprint_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+blueprint_id = "bark_shield_blueprint"
+blueprint_name = "Bark Shield Blueprint"
+description = "A practical field pattern that braces ancient bark with iron bands for a light defensive shield."
+result_item_path = "res://resources/items/crafted/bark_shield.tres"
+station_type = "forge"
+required_fragments = 3
+required_salvage_points = 6
+unlock_tags = PackedStringArray("shield", "bark", "forge", "defense")
+recipe_paths = PackedStringArray("res://resources/recipes/bark_shield.tres")

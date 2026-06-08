@@ -11,5 +11,9 @@ class_required = "mercenary"
 tier = 3
 prerequisites = ["r_opportunist"]
 stat_bonuses = {}
+stat_requirements = {
+"strength": 8,
+"endurance": 5
+}
 special_effect = "executioner_perk"
 is_percent = false

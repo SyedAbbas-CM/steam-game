@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="PerkDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/perk_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+perk_id = "g_lifesteal"
+perk_name = "Lifesteal"
+description = "Heal 5% of damage dealt"
+class_required = ""
+tier = 2
+prerequisites = []
+stat_requirements = {
+"strength": 12
+}
+stat_bonuses = {}
+special_effect = "lifesteal"
+is_percent = false

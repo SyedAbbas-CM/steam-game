@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="mod_0"]
+script = ExtResource("2")
+stat = 13
+flat_bonus = 0.10
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 17
+flat_bonus = 0.05
+
+[resource]
+script = ExtResource("1")
+item_name = "Parrying Dagger"
+loy_tile_index = 173
+description = "A slim offhand blade; Thrown, it carves a path through enemy fire."
+slot_type = 5
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
+rarity = 1
+buy_price = 180
+sell_value = 45
+weapon_type = "parrying_dagger"

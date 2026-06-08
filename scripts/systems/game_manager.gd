@@ -17,6 +17,9 @@ var _auto_save_timer: float = 0.0
 var _pending_coop_join_biome: String = ""
 const AUTO_SAVE_INTERVAL: float = 60.0
 const COOP_BOSS_ARENA_BIOME: String = "Test-Arena-Boss"
+const HALL_OF_ANCESTORS_SCENE := "res://scenes/ui/hall_of_ancestors.tscn"
+const MAX_ANCESTOR_RECORDS: int = 10
+const LEGACY_ITEM_LIMIT: int = 3
 
 signal gold_changed(amount: int)
 signal relics_changed(amount: int)
@@ -24,6 +27,15 @@ signal tokens_changed(amount: int)
 signal character_died
 signal slot_loaded(slot: int)
 signal battle_ended(result: Dictionary)
+
+func _clear_character_run_transients() -> void:
+	pending_biome_name = ""
+	pending_mine_id = ""
+	overworld_return_position = Vector2.ZERO
+	battle_config.clear()
+	_pending_coop_join_biome = ""
+	if has_meta("spawn_overworld_portal"):
+		remove_meta("spawn_overworld_portal")
 
 func queue_dungeon_run(biome_name: String, mine_id: String = "") -> void:
 	pending_biome_name = biome_name
@@ -241,6 +253,7 @@ func is_war_unlocked() -> bool:
 func start_new_character(class_id: String) -> void:
 	if not save_data:
 		return
+	_clear_character_run_transients()
 	save_data.selected_class = class_id
 	save_data.character_alive = true
 	save_data.player_level = 1
@@ -265,15 +278,126 @@ func start_new_character(class_id: String) -> void:
 	save_data.save_to_slot()
 	print("GameManager: Started new character as %s in slot %d" % [class_id, active_slot])
 
-func on_character_death(run_state: RunState) -> void:
+func on_character_death(run_state = null) -> void:
 	if not save_data:
 		return
+	_snapshot_death_legacy(run_state)
 	# Record run stats before wiping
-	on_run_ended(run_state)
+	if run_state:
+		on_run_ended(run_state)
+	_clear_character_run_transients()
 	# Wipe character data, keep world
 	save_data.wipe_character()
 	character_died.emit()
 	print("GameManager: Character died (death #%d)" % save_data.total_deaths)
+
+func get_hall_upgrade_level(upgrade_id: String) -> int:
+	if not save_data or upgrade_id == "":
+		return 0
+	return int(save_data.permanent_upgrades.get(upgrade_id, 0))
+
+func get_hall_upgrade_cost(upgrade_id: String) -> int:
+	var level := get_hall_upgrade_level(upgrade_id)
+	match upgrade_id:
+		"gold_retention":
+			return 25 + level * 20
+		"legacy_capacity":
+			return 40 + level * 30
+		"starting_health":
+			return 30 + level * 25
+		"starting_damage":
+			return 40 + level * 30
+		"starting_gold":
+			return 20 + level * 15
+		"heart_of_embers":
+			return 35 + level * 25
+		"gold_find":
+			return 50 + level * 35
+		"xp_find":
+			return 50 + level * 35
+		"starting_potions":
+			return 30 + level * 20
+		"free_stat_points":
+			return 60 + level * 40
+		"perk_token_carryover":
+			return 100 + level * 80
+		"soul_anchor":
+			return 80 + level * 60
+		_:
+			return 999999
+
+const HALL_UPGRADE_CAPS = {
+	"gold_retention": 5,
+	"legacy_capacity": 3,
+	"starting_health": 10,
+	"starting_damage": 10,
+	"starting_gold": 5,
+	"heart_of_embers": 5,
+	"gold_find": 5,
+	"xp_find": 5,
+	"starting_potions": 3,
+	"free_stat_points": 5,
+	"perk_token_carryover": 3,
+	"soul_anchor": 3,
+}
+
+func get_legacy_vault_capacity() -> int:
+	return 6 + get_hall_upgrade_level("legacy_capacity") * 2
+
+func can_buy_hall_upgrade(upgrade_id: String) -> bool:
+	if not save_data:
+		return false
+	var cap = HALL_UPGRADE_CAPS.get(upgrade_id, 0)
+	if cap > 0 and get_hall_upgrade_level(upgrade_id) >= cap:
+		return false
+	return save_data.soul_points >= get_hall_upgrade_cost(upgrade_id)
+
+func buy_hall_upgrade(upgrade_id: String) -> bool:
+	if not can_buy_hall_upgrade(upgrade_id):
+		return false
+	save_data.soul_points -= get_hall_upgrade_cost(upgrade_id)
+	save_data.permanent_upgrades[upgrade_id] = get_hall_upgrade_level(upgrade_id) + 1
+	save_data.save_to_slot()
+	return true
+
+func finalize_hall_legacy_selection(selected_indices: Array[int]) -> void:
+	if not save_data:
+		return
+	save_data.pending_legacy_items.clear()
+	save_data.pending_legacy_item_states.clear()
+	var picked: int = 0
+	for idx in selected_indices:
+		if picked >= LEGACY_ITEM_LIMIT:
+			break
+		if idx < 0 or idx >= save_data.last_death_inventory_items.size():
+			continue
+		var item_path := String(save_data.last_death_inventory_items[idx])
+		if item_path == "":
+			continue
+		save_data.pending_legacy_items.append(item_path)
+		if save_data.last_death_item_states.has(idx):
+			save_data.pending_legacy_item_states[picked] = save_data.last_death_item_states[idx]
+		if save_data.legacy_vault_items.size() < get_legacy_vault_capacity():
+			save_data.legacy_vault_items.append(item_path)
+			var vault_idx := save_data.legacy_vault_items.size() - 1
+			if save_data.last_death_item_states.has(idx):
+				save_data.legacy_vault_item_states[vault_idx] = save_data.last_death_item_states[idx]
+		picked += 1
+	var transfer_ratio := 0.20 + 0.10 * float(get_hall_upgrade_level("gold_retention"))
+	var transferred_gold := int(round(float(save_data.last_death_gold) * transfer_ratio))
+	save_data.gold += max(transferred_gold, 0)
+	save_data.last_death_inventory_items.clear()
+	save_data.last_death_item_states.clear()
+	save_data.last_death_gold = 0
+	save_data.last_death_run_summary.clear()
+	save_data.save_to_slot()
+
+func go_to_hall_of_ancestors() -> void:
+	pending_biome_name = ""
+	pending_mine_id = ""
+	get_tree().paused = false
+	_hide_loading_screen()
+	get_tree().change_scene_to_file(HALL_OF_ANCESTORS_SCENE)
 
 func auto_save() -> void:
 	if save_data:
@@ -304,6 +428,13 @@ func host_coop_boss_arena(slot: int, port: int = 24567, desired_max_players: int
 	var err: Error = int(result.get("error", OK))
 	if err != OK:
 		return result
+	# Host picks the deterministic seed for this coop run. Non-zero guard so DungeonManager
+	# can distinguish "coop seeded run" from "single-player random run".
+	var seed_val: int = int(Time.get_unix_time_from_system() * 1000.0) ^ randi()
+	if seed_val == 0:
+		seed_val = 1
+	coop.set_pending_seed(seed_val)
+	print("GameManager: hosting coop boss arena with seed=%d" % seed_val)
 	start_dungeon_run(COOP_BOSS_ARENA_BIOME)
 	return result
 
@@ -338,6 +469,12 @@ func return_to_overworld() -> void:
 func _on_coop_joined_server(_address: String, _port: int) -> void:
 	if _pending_coop_join_biome == "":
 		return
+	var coop = get_node_or_null("/root/CoopSession")
+	# Wait for host's seed RPC before generating the dungeon, otherwise the client
+	# will roll its own layout and desync. If seed already arrived, transition now.
+	if coop and coop.pending_dungeon_seed == 0:
+		print("GameManager: connected, waiting for host seed before entering arena")
+		await coop.dungeon_seed_ready
 	var biome := _pending_coop_join_biome
 	_pending_coop_join_biome = ""
 	start_dungeon_run(biome)
@@ -347,6 +484,11 @@ func _on_coop_connection_failed() -> void:
 
 func _on_coop_session_closed() -> void:
 	_pending_coop_join_biome = ""
+
+func start_tutorial() -> void:
+	pending_biome_name = ""
+	pending_mine_id = ""
+	_transition_to_scene("res://scenes/dungeon/tutorial.tscn", "Tutorial...")
 
 func go_to_start_screen() -> void:
 	pending_biome_name = ""
@@ -605,7 +747,7 @@ func _save_player_level() -> void:
 	if save_data:
 		save_data.selected_class = selected_class
 	# Save quickbar
-	var hud = get_tree().get_first_node_in_group("game_hud") as GameHUD
+	var hud = get_tree().get_first_node_in_group("game_hud") as CanvasLayer
 	if hud:
 		save_quickbar(hud)
 
@@ -616,6 +758,67 @@ func load_level_data(level_system: LevelSystem) -> void:
 	level_system.xp = save_data.player_xp
 	level_system.unspent_stat_points = save_data.stat_points_unspent
 	level_system.allocated = save_data.stat_allocations.duplicate()
+
+func apply_pending_legacy_equipment(equip_mgr: EquipmentManager) -> void:
+	if not save_data or not equip_mgr or save_data.pending_legacy_items.is_empty():
+		return
+	for i in range(save_data.pending_legacy_items.size()):
+		var path := String(save_data.pending_legacy_items[i])
+		if not ResourceLoader.exists(path):
+			continue
+		var res := load(path) as EquipmentItem
+		if not res:
+			continue
+		var copy := res.make_copy()
+		if save_data.pending_legacy_item_states.has(i):
+			copy.apply_item_instance_state(save_data.pending_legacy_item_states[i])
+		equip_mgr.inventory.append(copy)
+	save_data.pending_legacy_items.clear()
+	save_data.pending_legacy_item_states.clear()
+	save_equipment(equip_mgr)
+
+func _snapshot_death_legacy(run_state = null) -> void:
+	if not save_data:
+		return
+	var player = PlayerQuery.get_primary_player(get_tree())
+	if player and player.has_node("EquipmentManager"):
+		var equip_mgr = player.get_node("EquipmentManager") as EquipmentManager
+		if equip_mgr:
+			save_equipment(equip_mgr)
+	var hud = get_tree().get_first_node_in_group("game_hud") as GameHUD
+	if hud:
+		save_quickbar(hud)
+	save_data.last_death_inventory_items = save_data.inventory_items.duplicate()
+	save_data.last_death_item_states = save_data.inventory_item_states.duplicate(true)
+	save_data.last_death_gold = save_data.gold
+	var soul_gain := _calculate_soul_points_gain(run_state)
+	save_data.soul_points += soul_gain
+	save_data.last_death_run_summary = {
+		"class_id": selected_class,
+		"level": save_data.player_level,
+		"floor": int(run_state.current_floor) if run_state else 0,
+		"rooms_cleared": int(run_state.rooms_cleared) if run_state else 0,
+		"enemies_killed": int(run_state.enemies_killed) if run_state else 0,
+		"gold_earned": int(run_state.run_gold) if run_state else 0,
+		"soul_gain": soul_gain,
+		"time_seconds": int(run_state.get_duration_seconds()) if run_state else 0,
+		"died_at": Time.get_datetime_string_from_system(),
+	}
+	var ancestor_entry := save_data.last_death_run_summary.duplicate(true)
+	ancestor_entry["class_name"] = selected_class.capitalize()
+	save_data.ancestor_records.insert(0, ancestor_entry)
+	while save_data.ancestor_records.size() > MAX_ANCESTOR_RECORDS:
+		save_data.ancestor_records.pop_back()
+	save_data.save_to_slot()
+
+func _calculate_soul_points_gain(run_state = null) -> int:
+	var soul_gain := 10
+	soul_gain += maxi(save_data.player_level - 1, 0) * 3
+	if run_state:
+		soul_gain += maxi(run_state.current_floor, 0) * 4
+		soul_gain += int(run_state.enemies_killed / 10)
+		soul_gain += int(run_state.rooms_cleared / 2)
+	return maxi(soul_gain, 10)
 
 func save_equipment(equip_mgr: EquipmentManager) -> void:
 	if not save_data or not equip_mgr:
@@ -649,17 +852,19 @@ func save_equipment(equip_mgr: EquipmentManager) -> void:
 				save_data.equipped_items[idx] = int(slot_type)
 	save_data.save_to_slot()
 
-func save_quickbar(hud: GameHUD) -> void:
+func save_quickbar(hud: CanvasLayer) -> void:
+	# Accepts either GameHUD or SigilHUD — both have a `_quickbar_items` array.
 	if not save_data or not hud:
 		return
-	save_data.quickbar_items = hud._quickbar_items.duplicate()
+	save_data.quickbar_items = hud.get("_quickbar_items").duplicate()
 	save_data.save_to_slot()
 
-func load_quickbar(hud: GameHUD) -> void:
+func load_quickbar(hud: CanvasLayer) -> void:
+	# Accepts either GameHUD or SigilHUD — both have a `_quickbar_items` array.
 	if not save_data or not hud:
 		return
 	if save_data.quickbar_items.size() == 6:
-		hud._quickbar_items = save_data.quickbar_items.duplicate()
+		hud.set("_quickbar_items", save_data.quickbar_items.duplicate())
 
 func load_equipment(equip_mgr: EquipmentManager) -> bool:
 	if not save_data or not equip_mgr:

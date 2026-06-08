@@ -7,13 +7,13 @@ script = ExtResource("1")
 id = "swamp_brew"
 recipe_name = "Swamp Brew"
 recipe_type = "alchemist"
-ingredients = Array[Dictionary]([{{
+ingredients = Array[Dictionary]([{
 "item_name": "Swamp Root",
 "count": 2
-}}, {{
+}, {
 "item_name": "Wild Mushroom",
 "count": 1
-}}])
+}])
 gold_cost = 40
 result_item_path = "res://resources/items/crafted/swamp_brew.tres"
 result_count = 1

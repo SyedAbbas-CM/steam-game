@@ -11,5 +11,9 @@ class_required = "wizard"
 tier = 3
 prerequisites = ["m_mana_shield"]
 stat_bonuses = {}
+stat_requirements = {
+"intellect": 10,
+"movement": 5
+}
 special_effect = "void_walker"
 is_percent = false

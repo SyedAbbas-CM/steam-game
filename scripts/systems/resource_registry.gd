@@ -1652,6 +1652,9 @@ static func blueprints() -> Array[String]:
 		"res://resources/blueprints/iron_shield_blueprint.tres",
 		"res://resources/blueprints/crystal_wand_blueprint.tres",
 		"res://resources/blueprints/venom_bow_blueprint.tres",
+		"res://resources/blueprints/arcane_staff_blueprint.tres",
+		"res://resources/blueprints/bark_shield_blueprint.tres",
+		"res://resources/blueprints/natures_elixir_blueprint.tres",
 	]
 
 static func mines() -> Array[String]:

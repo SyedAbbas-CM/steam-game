@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="BlueprintDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/blueprint_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+blueprint_id = "arcane_staff_blueprint"
+blueprint_name = "Arcane Staff Blueprint"
+description = "A layered schematic for binding cave crystal and fire crystal into a stable caster's staff."
+result_item_path = "res://resources/items/crafted/arcane_staff.tres"
+station_type = "forge"
+required_fragments = 5
+required_salvage_points = 10
+unlock_tags = PackedStringArray("staff", "magic", "crystal", "forge")
+recipe_paths = PackedStringArray("res://resources/recipes/arcane_staff.tres")

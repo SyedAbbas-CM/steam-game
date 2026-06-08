@@ -6,8 +6,9 @@
 script = ExtResource("1")
 item_name = "Attack Elixir"
 loy_tile_index = 76
-description = "Increase attack by one permanently (max 3)"
+description = "Permanently increase attack by 1 (max 3 elixirs)"
 slot_type = 10
 rarity = 2
 buy_price = 300
 sell_value = 75
+use_effect = "permanent_attack"

@@ -91,14 +91,14 @@ static func generate_mine_map(floor_number: int, mine_def: MineDefinition, total
 		var hp_mult = 1.0
 		var dmg_mult = 1.0
 		if room.type == RoomData.RoomType.BOSS:
-			hp_mult = 5.0
-			dmg_mult = 1.5
+			hp_mult = 3.5
+			dmg_mult = 1.4
 		elif room.type == RoomData.RoomType.SUPER_ELITE:
-			hp_mult = 6.0
-			dmg_mult = 1.8
+			hp_mult = 4.5
+			dmg_mult = 1.6
 		elif room.type == RoomData.RoomType.ELITE:
-			hp_mult = 4.0
-			dmg_mult = 1.3
+			hp_mult = 3.0
+			dmg_mult = 1.25
 		room.enemy_hp_mult = hp_mult
 		room.enemy_damage_mult = dmg_mult
 		room.encounter_type = RoomData.EncounterType.STANDARD
@@ -275,14 +275,14 @@ static func generate_floor_map(floor_number: int, room_override: int = -1, biome
 		var hp_mult = 1.0
 		var dmg_mult = 1.0
 		if room.type == RoomData.RoomType.BOSS:
-			hp_mult = 5.0
-			dmg_mult = 1.5
+			hp_mult = 3.5
+			dmg_mult = 1.4
 		elif room.type == RoomData.RoomType.SUPER_ELITE:
-			hp_mult = 6.0
-			dmg_mult = 1.8
+			hp_mult = 4.5
+			dmg_mult = 1.6
 		elif room.type == RoomData.RoomType.ELITE:
-			hp_mult = 4.0
-			dmg_mult = 1.3
+			hp_mult = 3.0
+			dmg_mult = 1.25
 		room.enemy_hp_mult = hp_mult
 		room.enemy_damage_mult = dmg_mult
 
@@ -495,7 +495,7 @@ static func generate_linear_arena(fixed_monsters: Array, biome: DungeonBiome = n
 			if room_type_str == "super_elite":
 				wroom.type = RoomData.RoomType.SUPER_ELITE
 				wroom.enemy_count = clampi(int(entry.get("count", 3)), 2, 4)
-				wroom.enemy_hp_mult = 6.0
+				wroom.enemy_hp_mult = 4.5
 				wroom.enemy_damage_mult = 1.8
 				wroom.shape = RoomData.RoomShape.GRAND_HALL
 			elif room_type_str == "decorated":

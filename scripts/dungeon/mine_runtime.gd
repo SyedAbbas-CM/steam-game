@@ -33,7 +33,7 @@ func on_floor_generated() -> void:
 	_breakable_cells.clear()
 	_current_room = Vector2i.ZERO
 	_room_elapsed = 0.0
-	_intrusion_timer = _mine.intrusion_interval if _mine else 0.0
+	_intrusion_timer = _get_initial_intrusion_delay()
 	_intrusion_count = 0
 	if _dm == null or _mine == null or _dm.run_state == null:
 		return
@@ -48,17 +48,14 @@ func process(delta: float) -> void:
 	if grid_pos != _current_room:
 		_current_room = grid_pos
 		_room_elapsed = 0.0
-		_intrusion_timer = _mine.intrusion_interval
+		_intrusion_timer = _get_initial_intrusion_delay()
 		_intrusion_count = 0
 		return
-	if not _dm.run_state.floor_map.has(grid_pos):
+	var target_room := _get_pressure_target_room(grid_pos)
+	if target_room == Vector2i(-9999, -9999):
 		return
-	var room_data = _dm.run_state.floor_map[grid_pos] as RoomData
+	var room_data = _dm.run_state.floor_map[target_room] as RoomData
 	if room_data == null:
-		return
-	if room_data.type in [RoomData.RoomType.SHOP, RoomData.RoomType.TREASURE, RoomData.RoomType.SHRINE]:
-		return
-	if room_data.has_stairs_up:
 		return
 	_room_elapsed += delta
 	_intrusion_timer -= delta
@@ -66,7 +63,47 @@ func process(delta: float) -> void:
 		return
 	_intrusion_timer = _mine.intrusion_interval
 	_intrusion_count += 1
-	_spawn_intrusion_wave(grid_pos, room_data)
+	_spawn_intrusion_wave(target_room, room_data)
+
+func _get_initial_intrusion_delay() -> float:
+	if _mine == null:
+		return 0.0
+	return minf(_mine.intrusion_interval, 2.5)
+
+func on_room_entered(grid_pos: Vector2i, room_data: RoomData) -> void:
+	_current_room = grid_pos
+	_room_elapsed = 0.0
+	_intrusion_count = 0
+	_intrusion_timer = _get_initial_intrusion_delay()
+
+func _is_hostile_room(room_data: RoomData) -> bool:
+	if room_data == null:
+		return false
+	if room_data.type in [RoomData.RoomType.SHOP, RoomData.RoomType.TREASURE, RoomData.RoomType.SHRINE]:
+		return false
+	if room_data.has_stairs_up:
+		return false
+	return true
+
+func _get_pressure_target_room(from_grid: Vector2i) -> Vector2i:
+	if _dm == null or _dm.run_state == null:
+		return Vector2i(-9999, -9999)
+	var floor_map: Dictionary = _dm.run_state.floor_map
+	if floor_map.has(from_grid):
+		var current_room = floor_map[from_grid] as RoomData
+		if _is_hostile_room(current_room):
+			return from_grid
+	var best_room := Vector2i(-9999, -9999)
+	var best_dist := 999999
+	for grid_pos in floor_map.keys():
+		var room_data = floor_map[grid_pos] as RoomData
+		if not _is_hostile_room(room_data):
+			continue
+		var dist := absi(grid_pos.x - from_grid.x) + absi(grid_pos.y - from_grid.y)
+		if dist < best_dist:
+			best_dist = dist
+			best_room = grid_pos
+	return best_room
 
 func has_breakable_cell(tile_pos: Vector2i) -> bool:
 	return _breakable_cells.has(tile_pos)
@@ -240,16 +277,19 @@ func _build_breakable_cell_state(is_cluster_center: bool) -> Dictionary:
 	var gem_ids: PackedStringArray = PackedStringArray()
 
 	var roll := randf()
-	if is_cluster_center and _mine.rare_material_drop_paths.size() > 0 and roll < 0.2:
+	var ore_chance := 0.2 if is_cluster_center else 0.06
+	var gem_chance := 0.4 if is_cluster_center else 0.09
+	var cache_chance := 0.52 if is_cluster_center else 0.12
+	if _mine.rare_material_drop_paths.size() > 0 and roll < ore_chance:
 		kind = "ore"
 		hp = _roll_hp(_mine.ore_wall_hp, _mine.ore_wall_hp_max)
 		drop_paths = _mine.rare_material_drop_paths
-	elif is_cluster_center and _mine.gem_hint_ids.size() > 0 and roll < 0.4:
+	elif _mine.gem_hint_ids.size() > 0 and roll < gem_chance:
 		kind = "gem"
 		hp = _roll_hp(_mine.gem_wall_hp, _mine.gem_wall_hp_max)
 		drop_paths = _mine.rare_material_drop_paths if _mine.rare_material_drop_paths.size() > 0 else _mine.material_drop_paths
 		gem_ids = _mine.gem_hint_ids
-	elif is_cluster_center and _mine.blueprint_ids.size() > 0 and roll < 0.52:
+	elif _mine.blueprint_ids.size() > 0 and roll < cache_chance:
 		kind = "cache"
 		hp = _roll_hp(_mine.ore_wall_hp, _mine.ore_wall_hp_max)
 		drop_paths = _mine.material_drop_paths
@@ -257,7 +297,7 @@ func _build_breakable_cell_state(is_cluster_center: bool) -> Dictionary:
 	else:
 		kind = "soft"
 		hp = _roll_hp(_mine.soft_wall_hp, _mine.soft_wall_hp_max)
-		drop_paths = _mine.material_drop_paths
+		drop_paths = PackedStringArray()
 
 	return {
 		"kind": kind,
@@ -280,7 +320,7 @@ func _mark_breakable_wall(tile_pos: Vector2i) -> void:
 
 func _destroy_breakable_cell(tile_pos: Vector2i, state: Dictionary) -> void:
 	var world_pos := Vector2((tile_pos.x + 0.5) * _dm.TILE_SIZE, (tile_pos.y + 0.5) * _dm.TILE_SIZE)
-	_dm.smash_area(world_pos, 0)
+	_dm.smash_area(world_pos, 0, false, false)
 	_expand_breakables_from_opening(tile_pos)
 	_spawn_breakable_rewards(world_pos, state)
 
@@ -299,16 +339,34 @@ func _expand_breakables_from_opening(tile_pos: Vector2i) -> void:
 
 func _spawn_breakable_rewards(world_pos: Vector2, state: Dictionary) -> void:
 	var drop_paths: PackedStringArray = state.get("drop_paths", PackedStringArray())
+	var kind := str(state.get("kind", "soft"))
 	if drop_paths.size() > 0:
-		# Each item rolls independently at DROP_CHANCE — most walls yield nothing.
-		const DROP_CHANCE := 0.10
 		var bag := LootBag.new()
-		for item_path in drop_paths:
-			if randf() >= DROP_CHANCE:
-				continue
-			var item_res := load(item_path) as EquipmentItem
-			if item_res:
-				bag.items.append(item_res.make_copy())
+		match kind:
+			"ore":
+				var ore_path := str(drop_paths[randi() % drop_paths.size()])
+				var ore_res := load(ore_path) as EquipmentItem
+				if ore_res:
+					bag.items.append(ore_res.make_copy())
+				if drop_paths.size() > 1 and randf() < 0.35:
+					var extra_path := str(drop_paths[randi() % drop_paths.size()])
+					var extra_res := load(extra_path) as EquipmentItem
+					if extra_res:
+						bag.items.append(extra_res.make_copy())
+			"gem":
+				var gem_count := 1 + int(randf() < 0.4)
+				for _i in range(gem_count):
+					var gem_path := str(drop_paths[randi() % drop_paths.size()])
+					var gem_res := load(gem_path) as EquipmentItem
+					if gem_res:
+						bag.items.append(gem_res.make_copy())
+			"cache":
+				for item_path in drop_paths:
+					if randf() >= 0.45:
+						continue
+					var cache_res := load(str(item_path)) as EquipmentItem
+					if cache_res:
+						bag.items.append(cache_res.make_copy())
 		if bag.items.size() > 0:
 			bag.global_position = world_pos
 			_dm.add_child(bag)
@@ -375,21 +433,40 @@ func _find_nearby_wall_theme(tile_pos: Vector2i) -> Vector2i:
 func _spawn_intrusion_wave(grid_pos: Vector2i, room_data: RoomData) -> void:
 	if _dm == null:
 		return
+	var active_intruders := _get_active_intruder_count()
+	if _mine and active_intruders >= _mine.max_active_intruders:
+		_intrusion_timer = 4.0
+		return
 	var wave_size := randi_range(_mine.intrusion_wave_size_min, _mine.intrusion_wave_size_max)
+	if _mine:
+		wave_size = mini(wave_size, maxi(_mine.max_active_intruders - active_intruders, 0))
+	wave_size = maxi(1, wave_size)
 	var tier := "normal"
 	if _room_elapsed >= _mine.intrusion_super_time:
 		tier = "super"
 	elif _room_elapsed >= _mine.intrusion_elite_time:
 		tier = "elite"
-	var result = _dm.spawn_mine_intrusion_wave(grid_pos, room_data, wave_size, tier)
-	if bool(result.get("ok", false)):
-		var label := "Cave stirs..."
-		var color := Color(0.8, 0.8, 0.8)
-		match tier:
-			"elite":
-				label = "Elite presence"
-				color = Color(1.0, 0.75, 0.3)
-			"super":
-				label = "A terror answers"
-				color = Color(1.0, 0.45, 0.45)
-		FloatingText.spawn(_dm, _dm._grid_to_world_center(grid_pos), label, color)
+	var result = _dm.spawn_mine_intrusion_wave_global(grid_pos, room_data, wave_size, tier)
+	if not bool(result.get("ok", false)):
+		# Retry soon instead of making the player wait through a full failed cycle.
+		_intrusion_timer = _mine.intrusion_retry_interval if _mine else 3.0
+		return
+	var label := "BREACH..."
+	var color := Color(0.8, 0.8, 0.8)
+	match tier:
+		"elite":
+			label = "Heavy breach"
+			color = Color(1.0, 0.75, 0.3)
+		"super":
+			label = "Deep terror"
+			color = Color(1.0, 0.45, 0.45)
+	FloatingText.spawn(_dm, _dm._grid_to_world_center(grid_pos), label, color)
+
+func _get_active_intruder_count() -> int:
+	if _dm == null:
+		return 0
+	var count := 0
+	for enemy in _dm.get_tree().get_nodes_in_group("mine_intrusion_enemy"):
+		if is_instance_valid(enemy):
+			count += 1
+	return count

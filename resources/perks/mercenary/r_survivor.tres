@@ -11,5 +11,8 @@ class_required = "mercenary"
 tier = 2
 prerequisites = ["r_scavenger"]
 stat_bonuses = {10: 2.0}
+stat_requirements = {
+"endurance": 5
+}
 special_effect = ""
 is_percent = false

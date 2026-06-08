@@ -7,10 +7,10 @@ script = ExtResource("1")
 id = "iron_dagger"
 recipe_name = "Iron Dagger"
 recipe_type = "blacksmith"
-ingredients = Array[Dictionary]([{{
+ingredients = Array[Dictionary]([{
 "item_name": "Iron Ore",
 "count": 3
-}}])
+}])
 gold_cost = 50
 result_item_path = "res://resources/items/crafted/iron_dagger.tres"
 result_count = 1

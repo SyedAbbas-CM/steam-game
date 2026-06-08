@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EliteArchetypeDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/elite_archetype_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/movements/teleport.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+archetype_id = "trickster"
+display_prefix = "Trickster"
+allowed_roles = Array[String](["ranged", "support"])
+movement_pattern = ExtResource("2")
+attack_pool = Array[int]([26, 29, 32, 22])
+phase_2_attack = 32
+phase_3_attack = 29
+hp_mult = 1.08
+damage_mult = 1.08
+move_speed_mult = 1.14
+attack_speed_mult = 0.88
+bullet_speed_mult = 1.08
+bullet_count_bonus = 1
+armor_bonus = 1
+color_tint = Color(0.84, 0.72, 1, 1)

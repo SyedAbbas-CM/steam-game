@@ -18,3 +18,4 @@ modifiers = Array[ExtResource("2")]([SubResource("mod_0")])
 rarity = 0
 buy_price = 180
 sell_value = 45
+blueprint_id = "bark_shield_blueprint"

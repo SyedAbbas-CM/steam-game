@@ -238,6 +238,37 @@ func use_consumable(inv_index: int) -> bool:
 					vfx.status_puff(player.global_position, "POWER")
 				if sfx:
 					sfx.play("mystical", -4.0)
+			"permanent_attack", "permanent_defence":
+				# Stacks up to 3 each, stored in GameManager.save_data.permanent_upgrades.
+				# Applied at character spawn via player._apply_class_stats().
+				var gm = get_node_or_null("/root/GameManager")
+				if gm and gm.save_data:
+					var key = "elixir_attack" if item.use_effect == "permanent_attack" else "elixir_defence"
+					var current = int(gm.save_data.permanent_upgrades.get(key, 0))
+					if current >= 3:
+						# Cap reached — refund (do nothing, restore inventory)
+						if sfx:
+							sfx.play("error", -3.0)
+						# Re-insert the item back so it wasn't wasted
+						inventory.insert(inv_index, item)
+						inventory_changed.emit()
+						return false
+					gm.save_data.permanent_upgrades[key] = current + 1
+					gm.save_data.save_to_slot()
+					# Apply the bonus immediately so the player sees it now
+					if item.use_effect == "permanent_attack":
+						base_stats.attack_damage += 1
+					else:
+						base_stats.armor += 2.0
+					stats_changed.emit()
+					if vfx and player:
+						vfx.level_up_burst(player.global_position)
+					if sfx:
+						sfx.play("mystical", -2.0)
+					var scene_root_ex = get_tree().current_scene
+					if scene_root_ex and player:
+						var msg = "+1 ATK (%d/3)" % gm.save_data.permanent_upgrades[key] if item.use_effect == "permanent_attack" else "+2 ARMOR (%d/3)" % gm.save_data.permanent_upgrades[key]
+						FloatingText.spawn(scene_root_ex, player.global_position + Vector2(0, -4), msg, Color(1.0, 0.8, 0.3))
 			"town_portal":
 				use_effect_triggered.emit("town_portal")
 				if sfx:
@@ -364,6 +395,17 @@ func get_equipped_weapon() -> EquipmentItem:
 
 func get_equipped_ammo() -> EquipmentItem:
 	return equipped.get(EquipmentItem.SlotType.AMMO, null)
+
+## Returns true if any equipped item has an enchantment that grants the named passive
+## effect (e.g. "bastion", "mystic_shield", "wraithwalk", "lifesteal").
+func has_passive_effect(effect_name: String) -> bool:
+	for item in equipped.values():
+		if not item or not item.enchantment:
+			continue
+		var passive = ItemEnchantment.PASSIVE_EFFECTS.get(item.enchantment.type, "")
+		if passive == effect_name:
+			return true
+	return false
 
 func consume_ammo() -> bool:
 	var ammo = get_equipped_ammo()
@@ -664,15 +706,96 @@ func get_stat(stat_type: StatModifier.StatType) -> float:
 			total *= mult
 	return total
 
+## Native-weapon list per class. Off-class weapons require allocated points in
+## the weapon's scaling stat or they fire at 0 damage.
+const CLASS_NATIVE_WEAPONS = {
+	"warrior": ["sword", "axe", "hammer", "club", "flail", "halberd", "spear",
+				"greatsword", "great_axe", "mace", "scythe"],
+	"mercenary": ["sword", "dagger", "short_bow", "throwing", "club", "claws", "axe"],
+	"archer": ["bow", "short_bow", "crossbow", "dagger", "throwing", "sling",
+				"whip", "javelin"],
+	"ranger": ["bow", "short_bow", "crossbow", "dagger", "throwing", "sling",
+				"whip", "javelin"],
+	"wizard": ["staff", "wand", "tome"],
+}
+
+## Native offhand items per class (the SHIELD slot).
+##   "shield"          — wooden_shield, iron_shield, shimmering_shield, etc. (warrior identity)
+##   "buckler"         — wooden_buckler, buckler (mercenary identity)
+##   "parrying_dagger" — parrying_dagger (archer / ranger identity)
+const CLASS_NATIVE_OFFHANDS = {
+	"warrior":   ["shield"],
+	"mercenary": ["buckler"],
+	"archer":    ["parrying_dagger"],
+	"ranger":    ["parrying_dagger"],
+	"wizard":    [],  # no native offhand — wizard uses spells instead
+}
+
+func _is_native_weapon(player_class: String, weapon_type: String) -> bool:
+	var lst = CLASS_NATIVE_WEAPONS.get(player_class, [])
+	return weapon_type in lst
+
+## Returns the offhand "category" of the currently equipped SHIELD-slot item:
+##   "parrying_dagger" / "buckler" / "shield" / "" (none equipped)
+## Items without an explicit weapon_type default to "shield" (any old shield item).
+func get_equipped_offhand_type() -> String:
+	var item = equipped.get(EquipmentItem.SlotType.SHIELD, null) as EquipmentItem
+	if not item:
+		return ""
+	if item.weapon_type == "parrying_dagger":
+		return "parrying_dagger"
+	if item.weapon_type == "buckler":
+		return "buckler"
+	# Fallback — any shield-slot item with no specific type
+	return "shield"
+
+## Returns 1.0 if the player's class is native to the offhand category, else 0.5.
+## "" (no offhand) always returns 1.0 (no item to penalize).
+func get_offhand_proficiency_mult(player_class: String) -> float:
+	var off_type = get_equipped_offhand_type()
+	if off_type == "":
+		return 1.0
+	var lst = CLASS_NATIVE_OFFHANDS.get(player_class, [])
+	return 1.0 if off_type in lst else 0.5
+
+## Returns 0.0–1.0 multiplier applied to weapon damage based on class proficiency.
+## Native weapon: 0.75 at 0 points, 1.0 at 10+ points (always usable).
+## Off-class weapon: 0.0 at 0 points, 1.0 at 10+ points (needs investment).
+func get_proficiency_mult() -> float:
+	if not level_system:
+		return 1.0
+	var weapon = get_equipped_weapon()
+	if not weapon or weapon.weapon_type == "":
+		return 1.0
+	var scaling_stat = weapon.get_scaling_stat()
+	if scaling_stat == "":
+		return 1.0
+	var points = int(level_system.allocated.get(scaling_stat, 0))
+	# Determine player class from GameManager
+	var gm = Engine.get_main_loop().root.get_node_or_null("/root/GameManager") if Engine.get_main_loop() else null
+	var pc = gm.selected_class if gm else "warrior"
+	if _is_native_weapon(pc, weapon.weapon_type):
+		# Native: floor of 0.75 even with 0 points
+		return clampf(0.75 + float(points) * 0.025, 0.75, 1.0)
+	else:
+		# Off-class: 0% at 0 points, full at 10+
+		return clampf(float(points) * 0.10, 0.0, 1.0)
+
 func get_damage() -> int:
 	var base = get_stat(StatModifier.StatType.ATTACK_DAMAGE)
 	var weapon = get_equipped_weapon()
+	var prof_mult = 1.0
 	if weapon and weapon.weapon_type != "" and level_system:
 		var scaling_stat = weapon.get_scaling_stat()
 		if scaling_stat != "":
 			var points = level_system.allocated.get(scaling_stat, 0)
 			base *= (1.0 + points * 0.08)
-	return maxi(1, int(base))
+		prof_mult = get_proficiency_mult()
+	var final_dmg = int(base * prof_mult)
+	# Off-class with no allocation produces 0 damage — the bullet still fires, but ineffective.
+	if prof_mult <= 0.0:
+		return 0
+	return maxi(1, final_dmg)
 func get_attack_speed() -> float: return get_stat(StatModifier.StatType.ATTACK_SPEED)
 func get_bullet_speed() -> float: return get_stat(StatModifier.StatType.BULLET_SPEED)
 func get_bullet_count() -> int: return maxi(1, int(round(get_stat(StatModifier.StatType.BULLET_COUNT))))

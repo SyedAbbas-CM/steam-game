@@ -9,6 +9,7 @@ title = "Jimbob's Lost Pickaxe"
 summary = "Jimbob lost his pickaxe in the dungeons. Clear 10 enemies down there to search for it."
 level = 2
 location = "haven"
+giver_npc = "Elder"
 properties = [{
 "index": 0,
 "name": "Enemies Cleared",

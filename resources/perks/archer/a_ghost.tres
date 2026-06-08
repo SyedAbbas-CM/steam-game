@@ -11,5 +11,9 @@ class_required = "archer"
 tier = 3
 prerequisites = ["a_shadow_blend"]
 stat_bonuses = {}
+stat_requirements = {
+"movement": 8,
+"intellect": 4
+}
 special_effect = "ghost"
 is_percent = false

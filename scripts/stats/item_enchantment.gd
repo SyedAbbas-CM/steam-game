@@ -1,7 +1,16 @@
 class_name ItemEnchantment
 extends Resource
 
-enum EnchantType { FIRE, ICE, POISON, LIGHTNING, HOLY, DARK, VAMPIRIC, EXPLOSIVE }
+enum EnchantType { FIRE, ICE, POISON, LIGHTNING, HOLY, DARK, VAMPIRIC, EXPLOSIVE, BULWARK, MYSTIC, WRAITH }
+
+# Passive enchants (BULWARK / MYSTIC / WRAITH) — provide perk-style effects via gear.
+# Map enchant type -> passive effect name expected by player.gd.
+const PASSIVE_EFFECTS = {
+	EnchantType.BULWARK: "bastion",
+	EnchantType.MYSTIC: "mystic_shield",
+	EnchantType.WRAITH: "wraithwalk",
+	EnchantType.VAMPIRIC: "lifesteal",  # on-hit + perk both heal
+}
 
 @export var type: EnchantType = EnchantType.FIRE
 @export var tier: int = 1  # 1-3
@@ -34,6 +43,9 @@ func get_prefix() -> String:
 		EnchantType.DARK: return "Dark"
 		EnchantType.VAMPIRIC: return "Vampiric"
 		EnchantType.EXPLOSIVE: return "Explosive"
+		EnchantType.BULWARK: return "Bulwark"
+		EnchantType.MYSTIC: return "Mystic"
+		EnchantType.WRAITH: return "Wraith"
 	return ""
 
 func get_color() -> Color:
@@ -46,6 +58,9 @@ func get_color() -> Color:
 		EnchantType.DARK: return Color(0.5, 0.2, 0.8)
 		EnchantType.VAMPIRIC: return Color(0.8, 0.1, 0.3)
 		EnchantType.EXPLOSIVE: return Color(1.0, 0.6, 0.0)
+		EnchantType.BULWARK: return Color(0.85, 0.75, 0.4)
+		EnchantType.MYSTIC: return Color(0.3, 0.6, 1.0)
+		EnchantType.WRAITH: return Color(0.5, 0.2, 0.7)
 	return Color.WHITE
 
 func get_enchant_cost() -> int:

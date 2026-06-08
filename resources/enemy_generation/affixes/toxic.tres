@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EliteAffixDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/elite_affix_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+affix_id = "toxic"
+display_prefix = "Toxic"
+allowed_roles = Array[String](["ranged", "support"])
+requires_projectiles = true
+add_attack_types = Array[int]([15, 54])
+damage_mult = 1.05
+bullet_speed_mult = 0.98
+bullet_count_bonus = 1
+color_tint = Color(0.55, 0.98, 0.55, 1)
+bullet_status_effect = "POISONED"
+bullet_status_duration = 4.0
+apply_poisoned = true

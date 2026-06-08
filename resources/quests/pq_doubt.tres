@@ -9,6 +9,7 @@ title = "The Burning"
 summary = "Heshem wants a Red Potion and a Blue Potion. He says he needs them for something important."
 level = 5
 location = "aria"
+giver_npc = "Heshem"
 prerequisite = "pq_cave"
 properties = [{
 "index": 0,

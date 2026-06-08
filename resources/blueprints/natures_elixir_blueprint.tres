@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="BlueprintDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/blueprint_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+blueprint_id = "natures_elixir_blueprint"
+blueprint_name = "Nature's Elixir Formula"
+description = "A rare alchemical formula that distills swamp root and bark into a speed-boosting tonic."
+result_item_path = "res://resources/items/crafted/natures_elixir.tres"
+station_type = "alchemy"
+required_fragments = 4
+required_salvage_points = 8
+unlock_tags = PackedStringArray("alchemy", "elixir", "nature", "speed")
+recipe_paths = PackedStringArray("res://resources/recipes/natures_elixir.tres")

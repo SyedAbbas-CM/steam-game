@@ -11,5 +11,6 @@ class_required = "archer"
 tier = 1
 prerequisites = []
 stat_bonuses = {}
+stat_requirements = {}
 special_effect = "silent_step"
 is_percent = false

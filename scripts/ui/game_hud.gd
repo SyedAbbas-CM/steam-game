@@ -33,6 +33,11 @@ const QUICKBAR_SLOT_SIZE = 80
 const QUICKBAR_ICON_SIZE = 52
 const QUICKBAR_SLOTS = 6
 const QUICKBAR_GAP = 84
+var _mobile_quickbar_slots: Array[Button] = []
+var _mobile_quickbar_panel: Control
+const MOBILE_QUICKBAR_SLOT_SIZE = 58
+const MOBILE_QUICKBAR_ICON_SIZE = 36
+const MOBILE_QUICKBAR_GAP = 10
 
 # Spell slots (left side)
 var _spell_slots: Array[Button] = []
@@ -43,6 +48,13 @@ const SPELL_ICON_SIZE = 44
 const SPELL_SLOTS = 6
 const SPELL_GAP = 76
 const SPELL_KEYS = ["F", "G", "H", "J", "K", "L"]
+var _mobile_spell_slots: Array[Button] = []
+var _mobile_spell_panel: Control
+var _mobile_stone_toss_btn: Button
+const MOBILE_SPELL_SLOT_SIZE = 52
+const MOBILE_SPELL_ICON_SIZE = 30
+const MOBILE_SPELL_GAP = 8
+var _is_mobile_layout: bool = false
 
 # Minimap
 var _minimap_panel: Control
@@ -66,31 +78,36 @@ const MP_BAR_HEIGHT = 16.0
 const XP_BAR_HEIGHT = 10.0
 const MARGIN = 14.0
 
-# Colors
-const HP_FILL = Color(0.8, 0.2, 0.2)
-const HP_BG = Color(0.27, 0.07, 0.07)
-const MP_FILL = Color(0.2, 0.4, 0.8)
-const MP_BG = Color(0.07, 0.07, 0.27)
-const STAMINA_FILL = Color(0.85, 0.75, 0.15)
-const STAMINA_BG = Color(0.25, 0.2, 0.05)
+# Ashfields palette — keep in sync with assets/themes/ashfields_theme.tres
+const HP_FILL = Color(0.604, 0.106, 0.106)        # accent_blood
+const HP_BG = Color(0.149, 0.055, 0.055, 0.85)
+const MP_FILL = Color(0.486, 0.227, 0.929)        # accent_arcane
+const MP_BG = Color(0.118, 0.067, 0.227, 0.85)
+const STAMINA_FILL = Color(0.918, 0.702, 0.031)   # accent_gold2
+const STAMINA_BG = Color(0.149, 0.114, 0.024, 0.85)
 const STAMINA_BAR_HEIGHT = 14.0
-const SHIELD_FILL = Color(0.3, 0.5, 0.9)
-const SHIELD_BG = Color(0.08, 0.1, 0.25)
+const SHIELD_FILL = Color(0.392, 0.502, 0.722)    # cool steel
+const SHIELD_BG = Color(0.090, 0.114, 0.196, 0.85)
 const SHIELD_BAR_HEIGHT = 14.0
-const XP_FILL = Color(0.8, 0.67, 0.2)
-const XP_BG = Color(0.2, 0.13, 0.07)
-const BADGE_BG = Color(0.2, 0.2, 0.2)
-const BADGE_TEXT = Color(1.0, 0.8, 0.0)
-const INFO_BG = Color(0.0, 0.0, 0.0, 0.6)
+const XP_FILL = Color(0.792, 0.541, 0.016)        # accent_gold (darker)
+const XP_BG = Color(0.149, 0.098, 0.024, 0.85)
+const BADGE_BG = Color(0.110, 0.098, 0.090, 0.95) # bg_panel
+const BADGE_TEXT = Color(0.918, 0.702, 0.031)     # accent_gold2
+const INFO_BG = Color(0.059, 0.059, 0.102, 0.7)   # bg_deep semitransparent
 
 func _ready() -> void:
 	layer = 100
 	add_to_group("game_hud")
+	_is_mobile_layout = TouchControls.is_mobile()
 	_build_vitals_panel()
 	_build_info_panel()
 	_build_action_buttons()
-	_build_quickbar()
-	_build_spell_slots()
+	if _is_mobile_layout:
+		_build_mobile_spell_bar()
+		_build_mobile_quickbar()
+	else:
+		_build_quickbar()
+		_build_spell_slots()
 	_build_quest_arrow()
 	_build_stealth_indicator()
 
@@ -267,13 +284,17 @@ func _build_action_buttons() -> void:
 
 	# Inventory button — bag sprite from lofi_obj_32 (BAG_BROWN = index 30)
 	_btn_inventory = _create_icon_button(obj_tex, 30, "BAG", 32)
-	_btn_inventory.position = Vector2(1920 - 120 - MARGIN, 1080 - 220 - MARGIN)
+	_btn_inventory.position = Vector2(1920 - 88 - MARGIN, 28) if _is_mobile_layout else Vector2(1920 - 120 - MARGIN, 1080 - 220 - MARGIN)
+	if _is_mobile_layout:
+		_btn_inventory.scale = Vector2(0.78, 0.78)
 	_btn_inventory.pressed.connect(_on_bag_pressed)
 	panel.add_child(_btn_inventory)
 
 	# Quest button — scroll icon from tiles.png (tile 100)
 	_btn_quest = _create_icon_button(tiles_tex, 100, "LOG", 32)
-	_btn_quest.position = Vector2(1920 - 120 - MARGIN, 1080 - 110 - MARGIN)
+	_btn_quest.position = Vector2(1920 - 176 - MARGIN, 28) if _is_mobile_layout else Vector2(1920 - 120 - MARGIN, 1080 - 110 - MARGIN)
+	if _is_mobile_layout:
+		_btn_quest.scale = Vector2(0.78, 0.78)
 	_btn_quest.pressed.connect(_on_log_pressed)
 	panel.add_child(_btn_quest)
 
@@ -292,7 +313,8 @@ func _build_action_buttons() -> void:
 	dbg_btn.add_theme_stylebox_override("normal", dbg_style)
 	dbg_btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
 	dbg_btn.pressed.connect(_on_debug_gold_pressed)
-	panel.add_child(dbg_btn)
+	if not _is_mobile_layout:
+		panel.add_child(dbg_btn)
 
 	# Map button removed — world map now only accessible from War Table
 
@@ -324,8 +346,8 @@ func _create_icon_button(sheet: Texture2D, sprite_index: int, label_text: String
 
 	# Dark styled background
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.06, 0.14, 0.85)
-	style.border_color = Color(0.5, 0.4, 0.25)
+	style.bg_color = Color(0.110, 0.098, 0.090, 0.92)
+	style.border_color = Color(0.471, 0.443, 0.420)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
 	style.content_margin_left = 4
@@ -335,12 +357,12 @@ func _create_icon_button(sheet: Texture2D, sprite_index: int, label_text: String
 	btn.add_theme_stylebox_override("normal", style)
 
 	var hover = style.duplicate()
-	hover.bg_color = Color(0.15, 0.12, 0.25, 0.9)
-	hover.border_color = Color(0.8, 0.6, 0.3)
+	hover.bg_color = Color(0.149, 0.137, 0.122, 0.95)
+	hover.border_color = Color(0.918, 0.702, 0.031)
 	btn.add_theme_stylebox_override("hover", hover)
 
 	var pressed_style = style.duplicate()
-	pressed_style.bg_color = Color(0.2, 0.15, 0.3, 0.95)
+	pressed_style.bg_color = Color(0.075, 0.067, 0.060, 0.98)
 	btn.add_theme_stylebox_override("pressed", pressed_style)
 
 	# Icon sprite — displayed at 64x64 (2x)
@@ -521,12 +543,22 @@ func setup_minimap(floor_map: Dictionary, start_pos: Vector2i) -> void:
 	_minimap_panel.name = "Minimap"
 	add_child(_minimap_panel)
 
-	# Background
+	# Background — top-right corner, flush to the edge
 	var bg = ColorRect.new()
 	bg.color = Color(0, 0, 0, 0.5)
-	bg.position = Vector2(1920 - 200 - MARGIN, MARGIN + 90)
+	bg.position = Vector2(1920 - 200 - MARGIN, MARGIN)
 	bg.size = Vector2(200, 120)
 	_minimap_panel.add_child(bg)
+	# Compass / hint label above the minimap
+	var hint = Label.new()
+	hint.name = "MinimapHint"
+	hint.add_theme_font_size_override("font_size", 12)
+	hint.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	hint.position = Vector2(1920 - 200 - MARGIN, MARGIN + 122)
+	hint.size = Vector2(200, 18)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.text = ""
+	_minimap_panel.add_child(hint)
 
 	# Find bounds of map
 	var min_pos = Vector2i(999, 999)
@@ -545,26 +577,23 @@ func setup_minimap(floor_map: Dictionary, start_pos: Vector2i) -> void:
 	cell_size = maxi(cell_size, 3)
 
 	var offset_x = 1920 - 200 - MARGIN + 5 + (190 - map_w * cell_size) / 2
-	var offset_y = MARGIN + 95 + (110 - map_h * cell_size) / 2
+	var offset_y = MARGIN + 5 + (110 - map_h * cell_size) / 2
 
 	_minimap_rects.clear()
 	for pos in floor_map:
-		var room = floor_map[pos] as RoomData
 		var rect = ColorRect.new()
 		rect.size = Vector2(cell_size - 1, cell_size - 1)
 		rect.position = Vector2(
 			offset_x + (pos.x - min_pos.x) * cell_size,
 			offset_y + (pos.y - min_pos.y) * cell_size
 		)
-		if room and room.has_stairs_down:
-			rect.color = Color(0.5, 0.4, 0.08, 0.95)  # stairs = dim gold (visible before visiting)
-		else:
-			rect.color = Color(0.02, 0.02, 0.02, 0.95)  # unvisited = effectively black
-
+		# Unvisited rooms (including stairs) are uniformly black — no spoiler marker.
+		rect.color = Color(0.02, 0.02, 0.02, 0.95)
 		_minimap_panel.add_child(rect)
 		_minimap_rects[pos] = rect
 
 	update_minimap_room(start_pos)
+	_flash_path_to_stairs(start_pos)
 
 func hide_minimap() -> void:
 	_minimap_data.clear()
@@ -577,14 +606,94 @@ func update_minimap_room(grid_pos: Vector2i) -> void:
 	# Dim previous current room to visited color
 	if _minimap_rects.has(_minimap_current):
 		var prev_room = _minimap_data.get(_minimap_current) as RoomData
+		# Only reveal the stairs gold once the player has actually stood in that room.
 		if prev_room and prev_room.has_stairs_down:
-			_minimap_rects[_minimap_current].color = Color(0.6, 0.5, 0.1)  # stairs = gold
+			_minimap_rects[_minimap_current].color = Color(0.6, 0.5, 0.1)
 		else:
-			_minimap_rects[_minimap_current].color = Color(0.22, 0.22, 0.22, 1.0)  # visited = dark grey
+			_minimap_rects[_minimap_current].color = Color(0.22, 0.22, 0.22, 1.0)
 
 	_minimap_current = grid_pos
 	if _minimap_rects.has(grid_pos):
 		_minimap_rects[grid_pos].color = Color.WHITE  # current = bright white
+	_update_minimap_hint(grid_pos)
+
+func _update_minimap_hint(_grid_pos: Vector2i) -> void:
+	pass  # path is now revealed once on floor entry via _flash_path_to_stairs
+
+func _flash_path_to_stairs(start_pos: Vector2i) -> void:
+	if not _minimap_panel:
+		return
+	# Find stairs room
+	var goal = Vector2i.ZERO
+	var has_goal := false
+	for pos in _minimap_data:
+		var room = _minimap_data[pos] as RoomData
+		if room and room.has_stairs_down:
+			goal = pos
+			has_goal = true
+			break
+	if not has_goal:
+		return
+	# BFS over the actual room graph (uses room.connections, not grid adjacency,
+	# because rooms may be at non-adjacent grid cells linked via corridors).
+	var queue: Array = [start_pos]
+	var came_from: Dictionary = {start_pos: start_pos}
+	while queue.size() > 0:
+		var p = queue.pop_front() as Vector2i
+		if p == goal:
+			break
+		var rd = _minimap_data.get(p) as RoomData
+		if not rd:
+			continue
+		for dir_name in rd.connections:
+			var n = rd.connections[dir_name] as Vector2i
+			if came_from.has(n) or not _minimap_data.has(n):
+				continue
+			came_from[n] = p
+			queue.append(n)
+	if not came_from.has(goal):
+		return
+	# Build the path from start → goal
+	var path: Array = []
+	var step = goal
+	while step != start_pos:
+		path.push_front(step)
+		step = came_from[step]
+	# Set hint label briefly so the player has a direction reminder. Use the
+	# named connection direction (rooms aren't on adjacent grid cells).
+	var hint = _minimap_panel.get_node_or_null("MinimapHint") as Label
+	if hint and path.size() > 0:
+		var first_step = path[0] as Vector2i
+		var start_rd = _minimap_data.get(start_pos) as RoomData
+		var arrow := "?"
+		if start_rd:
+			for dname in start_rd.connections:
+				if start_rd.connections[dname] == first_step:
+					match dname:
+						"north": arrow = "↑"
+						"south": arrow = "↓"
+						"east": arrow = "→"
+						"west": arrow = "←"
+					break
+		hint.text = "Stairs: %s  %d rooms" % [arrow, path.size()]
+	# Flash each room on the path with a gold tint, then fade back to black.
+	for i in range(path.size()):
+		var pos = path[i] as Vector2i
+		if not _minimap_rects.has(pos):
+			continue
+		var rect = _minimap_rects[pos] as ColorRect
+		# Stagger each tile slightly so the player perceives the route direction.
+		var stagger = float(i) * 0.10
+		var tw = create_tween()
+		tw.tween_interval(stagger)
+		tw.tween_callback(func(): rect.color = Color(0.95, 0.75, 0.20, 1.0))
+		tw.tween_interval(2.5)
+		tw.tween_property(rect, "color", Color(0.02, 0.02, 0.02, 0.95), 1.2)
+	# Clear the hint text after the reveal finishes
+	if hint:
+		var clear_tween = create_tween()
+		clear_tween.tween_interval(3.5 + float(path.size()) * 0.10)
+		clear_tween.tween_callback(func(): hint.text = "")
 
 # --- Public API ---
 
@@ -729,11 +838,12 @@ func _update_level(level: int) -> void:
 var _quickbar_items: Array[String] = ["", "", "", "", "", ""]  # item_name per slot
 
 func get_quickbar_slot_at_pos(screen_pos: Vector2) -> int:
-	for i in range(QUICKBAR_SLOTS):
-		var btn = _quickbar_slots[i]
-		var rect = Rect2(btn.position, btn.size)
-		if rect.has_point(screen_pos):
-			return i
+	for bar in [_quickbar_slots, _mobile_quickbar_slots]:
+		for i in range(bar.size()):
+			var btn = bar[i] as Button
+			var rect = Rect2(btn.global_position, btn.size)
+			if rect.has_point(screen_pos):
+				return i
 	return -1
 
 func _build_quickbar() -> void:
@@ -754,26 +864,64 @@ func _build_quickbar() -> void:
 		btn.size = Vector2(QUICKBAR_SLOT_SIZE, QUICKBAR_SLOT_SIZE)
 		btn.position = Vector2(base_x, slot_y)
 
+		# Quickbar slot — gold border
 		var sty = StyleBoxFlat.new()
-		sty.bg_color = Color(0.08, 0.06, 0.14, 0.85)
-		sty.border_color = Color(0.4, 0.35, 0.25)
+		sty.bg_color = Color(0.110, 0.098, 0.090, 0.88)
+		sty.border_color = Color(0.471, 0.443, 0.420)
 		sty.set_border_width_all(1)
 		sty.set_corner_radius_all(4)
 		btn.add_theme_stylebox_override("normal", sty)
 
 		var hover_sty = sty.duplicate()
-		hover_sty.bg_color = Color(0.15, 0.12, 0.25, 0.9)
-		hover_sty.border_color = Color(0.8, 0.6, 0.3)
+		hover_sty.bg_color = Color(0.149, 0.137, 0.122, 0.95)
+		hover_sty.border_color = Color(0.918, 0.702, 0.031)
 		hover_sty.set_border_width_all(2)
 		btn.add_theme_stylebox_override("hover", hover_sty)
 
 		var pressed_sty = sty.duplicate()
-		pressed_sty.bg_color = Color(0.2, 0.15, 0.3, 0.95)
+		pressed_sty.bg_color = Color(0.075, 0.067, 0.060, 0.98)
 		btn.add_theme_stylebox_override("pressed", pressed_sty)
 
 		btn.pressed.connect(_on_quickbar_pressed.bind(i))
 		_quickbar_panel.add_child(btn)
 		_quickbar_slots.append(btn)
+
+func _build_mobile_quickbar() -> void:
+	_mobile_quickbar_panel = Control.new()
+	_mobile_quickbar_panel.name = "MobileQuickbar"
+	add_child(_mobile_quickbar_panel)
+
+	var total_w = QUICKBAR_SLOTS * MOBILE_QUICKBAR_SLOT_SIZE + (QUICKBAR_SLOTS - 1) * MOBILE_QUICKBAR_GAP
+	var start_x = (1920.0 - total_w) * 0.5
+	var y = 1080.0 - MOBILE_QUICKBAR_SLOT_SIZE - 16.0
+	_mobile_quickbar_slots.clear()
+
+	for i in range(QUICKBAR_SLOTS):
+		var btn = Button.new()
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.size = Vector2(MOBILE_QUICKBAR_SLOT_SIZE, MOBILE_QUICKBAR_SLOT_SIZE)
+		btn.position = Vector2(start_x + i * (MOBILE_QUICKBAR_SLOT_SIZE + MOBILE_QUICKBAR_GAP), y)
+
+		var sty = StyleBoxFlat.new()
+		sty.bg_color = Color(0.110, 0.098, 0.090, 0.90)
+		sty.border_color = Color(0.471, 0.443, 0.420)
+		sty.set_border_width_all(1)
+		sty.set_corner_radius_all(5)
+		btn.add_theme_stylebox_override("normal", sty)
+
+		var hover_sty = sty.duplicate()
+		hover_sty.bg_color = Color(0.149, 0.137, 0.122, 0.95)
+		hover_sty.border_color = Color(0.918, 0.702, 0.031)
+		hover_sty.set_border_width_all(2)
+		btn.add_theme_stylebox_override("hover", hover_sty)
+
+		var pressed_sty = sty.duplicate()
+		pressed_sty.bg_color = Color(0.075, 0.067, 0.060, 0.98)
+		btn.add_theme_stylebox_override("pressed", pressed_sty)
+
+		btn.pressed.connect(_on_quickbar_pressed.bind(i))
+		_mobile_quickbar_panel.add_child(btn)
+		_mobile_quickbar_slots.append(btn)
 
 func _build_spell_slots() -> void:
 	_spell_panel = Control.new()
@@ -792,16 +940,17 @@ func _build_spell_slots() -> void:
 		btn.size = Vector2(SPELL_SLOT_SIZE, SPELL_SLOT_SIZE)
 		btn.position = Vector2(base_x, slot_y)
 
+		# Spell slot — arcane purple border
 		var sty = StyleBoxFlat.new()
-		sty.bg_color = Color(0.06, 0.06, 0.16, 0.85)
-		sty.border_color = Color(0.3, 0.25, 0.5)
+		sty.bg_color = Color(0.110, 0.098, 0.090, 0.88)
+		sty.border_color = Color(0.486, 0.227, 0.929)
 		sty.set_border_width_all(1)
 		sty.set_corner_radius_all(4)
 		btn.add_theme_stylebox_override("normal", sty)
 
 		var hover_sty = sty.duplicate()
-		hover_sty.bg_color = Color(0.12, 0.1, 0.25, 0.9)
-		hover_sty.border_color = Color(0.6, 0.4, 0.8)
+		hover_sty.bg_color = Color(0.149, 0.137, 0.122, 0.95)
+		hover_sty.border_color = Color(0.640, 0.421, 0.998)
 		hover_sty.set_border_width_all(2)
 		btn.add_theme_stylebox_override("hover", hover_sty)
 
@@ -824,103 +973,152 @@ func _build_spell_slots() -> void:
 	_stone_toss_btn.add_theme_stylebox_override("hover", stone_sty)
 	_spell_panel.add_child(_stone_toss_btn)
 
+func _build_mobile_spell_bar() -> void:
+	_mobile_spell_panel = Control.new()
+	_mobile_spell_panel.name = "MobileSpellBar"
+	add_child(_mobile_spell_panel)
+
+	var total_slots = SPELL_SLOTS + 1
+	var total_w = total_slots * MOBILE_SPELL_SLOT_SIZE + (total_slots - 1) * MOBILE_SPELL_GAP
+	var start_x = (1920.0 - total_w) * 0.5
+	var y = 1080.0 - MOBILE_QUICKBAR_SLOT_SIZE - MOBILE_SPELL_SLOT_SIZE - 30.0
+	_mobile_spell_slots.clear()
+
+	for i in range(SPELL_SLOTS):
+		var btn = Button.new()
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.size = Vector2(MOBILE_SPELL_SLOT_SIZE, MOBILE_SPELL_SLOT_SIZE)
+		btn.position = Vector2(start_x + i * (MOBILE_SPELL_SLOT_SIZE + MOBILE_SPELL_GAP), y)
+
+		var sty = StyleBoxFlat.new()
+		sty.bg_color = Color(0.110, 0.098, 0.090, 0.90)
+		sty.border_color = Color(0.486, 0.227, 0.929)
+		sty.set_border_width_all(1)
+		sty.set_corner_radius_all(5)
+		btn.add_theme_stylebox_override("normal", sty)
+
+		var hover_sty = sty.duplicate()
+		hover_sty.bg_color = Color(0.149, 0.137, 0.122, 0.95)
+		hover_sty.border_color = Color(0.640, 0.421, 0.998)
+		hover_sty.set_border_width_all(2)
+		btn.add_theme_stylebox_override("hover", hover_sty)
+
+		btn.pressed.connect(_on_spell_slot_pressed.bind(i))
+		_mobile_spell_panel.add_child(btn)
+		_mobile_spell_slots.append(btn)
+
+	_mobile_stone_toss_btn = Button.new()
+	_mobile_stone_toss_btn.focus_mode = Control.FOCUS_NONE
+	_mobile_stone_toss_btn.size = Vector2(MOBILE_SPELL_SLOT_SIZE, MOBILE_SPELL_SLOT_SIZE)
+	_mobile_stone_toss_btn.position = Vector2(start_x + SPELL_SLOTS * (MOBILE_SPELL_SLOT_SIZE + MOBILE_SPELL_GAP), y)
+	var stone_sty = StyleBoxFlat.new()
+	stone_sty.bg_color = Color(0.1, 0.08, 0.04, 0.90)
+	stone_sty.border_color = Color(0.6, 0.5, 0.3)
+	stone_sty.set_border_width_all(2)
+	stone_sty.set_corner_radius_all(5)
+	_mobile_stone_toss_btn.add_theme_stylebox_override("normal", stone_sty)
+	_mobile_stone_toss_btn.add_theme_stylebox_override("hover", stone_sty)
+	_mobile_stone_toss_btn.pressed.connect(_on_stone_toss_pressed)
+	_mobile_spell_panel.add_child(_mobile_stone_toss_btn)
+
 func _refresh_spell_slots() -> void:
 	if not _player or not _player.spell_book:
 		return
 	var sb = _player.spell_book
 	# Get spirit stat for slot unlocks
-	var spirit = _player.level_system.allocated.get("spirit", 0) if _player.level_system else 0
+	var spirit = _player.level_system.allocated.get("intellect", 0) if _player.level_system else 0
 	var max_slots = sb.get_max_slots(_player.level_system.level if _player.level_system else 1, spirit)
-	for i in range(SPELL_SLOTS):
-		var btn = _spell_slots[i]
-		for child in btn.get_children():
-			child.queue_free()
+	if _spell_slots.size() >= SPELL_SLOTS:
+		for i in range(SPELL_SLOTS):
+			var btn = _spell_slots[i]
+			for child in btn.get_children():
+				child.queue_free()
 
-		var sty = btn.get_theme_stylebox("normal") as StyleBoxFlat
+			var sty = btn.get_theme_stylebox("normal") as StyleBoxFlat
 
-		# Locked slot
-		if i >= max_slots:
-			var lock_lbl = Label.new()
-			lock_lbl.text = "Spr%d" % SpellBook.SPIRIT_THRESHOLDS[i] if i < SpellBook.SPIRIT_THRESHOLDS.size() else "?"
-			lock_lbl.add_theme_font_size_override("font_size", 10)
-			lock_lbl.add_theme_color_override("font_color", Color(0.25, 0.2, 0.3))
-			lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			lock_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			lock_lbl.position = Vector2(0, 0)
-			lock_lbl.size = Vector2(SPELL_SLOT_SIZE, SPELL_SLOT_SIZE)
-			lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			btn.add_child(lock_lbl)
+			# Locked slot
+			if i >= max_slots:
+				var lock_lbl = Label.new()
+				lock_lbl.text = "Spr%d" % SpellBook.SPIRIT_THRESHOLDS[i] if i < SpellBook.SPIRIT_THRESHOLDS.size() else "?"
+				lock_lbl.add_theme_font_size_override("font_size", 10)
+				lock_lbl.add_theme_color_override("font_color", Color(0.25, 0.2, 0.3))
+				lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				lock_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+				lock_lbl.position = Vector2(0, 0)
+				lock_lbl.size = Vector2(SPELL_SLOT_SIZE, SPELL_SLOT_SIZE)
+				lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(lock_lbl)
+				if sty:
+					sty.bg_color = Color(0.04, 0.04, 0.08, 0.7)
+					sty.border_color = Color(0.15, 0.12, 0.2)
+					sty.set_border_width_all(1)
+				continue
+
+			var spell = sb.spell_slots[i] as SpellDefinition if i < sb.spell_slots.size() else null
+
+			if not spell:
+				# Empty slot — show key label (big)
+				var key_lbl = Label.new()
+				key_lbl.text = SPELL_KEYS[i]
+				key_lbl.add_theme_font_size_override("font_size", 28)
+				key_lbl.add_theme_color_override("font_color", Color(0.4, 0.35, 0.55))
+				key_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				key_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+				key_lbl.position = Vector2(0, 0)
+				key_lbl.size = Vector2(SPELL_SLOT_SIZE, SPELL_SLOT_SIZE)
+				key_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(key_lbl)
+				if sty:
+					sty.border_color = Color(0.3, 0.25, 0.5)
+					sty.set_border_width_all(1)
+				continue
+
+			# Spell icon (colored circle based on effect type)
+			var icon_color = _spell_effect_color(spell.effect_type)
+			var icon_rect = ColorRect.new()
+			icon_rect.color = icon_color
+			icon_rect.size = Vector2(SPELL_ICON_SIZE, SPELL_ICON_SIZE)
+			icon_rect.position = Vector2((SPELL_SLOT_SIZE - SPELL_ICON_SIZE) / 2, 2)
+			icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(icon_rect)
+
+			# Spell name (abbreviated)
+			var name_lbl = Label.new()
+			var short = spell.spell_name.substr(0, 6) if spell.spell_name.length() > 6 else spell.spell_name
+			name_lbl.text = short
+			name_lbl.add_theme_font_size_override("font_size", 9)
+			name_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 0.9))
+			name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			name_lbl.position = Vector2(0, SPELL_SLOT_SIZE - 14)
+			name_lbl.size = Vector2(SPELL_SLOT_SIZE, 12)
+			name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(name_lbl)
+
+			# Key label (top-left corner, prominent)
+			var key_lbl2 = Label.new()
+			key_lbl2.text = SPELL_KEYS[i]
+			key_lbl2.add_theme_font_size_override("font_size", 18)
+			key_lbl2.add_theme_color_override("font_color", Color(0.7, 0.65, 0.8))
+			key_lbl2.position = Vector2(2, 0)
+			key_lbl2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(key_lbl2)
+
+			# Cooldown overlay
+			if sb.slot_cooldowns[i] > 0:
+				var cd_lbl = Label.new()
+				cd_lbl.text = str(int(ceil(sb.slot_cooldowns[i])))
+				cd_lbl.add_theme_font_size_override("font_size", 20)
+				cd_lbl.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
+				cd_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				cd_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+				cd_lbl.position = Vector2(0, 0)
+				cd_lbl.size = Vector2(SPELL_SLOT_SIZE, SPELL_SLOT_SIZE)
+				cd_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(cd_lbl)
+
 			if sty:
-				sty.bg_color = Color(0.04, 0.04, 0.08, 0.7)
-				sty.border_color = Color(0.15, 0.12, 0.2)
-				sty.set_border_width_all(1)
-			continue
-
-		var spell = sb.spell_slots[i] as SpellDefinition if i < sb.spell_slots.size() else null
-
-		if not spell:
-			# Empty slot — show key label (big)
-			var key_lbl = Label.new()
-			key_lbl.text = SPELL_KEYS[i]
-			key_lbl.add_theme_font_size_override("font_size", 28)
-			key_lbl.add_theme_color_override("font_color", Color(0.4, 0.35, 0.55))
-			key_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			key_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			key_lbl.position = Vector2(0, 0)
-			key_lbl.size = Vector2(SPELL_SLOT_SIZE, SPELL_SLOT_SIZE)
-			key_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			btn.add_child(key_lbl)
-			if sty:
-				sty.border_color = Color(0.3, 0.25, 0.5)
-				sty.set_border_width_all(1)
-			continue
-
-		# Spell icon (colored circle based on effect type)
-		var icon_color = _spell_effect_color(spell.effect_type)
-		var icon_rect = ColorRect.new()
-		icon_rect.color = icon_color
-		icon_rect.size = Vector2(SPELL_ICON_SIZE, SPELL_ICON_SIZE)
-		icon_rect.position = Vector2((SPELL_SLOT_SIZE - SPELL_ICON_SIZE) / 2, 2)
-		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		btn.add_child(icon_rect)
-
-		# Spell name (abbreviated)
-		var name_lbl = Label.new()
-		var short = spell.spell_name.substr(0, 6) if spell.spell_name.length() > 6 else spell.spell_name
-		name_lbl.text = short
-		name_lbl.add_theme_font_size_override("font_size", 9)
-		name_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 0.9))
-		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_lbl.position = Vector2(0, SPELL_SLOT_SIZE - 14)
-		name_lbl.size = Vector2(SPELL_SLOT_SIZE, 12)
-		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		btn.add_child(name_lbl)
-
-		# Key label (top-left corner, prominent)
-		var key_lbl2 = Label.new()
-		key_lbl2.text = SPELL_KEYS[i]
-		key_lbl2.add_theme_font_size_override("font_size", 18)
-		key_lbl2.add_theme_color_override("font_color", Color(0.7, 0.65, 0.8))
-		key_lbl2.position = Vector2(2, 0)
-		key_lbl2.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		btn.add_child(key_lbl2)
-
-		# Cooldown overlay
-		if sb.slot_cooldowns[i] > 0:
-			var cd_lbl = Label.new()
-			cd_lbl.text = str(int(ceil(sb.slot_cooldowns[i])))
-			cd_lbl.add_theme_font_size_override("font_size", 20)
-			cd_lbl.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
-			cd_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			cd_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			cd_lbl.position = Vector2(0, 0)
-			cd_lbl.size = Vector2(SPELL_SLOT_SIZE, SPELL_SLOT_SIZE)
-			cd_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			btn.add_child(cd_lbl)
-
-		if sty:
-			sty.border_color = icon_color.darkened(0.3)
-			sty.set_border_width_all(2)
+				sty.border_color = icon_color.darkened(0.3)
+				sty.set_border_width_all(2)
 
 	# Refresh stone toss indicator
 	if _stone_toss_btn and _player:
@@ -965,6 +1163,106 @@ func _refresh_spell_slots() -> void:
 		ch_lbl.size = Vector2(SPELL_SLOT_SIZE, SPELL_SLOT_SIZE)
 		ch_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_stone_toss_btn.add_child(ch_lbl)
+	_refresh_mobile_spell_slots()
+
+func _refresh_mobile_spell_slots() -> void:
+	if not _player or not _player.spell_book or _mobile_spell_slots.is_empty():
+		return
+	var sb = _player.spell_book
+	var spirit = _player.level_system.allocated.get("intellect", 0) if _player.level_system else 0
+	var max_slots = sb.get_max_slots(_player.level_system.level if _player.level_system else 1, spirit)
+	for i in range(SPELL_SLOTS):
+		var btn = _mobile_spell_slots[i]
+		for child in btn.get_children():
+			child.queue_free()
+		var sty = btn.get_theme_stylebox("normal") as StyleBoxFlat
+		if i >= max_slots:
+			var lock_lbl = Label.new()
+			lock_lbl.text = "S"
+			lock_lbl.add_theme_font_size_override("font_size", 10)
+			lock_lbl.add_theme_color_override("font_color", Color(0.25, 0.2, 0.3))
+			lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lock_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			lock_lbl.size = Vector2(MOBILE_SPELL_SLOT_SIZE, MOBILE_SPELL_SLOT_SIZE)
+			lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(lock_lbl)
+			if sty:
+				sty.bg_color = Color(0.04, 0.04, 0.08, 0.7)
+				sty.border_color = Color(0.15, 0.12, 0.2)
+			continue
+
+		var spell = sb.spell_slots[i] as SpellDefinition if i < sb.spell_slots.size() else null
+		if not spell:
+			var key_lbl = Label.new()
+			key_lbl.text = str(i + 1)
+			key_lbl.add_theme_font_size_override("font_size", 18)
+			key_lbl.add_theme_color_override("font_color", Color(0.4, 0.35, 0.55))
+			key_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			key_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			key_lbl.size = Vector2(MOBILE_SPELL_SLOT_SIZE, MOBILE_SPELL_SLOT_SIZE)
+			key_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(key_lbl)
+			if sty:
+				sty.border_color = Color(0.3, 0.25, 0.5)
+			continue
+
+		var icon_color = _spell_effect_color(spell.effect_type)
+		var icon_rect = ColorRect.new()
+		icon_rect.color = icon_color
+		icon_rect.size = Vector2(MOBILE_SPELL_ICON_SIZE, MOBILE_SPELL_ICON_SIZE)
+		icon_rect.position = Vector2((MOBILE_SPELL_SLOT_SIZE - MOBILE_SPELL_ICON_SIZE) / 2, 3)
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(icon_rect)
+
+		var idx_lbl = Label.new()
+		idx_lbl.text = str(i + 1)
+		idx_lbl.add_theme_font_size_override("font_size", 12)
+		idx_lbl.add_theme_color_override("font_color", Color(0.7, 0.65, 0.8))
+		idx_lbl.position = Vector2(2, 0)
+		idx_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(idx_lbl)
+
+		if sb.slot_cooldowns[i] > 0:
+			var cd_lbl = Label.new()
+			cd_lbl.text = str(int(ceil(sb.slot_cooldowns[i])))
+			cd_lbl.add_theme_font_size_override("font_size", 16)
+			cd_lbl.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
+			cd_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			cd_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			cd_lbl.size = Vector2(MOBILE_SPELL_SLOT_SIZE, MOBILE_SPELL_SLOT_SIZE)
+			cd_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(cd_lbl)
+
+		if sty:
+			sty.border_color = icon_color.darkened(0.3)
+			sty.set_border_width_all(2)
+
+	if _mobile_stone_toss_btn:
+		for c in _mobile_stone_toss_btn.get_children():
+			c.queue_free()
+		var st_icon = ColorRect.new()
+		st_icon.color = Color(0.7, 0.6, 0.35)
+		st_icon.size = Vector2(MOBILE_SPELL_ICON_SIZE, MOBILE_SPELL_ICON_SIZE)
+		st_icon.position = Vector2((MOBILE_SPELL_SLOT_SIZE - MOBILE_SPELL_ICON_SIZE) / 2, 3)
+		st_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_mobile_stone_toss_btn.add_child(st_icon)
+		var st_key = Label.new()
+		st_key.text = "T"
+		st_key.add_theme_font_size_override("font_size", 12)
+		st_key.add_theme_color_override("font_color", Color(0.7, 0.65, 0.5))
+		st_key.position = Vector2(2, 0)
+		st_key.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_mobile_stone_toss_btn.add_child(st_key)
+		var charges = _player._stone_toss_charges if "_stone_toss_charges" in _player else 0
+		var ch_lbl = Label.new()
+		ch_lbl.text = str(charges)
+		ch_lbl.add_theme_font_size_override("font_size", 15)
+		ch_lbl.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6) if charges > 0 else Color(0.5, 0.4, 0.4))
+		ch_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ch_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		ch_lbl.size = Vector2(MOBILE_SPELL_SLOT_SIZE, MOBILE_SPELL_SLOT_SIZE)
+		ch_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_mobile_stone_toss_btn.add_child(ch_lbl)
 
 func _spell_effect_color(effect_type: SpellDefinition.EffectType) -> Color:
 	match effect_type:
@@ -985,6 +1283,13 @@ func _on_spell_slot_pressed(slot_index: int) -> void:
 		return
 	_player._use_spell_slot(slot_index)
 
+func _on_stone_toss_pressed() -> void:
+	if not _player or _player._stone_toss_charges <= 0:
+		return
+	_player._stone_toss()
+	_player._stone_toss_charges -= 1
+	_refresh_spell_slots()
+
 func assign_to_quickbar(slot_index: int, item_name: String) -> void:
 	if slot_index < 0 or slot_index >= QUICKBAR_SLOTS:
 		return
@@ -1001,34 +1306,140 @@ func _refresh_quickbar() -> void:
 		return
 	var em = _player.equipment_manager
 
+	if _quickbar_slots.size() >= QUICKBAR_SLOTS:
+		for i in range(QUICKBAR_SLOTS):
+			var btn = _quickbar_slots[i]
+			# Clear old children
+			for child in btn.get_children():
+				child.queue_free()
+
+			var item_name = _quickbar_items[i]
+			var sty = btn.get_theme_stylebox("normal") as StyleBoxFlat
+
+			if sty:
+				sty.border_color = Color(0.4, 0.35, 0.25)
+				sty.set_border_width_all(1)
+
+			if item_name == "":
+				# Empty slot — show slot number
+				var num_lbl = Label.new()
+				num_lbl.text = str(i + 1)
+				num_lbl.add_theme_font_size_override("font_size", 14)
+				num_lbl.add_theme_color_override("font_color", Color(0.3, 0.3, 0.35))
+				num_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				num_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+				num_lbl.position = Vector2(0, 0)
+				num_lbl.size = Vector2(QUICKBAR_SLOT_SIZE, QUICKBAR_SLOT_SIZE)
+				num_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(num_lbl)
+				continue
+
+			# Find item in inventory by name
+			var item: EquipmentItem = null
+			var count = 0
+			for j in range(em.inventory.size()):
+				if em.inventory[j].item_name == item_name:
+					if not item:
+						item = em.inventory[j]
+					count += 1
+
+			if not item:
+				# Item no longer in inventory — show greyed out name
+				var ghost_lbl = Label.new()
+				ghost_lbl.text = item_name.substr(0, 7)
+				ghost_lbl.add_theme_font_size_override("font_size", 10)
+				ghost_lbl.add_theme_color_override("font_color", Color(0.35, 0.3, 0.3))
+				ghost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				ghost_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+				ghost_lbl.position = Vector2(0, 0)
+				ghost_lbl.size = Vector2(QUICKBAR_SLOT_SIZE, QUICKBAR_SLOT_SIZE)
+				ghost_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(ghost_lbl)
+				continue
+
+			# Icon
+			var icon = TextureRect.new()
+			icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.size = Vector2(QUICKBAR_ICON_SIZE, QUICKBAR_ICON_SIZE)
+			icon.position = Vector2((QUICKBAR_SLOT_SIZE - QUICKBAR_ICON_SIZE) / 2, 2)
+			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var tex = ItemIconHelper.get_icon_texture(item)
+			if tex:
+				icon.texture = tex
+			btn.add_child(icon)
+
+			# Name label
+			var name_lbl = Label.new()
+			var short_name = item_name.substr(0, 7) if item_name.length() > 7 else item_name
+			name_lbl.text = short_name
+			name_lbl.add_theme_font_size_override("font_size", 10)
+			name_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
+			name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			name_lbl.position = Vector2(0, QUICKBAR_SLOT_SIZE - 16)
+			name_lbl.size = Vector2(QUICKBAR_SLOT_SIZE, 14)
+			name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(name_lbl)
+
+			# Count badge
+			if count > 1:
+				var count_lbl = Label.new()
+				count_lbl.text = "x" + str(count)
+				count_lbl.add_theme_font_size_override("font_size", 11)
+				count_lbl.add_theme_color_override("font_color", Color(1, 1, 0.6))
+				count_lbl.position = Vector2(QUICKBAR_SLOT_SIZE - 28, 0)
+				count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(count_lbl)
+
+			# Equipped badge + green border for equippable items
+			if em.is_equipped(item):
+				var eq_lbl = Label.new()
+				eq_lbl.text = "E"
+				eq_lbl.add_theme_font_size_override("font_size", 10)
+				eq_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
+				eq_lbl.position = Vector2(2, 0)
+				eq_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(eq_lbl)
+				if sty:
+					sty.border_color = Color(0.2, 0.6, 0.2)
+					sty.set_border_width_all(2)
+
+			# "R" key hint for shields and items with special abilities
+			if item.slot_type == EquipmentItem.SlotType.SHIELD or (item.ability_id != "" and item.ability_id != null):
+				var r_lbl = Label.new()
+				r_lbl.text = "R"
+				r_lbl.add_theme_font_size_override("font_size", 18)
+				r_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+				r_lbl.position = Vector2(QUICKBAR_SLOT_SIZE - 16, 0)
+				r_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(r_lbl)
+	_refresh_mobile_quickbar()
+
+func _refresh_mobile_quickbar() -> void:
+	if not _player or _mobile_quickbar_slots.is_empty():
+		return
+	var em = _player.equipment_manager
 	for i in range(QUICKBAR_SLOTS):
-		var btn = _quickbar_slots[i]
-		# Clear old children
+		var btn = _mobile_quickbar_slots[i]
 		for child in btn.get_children():
 			child.queue_free()
-
 		var item_name = _quickbar_items[i]
 		var sty = btn.get_theme_stylebox("normal") as StyleBoxFlat
-
 		if sty:
 			sty.border_color = Color(0.4, 0.35, 0.25)
 			sty.set_border_width_all(1)
-
 		if item_name == "":
-			# Empty slot — show slot number
 			var num_lbl = Label.new()
 			num_lbl.text = str(i + 1)
 			num_lbl.add_theme_font_size_override("font_size", 14)
 			num_lbl.add_theme_color_override("font_color", Color(0.3, 0.3, 0.35))
 			num_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			num_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			num_lbl.position = Vector2(0, 0)
-			num_lbl.size = Vector2(QUICKBAR_SLOT_SIZE, QUICKBAR_SLOT_SIZE)
+			num_lbl.size = Vector2(MOBILE_QUICKBAR_SLOT_SIZE, MOBILE_QUICKBAR_SLOT_SIZE)
 			num_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			btn.add_child(num_lbl)
 			continue
 
-		# Find item in inventory by name
 		var item: EquipmentItem = null
 		var count = 0
 		for j in range(em.inventory.size()):
@@ -1036,77 +1447,57 @@ func _refresh_quickbar() -> void:
 				if not item:
 					item = em.inventory[j]
 				count += 1
-
 		if not item:
-			# Item no longer in inventory — show greyed out name
 			var ghost_lbl = Label.new()
-			ghost_lbl.text = item_name.substr(0, 7)
+			ghost_lbl.text = item_name.substr(0, 3)
 			ghost_lbl.add_theme_font_size_override("font_size", 10)
 			ghost_lbl.add_theme_color_override("font_color", Color(0.35, 0.3, 0.3))
 			ghost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			ghost_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			ghost_lbl.position = Vector2(0, 0)
-			ghost_lbl.size = Vector2(QUICKBAR_SLOT_SIZE, QUICKBAR_SLOT_SIZE)
+			ghost_lbl.size = Vector2(MOBILE_QUICKBAR_SLOT_SIZE, MOBILE_QUICKBAR_SLOT_SIZE)
 			ghost_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			btn.add_child(ghost_lbl)
 			continue
 
-		# Icon
 		var icon = TextureRect.new()
 		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.size = Vector2(QUICKBAR_ICON_SIZE, QUICKBAR_ICON_SIZE)
-		icon.position = Vector2((QUICKBAR_SLOT_SIZE - QUICKBAR_ICON_SIZE) / 2, 2)
+		icon.size = Vector2(MOBILE_QUICKBAR_ICON_SIZE, MOBILE_QUICKBAR_ICON_SIZE)
+		icon.position = Vector2((MOBILE_QUICKBAR_SLOT_SIZE - MOBILE_QUICKBAR_ICON_SIZE) / 2, 3)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var tex = ItemIconHelper.get_icon_texture(item)
 		if tex:
 			icon.texture = tex
 		btn.add_child(icon)
 
-		# Name label
-		var name_lbl = Label.new()
-		var short_name = item_name.substr(0, 7) if item_name.length() > 7 else item_name
-		name_lbl.text = short_name
-		name_lbl.add_theme_font_size_override("font_size", 10)
-		name_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
-		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_lbl.position = Vector2(0, QUICKBAR_SLOT_SIZE - 16)
-		name_lbl.size = Vector2(QUICKBAR_SLOT_SIZE, 14)
-		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		btn.add_child(name_lbl)
-
-		# Count badge
 		if count > 1:
 			var count_lbl = Label.new()
-			count_lbl.text = "x" + str(count)
+			count_lbl.text = str(count)
 			count_lbl.add_theme_font_size_override("font_size", 11)
 			count_lbl.add_theme_color_override("font_color", Color(1, 1, 0.6))
-			count_lbl.position = Vector2(QUICKBAR_SLOT_SIZE - 28, 0)
+			count_lbl.position = Vector2(MOBILE_QUICKBAR_SLOT_SIZE - 16, 1)
 			count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			btn.add_child(count_lbl)
 
-		# Equipped badge + green border for equippable items
+		var idx_lbl = Label.new()
+		idx_lbl.text = str(i + 1)
+		idx_lbl.add_theme_font_size_override("font_size", 12)
+		idx_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
+		idx_lbl.position = Vector2(2, 0)
+		idx_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(idx_lbl)
+
 		if em.is_equipped(item):
 			var eq_lbl = Label.new()
 			eq_lbl.text = "E"
 			eq_lbl.add_theme_font_size_override("font_size", 10)
 			eq_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
-			eq_lbl.position = Vector2(2, 0)
+			eq_lbl.position = Vector2(2, MOBILE_QUICKBAR_SLOT_SIZE - 14)
 			eq_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			btn.add_child(eq_lbl)
 			if sty:
 				sty.border_color = Color(0.2, 0.6, 0.2)
 				sty.set_border_width_all(2)
-
-		# "R" key hint for shields and items with special abilities
-		if item.slot_type == EquipmentItem.SlotType.SHIELD or (item.ability_id != "" and item.ability_id != null):
-			var r_lbl = Label.new()
-			r_lbl.text = "R"
-			r_lbl.add_theme_font_size_override("font_size", 18)
-			r_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-			r_lbl.position = Vector2(QUICKBAR_SLOT_SIZE - 16, 0)
-			r_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			btn.add_child(r_lbl)
 
 func _on_quickbar_pressed(slot_index: int) -> void:
 	if not _player:
@@ -1136,7 +1527,7 @@ func _build_stealth_indicator() -> void:
 	_stealth_indicator.visible = false
 	add_child(_stealth_indicator)
 	_stealth_kill_prompt = Label.new()
-	_stealth_kill_prompt.text = "[E] KILL"
+	_stealth_kill_prompt.text = "[Tap] KILL" if _is_mobile_layout else "[E] KILL"
 	_stealth_kill_prompt.add_theme_font_size_override("font_size", 12)
 	_stealth_kill_prompt.add_theme_color_override("font_color", Color(0.9, 0.2, 0.9))
 	_stealth_kill_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

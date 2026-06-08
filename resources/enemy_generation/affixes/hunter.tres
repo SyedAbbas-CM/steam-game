@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EliteAffixDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/elite_affix_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+affix_id = "hunter"
+display_prefix = "Hunting"
+allowed_roles = Array[String](["ranged", "support"])
+requires_projectiles = true
+add_attack_types = Array[int]([34, 35])
+damage_mult = 1.08
+attack_speed_mult = 0.94
+bullet_speed_mult = 0.95
+color_tint = Color(1, 0.92, 0.66, 1)
+homing_strength = 0.38
+lifetime_mult = 1.12

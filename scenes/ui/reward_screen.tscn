@@ -3,30 +3,33 @@
 [ext_resource type="Script" path="res://scripts/ui/reward_screen.gd" id="1_script"]
 
 [node name="RewardScreen" type="CanvasLayer"]
-process_mode = 2
+process_mode = 3
+layer = 70
 script = ExtResource("1_script")
 
 [node name="Panel" type="PanelContainer" parent="."]
-anchors_preset = 8
 anchor_left = 0.5
-anchor_top = 0.5
+anchor_top = 0.0
 anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -160.0
-offset_top = -50.0
-offset_right = 160.0
-offset_bottom = 50.0
+anchor_bottom = 0.0
+offset_left = -260.0
+offset_top = 8.0
+offset_right = 260.0
+offset_bottom = 92.0
 grow_horizontal = 2
-grow_vertical = 2
+mouse_filter = 1
 
 [node name="VBox" type="VBoxContainer" parent="Panel"]
 layout_mode = 2
+mouse_filter = 1
 
 [node name="Title" type="Label" parent="Panel/VBox"]
 layout_mode = 2
 horizontal_alignment = 1
-text = "Choose a Reward"
+text = "Treasure — Pick Anytime"
+mouse_filter = 2
 
 [node name="Cards" type="HBoxContainer" parent="Panel/VBox"]
 layout_mode = 2
 alignment = 1
+mouse_filter = 1

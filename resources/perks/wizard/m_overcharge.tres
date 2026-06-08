@@ -11,5 +11,9 @@ class_required = "wizard"
 tier = 2
 prerequisites = ["m_quick_cast"]
 stat_bonuses = {}
+stat_requirements = {
+"strength": 5,
+"intellect": 3
+}
 special_effect = "overcharge"
 is_percent = false

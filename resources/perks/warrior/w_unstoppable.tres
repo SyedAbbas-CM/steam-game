@@ -11,5 +11,8 @@ class_required = "warrior"
 tier = 2
 prerequisites = ["w_iron_skin"]
 stat_bonuses = {}
+stat_requirements = {
+"strength": 5
+}
 special_effect = "unstoppable"
 is_percent = false

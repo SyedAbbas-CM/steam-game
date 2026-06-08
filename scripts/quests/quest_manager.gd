@@ -220,8 +220,10 @@ func on_zone_entered(zone_id: String) -> void:
 			if event.get("type") == "zone_enter" and event.get("param") == zone_id:
 				_execute_script(event.get("script", []), quest_id)
 
-func check_zone_quests(zone_id: String) -> void:
+func check_zone_quests(zone_id: String, npc_name: String = "") -> void:
 	## Run "quest" type event scripts for active quests in this zone.
+	## If npc_name is given, only fire events for quests whose giver_npc matches
+	## (so talking to Telos doesn't fire Solmund's reminder).
 	## Called from NPC interaction / offerZoneQuests, NOT automatically on zone entry.
 	if _zone_script_running:
 		# Safety: if stuck for > 5s, force reset
@@ -237,7 +239,9 @@ func check_zone_quests(zone_id: String) -> void:
 			continue
 		if not definitions.has(quest_id):
 			continue
-		var quest = definitions[quest_id]
+		var quest = definitions[quest_id] as QuestDefinition
+		if npc_name != "" and quest.giver_npc != "" and quest.giver_npc != npc_name:
+			continue
 		for event in quest.events:
 			if event.get("type") == "quest" and event.get("param") == zone_id:
 				await _execute_script(event.get("script", []), quest_id)
@@ -431,7 +435,8 @@ func _execute_script(commands: Array, context_quest_id: String) -> void:
 
 			"offerZoneQuests":
 				var zone = cmd.get("zone", current_zone)
-				_offer_zone_quests_for(zone)
+				var npc = cmd.get("npc", "")
+				await _offer_zone_quests_for(zone, npc)
 
 			"openShop":
 				var sid = cmd.get("shop", "")
@@ -446,7 +451,7 @@ func _execute_script(commands: Array, context_quest_id: String) -> void:
 				var pt = get_tree().get_first_node_in_group("perk_tree_screen")
 				if pt:
 					if pt.has_method("open"):
-						pt.open()
+						pt.open(true)  # trainer dialog: unlocks enabled
 					else:
 						pt.visible = true
 						if pt.has_method("_refresh"):
@@ -579,7 +584,7 @@ func get_quest_objective_position(quest_id: String) -> Vector2:
 			return _zone_center_world_pos(_zone_lookup[turnin])
 
 	# Step 2: Point to where the player needs to go to make progress
-	# Priority: target_location > spawn zone from quest script > zone_enter zone
+	# Priority: target_location > spawn zone > zone_enter > nearest dungeon (kill-any) > giver
 
 	# Try target_location first (most quests set this to the action zone)
 	if quest.target_location != "" and _zone_lookup.has(quest.target_location):
@@ -598,11 +603,55 @@ func get_quest_objective_position(quest_id: String) -> Vector2:
 			if zone_id != "" and _zone_lookup.has(zone_id):
 				return _zone_center_world_pos(_zone_lookup[zone_id])
 
+	# Kill-any quests (e.g. q14 "10 enemies in the dungeons") have no zone target,
+	# so point to the dungeon entrance closest to the player rather than the giver.
+	if _quest_targets_any_kill(quest):
+		var entrance_pos = _find_nearest_dungeon_entrance()
+		if entrance_pos != Vector2.ZERO:
+			return entrance_pos
+
 	# Fallback: quest location
 	if quest.location != "" and _zone_lookup.has(quest.location):
 		return _zone_center_world_pos(_zone_lookup[quest.location])
 
 	return Vector2.ZERO
+
+## True when the quest's only progress event is "kill any enemy" (param "*"),
+## meaning the player needs to clear dungeons rather than visit a specific zone.
+func _quest_targets_any_kill(quest: QuestDefinition) -> bool:
+	var has_any_kill := false
+	for event in quest.events:
+		var etype = str(event.get("type", ""))
+		if etype == "kill" and str(event.get("param", "")) == "*":
+			has_any_kill = true
+		elif etype in ["kill", "boss_killed", "zone_enter", "interact"]:
+			# Any zone-bound event wins — fall back to standard targeting.
+			return false
+	return has_any_kill
+
+## Find the world position of the dungeon entrance closest to the player.
+## Entrances are Area2D nodes added by overworld._add_entrance() with meta
+## "biome_name" set. Returns Vector2.ZERO if no entrance found.
+func _find_nearest_dungeon_entrance() -> Vector2:
+	var player = _get_player()
+	if not player:
+		return Vector2.ZERO
+	var overworld = get_tree().get_first_node_in_group("overworld")
+	if not overworld:
+		return Vector2.ZERO
+	var ppos: Vector2 = player.global_position
+	var best := Vector2.ZERO
+	var best_dist_sq := INF
+	for child in overworld.get_children():
+		if not (child is Area2D):
+			continue
+		if not child.has_meta("biome_name"):
+			continue
+		var d := ppos.distance_squared_to(child.global_position)
+		if d < best_dist_sq:
+			best_dist_sq = d
+			best = child.global_position
+	return best
 
 func _are_quest_objectives_complete(quest_id: String, quest: QuestDefinition) -> bool:
 	## Check if all numbered properties have met their targets based on quest events.
@@ -682,7 +731,11 @@ func get_first_active_quest_id() -> String:
 			return quest_id
 	return ""
 
-func _offer_zone_quests_for(zone: String) -> void:
+func _offer_zone_quests_for(zone: String, npc_name: String = "") -> void:
+	## Offers a quest in this zone. If npc_name is given, only considers quests
+	## whose giver_npc matches that NPC (so Telos doesn't hand out Solmund's
+	## quests). A quest with empty giver_npc is treated as zone-wide and may be
+	## offered by any NPC in that zone.
 	var player_level = 1
 	var player = get_tree().get_first_node_in_group("player")
 	if player:
@@ -690,20 +743,27 @@ func _offer_zone_quests_for(zone: String) -> void:
 		if ls:
 			player_level = ls.level
 
-	# Check active quests in this zone first
+	# Fire any reminder/turn-in for quests bound to THIS npc (or zone-wide ones).
 	for quest_id in active_quests:
 		if not active_quests[quest_id].get("active", false):
 			continue
 		var quest = definitions.get(quest_id) as QuestDefinition
-		if quest and (quest.target_location == zone or quest.location == zone):
-			check_zone_quests(zone)
-			return
+		if not quest:
+			continue
+		if quest.target_location != zone and quest.location != zone:
+			continue
+		if npc_name != "" and quest.giver_npc != "" and quest.giver_npc != npc_name:
+			continue
+		await check_zone_quests(zone, npc_name)
+		break
 
-	# Collect available quests (prerequisite-filtered)
+	# Collect available quests (prerequisite-filtered, npc-filtered)
 	var available: Array = []
 	for quest_id in definitions:
 		var quest = definitions[quest_id] as QuestDefinition
 		if quest.location != zone:
+			continue
+		if npc_name != "" and quest.giver_npc != "" and quest.giver_npc != npc_name:
 			continue
 		if is_quest_active(quest_id) or is_quest_completed(quest_id):
 			continue
@@ -724,6 +784,7 @@ func _offer_zone_quests_for(zone: String) -> void:
 		offer_quest(available[0].id)
 		return
 
-	# No quests available
+	# No quests available for this NPC
 	_waiting_for_dialogue = true
-	show_dialogue_requested.emit("Elder", 147, "The shadows have thinned here... for now. Stay vigilant.", ["Ok"])
+	var speaker = npc_name if npc_name != "" else "Elder"
+	show_dialogue_requested.emit(speaker, 147, "The shadows have thinned here... for now. Stay vigilant.", ["Ok"])

@@ -27,7 +27,8 @@ commands = [{
 "name": "Any quests?",
 "script": [{
 "cmd": "offerZoneQuests",
-"zone": "aria"
+"zone": "aria",
+"npc": "Heshem"
 }]
 }, {
 "name": "Heavy words",
@@ -52,7 +53,8 @@ commands = [{
 "name": "Any quests?",
 "script": [{
 "cmd": "offerZoneQuests",
-"zone": "aria"
+"zone": "aria",
+"npc": "Heshem"
 }]
 }, {
 "name": "Farewell",

@@ -1,5 +1,7 @@
 extends Node2D
 
+const EliteGenerator = preload("res://scripts/enemies/elite_generator.gd")
+
 signal floor_changed(floor_number: int)
 signal room_changed(room_index: int, room_data: RoomData)
 signal run_ended(run_state: RunState)
@@ -25,6 +27,10 @@ var current_biome: DungeonBiome
 var current_mine: MineDefinition
 var starting_biome_name: String = ""
 var preferred_mine_id: String = ""
+
+# Coop: per-room counter used to derive deterministic enemy network IDs.
+# Same grid_pos + same spawn order on every peer → same IDs (seeded RNG guarantees order).
+var _enemy_room_counters: Dictionary = {}
 
 func _is_test_dungeon() -> bool:
 	return starting_biome_name.begins_with("Test-Arena") or starting_biome_name == "TestCombo" or starting_biome_name == "TestMovement" or starting_biome_name == "HeightTest"
@@ -113,6 +119,9 @@ const SHADOW_OCCLUDER_REBUILD_INTERVAL := 0.18
 var nav: DungeonNav  # flow-field navigation for enemies
 var events # DungeonEvents - untyped to avoid circular dependency
 var _flow_timer: float = 0.0
+var _liquid_shader_material: ShaderMaterial = null
+
+const DUNGEON_LIQUID_SHADER := preload("res://shaders/dungeon/liquid_surface.gdshader")
 
 # Decoration inspection (press E)
 var _tile_inspector: TileInspector = null
@@ -289,6 +298,8 @@ func _process(delta: float) -> void:
 				var frame = entry["frame_b"] if _anim_frame else entry["frame_a"]
 				deco_layer.set_cell(entry["pos"], 1, frame)
 
+	_update_liquid_shader_params()
+
 func _physics_process(delta: float) -> void:
 	if not player or _floor_tile_set.is_empty():
 		return
@@ -311,6 +322,7 @@ func _physics_process(delta: float) -> void:
 func _ready() -> void:
 	add_to_group("dungeon_manager")
 	RenderingServer.set_default_clear_color(Color.BLACK)
+	_setup_liquid_layer_shader()
 	# Load trap scripts at runtime to avoid parse-time circular dependency
 	_TrapTileScript = load("res://scripts/dungeon/trap_tile.gd")
 	_ArrowTrapScript = load("res://scripts/dungeon/traps/arrow_trap.gd")
@@ -348,6 +360,41 @@ func _ready() -> void:
 	# Create tile inspector for decoration interaction
 	_tile_inspector = TileInspector.new()
 	add_child(_tile_inspector)
+
+func _setup_liquid_layer_shader() -> void:
+	if liquid_layer == null:
+		return
+	_liquid_shader_material = ShaderMaterial.new()
+	_liquid_shader_material.shader = DUNGEON_LIQUID_SHADER
+	_liquid_shader_material.set_shader_parameter("tile_size", float(TILE_SIZE))
+	_liquid_shader_material.set_shader_parameter("player_world_pos", Vector2.ZERO)
+	_liquid_shader_material.set_shader_parameter("active_liquid_type", _get_effective_liquid_type())
+	liquid_layer.material = _liquid_shader_material
+
+func _update_liquid_shader_params() -> void:
+	if _liquid_shader_material == null:
+		return
+	if player and is_instance_valid(player):
+		_liquid_shader_material.set_shader_parameter("player_world_pos", player.global_position)
+	_liquid_shader_material.set_shader_parameter("active_liquid_type", _get_effective_liquid_type())
+
+func _get_effective_liquid_type() -> int:
+	if current_mine and current_mine.liquid_type != "":
+		return _liquid_type_to_int(current_mine.liquid_type)
+	if current_biome and current_biome.liquid_type != "":
+		return _liquid_type_to_int(current_biome.liquid_type)
+	return 0
+
+func _liquid_type_to_int(liquid_type: String) -> int:
+	match liquid_type:
+		"water":
+			return 1
+		"poison":
+			return 2
+		"lava":
+			return 3
+		_:
+			return 0
 
 func _load_biomes() -> void:
 	var t0 = Time.get_ticks_msec()
@@ -395,6 +442,14 @@ func _load_level_data_for(level_id: String) -> void:
 
 func start_run() -> void:
 	var t0 = Time.get_ticks_msec()
+	# Coop: if a host-agreed seed is present, seed the global RNG so all peers generate
+	# identical layouts. seed(0) would reset to time-based, so guard on != 0.
+	var coop = get_node_or_null("/root/CoopSession")
+	if coop and "pending_dungeon_seed" in coop and int(coop.pending_dungeon_seed) != 0:
+		var s := int(coop.pending_dungeon_seed)
+		seed(s)
+		print("DungeonManager: seeded RNG with coop seed=%d" % s)
+	_enemy_room_counters.clear()
 	_item_pool = ItemPool.new()
 	run_state = RunState.new()
 	run_state.run_id = str(randi())
@@ -799,6 +854,8 @@ func _generate_floor(floor_num: int) -> void:
 	# Build flow-field navigation for enemies
 	t1 = Time.get_ticks_msec()
 	nav = DungeonNav.new()
+	if _height_system and is_instance_valid(_height_system):
+		nav.set_height_system(_height_system)
 	nav.build(floor_layer, deco_layer, SOLID_DECO_ROWS)
 	print("TIMING: nav grid took %d ms" % (Time.get_ticks_msec() - t1))
 
@@ -877,17 +934,15 @@ func _generate_height_test_floor() -> void:
 		mood.glow_bloom = 0.1
 		lm.apply_mood(mood)
 
-	# Map dimensions (in tiles, at 8px per tile)
+	# Three clear, well-spaced showcases. Each has a Label sign explaining what it is.
 	var MAP_W = 60
 	var MAP_H = 50
 	var GRASS = Vector2i(6, 14)  # grass_green from environment_tileset
 
-	# Paint all grass
 	for y in range(MAP_H):
 		for x in range(MAP_W):
 			floor_layer.set_cell(Vector2i(x, y), 0, GRASS)
 
-	# Height layout
 	var height_layout: Array = []
 	for y in range(MAP_H):
 		var row: Array = []
@@ -895,33 +950,57 @@ func _generate_height_test_floor() -> void:
 			row.append(0)
 		height_layout.append(row)
 
-	# Layout: lowland left, hills middle, plateau right, peak top-right
-	for y in range(MAP_H):
-		for x in range(MAP_W):
-			if x >= 40 and x <= 54 and y >= 4 and y <= 12:
-				height_layout[y][x] = 3
-			elif x >= 36 and x <= 56:
-				height_layout[y][x] = 2
-			elif x >= 20 and x <= 38:
-				height_layout[y][x] = 1
-
-	# Ramps — short (1 tile wide, 1-2 tiles tall)
 	var ramp_cells_arr: Array = []
-	# 0→1 ramps (west edge of hills at x=20)
-	ramp_cells_arr.append(Vector2i(20, 24))
-	height_layout[24][20] = 0
-	ramp_cells_arr.append(Vector2i(20, 25))
-	height_layout[25][20] = 0
-	# 1→2 ramp (east edge of hills at x=36)
-	ramp_cells_arr.append(Vector2i(36, 24))
-	height_layout[24][36] = 1
-	ramp_cells_arr.append(Vector2i(36, 25))
-	height_layout[25][36] = 1
-	# 2→3 ramp (south edge of peak at y=12)
-	ramp_cells_arr.append(Vector2i(47, 12))
-	height_layout[12][47] = 2
-	ramp_cells_arr.append(Vector2i(48, 12))
-	height_layout[12][48] = 2
+	var labels: Array = []  # [{pos:Vector2, text:String}]
+
+	var paint_rect := func(x0: int, y0: int, x1: int, y1: int, h: int):
+		for yy in range(y0, y1 + 1):
+			for xx in range(x0, x1 + 1):
+				if yy >= 0 and yy < MAP_H and xx >= 0 and xx < MAP_W:
+					height_layout[yy][xx] = h
+
+	var add_ramp := func(x: int, y: int, h: int):
+		if y >= 0 and y < MAP_H and x >= 0 and x < MAP_W:
+			height_layout[y][x] = h
+			ramp_cells_arr.append(Vector2i(x, y))
+
+	# ── LEFT: ascending stairs 0 → 1 → 2 → 3 ──
+	# Single ramp at the south of each step; rest of perimeter is cliff.
+	paint_rect.call(6, 30, 18, 36, 1)
+	paint_rect.call(6, 23, 18, 29, 2)
+	paint_rect.call(6, 16, 18, 22, 3)
+	add_ramp.call(12, 36, 0)
+	add_ramp.call(12, 29, 1)
+	add_ramp.call(12, 22, 2)
+	labels.append({"pos": Vector2(12 * 8, 14 * 8), "text": "STAIRS UP\n(climb from the south)"})
+
+	# ── MIDDLE: simple plateau (h=1), climbed only from north and south ──
+	# East/west edges are solid cliff walls (no ramps), matching the "only climb up/down" rule.
+	paint_rect.call(26, 24, 34, 32, 1)
+	add_ramp.call(30, 33, 0)  # south ramp
+	add_ramp.call(30, 23, 0)  # north ramp
+	labels.append({"pos": Vector2(30 * 8, 22 * 8), "text": "PLATEAU\n(N/S ramps only)"})
+
+	# ── MIDDLE-BOTTOM: 3-tile-long ramp into a high plateau ──
+	paint_rect.call(26, 38, 34, 44, 2)
+	# 3-tile ramp going south→north from (30,47)→(30,45)
+	var chain := [Vector2i(30, 47), Vector2i(30, 46), Vector2i(30, 45)]
+	for c in chain:
+		height_layout[c.y][c.x] = 0
+		ramp_cells_arr.append(c)
+	labels.append({"pos": Vector2(30 * 8, 46 * 8), "text": "LONG RAMP\n(3 tiles)"})
+
+	# ── RIGHT: descending pit 0 → -1 → -2 → -3 ──
+	paint_rect.call(42, 30, 54, 36, -1)
+	paint_rect.call(42, 23, 54, 29, -2)
+	paint_rect.call(42, 16, 54, 22, -3)
+	add_ramp.call(48, 36, 0)
+	add_ramp.call(48, 29, -1)
+	add_ramp.call(48, 22, -2)
+	labels.append({"pos": Vector2(48 * 8, 14 * 8), "text": "PIT\n(descend from the south)"})
+
+	# Store labels for later spawning after build()
+	set_meta("__height_test_labels", labels)
 
 	# Build height system
 	_height_system = _new_height_system()
@@ -929,6 +1008,9 @@ func _generate_height_test_floor() -> void:
 	_height_system.tile_size = TILE_SIZE
 	_height_system.height_px = 8
 	_height_system.cliff_px = 8
+	# Use a dirt-themed tile for ramp bases so ramps read as actual paths, not
+	# grass with a translucent stain.
+	_height_system.ramp_atlas = Vector2i(12, 14)
 	add_child(_height_system)
 
 	for y in range(MAP_H):
@@ -943,12 +1025,38 @@ func _generate_height_test_floor() -> void:
 	# Generate wall collisions
 	_generate_wall_collisions()
 
-	# Build nav
+	# Build nav (height-aware: cliff walls block enemy pathing unless ramps connect)
 	nav = DungeonNav.new()
+	if _height_system and is_instance_valid(_height_system):
+		nav.set_height_system(_height_system)
 	nav.build(floor_layer, deco_layer, SOLID_DECO_ROWS)
 
-	# Place player at lowland center
-	var start_pos = Vector2(10 * TILE_SIZE + TILE_SIZE / 2, 25 * TILE_SIZE + TILE_SIZE / 2)
+	# Showcase legend in a screen-corner CanvasLayer so labels don't pollute terrain readability.
+	var ht_labels = get_meta("__height_test_labels", []) as Array
+	if not ht_labels.is_empty():
+		var cl := CanvasLayer.new()
+		cl.name = "HeightTestLegend"
+		cl.layer = 50
+		add_child(cl)
+		var panel := PanelContainer.new()
+		panel.position = Vector2(12, 60)
+		cl.add_child(panel)
+		var vb := VBoxContainer.new()
+		panel.add_child(vb)
+		var title := Label.new()
+		title.text = "HEIGHT TEST"
+		title.add_theme_font_size_override("font_size", 12)
+		title.add_theme_color_override("font_color", Color(1.0, 0.95, 0.7))
+		vb.add_child(title)
+		for entry in ht_labels:
+			var lbl := Label.new()
+			lbl.text = "• " + String(entry.get("text", "?")).replace("\n", " — ")
+			lbl.add_theme_font_size_override("font_size", 10)
+			lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.95))
+			vb.add_child(lbl)
+
+	# Place player at lowland between showcases
+	var start_pos = Vector2(40 * TILE_SIZE + TILE_SIZE / 2, 42 * TILE_SIZE + TILE_SIZE / 2)
 	player.global_position = start_pos
 	nav.force_update(start_pos)
 
@@ -964,9 +1072,7 @@ func _generate_height_test_floor() -> void:
 	print("Height test floor generated: %dx%d tiles" % [MAP_W, MAP_H])
 
 func _build_mine_heights(theme_row: int) -> void:
-	## Generate subtle height variations for mine rooms using noise.
-	## Interior tiles can be raised (height 1), edges/corridors stay at 0.
-	## Creates natural cave-terrace look with stone-themed cliff faces.
+	## Generate broad mine shelves and clear ramps instead of tiny noise bumps.
 	if _height_system and is_instance_valid(_height_system):
 		_height_system.queue_free()
 	_height_system = _new_height_system()
@@ -977,57 +1083,74 @@ func _build_mine_heights(theme_row: int) -> void:
 	_height_system.theme = HeightSystem.HeightTheme.STONE
 	_height_system.ramp_atlas = Vector2i(12, theme_row)  # dirt tile as ramp
 
-	# Noise for natural-looking elevation
-	var noise = FastNoiseLite.new()
-	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	noise.frequency = 0.08
-	noise.seed = randi()
-
+	## Deliberate per-room shelves instead of noise fragments:
+	## - Find interior of each room (3-tile erosion so we have margin).
+	## - Pick at most one rectangular shelf per room, sized to fit.
+	## - Skip small rooms entirely.
+	## - Place a clear 2-wide ramp on the south side of each shelf.
 	var floor_cells = floor_layer.get_used_cells()
 	var floor_set: Dictionary = {}
 	for cell in floor_cells:
 		floor_set[cell] = true
 
-	# Find interior cells by erosion: cells that have all 4 cardinal neighbors as floor,
-	# then erode 2 more times to get tiles 3+ tiles from any edge.
-	var current_set: Dictionary = floor_set.duplicate()
-	for _pass in range(3):
-		var next_set: Dictionary = {}
-		for cell in current_set:
-			if current_set.has(cell + Vector2i(1, 0)) and current_set.has(cell + Vector2i(-1, 0)) \
-				and current_set.has(cell + Vector2i(0, 1)) and current_set.has(cell + Vector2i(0, -1)):
-				next_set[cell] = true
-		current_set = next_set
-	var interior_cells: Dictionary = current_set
-
-	# Assign heights based on noise, only for interior cells
-	var raised_cells: Dictionary = {}
 	for cell in floor_cells:
 		_height_system.set_height(cell, 0)
-		if not interior_cells.has(cell):
+
+	if run_state == null or run_state.floor_map.is_empty():
+		add_child(_height_system)
+		_height_system.build(floor_layer)
+		return
+
+	var deco_used: Dictionary = {}
+	for cell in deco_layer.get_used_cells():
+		deco_used[cell] = true
+
+	for grid_pos in run_state.floor_map:
+		var room_data: RoomData = run_state.floor_map[grid_pos] as RoomData
+		if room_data == null:
 			continue
-		var n = noise.get_noise_2d(float(cell.x), float(cell.y))
-		if n > 0.15:
-			_height_system.set_height(cell, 1)
-			raised_cells[cell] = true
-
-	# Create ramps at edges of raised areas (raised cell adjacent to non-raised floor)
-	for cell in raised_cells:
-		for dir in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			var nb = cell + dir
-			if floor_set.has(nb) and not raised_cells.has(nb) and interior_cells.has(nb):
-				# Check if this neighbor is also near raised tiles (transitional)
-				var near_raised = 0
-				for d2 in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-					if raised_cells.has(nb + d2):
-						near_raised += 1
-				if near_raised >= 2:
-					_height_system.set_ramp(nb)
-
-	# Skip decoration tiles — don't raise cells that have deco on them
-	for cell in raised_cells:
-		if deco_layer.get_cell_source_id(cell) >= 0:
-			_height_system.set_height(cell, 0)
+		if room_data.has_stairs_up or room_data.has_stairs_down:
+			continue
+		if room_data.type == RoomData.RoomType.SHOP or room_data.type == RoomData.RoomType.TREASURE:
+			continue
+		var origin: Vector2i = _grid_to_tile_origin(grid_pos)
+		var room_floor: Array[Vector2i] = []
+		var mask = room_data.floor_mask
+		var w = room_data.shape_width
+		var h = room_data.shape_height
+		for ry in range(h):
+			for rx in range(w):
+				if mask[ry][rx]:
+					room_floor.append(origin + Vector2i(rx, ry))
+		# Need at least ~12x10 of usable floor for a meaningful shelf
+		if room_floor.size() < 120:
+			continue
+		# Find the largest inscribed rectangle of cells with 3-tile clearance to walls
+		var rect = _find_shelf_rect(room_floor, floor_set, deco_used)
+		if rect.size.x < 4 or rect.size.y < 3:
+			continue
+		# Shrink slightly so the shelf isn't flush with walls
+		var shelf_min := Vector2i(rect.position.x + 1, rect.position.y + 1)
+		var shelf_max := Vector2i(rect.end.x - 2, rect.end.y - 2)
+		if shelf_max.x - shelf_min.x < 2 or shelf_max.y - shelf_min.y < 2:
+			continue
+		var shelf_cells: Array[Vector2i] = []
+		for y in range(shelf_min.y, shelf_max.y + 1):
+			for x in range(shelf_min.x, shelf_max.x + 1):
+				var c := Vector2i(x, y)
+				if floor_set.has(c) and not deco_used.has(c):
+					_height_system.set_height(c, 1)
+					shelf_cells.append(c)
+		if shelf_cells.is_empty():
+			continue
+		# Carve a 2-wide ramp at the south middle of the shelf
+		var mid_x: int = (shelf_min.x + shelf_max.x) / 2
+		var ramp_y: int = shelf_max.y
+		for offset in [0, 1]:
+			var ramp_cell := Vector2i(mid_x + offset, ramp_y)
+			if floor_set.has(ramp_cell):
+				_height_system.set_height(ramp_cell, 0)
+				_height_system.set_ramp(ramp_cell)
 
 	add_child(_height_system)
 	_height_system.build(floor_layer)
@@ -1158,14 +1281,23 @@ func _add_wall_shape(x_start: int, x_end: int, y: int) -> void:
 	wall_body.add_child(shape)
 
 func _queue_light_occluder_rebuild() -> void:
+	var lm = get_node_or_null("/root/LightingManager")
+	if lm and lm.has_method("requires_shadow_occluders") and not lm.requires_shadow_occluders():
+		_clear_light_occluders()
+		_shadow_occluders_dirty = false
+		_shadow_occluder_rebuild_timer = 0.0
+		return
 	_shadow_occluders_dirty = true
 	_shadow_occluder_rebuild_timer = minf(_shadow_occluder_rebuild_timer, SHADOW_OCCLUDER_REBUILD_INTERVAL) if _shadow_occluders_dirty and _shadow_occluder_rebuild_timer > 0.0 else SHADOW_OCCLUDER_REBUILD_INTERVAL
 
 func _generate_light_occluders() -> void:
 	if shadow_occluders == null:
 		return
-	for child in shadow_occluders.get_children():
-		child.queue_free()
+	var lm = get_node_or_null("/root/LightingManager")
+	if lm and lm.has_method("requires_shadow_occluders") and not lm.requires_shadow_occluders():
+		_clear_light_occluders()
+		return
+	_clear_light_occluders()
 	if not _has_live_wall_body():
 		return
 	for child in wall_body.get_children():
@@ -1187,6 +1319,12 @@ func _generate_light_occluders() -> void:
 		occluder.occluder = polygon
 		occluder.position = shape_node.position
 		shadow_occluders.add_child(occluder)
+
+func _clear_light_occluders() -> void:
+	if shadow_occluders == null:
+		return
+	for child in shadow_occluders.get_children():
+		child.queue_free()
 
 ## Remove collision shapes that overlap any of the given tile positions.
 ## Splits merged row shapes so non-overlapping portions keep their collision.
@@ -1294,10 +1432,11 @@ func flush_deco_collisions() -> void:
 
 ## Smash an area: convert walls/void to floor, then edge new floors with walls
 ## This is the main method called by boss/elite obstacle breaking
-func smash_area(world_pos: Vector2, radius_tiles: int) -> bool:
+func smash_area(world_pos: Vector2, radius_tiles: int, heavy_sfx: bool = true, immediate_light_refresh: bool = false) -> bool:
 	var center_tile = Vector2i(int(world_pos.x) / TILE_SIZE, int(world_pos.y) / TILE_SIZE)
 
 	# Find a nearby floor tile to copy the theme from
+	var theme_source_id := 0
 	var theme_floor = Vector2i(5, 0)  # fallback
 	var theme_wall = Vector2i(4, 0)
 	var _found_theme = false
@@ -1307,6 +1446,7 @@ func smash_area(world_pos: Vector2, radius_tiles: int) -> bool:
 		for dx in range(-4, 5):
 			var neighbor = center_tile + Vector2i(dx, dy)
 			if floor_layer.get_cell_source_id(neighbor) >= 0:
+				theme_source_id = floor_layer.get_cell_source_id(neighbor)
 				theme_floor = floor_layer.get_cell_atlas_coords(neighbor)
 				theme_wall = Vector2i(4, theme_floor.y)
 				_found_theme = true
@@ -1330,7 +1470,7 @@ func smash_area(world_pos: Vector2, radius_tiles: int) -> bool:
 			if deco_layer.get_cell_source_id(tile) >= 0:
 				deco_layer.erase_cell(tile)
 			# Place floor
-			floor_layer.set_cell(tile, 0, theme_floor)
+			floor_layer.set_cell(tile, theme_source_id, theme_floor)
 			_floor_tile_set[tile] = true
 			new_floors.append(tile)
 
@@ -1367,7 +1507,15 @@ func smash_area(world_pos: Vector2, radius_tiles: int) -> bool:
 		# Add collision for new edge walls (simple per-tile shapes, no merging needed)
 		for wt in wall_set:
 			_add_wall_shape(wt.x, wt.x, wt.y)
-		_queue_light_occluder_rebuild()
+		if immediate_light_refresh:
+			_generate_light_occluders()
+			_shadow_occluders_dirty = false
+			_shadow_occluder_rebuild_timer = 0.0
+		else:
+			_queue_light_occluder_rebuild()
+	if _height_system and is_instance_valid(_height_system) and _height_system.has_method("reveal_ground_cell"):
+		for tile in new_floors:
+			_height_system.reveal_ground_cell(tile, theme_source_id, theme_floor, 0)
 
 	# VFX + SFX
 	var vfx = get_node_or_null("/root/VFXManager")
@@ -1377,7 +1525,10 @@ func smash_area(world_pos: Vector2, radius_tiles: int) -> bool:
 		vfx.shake(1.5, 0.1)
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
-		sfx.play("explode_b", -5.0, 0.12)
+		if heavy_sfx:
+			sfx.play("explode_b", -5.0, 0.12)
+		else:
+			sfx.play("impact_b", -8.0, 0.02)
 	return true
 
 ## Convenience: break a single wall tile (calls smash_area with radius 0)
@@ -1389,6 +1540,55 @@ func _grid_to_tile_origin(grid_pos: Vector2i) -> Vector2i:
 		grid_pos.x * GRID_CELL_W,
 		grid_pos.y * GRID_CELL_H
 	)
+
+func _find_shelf_rect(room_floor: Array[Vector2i], floor_set: Dictionary, deco_used: Dictionary) -> Rect2i:
+	## Returns the largest axis-aligned rectangle of room floor cells (excluding deco)
+	## that has no holes. Greedy, good enough for mine shelves.
+	if room_floor.is_empty():
+		return Rect2i(Vector2i.ZERO, Vector2i.ZERO)
+	var min_p := room_floor[0]
+	var max_p := room_floor[0]
+	for c in room_floor:
+		min_p.x = mini(min_p.x, c.x)
+		min_p.y = mini(min_p.y, c.y)
+		max_p.x = maxi(max_p.x, c.x)
+		max_p.y = maxi(max_p.y, c.y)
+	# Build a 2D mask of valid cells
+	var rw: int = max_p.x - min_p.x + 1
+	var rh: int = max_p.y - min_p.y + 1
+	var mask: Array = []
+	for y in range(rh):
+		var row: Array = []
+		for x in range(rw):
+			var c := Vector2i(min_p.x + x, min_p.y + y)
+			row.append(floor_set.has(c) and not deco_used.has(c))
+		mask.append(row)
+	# Histogram-based max rectangle
+	var heights: Array = []
+	for _i in range(rw):
+		heights.append(0)
+	var best := Rect2i(Vector2i.ZERO, Vector2i.ZERO)
+	var best_area := 0
+	for y in range(rh):
+		for x in range(rw):
+			heights[x] = heights[x] + 1 if mask[y][x] else 0
+		# Find max rect in this row's histogram
+		for left in range(rw):
+			if heights[left] <= 0:
+				continue
+			var min_h: int = heights[left]
+			for right in range(left, rw):
+				min_h = mini(min_h, heights[right])
+				if min_h <= 0:
+					break
+				var area: int = (right - left + 1) * min_h
+				if area > best_area:
+					best_area = area
+					best = Rect2i(
+						Vector2i(min_p.x + left, min_p.y + y - min_h + 1),
+						Vector2i(right - left + 1, min_h)
+					)
+	return best
 
 func _grid_to_world_center(grid_pos: Vector2i) -> Vector2:
 	var room_data = run_state.floor_map.get(grid_pos) as RoomData
@@ -1736,20 +1936,28 @@ func _create_liquid_hazards(origin: Vector2i, liquid_mask: Array, web_positions:
 func _apply_hazard_status(hazard: HazardArea, liquid_type: String) -> void:
 	match liquid_type:
 		"lava":
-			hazard.damage = 5
-			hazard.interval = 0.6
+			# Was 5/0.6s (~8 dps) — way under-tuned. Now 14/0.35s (~40 dps) +
+			# burn DoT for 4s. Standing in lava should feel like a real mistake.
+			hazard.damage = 14
+			hazard.interval = 0.35
 			hazard.status_effect_type = StatusEffect.Type.BURNING
-			hazard.status_strength = 1.0
-			hazard.status_duration = 3.0
+			hazard.status_strength = 3.0
+			hazard.status_duration = 4.0
 		"water":
 			hazard.damage = 0
+			hazard.interval = 1.0
 			hazard.status_effect_type = StatusEffect.Type.SLOWED
 			hazard.status_strength = 0.5
 			hazard.status_duration = 1.5
 		"poison":
+			# Was 1/1s + 1-strength DoT for 4s (~3 total dmg) — barely noticed.
+			# Now applies a proper venom: small tick dmg + 4-strength status DoT
+			# (4 dmg/s for 6s), so 1s in a pool = ~28 total over the next 6s.
+			hazard.damage = 3
+			hazard.interval = 0.5
 			hazard.status_effect_type = StatusEffect.Type.POISONED
-			hazard.status_strength = 1.0
-			hazard.status_duration = 4.0
+			hazard.status_strength = 4.0
+			hazard.status_duration = 6.0
 
 func _paint_spike_traps(origin: Vector2i, mask: Array, w: int, h: int, trap_tile: Vector2i, density: float, room_data: RoomData, grid_pos: Vector2i = Vector2i.ZERO) -> void:
 	var floor_count = 0
@@ -2113,6 +2321,8 @@ func _paint_showcase_trap(origin: Vector2i, mask: Array, w: int, h: int, room_da
 			barrel.origin = origin
 			barrel.deco_layer = deco_layer
 			barrel.floor_layer = floor_layer
+			barrel.wall_layer = wall_layer
+			barrel.liquid_layer = liquid_layer
 			barrel.floor_number = floor_num
 			barrel.room_grid_pos = grid_pos
 			barrel.position = world_pos
@@ -2171,6 +2381,9 @@ func _find_wall_adjacent_to_floor(mask: Array, w: int, h: int, min_floor_neighbo
 
 func _paint_corridor_traps(theme_row: int) -> void:
 	var floor_num = run_state.current_floor if run_state else 1
+	# complexity 0.0..2.0 scales trap density (and feeds the dummy-trap chance)
+	var complexity: float = current_level.corridor_complexity if current_level else 1.0
+	var density: float = clampf(complexity * 0.5, 0.0, 1.0)  # 0.0..1.0
 
 	for corridor in _corridor_midpoints:
 		var floor_tiles = corridor.get("floor_tiles", []) as Array
@@ -2182,26 +2395,31 @@ func _paint_corridor_traps(theme_row: int) -> void:
 			continue
 		var wall_mounts = _get_corridor_wall_mounts(corridor)
 
-		# Common collapsing-floor runs: these should define corridor danger.
-		var collapse_runs = 2 if centerline.size() >= 12 else 1
+		# Collapsing floor runs — count scaled by complexity
+		var base_runs: int = 2 if centerline.size() >= 12 else 1
 		if centerline.size() >= 20:
-			collapse_runs = 3
+			base_runs = 3
+		var collapse_runs: int = maxi(0, int(round(base_runs * density)))
 		for run_idx in range(collapse_runs):
 			var run_len = clampi(3 + floor_num / 3 + randi_range(0, 1), 3, 5)
 			var start_idx = clampi(2 + run_idx * maxi(3, centerline.size() / max(2, collapse_runs)) + randi_range(0, 2), 1, maxi(centerline.size() - run_len - 1, 1))
 			_spawn_corridor_collapsing_run(centerline, start_idx, run_len, floor_num, theme_row)
 
-		# Floor spike runs and explosive tiles/barrels layered in.
+		# Floor spikes from above (single run unconditional, second run gated)
 		var spike_len = clampi(2 + floor_num / 3, 2, 5)
 		var spike_start = clampi(centerline.size() / 3 + randi_range(-1, 1), 1, maxi(centerline.size() - spike_len - 1, 1))
 		_spawn_corridor_spike_run(centerline, spike_start, spike_len, floor_num, theme_row)
-		if centerline.size() >= 12:
+		if centerline.size() >= 12 and randf() < density:
 			var spike_start_2 = clampi((centerline.size() * 2) / 3 + randi_range(-1, 1), 1, maxi(centerline.size() - spike_len - 1, 1))
 			_spawn_corridor_spike_run(centerline, spike_start_2, spike_len, floor_num, theme_row)
-		_spawn_corridor_explosive_tiles(centerline, floor_num)
-		_spawn_corridor_poison_tiles(centerline, floor_num, theme_row)
 
-		# Wall-anchored trap lanes: flame jets, darts, spears, arrows.
+		# Explosive barrels: density-gated, of which 30% are dummies (see spawn site).
+		if randf() < density:
+			_spawn_corridor_explosive_tiles(centerline, floor_num)
+		# Poison gas tiles removed from corridors — too many in tight spaces.
+
+		# Wall-anchored trap lanes (spear / arrow / dart / flame from the walls):
+		# always-on — these are tactical, telegraphed, and the player liked them.
 		_spawn_corridor_wall_lanes(wall_mounts, corr_dir, floor_num, theme_row)
 
 func _get_sorted_corridor_centerline_tiles(corridor: Dictionary) -> Array[Vector2i]:
@@ -2331,11 +2549,31 @@ func _spawn_corridor_spike_run(centerline: Array[Vector2i], start_idx: int, run_
 	if not _TrapTileScript:
 		return
 	var trap_atlas = Vector2i(13, theme_row)
-	for i in range(run_len):
-		var idx = start_idx + i
-		if idx < 0 or idx >= centerline.size():
-			break
-		var tile_pos = centerline[idx]
+	# Build a scatter region around the requested centerline segment by pulling
+	# every floor tile within the segment's bounding box. Then place spikes on a
+	# random subset of those tiles so the pattern reads as scattered, not a line.
+	var region: Array[Vector2i] = []
+	var lo := maxi(0, start_idx - 1)
+	var hi := mini(centerline.size() - 1, start_idx + run_len)
+	if hi <= lo:
+		return
+	var min_pos := centerline[lo]
+	var max_pos := centerline[hi]
+	var xmin := mini(min_pos.x, max_pos.x) - 1
+	var xmax := maxi(min_pos.x, max_pos.x) + 1
+	var ymin := mini(min_pos.y, max_pos.y) - 1
+	var ymax := maxi(min_pos.y, max_pos.y) + 1
+	for y in range(ymin, ymax + 1):
+		for x in range(xmin, xmax + 1):
+			var p := Vector2i(x, y)
+			if _floor_tile_set.has(p):
+				region.append(p)
+	if region.is_empty():
+		return
+	region.shuffle()
+	var count := mini(run_len, region.size())
+	for i in count:
+		var tile_pos := region[i]
 		deco_layer.set_cell(tile_pos, 0, trap_atlas)
 		var spike = _TrapTileScript.new()
 		spike.tile_pos = tile_pos
@@ -2352,20 +2590,42 @@ func _spawn_corridor_explosive_tiles(centerline: Array[Vector2i], floor_num: int
 	if not _ExplosiveBarrelScript:
 		return
 	var barrel_atlas = Vector2i(6, 8)
-	for idx in range(3, centerline.size() - 3, 6):
+	# Gather corridor floor tiles around the centerline so barrels can land in
+	# corners and against walls rather than marching down the middle.
+	var region: Array[Vector2i] = []
+	for cell in centerline:
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				var p := cell + Vector2i(dx, dy)
+				if _floor_tile_set.has(p) and not region.has(p):
+					region.append(p)
+	if region.is_empty():
+		return
+	region.shuffle()
+	# Roughly one barrel per 6 tiles of corridor length, randomly placed.
+	var target_count := maxi(1, centerline.size() / 6)
+	var placed := 0
+	var idx_iter := 0
+	while placed < target_count and idx_iter < region.size():
+		var tile_pos := region[idx_iter]
+		idx_iter += 1
 		if randf() > 0.62:
 			continue
-		var tile_pos = centerline[idx]
 		deco_layer.set_cell(tile_pos, 1, barrel_atlas)
 		var barrel = _ExplosiveBarrelScript.new()
 		barrel.tile_pos = tile_pos
 		barrel.origin = Vector2i.ZERO
 		barrel.deco_layer = deco_layer
 		barrel.floor_layer = floor_layer
+		barrel.wall_layer = wall_layer
+		barrel.liquid_layer = liquid_layer
 		barrel.floor_number = floor_num
+		# 20% dummies (1 in 5). The rest detonate properly.
+		barrel.is_dummy = randf() < 0.20
 		barrel.position = Vector2(tile_pos.x * TILE_SIZE + 4, tile_pos.y * TILE_SIZE + 4)
 		hazard_container.add_child(barrel)
 		barrel.activate()
+		placed += 1
 
 func _spawn_corridor_poison_tiles(centerline: Array[Vector2i], floor_num: int, theme_row: int) -> void:
 	if not _PoisonGasScript or centerline.size() < 8:
@@ -3245,7 +3505,12 @@ func _paint_corridor(from_grid: Vector2i, to_grid: Vector2i, direction: String, 
 
 	# Generate corridor shape
 	var floor_num = run_state.current_floor if run_state else 1
-	var corridor_data = CorridorGenerator.generate_corridor(from_exit_abs, to_exit_abs, direction, half_w, floor_num)
+	var complexity: float = 1.0
+	if current_level:
+		complexity = current_level.corridor_complexity
+	# Low complexity narrows the corridor too
+	var eff_half_w: int = maxi(1, int(round(half_w * lerpf(0.6, 1.4, clampf(complexity * 0.5, 0.0, 1.0)))))
+	var corridor_data = CorridorGenerator.generate_corridor(from_exit_abs, to_exit_abs, direction, eff_half_w, floor_num, complexity)
 
 	# Paint floor tiles
 	for tile in corridor_data["floor_tiles"]:
@@ -3521,6 +3786,12 @@ func _on_interact_area_exited(body: Node2D, area: Area2D) -> void:
 				tc.hide_interact_button()
 
 func _unhandled_input(event: InputEvent) -> void:
+	# F3 — toggle height debug overlay
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F3:
+		if _height_system and is_instance_valid(_height_system) and _height_system.has_method("toggle_debug_overlay"):
+			_height_system.toggle_debug_overlay()
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed("interact"):
 		# Stairs take priority
 		if _nearby_stairs and is_instance_valid(_nearby_stairs):
@@ -3777,8 +4048,42 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 	var rec_level = current_level.recommended_level if current_level else 0
 	var player_level = player.level_system.level if player and player.level_system else 1
 	var effective_level = rec_level + player_level
-	var level_scale = 1.0 + effective_level * 0.15
-	var dmg_scale = 1.0 + effective_level * 0.08
+	var level_scale = 1.0 + effective_level * 0.10
+	var dmg_scale = 1.0 + effective_level * 0.05
+
+	# Elite budget: how many actual elites should an ELITE room contain at this
+	# dungeon's difficulty tier. The rest stay as normal enemies (still scaled but
+	# without elite buffs). Prevents "4 elites in starter dungeon" pile-ups.
+	var elite_budget := 99
+	# Elite HP multiplier also scales with dungeon tier so starter elites aren't sponges.
+	# In rec_1-3, override room.enemy_hp_mult down from 3.0 toward a friendlier 2.0.
+	var elite_hp_override := -1.0
+	if room_data.type == RoomData.RoomType.ELITE:
+		if rec_level <= 3:
+			elite_budget = 1
+			elite_hp_override = 2.0
+		elif rec_level <= 7:
+			elite_budget = 2
+			elite_hp_override = 2.5
+		elif rec_level <= 15:
+			elite_budget = 3
+			elite_hp_override = 2.8
+		else:
+			elite_budget = 99  # rec_level 16+: full elite room, normal mult
+	var elites_used := 0
+	# Starter-dungeon mercy: rec_level 1-2 enemies are 25% less tanky and ~12%
+	# less damaging so the first dungeon doesn't feel like a wall to a lvl-1 hero.
+	if rec_level <= 2:
+		level_scale *= 0.75
+		dmg_scale *= 0.88
+
+	# Over-level penalty: when player out-levels the dungeon by 5+, enemies get an extra boost
+	# and elites have a chance to promote to super_elite.
+	var overlevel = maxi(0, player_level - rec_level - 5)
+	if overlevel > 0:
+		var ol_factor = 1.0 + overlevel * 0.08
+		level_scale *= ol_factor
+		dmg_scale *= 1.0 + overlevel * 0.03  # was 0.05 — overlevel damage was too brutal
 	var floor_idx = run_state.current_floor
 
 
@@ -3848,11 +4153,22 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 				def.max_hp = 500
 				def.attack_damage = maxi(5, def.attack_damage * 5)
 			def.sprite_color = def.sprite_color.lightened(0.2)
+		# Determine if this slot in an ELITE room is "elite-budgeted" or a normal filler
+		var _is_elite_slot = (room_data.type == RoomData.RoomType.ELITE and i < elite_budget)
 		if not _is_fixed:
 			# Dungeon-only scaling: rec_level drives HP/DMG, player levels up to get stronger
 			# Apply room type mult (boss/elite) + level scaling
-			def.max_hp = maxi(1, int(def.max_hp * room_data.enemy_hp_mult * level_scale))
-			def.attack_damage = maxi(1, int(def.attack_damage * room_data.enemy_damage_mult * dmg_scale))
+			var hp_mult_eff = room_data.enemy_hp_mult
+			var dmg_mult_eff = room_data.enemy_damage_mult
+			# Non-budgeted slots in ELITE rooms scale like normal combat enemies
+			if room_data.type == RoomData.RoomType.ELITE and not _is_elite_slot:
+				hp_mult_eff = 1.4  # mildly tougher than pure normal but not elite-tier
+				dmg_mult_eff = 1.05
+			# Budgeted elite slot: in low-tier dungeons use the friendlier override
+			elif _is_elite_slot and elite_hp_override > 0.0:
+				hp_mult_eff = elite_hp_override
+			def.max_hp = maxi(1, int(def.max_hp * hp_mult_eff * level_scale))
+			def.attack_damage = maxi(1, int(def.attack_damage * dmg_mult_eff * dmg_scale))
 			# Armor stays as defined per enemy type — no floor-based override
 			# Floor depth XP bonus: +15% per floor deeper
 			def.xp_value = maxi(def.xp_value, int(def.xp_value * (1.0 + floor_idx * 0.15)))
@@ -3926,39 +4242,74 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 				def.phase_3_attack = _get_boss_phase_attack(def.attack_type, 3)
 				def.phase_3_bullet_count = 18
 			def.max_hp = int(def.max_hp * 2.5)
-			def.attack_damage = int(def.attack_damage * 1.5)
+			def.attack_damage = int(def.attack_damage * 1.25)  # was 1.5 — toned down
 			def.sprite_color = def.sprite_color.lightened(0.4)
 			def.armor += 6
+			_apply_generated_elite_identity(def, EliteGenerator.Tier.BOSS)
 			# Extra XP + score
 			def.xp_value = maxi(int(def.xp_value * 3.0), 50)
 			def.score_value = int(def.score_value * 3.0)
-			# Lovecraftian title
-			def.enemy_name = _generate_eldritch_name(def.enemy_name)
-		elif not _is_fixed and room_data.type == RoomData.RoomType.ELITE:
-			# Mini-boss: LARGE, 2 phases, escalated attacks, spawns minions
-			var is_bomb_elite = _is_bomb_attack_type(def.attack_type)
-			def.move_speed *= 1.3
-			if is_bomb_elite:
-				def.attack_speed *= 1.5  # SLOWER bombs, heavier hits
-				def.attack_damage = int(def.attack_damage * 1.4)
-				def.bomb_aoe_radius *= 1.3
-			else:
-				def.attack_speed *= 0.8  # faster attacks
-			def.size_class = EnemyDefinition.SizeClass.LARGE
-			if not is_bomb_elite:
-				def.bullet_count += 3
-			def.bullet_speed *= 1.2
-			def.boss_phases = 2
-			def.summon_on_phase_change = true
-			def.summon_phase_count = 2  # 2 minions per phase change
-			if not def.summon_definition:
-				def.summon_definition = _get_weakest_enemy(loy_pool, pool)
-			# Archetype-based phase 2 attack (same system as bosses)
-			if def.phase_2_attack == EnemyDefinition.AttackType.NONE:
-				def.phase_2_attack = _get_boss_phase_attack(def.attack_type, 2)
-			def.phase_2_bullet_count = def.bullet_count + 3
-			def.sprite_color = def.sprite_color.lightened(0.3)
-			def.armor += 3
+		elif not _is_fixed and room_data.type == RoomData.RoomType.ELITE and _is_elite_slot:
+			# Elite budget: in early dungeons we only promote N enemies, the rest stay normal.
+			elites_used += 1
+			# Over-level promotion: 5% per overlevel point past 5, capped at 50%, to upgrade elite -> hyper elite
+			var promote_chance = minf(overlevel * 0.05, 0.5)
+			var hyper_promote = overlevel >= 5 and randf() < promote_chance
+			if hyper_promote:
+				# Hyper elite: clone of SUPER_ELITE buffs, name-prefixed
+				def.max_hp = maxi(1, int(def.max_hp * 1.5))
+				# Damage trimmed back from the inherited elite buff so hyper elites are
+				# tanky/threatening without one-shotting an overlevel'd player.
+				def.attack_damage = maxi(1, int(def.attack_damage * 0.85))
+				def.move_speed *= 1.4
+				# Bomb attackers don't get the attack-speed buff — bombs already heavy,
+				# faster cooldown turns them into rapid-fire artillery (was the spam issue)
+				if not _is_bomb_attack_type(def.attack_type):
+					def.attack_speed *= 0.7
+					def.bullet_count += 5
+				def.size_class = EnemyDefinition.SizeClass.BOSS
+				def.bullet_speed *= 1.3
+				def.boss_phases = 3
+				def.summon_on_phase_change = true
+				def.summon_phase_count = 3
+				if def.phase_2_attack == EnemyDefinition.AttackType.NONE:
+					def.phase_2_attack = _get_boss_phase_attack(def.attack_type, 2)
+				if def.phase_3_attack == EnemyDefinition.AttackType.NONE:
+					def.phase_3_attack = _get_boss_phase_attack(def.attack_type, 3)
+				if not def.summon_definition:
+					def.summon_definition = _get_weakest_enemy(loy_pool, pool)
+				def.sprite_color = def.sprite_color.lightened(0.5)
+				def.armor += 6
+				_apply_generated_elite_identity(def, EliteGenerator.Tier.HYPER)
+				def.xp_value = maxi(int(def.xp_value * 3.0), 50)
+				def.score_value = int(def.score_value * 3.0)
+				print("Hyper Elite spawned: %s (overlevel=%d)" % [def.enemy_name, overlevel])
+			# Mini-boss: LARGE, 2 phases, escalated attacks, spawns minions (skip if already promoted to hyper)
+			if not hyper_promote:
+				var is_bomb_elite = _is_bomb_attack_type(def.attack_type)
+				def.move_speed *= 1.3
+				if is_bomb_elite:
+					def.attack_speed *= 1.8  # bombs SLOWER (was 1.5) — less spammy
+					def.attack_damage = int(def.attack_damage * 1.15)  # was 1.4 — less brutal hits
+					def.bomb_aoe_radius *= 1.15  # was 1.3
+				else:
+					def.attack_speed *= 0.8  # faster attacks
+				def.size_class = EnemyDefinition.SizeClass.LARGE
+				if not is_bomb_elite:
+					def.bullet_count += 3
+				def.bullet_speed *= 1.2
+				def.boss_phases = 2
+				def.summon_on_phase_change = true
+				def.summon_phase_count = 2  # 2 minions per phase change
+				if not def.summon_definition:
+					def.summon_definition = _get_weakest_enemy(loy_pool, pool)
+				# Archetype-based phase 2 attack (same system as bosses)
+				if def.phase_2_attack == EnemyDefinition.AttackType.NONE:
+					def.phase_2_attack = _get_boss_phase_attack(def.attack_type, 2)
+				def.phase_2_bullet_count = def.bullet_count + 3
+				def.sprite_color = def.sprite_color.lightened(0.3)
+				def.armor += 3
+				_apply_generated_elite_identity(def, EliteGenerator.Tier.ELITE)
 		elif not _is_fixed and room_data.type == RoomData.RoomType.BOSS:
 			# Full boss: 3 phases, minion summoning (HP already scaled by room_data.enemy_hp_mult)
 			var is_bomb_boss = _is_bomb_attack_type(def.attack_type)
@@ -3987,6 +4338,7 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 				def.summon_definition = _get_weakest_enemy(loy_pool, pool)
 			def.sprite_color = def.sprite_color.lightened(0.5)
 			def.armor += 5
+			_apply_generated_elite_identity(def, EliteGenerator.Tier.BOSS)
 
 			if not _is_fixed and room_data.type == RoomData.RoomType.COMBAT:
 				def = _try_make_rare(def)
@@ -4010,6 +4362,7 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 		enemy.set_meta("grid_pos", grid_pos)
 		enemy.tree_exited.connect(_on_enemy_died.bind(grid_pos))
 		enemy_container.add_child(enemy)
+		_coop_register_enemy(enemy, grid_pos)
 
 		room_states[grid_pos]["alive"] += 1
 
@@ -4018,6 +4371,38 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 		room_states[grid_pos]["horde_wave2_count"] = horde_wave2_count
 		var timer = get_tree().create_timer(5.0)
 		timer.timeout.connect(_spawn_horde_wave_2.bind(grid_pos))
+
+	# Searchable containers — sprinkle into combat, elite, and super-elite rooms.
+	# Higher chance overall + better counts so loot feels frequent without being everywhere.
+	var container_chance = 0.0
+	var container_max = 1
+	match room_data.type:
+		RoomData.RoomType.COMBAT:
+			container_chance = 0.75
+			container_max = 2
+		RoomData.RoomType.ELITE:
+			container_chance = 0.85
+			container_max = 3  # mini-boss rooms get more
+		RoomData.RoomType.SUPER_ELITE:
+			container_chance = 0.95
+			container_max = 4
+	if container_chance > 0.0 and randf() < container_chance:
+		_spawn_loot_containers(grid_pos, room_data, container_max)
+
+func _spawn_loot_containers(grid_pos: Vector2i, room_data: RoomData, max_count: int = 2) -> void:
+	# Roll 1..max_count containers, weighted toward the higher end
+	var count = randi_range(1, max_count)
+	var positions = _get_valid_spawn_positions(grid_pos, room_data, count)
+	for i in range(mini(count, positions.size())):
+		var roll = randf()
+		var c_type = LootContainer.ContainerType.BARREL
+		if roll < 0.25:
+			c_type = LootContainer.ContainerType.CRATE
+		elif roll < 0.5:
+			c_type = LootContainer.ContainerType.SACK
+		var container = LootContainer.create_loot_container(c_type, true)
+		container.global_position = positions[i]
+		enemy_container.add_child(container)
 
 func _spawn_horde_wave_2(grid_pos: Vector2i) -> void:
 	if not room_states.has(grid_pos):
@@ -4065,8 +4450,8 @@ func _spawn_horde_wave_2(grid_pos: Vector2i) -> void:
 		var rec_level = current_level.recommended_level if current_level else 0
 		var player_level = player.level_system.level if player and player.level_system else 1
 		var effective_level = rec_level + player_level
-		var level_scale = 1.0 + effective_level * 0.15
-		var dmg_scale = 1.0 + effective_level * 0.08
+		var level_scale = 1.0 + effective_level * 0.10
+		var dmg_scale = 1.0 + effective_level * 0.05
 		def.max_hp = maxi(1, int(def.max_hp * room_data.enemy_hp_mult * level_scale))
 		def.attack_damage = maxi(1, int(def.attack_damage * room_data.enemy_damage_mult * dmg_scale))
 
@@ -4081,10 +4466,13 @@ func _spawn_horde_wave_2(grid_pos: Vector2i) -> void:
 		enemy.set_meta("grid_pos", grid_pos)
 		enemy.tree_exited.connect(_on_enemy_died.bind(grid_pos))
 		enemy_container.add_child(enemy)
+		_coop_register_enemy(enemy, grid_pos)
 		# Brief spawn flash
 		enemy.modulate = Color(2.0, 2.0, 2.0, 1.0)
 		var tween = create_tween()
 		tween.tween_property(enemy, "modulate", Color.WHITE, 0.3)
+		# Wave-2 reinforcements need to actively chase the player from spawn
+		enemy.call_deferred("force_aggro_player")
 		room_states[grid_pos]["alive"] += 1
 
 # --- Encounter Activation (deferred_spawn rooms) ---
@@ -4164,8 +4552,8 @@ func _get_encounter_scaling() -> Dictionary:
 	# while mid-game dungeons (Farm=10+) are near-normal speed.
 	var atk_speed_mult: float = maxf(1.0, 1.4 - maxf(0, rec_level - 1) * 0.03)
 	return {
-		"level_scale": 1.0 + effective_level * 0.15,
-		"dmg_scale": 1.0 + effective_level * 0.08,
+		"level_scale": 1.0 + effective_level * 0.10,
+		"dmg_scale": 1.0 + effective_level * 0.05,
 		"atk_speed_mult": atk_speed_mult,
 		"floor_idx": floor_idx,
 		"bd": current_biome.base_difficulty if current_biome else 0,
@@ -4202,8 +4590,33 @@ func _spawn_encounter_enemy(grid_pos: Vector2i, room_data: RoomData, spawn_pos: 
 	enemy.set_meta("grid_pos", grid_pos)
 	enemy.tree_exited.connect(_on_enemy_died.bind(grid_pos))
 	enemy_container.add_child(enemy)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.warp_portal(spawn_pos, Color(0.84, 0.09, 0.05, 0.98), 18.0 if def.size_class == EnemyDefinition.SizeClass.NORMAL else 24.0, 0.5)
+	_coop_register_enemy(enemy, grid_pos)
 	room_states[grid_pos]["alive"] += 1
 	return enemy
+
+func _apply_generated_elite_identity(def: EnemyDefinition, tier: int) -> void:
+	if def == null:
+		return
+	if def.boss_states.size() > 0:
+		return
+	EliteGenerator.apply_generated_identity(def, tier)
+
+# Coop: assigns a deterministic network_id to a newly-spawned enemy and registers
+# with CoopRuntime. No-op offline or in non-room spawns (corridor patrols, mine intrusions —
+# Phase 2 limits coop scope to Test-Arena-Boss, which is room-only).
+func _coop_register_enemy(enemy: Node, grid_pos: Vector2i) -> void:
+	var coop_rt = get_node_or_null("/root/CoopRuntime")
+	if coop_rt == null or not coop_rt.has_method("register_enemy"):
+		return
+	var idx: int = int(_enemy_room_counters.get(grid_pos, 0))
+	_enemy_room_counters[grid_pos] = idx + 1
+	# Deterministic packing: gx ∈ [-256, 256], gy ∈ [-256, 256], idx < 1000.
+	# Same seed → same generation order → same idx per room on every peer.
+	var net_id: int = (grid_pos.x + 256) * 1_000_000 + (grid_pos.y + 256) * 1000 + idx + 1
+	coop_rt.register_enemy(enemy, net_id)
 
 func spawn_mine_intrusion_wave(grid_pos: Vector2i, room_data: RoomData, count: int, tier: String = "normal") -> Dictionary:
 	if current_mine == null or room_data == null:
@@ -4227,8 +4640,8 @@ func spawn_mine_intrusion_wave(grid_pos: Vector2i, room_data: RoomData, count: i
 					def.boss_phases = maxi(def.boss_phases, 2)
 					def.max_hp = int(def.max_hp * 1.8)
 					def.attack_damage = int(def.attack_damage * 1.35)
-					def.enemy_name = _generate_eldritch_name(def.enemy_name)
 					def.sprite_color = def.sprite_color.lightened(0.28)
+					_apply_generated_elite_identity(def, EliteGenerator.Tier.BOSS)
 			"elite":
 				if elite_pool.size() > 0:
 					def = elite_pool[randi() % elite_pool.size()].duplicate()
@@ -4236,6 +4649,7 @@ func spawn_mine_intrusion_wave(grid_pos: Vector2i, room_data: RoomData, count: i
 					def.max_hp = int(def.max_hp * 1.35)
 					def.attack_damage = int(def.attack_damage * 1.15)
 					def.sprite_color = def.sprite_color.lightened(0.18)
+					_apply_generated_elite_identity(def, EliteGenerator.Tier.ELITE)
 		if def == null:
 			if pool.size() > 0:
 				def = _pick_weighted_enemy(pool)
@@ -4244,6 +4658,95 @@ func spawn_mine_intrusion_wave(grid_pos: Vector2i, room_data: RoomData, count: i
 		if def == null:
 			continue
 		_spawn_encounter_enemy(grid_pos, room_data, spawn_positions[i], def, scaling)
+		spawned += 1
+	return {"ok": spawned > 0, "spawned": spawned, "tier": tier}
+
+func spawn_mine_intrusion_wave_global(grid_pos: Vector2i, room_data: RoomData, count: int, tier: String = "normal") -> Dictionary:
+	if current_mine == null or room_data == null or player == null:
+		return {"ok": false}
+	var player_tile := Vector2i(
+		int(floor(player.global_position.x / float(TILE_SIZE))),
+		int(floor(player.global_position.y / float(TILE_SIZE)))
+	)
+	var candidates: Array[Vector2] = []
+	var wall_adjacent_candidates: Array[Vector2] = []
+	for tile in _floor_tile_set.keys():
+		var cell := tile as Vector2i
+		var dist := absi(cell.x - player_tile.x) + absi(cell.y - player_tile.y)
+		if dist < 10 or dist > 22:
+			continue
+		if liquid_layer.get_cell_source_id(cell) >= 0:
+			continue
+		var world_pos := Vector2((cell.x + 0.5) * TILE_SIZE, (cell.y + 0.5) * TILE_SIZE)
+		candidates.append(world_pos)
+		for dir in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			if wall_layer.get_cell_source_id(cell + dir) >= 0:
+				wall_adjacent_candidates.append(world_pos)
+				break
+	if wall_adjacent_candidates.size() > 0:
+		candidates = wall_adjacent_candidates
+	candidates.shuffle()
+	if candidates.is_empty():
+		candidates = _get_perimeter_positions(grid_pos, room_data, count)
+	if candidates.is_empty():
+		candidates = _get_valid_spawn_positions(grid_pos, room_data, count)
+	if candidates.is_empty():
+		return {"ok": false}
+	var spawn_positions: Array[Vector2] = []
+	var min_dist_sq := float((TILE_SIZE * 4) * (TILE_SIZE * 4))
+	for pos in candidates:
+		var too_close := false
+		for chosen in spawn_positions:
+			if pos.distance_squared_to(chosen) < min_dist_sq:
+				too_close = true
+				break
+		if too_close:
+			continue
+		spawn_positions.append(pos)
+		if spawn_positions.size() >= count:
+			break
+	if spawn_positions.is_empty():
+		return {"ok": false}
+	var pool = current_mine.enemy_pool if current_mine.enemy_pool.size() > 0 else _get_active_enemy_pool_for_room(room_data)
+	var elite_pool = current_mine.elite_enemy_pool if current_mine.elite_enemy_pool.size() > 0 else pool
+	if pool.is_empty() and elite_pool.is_empty():
+		return {"ok": false}
+	var scaling = _get_encounter_scaling()
+	var spawned := 0
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("impact_b", -5.0, 0.0)
+	for i in range(mini(count, spawn_positions.size())):
+		var def: EnemyDefinition = null
+		match tier:
+			"super":
+				if elite_pool.size() > 0:
+					def = elite_pool[randi() % elite_pool.size()].duplicate()
+					def.size_class = EnemyDefinition.SizeClass.BOSS
+					def.boss_phases = maxi(def.boss_phases, 2)
+					def.max_hp = int(def.max_hp * 1.8)
+					def.attack_damage = int(def.attack_damage * 1.35)
+					def.sprite_color = def.sprite_color.lightened(0.28)
+					_apply_generated_elite_identity(def, EliteGenerator.Tier.BOSS)
+			"elite":
+				if elite_pool.size() > 0:
+					def = elite_pool[randi() % elite_pool.size()].duplicate()
+					def.size_class = EnemyDefinition.SizeClass.LARGE
+					def.max_hp = int(def.max_hp * 1.35)
+					def.attack_damage = int(def.attack_damage * 1.15)
+					def.sprite_color = def.sprite_color.lightened(0.18)
+					_apply_generated_elite_identity(def, EliteGenerator.Tier.ELITE)
+		if def == null:
+			if pool.size() > 0:
+				def = _pick_weighted_enemy(pool)
+			elif elite_pool.size() > 0:
+				def = elite_pool[randi() % elite_pool.size()].duplicate()
+		if def == null:
+			continue
+		var enemy = _spawn_encounter_enemy(grid_pos, room_data, spawn_positions[i], def, scaling)
+		if enemy:
+			enemy.add_to_group("mine_intrusion_enemy")
+			enemy.set_meta("mine_intrusion", true)
 		spawned += 1
 	return {"ok": spawned > 0, "spawned": spawned, "tier": tier}
 
@@ -4412,16 +4915,15 @@ func _activate_arena(grid_pos: Vector2i, room_data: RoomData) -> void:
 
 func _spawn_corridor_enemies() -> void:
 	var floor_num = run_state.current_floor if run_state else 1
-	if floor_num < 2:
-		return  # No corridor enemies on floor 1
-
-	var shield_skel_def = load("res://resources/enemies/basic/shield_skeleton.tres") as EnemyDefinition
 	var scaling = _get_encounter_scaling()
 	var enemy_scene = preload("res://scenes/enemy.tscn")
 	var spawned_count = 0
+	# Pull from the CURRENT level's monster_pool, not a hardcoded skeleton.
+	# Falls back to shield_skeleton only if the level has no pool defined.
+	var pool: Array = _get_loy_enemy_pool()
 
 	for corridor in _corridor_midpoints:
-		# 95% of corridors get guards — corridors are heavily patrolled
+		# 95% of corridors get patrols — including floor 1 (lighter)
 		if randf() > 0.95:
 			continue
 
@@ -4429,28 +4931,35 @@ func _spawn_corridor_enemies() -> void:
 		if floor_tiles.size() < 4:
 			continue
 
-		# 5-10 enemies per corridor, scaling with floor
-		var enemy_count = clampi(4 + floor_num, 5, 10)
-		enemy_count = mini(enemy_count, floor_tiles.size() / 2)
-		enemy_count = maxi(enemy_count, 4)
-		# Floor 2+: 30% chance one is an elite
-		var has_elite = floor_num >= 2 and randf() < 0.30
+		# Floor 1 gets a lighter patrol: 2-3 enemies. Floor 2+ scales up.
+		var enemy_count: int
+		if floor_num <= 1:
+			enemy_count = clampi(2 + randi() % 2, 2, 3)
+		else:
+			enemy_count = clampi(4 + floor_num, 5, 10)
+		enemy_count = mini(enemy_count, maxi(2, floor_tiles.size() / 2))
+		# Elites only show up from floor 2 onward
+		var has_elite: bool = floor_num >= 2 and randf() < 0.30
 
-		# Space enemies evenly along corridor
-		var step = floor_tiles.size() / (enemy_count + 1)
+		# SCATTERED placement: shuffle the floor_tiles array and take the first
+		# `enemy_count`. This breaks up the old "all enemies on the centerline"
+		# line look and uses tiles to the sides of the corridor as well.
+		var tiles_copy: Array = floor_tiles.duplicate()
+		tiles_copy.shuffle()
 
 		for i in range(enemy_count):
-			var tile_idx = clampi((i + 1) * step, 0, floor_tiles.size() - 1)
-			var tile = floor_tiles[tile_idx] as Vector2i
-			var world_pos = Vector2(tile.x * TILE_SIZE + 4, tile.y * TILE_SIZE + 4)
+			if i >= tiles_copy.size():
+				break
+			var tile = tiles_copy[i] as Vector2i
+			var jitter := Vector2(randf_range(-3, 3), randf_range(-3, 3))
+			var world_pos = Vector2(tile.x * TILE_SIZE + 4, tile.y * TILE_SIZE + 4) + jitter
 
-			var def = shield_skel_def.duplicate() as EnemyDefinition
-			def.max_hp = maxi(1, int(def.max_hp * scaling["level_scale"]))
-			def.attack_damage = maxi(1, int(def.attack_damage * scaling["dmg_scale"]))
-			def.attack_speed = def.attack_speed * scaling.get("atk_speed_mult", 1.0)
+			var def: EnemyDefinition = _corridor_pick_enemy(pool, scaling)
+			if def == null:
+				continue
 
 			if has_elite and i == 0:
-				def.enemy_name = "Corridor Guardian"
+				def.enemy_name = def.enemy_name + " (Captain)"
 				def.max_hp = int(def.max_hp * 3.0)
 				def.attack_damage = int(def.attack_damage * 1.5)
 				def.size_class = EnemyDefinition.SizeClass.LARGE
@@ -4470,7 +4979,38 @@ func _spawn_corridor_enemies() -> void:
 			spawned_count += 1
 
 	if spawned_count > 0:
-		print("CORRIDORS: spawned %d shield skeleton guards" % spawned_count)
+		print("CORRIDORS: spawned %d patrol enemies" % spawned_count)
+
+
+## Weighted pick from monster_pool (Dictionary entries like {"type": "...", "chance": N}).
+## Returns a per-spawn DUPLICATE so per-enemy stat tweaks don't mutate the source.
+func _corridor_pick_enemy(pool: Array, scaling: Dictionary) -> EnemyDefinition:
+	var picked: EnemyDefinition = null
+	if pool.size() > 0:
+		var total: int = 0
+		for entry in pool:
+			total += int(entry.get("chance", 1))
+		if total > 0:
+			var roll: int = randi() % total
+			var acc: int = 0
+			for entry in pool:
+				acc += int(entry.get("chance", 1))
+				if roll < acc:
+					var name_s := str(entry.get("type", entry.get("name", "")))
+					picked = _load_enemy_by_name(name_s)
+					break
+	# Fallback to legacy shield skeleton if pool empty or load failed.
+	if picked == null:
+		var fb := load("res://resources/enemies/basic/shield_skeleton.tres") as EnemyDefinition
+		if fb:
+			picked = fb
+	if picked == null:
+		return null
+	var def := picked.duplicate() as EnemyDefinition
+	def.max_hp = maxi(1, int(def.max_hp * scaling["level_scale"]))
+	def.attack_damage = maxi(1, int(def.attack_damage * scaling["dmg_scale"]))
+	def.attack_speed = def.attack_speed * scaling.get("atk_speed_mult", 1.0)
+	return def
 
 # --- End Encounter & Corridor Systems ---
 
@@ -5044,7 +5584,8 @@ func _spawn_chest_loot(grid_pos: Vector2i) -> void:
 		var chest_def = current_level.chest_loot[0]
 		var min_items = int(chest_def.get("min_items", 1))
 		var max_items = int(chest_def.get("max_items", 2))
-		var loy_pool = chest_def.get("pool", []) as Array
+		# Loot table data uses key "items" (some legacy uses "pool" — accept both)
+		var loy_pool = chest_def.get("items", chest_def.get("pool", [])) as Array
 		var item_count = randi_range(min_items, max_items)
 
 		if loy_pool.size() > 0:
@@ -5058,8 +5599,27 @@ func _spawn_chest_loot(grid_pos: Vector2i) -> void:
 					var gold_max = int(entry.get("max", 20))
 					run_state.run_gold += randi_range(gold_min, gold_max)
 					continue
-				var item_path = "res://resources/items/loy/" + rolled_item.to_lower().replace(" ", "_") + ".tres"
-				if not ResourceLoader.exists(item_path):
+				# Resolve item path. Prefer QuestManager's name → path cache (covers
+				# scrolls/, name-mismatched files like Stamina Potion = green_potion.tres).
+				# Fall back to slug-based loy/ path for legacy entries.
+				var item_path: String = ""
+				var qm = get_node_or_null("/root/QuestManager")
+				if qm and "_item_cache" in qm and qm._item_cache.has(rolled_item):
+					item_path = qm._item_cache[rolled_item]
+				else:
+					var slug = rolled_item.to_lower().replace(" ", "_")
+					var candidates = [
+						"res://resources/items/loy/" + slug + ".tres",
+						"res://resources/items/scrolls/" + slug + ".tres",
+						"res://resources/items/loy/" + slug.replace("_of_", "_") + ".tres",
+						"res://resources/items/scrolls/" + slug.replace("_of_", "_") + ".tres",
+					]
+					for cand in candidates:
+						if ResourceLoader.exists(cand):
+							item_path = cand
+							break
+				if item_path == "" or not ResourceLoader.exists(item_path):
+					push_warning("Chest loot: couldn't find item '" + rolled_item + "'")
 					continue
 				var item = load(item_path) as EquipmentItem
 				if not item:

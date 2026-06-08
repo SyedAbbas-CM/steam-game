@@ -11,5 +11,8 @@ class_required = "mercenary"
 tier = 2
 prerequisites = ["r_adaptable"]
 stat_bonuses = {}
+stat_requirements = {
+"luck": 5
+}
 special_effect = "opportunist"
 is_percent = false

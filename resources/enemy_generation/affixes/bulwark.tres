@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EliteAffixDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/elite_affix_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/movements/defensive_wall.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+affix_id = "bulwark"
+display_prefix = "Bulwark"
+allowed_roles = Array[String](["melee", "support"])
+movement_override = ExtResource("2")
+add_attack_types = Array[int]([57, 69])
+hp_mult = 1.18
+damage_mult = 1.02
+move_speed_mult = 0.94
+armor_bonus = 4
+color_tint = Color(0.72, 0.82, 1, 1)

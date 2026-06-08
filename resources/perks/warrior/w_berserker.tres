@@ -11,5 +11,8 @@ class_required = "warrior"
 tier = 3
 prerequisites = ["w_heavy_strikes"]
 stat_bonuses = {}
+stat_requirements = {
+"strength": 10
+}
 special_effect = "berserker"
 is_percent = false

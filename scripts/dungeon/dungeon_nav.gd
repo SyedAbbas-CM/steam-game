@@ -9,6 +9,11 @@ var _region: Rect2i
 var _ready: bool = false
 var _walkable: Dictionary = {}  # Vector2i -> true for walkable cells
 
+# Optional height-system reference. When set, neighbor transitions across cliff
+# boundaries (height differs and neither cell is a ramp) are blocked so enemies
+# path around plateaus instead of through them.
+var _height_system: Node = null
+
 # Flow field: each cell stores the direction toward the player
 var _flow: Dictionary = {}  # Vector2i -> Vector2 (normalized direction)
 var _last_target_cell: Vector2i = Vector2i(-99999, -99999)
@@ -21,6 +26,19 @@ const DIRS = [
 	Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)
 ]
+
+func set_height_system(hs: Node) -> void:
+	_height_system = hs
+
+func _can_traverse(a: Vector2i, b: Vector2i) -> bool:
+	if _height_system == null or not is_instance_valid(_height_system):
+		return true
+	var ha: int = int(_height_system.get_height(a))
+	var hb: int = int(_height_system.get_height(b))
+	if ha == hb:
+		return true
+	# Height differs — only passable if either side is a ramp tile.
+	return bool(_height_system.is_ramp(a)) or bool(_height_system.is_ramp(b))
 
 func build(floor_layer: TileMapLayer, deco_layer: TileMapLayer, solid_deco_rows: Array) -> void:
 	var floor_cells = floor_layer.get_used_cells()
@@ -101,10 +119,17 @@ func _rebuild_flow(target: Vector2i) -> void:
 				continue
 			if not _walkable.has(nb):
 				continue
-			# Diagonal check: both adjacent orthogonals must be walkable
+			# Diagonal check: both adjacent orthogonals must be walkable AND traversable
 			if dir.x != 0 and dir.y != 0:
-				if not _walkable.has(Vector2i(cell.x + dir.x, cell.y)) or not _walkable.has(Vector2i(cell.x, cell.y + dir.y)):
+				var ortho_a := Vector2i(cell.x + dir.x, cell.y)
+				var ortho_b := Vector2i(cell.x, cell.y + dir.y)
+				if not _walkable.has(ortho_a) or not _walkable.has(ortho_b):
 					continue
+				if not _can_traverse(cell, ortho_a) or not _can_traverse(cell, ortho_b):
+					continue
+			# Cliff walls block the cardinal step too
+			if not _can_traverse(cell, nb):
+				continue
 			dist[nb] = d + 1
 			# Flow points from nb TOWARD target (i.e. toward cell)
 			_flow[nb] = Vector2(cell.x - nb.x, cell.y - nb.y).normalized()

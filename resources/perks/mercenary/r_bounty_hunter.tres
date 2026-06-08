@@ -11,5 +11,8 @@ class_required = "mercenary"
 tier = 3
 prerequisites = ["r_dual_wield", "r_scavenger"]
 stat_bonuses = {}
+stat_requirements = {
+"luck": 10
+}
 special_effect = "bounty_hunter"
 is_percent = false

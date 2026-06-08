@@ -11,5 +11,9 @@ class_required = "mercenary"
 tier = 4
 prerequisites = ["r_executioner", "r_jack_trades"]
 stat_bonuses = {}
+stat_requirements = {
+"endurance": 10,
+"movement": 5
+}
 special_effect = "versatile"
 is_percent = false

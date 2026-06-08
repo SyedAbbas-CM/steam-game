@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EliteAffixDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/elite_affix_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+affix_id = "ember"
+display_prefix = "Ember"
+allowed_roles = Array[String](["ranged", "support", "melee"])
+add_attack_types = Array[int]([44, 45, 25])
+damage_mult = 1.12
+color_tint = Color(1, 0.68, 0.42, 1)
+bullet_status_effect = "BURNING"
+bullet_status_duration = 3.0
+apply_burning = true
+explode_on_hit = true
+explode_radius = 16.0

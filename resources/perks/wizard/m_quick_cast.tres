@@ -11,5 +11,6 @@ class_required = "wizard"
 tier = 1
 prerequisites = []
 stat_bonuses = {21: 20.0}
+stat_requirements = {}
 special_effect = ""
 is_percent = false

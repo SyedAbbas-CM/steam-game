@@ -12,6 +12,7 @@ var touch_controls: TouchControls
 var peer_owner_id: int = 1
 var player_slot_index: int = 0
 var replicated_proxy: bool = false
+var _dead: bool = false
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var equipment_manager: EquipmentManager = $EquipmentManager
@@ -30,6 +31,22 @@ signal player_died
 var stamina: float = 100.0
 var max_stamina: float = 100.0
 
+# Class meter (0-100). Each class has a unique meaning:
+#   Warrior   "rage"       — kills add stacks, +0.5% damage per stack, decays out of combat
+#   Wizard    "mana_flow"  — spell casts charge it; at 100 the next spell is +50% dmg / -50% MP
+#   Archer    "focus"      — repeat hits on same enemy build it; at 100 next shot pierces & crits
+#   Mercenary "adrenaline" — weapon swaps build it; at 100 next attack guaranteed crit + +30 stamina
+var class_meter: float = 0.0
+var class_meter_max: float = 100.0
+var _last_focus_target: Node = null
+var _rage_decay_grace: float = 0.0
+signal class_meter_changed(value: float, max_value: float)
+
+# Lock-on: TAB cycles to nearest enemy in front; press again to cycle next or release.
+var _lock_on_target: Node2D = null
+const LOCK_ON_MAX_RANGE := 360.0
+const LOCK_ON_CYCLE_RANGE := 240.0
+
 # Shield block (Warrior)
 var _shield_active: bool = false
 var _shield_charges: int = 30  # each hit costs 1 charge regardless of damage
@@ -39,7 +56,10 @@ var _shield_regen_accum: float = 0.0
 var _shield_broken: bool = false
 var _shield_break_stun: float = 0.0
 var _shield_raise_cooldown: float = 0.0  # delay after lowering before can raise again
-const SHIELD_RAISE_DELAY = 2.0
+const SHIELD_RAISE_DELAY = 0.35  # parry-stick / fallback delay
+const SHIELD_RAISE_DELAY_BIG = 0.9  # heavy shield (warrior native) — slower to toggle
+const SHIELD_RAISE_DELAY_LIGHT = 0.30  # buckler — snappy but you can't mash through it
+const BUCKLER_STAMINA_COST = 12.0  # each buckler tap takes a real bite of stamina
 const SHIELD_REGEN_RATE = 1.5  # charges per second (~20s for full recharge)
 const SHIELD_SPEED_MULT = 0.3
 const SHIELD_BREAK_STUN_TIME = 0.5
@@ -48,6 +68,15 @@ signal shield_changed(shield_hp: int)
 
 # Weapon swap (Mercenary/Ranger)
 var _secondary_weapon: EquipmentItem = null
+
+# Off-hand throw — when a secondary weapon is equipped, R/TAB throws it as a
+# bullet-clearing projectile instead of triggering a parry.
+var _offhand_throw_cooldown: float = 0.0
+const OFFHAND_THROW_COOLDOWN := 0.6
+const OFFHAND_THROW_STAMINA := 16.0  # each parrying-dagger throw is a meaningful commit
+const OFFHAND_THROW_SPEED := 380.0  # slower, feels like a thrown blade not a bullet
+const OFFHAND_THROW_LIFETIME := 0.95  # slightly longer life to keep range reasonable
+const OFFHAND_BULLET_DESTROY_LIMIT := 4  # native parrying dagger clears a 2-3 bullet path comfortably
 var _weapon_swap_cooldown: float = 0.0
 const WEAPON_SWAP_COOLDOWN = 0.3
 var _stamina_regen_delay: float = 0.0  # 1s delay after stamina use before regen starts
@@ -84,8 +113,13 @@ const DASH_LINGER_TIME = 0.25  # longer lingering i-frames after dash
 const DASH_BOSS_DMG_MULT = 2.0  # extra collision damage to bosses
 const SPRINT_SPEED_MULT = 2.0
 const SPRINT_STAMINA_DRAIN = 20.0  # stamina per second while sprinting
+const DOUBLE_TAP_SPRINT_WINDOW = 0.5  # seconds between two taps of the same direction to start sprinting
+
+var _last_move_tap_time: Dictionary = {"move_up": -1.0, "move_down": -1.0, "move_left": -1.0, "move_right": -1.0}
+var _double_tap_sprint: bool = false
 var _is_sprinting: bool = false
 var _sneaking: bool = false
+var _pushing: bool = false  # hold Ctrl/Cmd to brace and shove enemies
 var _stealth_kill_cooldown: float = 0.0
 const STEALTH_KILL_COOLDOWN = 1.0
 const STEALTH_KILL_RANGE = 28.0
@@ -221,10 +255,17 @@ const MASSACRE_FEAR_DURATION = 2.5  # seconds
 # Sneak mode constants
 const SNEAK_SPEED_MULT = 0.4
 const SNEAK_STAMINA_BASE_DRAIN = 5.0  # per second, reduced by stealth stat
+# Push mode (hold Ctrl/Cmd): braced, slow, more inertia, can shove enemies sustainedly
+const PUSH_SPEED_MULT = 0.55  # 55% move speed while pushing
+const PUSH_ACCEL_MULT = 0.35  # 35% acceleration -> heavy inertia
+const PUSH_FORCE = 110.0      # per-tick push force vs enemies (vs 50 default)
+const PUSH_BOSS_RECOIL = 35.0 # boss pushback applied to player per contact tick
 
 # Parry mechanic
 var _parry_window: float = 0.0
-const PARRY_WINDOW_TIME = 0.2  # seconds to parry after raising shield
+const PARRY_WINDOW_TIME = 0.26  # total window: perfect (0.14s) + late (0.12s)
+const PARRY_WINDOW_LATE = 0.12  # final 0.12s = "late parry" — blocks but skips bonuses
+const PARRY_STAMINA_COST_PCT = 0.20  # tap-parry costs 20% max stamina; refunded on successful block
 
 # Scout view (V key) — offset camera in aim direction
 var _scout_view_active: bool = false
@@ -272,6 +313,8 @@ func _ready() -> void:
 		loaded_equip = gm.load_equipment(equipment_manager)
 	if not loaded_equip and equipment_manager.inventory.is_empty() and equipment_manager.equipped.is_empty():
 		_give_starting_items()
+	if gm and gm.has_method("apply_pending_legacy_equipment"):
+		gm.apply_pending_legacy_equipment(equipment_manager)
 	# Restore secondary weapon for mercenary/ranger weapon swap
 	if gm and gm.save_data and gm.save_data.secondary_weapon_path != "":
 		var sec_res = load(gm.save_data.secondary_weapon_path) as EquipmentItem
@@ -319,6 +362,24 @@ func is_local_controlled() -> bool:
 		return false
 	return multiplayer.get_unique_id() == peer_owner_id
 
+func is_dead() -> bool:
+	return _dead
+
+# Coop: compact snapshot for remote ghosts. CoopRuntime calls this at 20 Hz on the
+# locally-controlled player only. Dir is PlayerAnimator.Dir (RIGHT/DOWN/UP/LEFT) and
+# anim_state is PlayerAnimator.AnimState — ghost feeds these into its own animator.
+func get_network_state() -> Dictionary:
+	var dir_v: int = 0
+	var anim_v: int = 0
+	if _player_anim:
+		dir_v = int(_player_anim._dir)
+		anim_v = int(_player_anim._state)
+	return {
+		"pos": global_position,
+		"dir": dir_v,
+		"anim": anim_v,
+	}
+
 func _is_ui_open() -> bool:
 	if not is_inside_tree():
 		return true
@@ -335,8 +396,9 @@ func _is_ui_open() -> bool:
 	var perk_tree = get_tree().get_first_node_in_group("perk_tree_screen")
 	if perk_tree and perk_tree is CanvasLayer and perk_tree.visible:
 		return true
-	# Check CraftingUI, ShopUI, EnchantUI, SpellCraftUI, SpellBookUI
-	for ui_name in ["crafting_ui", "shop_ui", "enchant_ui", "spell_craft_ui", "spellbook_ui", "world_map", "chest_ui"]:
+	# Check CraftingUI, ShopUI, EnchantUI, SpellCraftUI (SpellBookUI removed —
+	# spells live in the inventory now)
+	for ui_name in ["crafting_ui", "shop_ui", "enchant_ui", "spell_craft_ui", "world_map", "chest_ui"]:
 		var ui = get_tree().get_first_node_in_group(ui_name)
 		if ui and ui.has_method("is_open") and ui.is_open():
 			return true
@@ -393,9 +455,22 @@ func _physics_process(delta: float) -> void:
 			_shield_charges = _shield_max_charges
 			shield_changed.emit(_shield_charges)
 
-	# Parry window countdown
+	# Parry window countdown. When it expires:
+	#   - Clear the "first-parry" flag so the next raise can pay heal/meter bonuses
+	#   - Auto-drop the buckler (timer-free — no race when spamming taps)
 	if _parry_window > 0:
 		_parry_window -= delta
+		if _parry_window <= 0:
+			if has_meta("parry_bonuses_consumed"):
+				remove_meta("parry_bonuses_consumed")
+			# Buckler: shield_active is gated entirely on parry_window
+			if _shield_active and equipment_manager \
+					and equipment_manager.get_equipped_offhand_type() == "buckler":
+				_shield_active = false
+
+	# Off-hand throw cooldown
+	if _offhand_throw_cooldown > 0:
+		_offhand_throw_cooldown -= delta
 
 	# Shield regen when not blocking and not broken (any class with shield equipped)
 	var _player_class = _get_player_class()
@@ -408,11 +483,32 @@ func _physics_process(delta: float) -> void:
 			_shield_charges = mini(_shield_charges + points, _shield_max_charges)
 			shield_changed.emit(_shield_charges)
 
-	# Stamina regen
+	# Stamina regen — 2× rate when standing absolutely still (no input + no attack)
 	if _stamina_regen_delay > 0:
 		_stamina_regen_delay -= delta
 	elif stamina < max_stamina:
 		var regen_rate = equipment_manager.get_stamina_regen()
+		var has_move_input = false
+		if touch_controls and touch_controls.visible:
+			has_move_input = touch_controls.get_move_input().length() > 0.1
+		else:
+			has_move_input = (
+				Input.is_action_pressed("move_left") or Input.is_action_pressed("move_right")
+				or Input.is_action_pressed("move_up") or Input.is_action_pressed("move_down")
+			)
+		var has_attack_input = (
+			Input.is_action_pressed("shoot")
+			or (touch_controls and touch_controls.visible and touch_controls.get_aim_input().length() > 0.1)
+		)
+		var is_idle = (
+			not has_move_input
+			and not has_attack_input
+			and not _is_dashing
+			and not _is_sprinting
+			and velocity.length() < 1.0
+		)
+		if is_idle:
+			regen_rate *= 2.0
 		stamina = minf(stamina + regen_rate * delta, max_stamina)
 		stamina_changed.emit(stamina)
 
@@ -424,17 +520,49 @@ func _physics_process(delta: float) -> void:
 		mp = minf(mp + mp_rate * delta, max_mp)
 		mp_changed.emit(mp)
 
+	# Class meter decay — all four classes use the same passive ramp.
+	# Tuned so a full meter (100) drains to 0 in ~20-30s if you stop "feeding" it.
+	if class_meter > 0.0:
+		if _rage_decay_grace > 0.0:
+			_rage_decay_grace -= delta
+		else:
+			var pc_mt = _get_player_class()
+			var decay_rate := 3.0  # 100 → 0 in ~33s
+			match pc_mt:
+				"warrior":   decay_rate = 3.0
+				"wizard":    decay_rate = 4.0   # 25s
+				"ranger", "archer": decay_rate = 5.0   # 20s (resets faster on target switch too)
+				"mercenary": decay_rate = 3.5   # 28s
+			var new_v = maxf(0.0, class_meter - decay_rate * delta)
+			if new_v != class_meter:
+				class_meter = new_v
+				class_meter_changed.emit(class_meter, class_meter_max)
+
 	# Handle lingering i-frames after dash
 	if _dash_linger > 0:
 		_dash_linger -= delta
 		if _dash_linger <= 0:
 			invincible = false
 			sprite.modulate.a = 1.0
+			# Restore enemy collision once the dash + linger window finishes
+			set_collision_mask_value(2, true)
 
 	# Handle active dash
 	if _is_dashing:
 		_dash_timer -= delta
-		if _dash_timer <= 0:
+		# Warrior: collision with an *enemy* triggers AoE burst and ends dash.
+		# Walls do NOT end the dash — the dash slides along them so the warrior
+		# can still trigger his end-of-dash AoE even when starting against a wall.
+		var pc_dash = _get_player_class()
+		var warrior_collide := false
+		if pc_dash == "warrior":
+			for si in range(get_slide_collision_count()):
+				var col = get_slide_collision(si)
+				var collider = col.get_collider() if col else null
+				if collider and collider.is_in_group("enemy"):
+					warrior_collide = true
+					break
+		if _dash_timer <= 0 or warrior_collide:
 			_is_dashing = false
 			_lunge_active = false
 			_dash_hit_enemies.clear()
@@ -444,10 +572,15 @@ func _physics_process(delta: float) -> void:
 			if _dash_cleave_pending:
 				_dash_cleave_pending = false
 				_ability_blade_flurry()
-			# Start lingering i-frames (still invincible, fade alpha back)
-			_dash_linger = DASH_LINGER_TIME
-			var tween = create_tween()
-			tween.tween_property(sprite, "modulate:a", 1.0, DASH_LINGER_TIME)
+			# Warrior: burst AoE on dash end (no i-frames). Restore enemy collision immediately.
+			if pc_dash == "warrior":
+				_warrior_dash_burst()
+				sprite.modulate.a = 1.0
+				set_collision_mask_value(2, true)
+			else:
+				_dash_linger = DASH_LINGER_TIME
+				var tween = create_tween()
+				tween.tween_property(sprite, "modulate:a", 1.0, DASH_LINGER_TIME)
 		else:
 			var dash_speed_mod = 0.5 if _shield_active else 1.0  # slower dash while shielding
 			velocity = _dash_direction * equipment_manager.get_move_speed() * DASH_SPEED_MULT * dash_speed_mod
@@ -458,14 +591,15 @@ func _physics_process(delta: float) -> void:
 				var col_d = get_slide_collision(si_d)
 				var coll_d = col_d.get_collider()
 				if coll_d and coll_d.is_in_group("enemies") and coll_d is CharacterBody2D:
-					var ew: float = coll_d._weight if "_weight" in coll_d else 1.0
+					var ew: float = float(coll_d.get("_weight")) if coll_d.get("_weight") != null else 1.0
 					var push_d = _dash_direction * 250.0 * player_w_d / ew
-					if "_pushed_velocity" in coll_d:
-						coll_d._pushed_velocity += push_d
+					var pushed_velocity = coll_d.get("_pushed_velocity")
+					if pushed_velocity != null:
+						coll_d.set("_pushed_velocity", pushed_velocity + push_d)
 					else:
 						coll_d.velocity += push_d
-					if "_contact_bounce" in coll_d:
-						coll_d._contact_bounce = 0.3
+					if coll_d.get("_contact_bounce") != null:
+						coll_d.set("_contact_bounce", 0.3)
 			_dash_strike_check()
 			# Spawn afterimages + trail lines during dash
 			var vfx2 = get_node_or_null("/root/VFXManager")
@@ -596,43 +730,154 @@ func _physics_process(delta: float) -> void:
 		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 20.0:
 			_claws_pounce()
 
-	# Shield block — R key, requires shield item + melee weapon equipped
-	var was_shielding = _shield_active
-	_shield_active = false
+	# Shield block — R key TOGGLE (press to raise, press again to lower).
+	# Requires shield item + melee weapon equipped.
 	if _shield_raise_cooldown > 0:
 		_shield_raise_cooldown -= delta
-	var _has_shield_equipped = equipment_manager.equipped.has(EquipmentItem.SlotType.SHIELD) and equipment_manager.equipped[EquipmentItem.SlotType.SHIELD] != null and _cur_slot == EquipmentItem.SlotType.WEAPON_MELEE
-	if _has_shield_equipped and Input.is_action_pressed("shield_raise") and not _shield_broken and _shield_charges > 0 and _shield_raise_cooldown <= 0:
-		if not was_shielding:
-			var sfx_sr = get_node_or_null("/root/SFXManager")
-			if sfx_sr:
-				sfx_sr.play("clack", -6.0, 0.0)
-			# Parry window starts when shield is first raised
-			_parry_window = PARRY_WINDOW_TIME
-		_shield_active = true
+	# A shield/buckler item in the SHIELD slot counts as equipped regardless of
+	# which weapon is currently held. (Previously this required a melee weapon,
+	# which meant a mercenary holding their bow silently fell back to the slower
+	# parry-stick branch — felt like a delay.)
+	# A real shield or buckler is in the offhand. Parrying daggers also live in
+	# the SHIELD slot but they're handled by the throw branch below — they don't
+	# raise a shield, don't slow movement, don't follow the cursor.
+	var _offhand_item = equipment_manager.equipped.get(EquipmentItem.SlotType.SHIELD, null) as EquipmentItem
+	var _has_shield_equipped = _offhand_item != null and _offhand_item.weapon_type != "parrying_dagger"
+	var was_shielding = _shield_active
+	if _has_shield_equipped and Input.is_action_just_pressed("shield_raise") and _shield_raise_cooldown <= 0:
+		var off_type = equipment_manager.get_equipped_offhand_type() if equipment_manager else ""
+		var prof = equipment_manager.get_offhand_proficiency_mult(_get_player_class()) if equipment_manager else 1.0
+		if off_type == "buckler":
+			# Buckler tap-parry. Costs 20% max stamina up front — refunded on a
+			# successful block (see take_damage parry block). Active state gated
+			# entirely on _parry_window > 0 (no timer races).
+			var tap_cost = max_stamina * PARRY_STAMINA_COST_PCT
+			if not _shield_broken and _shield_charges > 0 and stamina >= tap_cost:
+				_shield_active = true
+				_parry_window = PARRY_WINDOW_TIME * prof
+				_shield_raise_cooldown = SHIELD_RAISE_DELAY_LIGHT
+				stamina = maxf(stamina - tap_cost, 0.0)
+				_stamina_regen_delay = 0.3
+				stamina_changed.emit(stamina)
+				# Track the cost so we can refund the exact amount if the parry lands
+				set_meta("parry_pending_refund", tap_cost)
+				var sfx_sb = get_node_or_null("/root/SFXManager")
+				if sfx_sb:
+					sfx_sb.play("clack", -6.0, 0.0)
+		else:
+			# Heavy shield (warrior native) — toggle hold mode.
+			if _shield_active:
+				_shield_active = false
+				_shield_raise_cooldown = SHIELD_RAISE_DELAY_BIG
+				var sfx_sl = get_node_or_null("/root/SFXManager")
+				if sfx_sl:
+					sfx_sl.play("click", -6.0, 0.0)
+			elif not _shield_broken and _shield_charges > 0:
+				_shield_active = true
+				var sfx_sr = get_node_or_null("/root/SFXManager")
+				if sfx_sr:
+					sfx_sr.play("clack", -6.0, 0.0)
+				_parry_window = PARRY_WINDOW_TIME * prof
+	# Auto-drop shield if broken or out of charges — but ONLY when a real shield
+	# is equipped. Without this guard, the archer/wizard parry-stick gets killed
+	# the same frame it's raised (their _shield_charges is 0 by default).
+	if _has_shield_equipped and _shield_active and (_shield_broken or _shield_charges <= 0):
+		_shield_active = false
+		var off_type_drop = equipment_manager.get_equipped_offhand_type() if equipment_manager else ""
+		_shield_raise_cooldown = SHIELD_RAISE_DELAY_BIG if off_type_drop == "shield" else SHIELD_RAISE_DELAY
+	if _shield_active:
 		_update_shield_visual(true)
-	if not _shield_active:
+	else:
 		_update_shield_visual(false)
-		if _has_shield_equipped:
+		if _has_shield_equipped and was_shielding:
 			sprite.modulate = Color.WHITE
-		# Start raise cooldown when shield is lowered
-		if was_shielding:
-			_shield_raise_cooldown = SHIELD_RAISE_DELAY
-			var sfx_sl = get_node_or_null("/root/SFXManager")
-			if sfx_sl:
-				sfx_sl.play("click", -6.0, 0.0)
 
 	# Stone toss (T key) — throw distraction stone (charge-based)
 	if Input.is_action_just_pressed("stone_toss") and _stone_toss_charges > 0:
 		_stone_toss()
 		_stone_toss_charges -= 1
 
-	# Wrestling grab (R key) — warrior/merc with melee weapon
 	var _pc_wrestle = _get_player_class()
+
+	# Off-hand action is decided by the equipped SHIELD-slot item:
+	#   Parrying Dagger → throw (bullet-clear + chip damage)
+	#   any shield/buckler → toggle shield + parry (handled in the shield block above)
+	#   nothing equipped → wrestle (warrior/merc melee) OR parry-stick (wizard etc.)
+	var _shield_slot_item: EquipmentItem = equipment_manager.equipped.get(EquipmentItem.SlotType.SHIELD, null) if equipment_manager else null
+	var _has_parrying_dagger = _shield_slot_item != null and _shield_slot_item.weapon_type == "parrying_dagger"
+
+	if _has_parrying_dagger \
+			and Input.is_action_just_pressed("shield_raise") \
+			and _offhand_throw_cooldown <= 0.0 \
+			and stamina >= OFFHAND_THROW_STAMINA:
+		_throw_secondary(_shield_slot_item)
+		return
+
+	# Wrestling grab — warrior/merc with melee weapon (no shield/dagger equipped).
 	var _can_wrestle = (_pc_wrestle == "warrior" or _pc_wrestle == "mercenary") and _cur_slot == EquipmentItem.SlotType.WEAPON_MELEE
 	if _can_wrestle and Input.is_action_just_pressed("shield_raise") and _wrestle_cooldown <= 0 and not _has_shield_equipped:
 		_wrestle_grab()
 		_wrestle_cooldown = WRESTLE_COOLDOWN
+		return
+
+	# Parrying-stick: archer/ranger only get the stick if they DON'T have a
+	# parrying-dagger equipped (rare edge case). Wizard has no parry — they're
+	# a spellcaster, their R should do nothing if no offhand item is held.
+	# Warrior/Mercenary fall back to the stick if holding ranged with no offhand.
+	var _stick_classes = ["ranger", "archer"]
+	var _can_parry_stick = (_pc_wrestle in _stick_classes \
+			or (_pc_wrestle == "mercenary" and not _has_shield_equipped) \
+			or (_pc_wrestle == "warrior" and _cur_slot != EquipmentItem.SlotType.WEAPON_MELEE and not _has_shield_equipped)) \
+			and not _has_parrying_dagger
+	if _can_parry_stick \
+			and Input.is_action_just_pressed("shield_raise") \
+			and not _has_shield_equipped \
+			and _shield_raise_cooldown <= 0:
+		_shield_active = true
+		_parry_window = PARRY_WINDOW_TIME * 0.7  # shorter window than warrior
+		_shield_raise_cooldown = 0.6
+		# Auto-drop the stick after the window closes
+		var stick_timer = get_tree().create_timer(0.18) if get_tree() else null
+		if stick_timer:
+			stick_timer.timeout.connect(func():
+				if is_instance_valid(self):
+					_shield_active = false)
+		var sfx_ps = get_node_or_null("/root/SFXManager")
+		if sfx_ps:
+			sfx_ps.play("clack", -8.0, 0.0)
+		# Visual: brief blue tick on the sprite so the player SEES the parry try
+		# (no text popup — keep it subtle)
+		if sprite:
+			var ps_tween = create_tween()
+			ps_tween.tween_property(sprite, "modulate", Color(0.6, 0.85, 1.0), 0.04)
+			ps_tween.tween_property(sprite, "modulate", Color.WHITE, 0.16)
+
+	# Lock-on (TAB) — cycle nearest enemy in front, press again to switch
+	if Input.is_action_just_pressed("lock_on"):
+		_cycle_lock_on()
+
+	# Class-meter full move (X key) — fires when class_meter is full, consumes it
+	if Input.is_action_just_pressed("class_meter_use") and class_meter >= class_meter_max:
+		_unleash_class_meter_move()
+	# Refresh reticle every frame while locked (target moves)
+	if is_instance_valid(_lock_on_target):
+		queue_redraw()
+	# Track whether the player had a target last frame — if so, we want to
+	# auto-relock when it dies/leaves rather than silently dropping.
+	var _had_lock = is_instance_valid(_lock_on_target)
+	if _had_lock:
+		var d = global_position.distance_to(_lock_on_target.global_position)
+		var dead = false
+		if _lock_on_target.has_method("get") and "state" in _lock_on_target:
+			dead = _lock_on_target.state == _lock_on_target.State.DEAD
+		if dead or d > LOCK_ON_MAX_RANGE:
+			_lock_on_target = null
+			# Try to find another on-screen enemy automatically. If nothing
+			# qualifies, the lock just releases as before.
+			_auto_relock()
+			queue_redraw()
+	else:
+		_lock_on_target = null
 
 	# Scout view (V key) — hold to offset camera in aim direction
 	var cam = get_node_or_null("Camera2D")
@@ -892,9 +1137,9 @@ func _physics_process(delta: float) -> void:
 		if Input.is_action_just_pressed("quickbar_%d" % (qi + 1)):
 			_use_quickbar_slot(qi)
 
-	# Spellbook toggle (B key)
-	if Input.is_action_just_pressed("spellbook"):
-		_toggle_spellbook()
+	# B key (spellbook) — removed: spells live in the inventory grid now.
+	# The action binding stays in project.godot but the press is intentionally
+	# a no-op; press I and look for the purple spell tiles instead.
 
 	# First-person view toggle (V key)
 	if Input.is_action_just_pressed("fps_toggle"):
@@ -907,6 +1152,16 @@ func _physics_process(delta: float) -> void:
 			var sfx_sn = get_node_or_null("/root/SFXManager")
 			if sfx_sn:
 				sfx_sn.play("click", -6.0)
+
+	# Push mode (hold Ctrl / Cmd) — braced, no transparency, can shove enemies
+	var push_pressed: bool = Input.is_action_pressed("push_mode") and not _is_dashing and not _shield_active
+	if push_pressed and not _pushing:
+		var sfx_pu = get_node_or_null("/root/SFXManager")
+		if sfx_pu:
+			sfx_pu.play("click", -8.0)
+	_pushing = push_pressed
+	if _pushing:
+		_sneaking = false  # push cancels sneak (mutually exclusive)
 	# Sneak drains stamina slowly (reduced by STEALTH stat, or free with "ghost" perk)
 	if _sneaking:
 		if stamina <= 0 or _is_dashing:
@@ -934,27 +1189,41 @@ func _physics_process(delta: float) -> void:
 	if _sneaking and _stealth_kill_cooldown <= 0 and Input.is_action_just_pressed("interact"):
 		_try_stealth_kill()
 
-	# Sprint (hold Shift while moving — weapons without a special shift ability get sprint)
-	# Short bows and unarmed also get sprint instead of a special ability
-	_is_sprinting = false
-	var _sprint_weapons = ["short_bow", ""]  # weapon types that sprint on shift
-	var _has_shift_ability = _wtype != "" and _wtype not in _sprint_weapons
-	if not _has_shift_ability:
-		if Input.is_action_pressed("sprint") and direction.length() > 0 and stamina > 0 and not _is_dashing and not _shield_active:
-			_is_sprinting = true
-			_sneaking = false  # sprinting cancels sneak
-			stamina = maxf(stamina - SPRINT_STAMINA_DRAIN * delta, 0.0)
-			_stamina_regen_delay = 0.5
-			stamina_changed.emit(stamina)
-			if stamina <= 0:
-				_is_sprinting = false
+	# Sprint:
+	#   1) Double-tap any WASD direction within 0.5 s → start sprinting (works
+	#      regardless of weapon — this is the main path now)
+	#   2) Hold SHIFT also sprints, but only for weapons without a shift ability
+	#      (short_bow / unarmed). All other weapons consume SHIFT as their special.
+	_update_double_tap_sprint()
 
-	# Acceleration-based movement
+	_is_sprinting = false
+	var _sprint_weapons = ["short_bow", ""]
+	var _has_shift_ability = _wtype != "" and _wtype not in _sprint_weapons
+	var shift_sprint_held = Input.is_action_pressed("sprint") and not _has_shift_ability
+	var sprint_pressed = shift_sprint_held or _double_tap_sprint
+	if sprint_pressed and direction.length() > 0 and stamina > 0 and not _is_dashing and not _shield_active and not _pushing:
+		_is_sprinting = true
+		_sneaking = false  # sprinting cancels sneak
+		stamina = maxf(stamina - SPRINT_STAMINA_DRAIN * delta, 0.0)
+		_stamina_regen_delay = 0.5
+		stamina_changed.emit(stamina)
+		if stamina <= 0:
+			_is_sprinting = false
+			_double_tap_sprint = false
+	if not _is_sprinting:
+		# Lose the double-tap latch the moment movement stops, so a single tap
+		# next direction change doesn't start a free sprint.
+		if direction.length() <= 0.0 or stamina <= 0:
+			_double_tap_sprint = false
+
+	# Acceleration-based movement. Mercenary takes an extra penalty for shield use.
 	var shield_mult = SHIELD_SPEED_MULT if _shield_active else 1.0
+	if _shield_active and _get_player_class() == "mercenary":
+		shield_mult *= 0.80  # mercenary shields are heavy for them: extra -20% on top
 	var buff_speed = (status_effects.get_buff_multiplier("speed") * status_effects.get_buff_multiplier("town_speed")) if status_effects else 1.0
 	var sneak_mult = SNEAK_SPEED_MULT if _sneaking else 1.0
 	var aimed_mult = 0.5 if _aimed_mode_active else 1.0
-	var charge_mult = 0.0 if _charge_active else 1.0  # Staff powershot: stationary while channeling
+	var charge_mult = 0.45 if _charge_active else 1.0  # Staff powershot: slowed (not frozen) while channeling
 	var stance_mult = 1.0
 	if _phalanx_active or _guard_stance_active:
 		stance_mult = 0.0
@@ -975,9 +1244,12 @@ func _physics_process(delta: float) -> void:
 			_earthquake_timer -= 0.5
 			_earthquake_slam()
 
-	var speed_mult = status_effects.get_speed_multiplier() * (SPRINT_SPEED_MULT if _is_sprinting else 1.0) * shield_mult * buff_speed * sneak_mult * aimed_mult * charge_mult * stance_mult
+	var push_mult = PUSH_SPEED_MULT if _pushing else 1.0
+	var speed_mult = status_effects.get_speed_multiplier() * (SPRINT_SPEED_MULT if _is_sprinting else 1.0) * shield_mult * buff_speed * sneak_mult * push_mult * aimed_mult * charge_mult * stance_mult
 	var target_velocity = direction * equipment_manager.get_move_speed() * speed_mult
 	var accel = equipment_manager.get_acceleration()
+	if _pushing:
+		accel *= PUSH_ACCEL_MULT  # heavier inertia while braced
 	velocity = velocity.lerp(target_velocity, accel * delta * 10.0)
 	# Apply external push (from enemy contact knockback) — decays quickly, capped
 	var _max_push := 200.0
@@ -1022,16 +1294,28 @@ func _physics_process(delta: float) -> void:
 			push_force = 220.0 * player_w
 		if _blade_dance_active or _phalanx_active:
 			push_force = 140.0 * player_w
-		var enemy_weight: float = collider._weight if "_weight" in collider else 1.0
+		if _pushing:
+			# Braced sustained shove: stronger per-tick force, scales with player weight
+			push_force = PUSH_FORCE * player_w
+		var enemy_weight: float = float(collider.get("_weight")) if collider.get("_weight") != null else 1.0
 		var push_vec = push_dir_c * push_force / enemy_weight
 		# Accumulate push so multiple sources don't cancel each other
-		if "_pushed_velocity" in collider:
-			collider._pushed_velocity += push_vec
+		var collider_push = collider.get("_pushed_velocity")
+		if collider_push != null:
+			collider.set("_pushed_velocity", collider_push + push_vec)
 		else:
 			collider.velocity += push_vec
 		# Brief contact_bounce so enemy AI doesn't immediately override the push
-		if "_contact_bounce" in collider and collider._contact_bounce <= 0:
-			collider._contact_bounce = 0.12
+		var collider_bounce = collider.get("_contact_bounce")
+		if collider_bounce != null and float(collider_bounce) <= 0.0:
+			collider.set("_contact_bounce", 0.12)
+		# Low-stamina stagger: when winded, heavier foes shove the player back
+		if not _is_dashing and not _is_sprinting and not _pushing and enemy_weight > player_w and max_stamina > 0:
+			if stamina / max_stamina < 0.25:
+				_pushed_velocity += -push_dir_c * 18.0 * enemy_weight / maxf(player_w, 0.5)
+		# Push-mode boss recoil: heavy bosses still shove the player back even when braced
+		if _pushing and enemy_weight >= 4.0:
+			_pushed_velocity += -push_dir_c * PUSH_BOSS_RECOIL * (enemy_weight / 5.0) / maxf(player_w, 0.5)
 
 	# Update facing direction (locked during dash to prevent frame flicker)
 	if _player_anim and not _is_dashing:
@@ -1054,19 +1338,61 @@ func _physics_process(delta: float) -> void:
 			_animator.set_state(SpriteAnimator.State.WALK if direction.length() > 0 else SpriteAnimator.State.IDLE)
 		return
 
+	# Class-conditional ability profiles. Each weapon's SHIFT ability behaves
+	# differently for Warrior (heavy/aggressive), Mercenary (versatile baseline),
+	# Archer (precise/fast), and Wizard (MP-scaling).
+	var _pc_class = _get_player_class()
+
 	# Apply dagger rapid fire mode / aimed mode to weapon system
 	if _dagger_rapid_active:
-		weapon_system.fire_rate_mult = DAGGER_RAPID_FIRE_MULT
-		weapon_system.crit_bonus = DAGGER_RAPID_CRIT_BONUS
-		weapon_system.damage_mult = 1.0
+		# Dagger rapid attack — fastest in the kit.
+		if _pc_class == "warrior":
+			# Warrior wields a dagger like a stab — slower, weighty hits.
+			weapon_system.fire_rate_mult = DAGGER_RAPID_FIRE_MULT * 0.7
+			weapon_system.crit_bonus = DAGGER_RAPID_CRIT_BONUS * 0.5
+			weapon_system.damage_mult = 1.5
+		elif _pc_class == "wizard":
+			# Wizard rune-dagger: same speed, MP-fueled crit boost.
+			weapon_system.fire_rate_mult = DAGGER_RAPID_FIRE_MULT
+			weapon_system.crit_bonus = DAGGER_RAPID_CRIT_BONUS + 15.0
+			weapon_system.damage_mult = 0.9
+		else:
+			# Mercenary / Archer (native): existing rapid attack
+			weapon_system.fire_rate_mult = DAGGER_RAPID_FIRE_MULT
+			weapon_system.crit_bonus = DAGGER_RAPID_CRIT_BONUS
+			weapon_system.damage_mult = 1.0
 	elif _aimed_mode_active:
-		weapon_system.fire_rate_mult = 0.7  # slightly slower fire for heavy shots
-		weapon_system.crit_bonus = 20.0  # +20% crit in aimed mode
-		weapon_system.damage_mult = 2.0  # 2x damage
+		# Crossbow aimed — Archer is the natural user.
+		if _pc_class == "archer" or _pc_class == "ranger":
+			weapon_system.fire_rate_mult = 0.7
+			weapon_system.crit_bonus = 30.0  # extra precision
+			weapon_system.damage_mult = 2.2
+		elif _pc_class == "warrior":
+			# Warrior crossbow: harder hit, slower.
+			weapon_system.fire_rate_mult = 0.5
+			weapon_system.crit_bonus = 10.0
+			weapon_system.damage_mult = 2.6
+		else:
+			weapon_system.fire_rate_mult = 0.7
+			weapon_system.crit_bonus = 20.0
+			weapon_system.damage_mult = 2.0
 	elif _blade_dance_active:
-		weapon_system.fire_rate_mult = 2.0
-		weapon_system.crit_bonus = 15.0
-		weapon_system.damage_mult = 0.7
+		# Sword SHIFT — Warrior gets heavy swings, Merc gets the dance, Wizard gets arcane infusion.
+		if _pc_class == "warrior":
+			# Warrior power swings — slower, harder hits, knockback feel.
+			weapon_system.fire_rate_mult = 0.75
+			weapon_system.crit_bonus = 5.0
+			weapon_system.damage_mult = 1.8
+		elif _pc_class == "wizard":
+			# Wizard arcane sword — moderate fire rate, big crit chance.
+			weapon_system.fire_rate_mult = 1.4
+			weapon_system.crit_bonus = 25.0
+			weapon_system.damage_mult = 1.0
+		else:
+			# Mercenary / Archer dancing blade — fast flurry, lower per-hit.
+			weapon_system.fire_rate_mult = 2.0
+			weapon_system.crit_bonus = 15.0
+			weapon_system.damage_mult = 0.7
 	elif _berserk_swing_active:
 		weapon_system.fire_rate_mult = 0.8
 		weapon_system.crit_bonus = 0.0
@@ -1157,7 +1483,10 @@ func _physics_process(delta: float) -> void:
 		# Desktop: mouse/keyboard shooting (skip entirely on mobile to avoid emulated mouse)
 		var _mouse_shooting = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 		var _kb_shooting = Input.is_action_pressed("shoot") and not _mouse_shooting
-		if _mouse_shooting or (_kb_shooting and not _space_suppressed):
+		# Lock-on: auto-fire toward the locked target for every class. The whole
+		# point of locking is hands-free aim; no reason to require holding fire.
+		var _auto_shoot = is_instance_valid(_lock_on_target)
+		if _mouse_shooting or (_kb_shooting and not _space_suppressed) or _auto_shoot:
 			var _was_sneak_fire2 = _sneaking
 			_sneaking = false  # firing breaks sneak
 			var _ns2 = get_node_or_null("/root/NoiseSystem")
@@ -1172,6 +1501,9 @@ func _physics_process(delta: float) -> void:
 			if fps_mode:
 				# FPS: shoot in the direction the camera is facing
 				aim_dir = Vector2(cos(fps_angle), sin(fps_angle))
+			elif is_instance_valid(_lock_on_target):
+				# Lock-on overrides mouse — point at the locked target.
+				aim_dir = (_lock_on_target.global_position - global_position).normalized()
 			else:
 				var mouse_pos = get_global_mouse_position()
 				aim_dir = (mouse_pos - global_position).normalized()
@@ -1228,6 +1560,15 @@ func gain_xp(amount: int) -> void:
 	var xp_mult = equipment_manager.get_xp_mult() + status_effects.get_buff_value("xp")
 	level_system.gain_xp(amount, xp_mult)
 	xp_changed.emit(level_system.xp, level_system.xp_to_next_level())
+
+## Unified passive-effect check: perk OR equipped gear with the enchantment.
+func _has_effect(effect_name: String) -> bool:
+	var pm = get_node_or_null("/root/PerkManager")
+	if pm and pm.has_method("has_special") and pm.has_special(effect_name):
+		return true
+	if equipment_manager and equipment_manager.has_passive_effect(effect_name):
+		return true
+	return false
 
 func is_sneaking() -> bool:
 	return _sneaking
@@ -1313,6 +1654,30 @@ func on_enemy_killed_for_massacre() -> void:
 	# Check if massacre threshold reached (this kill is already counted)
 	if _recent_kill_times.size() >= MASSACRE_KILL_COUNT:
 		_trigger_massacre_fear()
+	# Soul Siphon: restore MP on kill
+	if _has_effect("soul_siphon"):
+		mp = minf(mp + 4.0, max_mp)
+		mp_changed.emit(mp)
+		var scene_root_ss = get_tree().current_scene if is_inside_tree() else null
+		if scene_root_ss:
+			FloatingText.spawn(scene_root_ss, global_position + Vector2(0, -10), "+4 MP", Color(0.3, 0.6, 1.0))
+	# Berserker Frenzy: attack-speed buff on kill
+	if _has_effect("frenzy") and status_effects:
+		status_effects.apply_buff("fire_rate", 3.0, 0.30)
+	# Class meters on kill — small ramps so kills feel like incremental progress,
+	# not chunks. Specific build actions (swap/cast/focus-hits) still do more.
+	var _pc_kill = _get_player_class()
+	match _pc_kill:
+		"warrior":
+			class_meter = minf(class_meter + 5.0, class_meter_max)  # Rage
+		"mercenary":
+			class_meter = minf(class_meter + 4.0, class_meter_max)  # Adrenaline
+		"wizard":
+			class_meter = minf(class_meter + 3.0, class_meter_max)  # Mana Flow
+		"ranger", "archer":
+			class_meter = minf(class_meter + 2.5, class_meter_max)  # Focus
+	_rage_decay_grace = 4.0
+	class_meter_changed.emit(class_meter, class_meter_max)
 
 func _trigger_massacre_fear() -> void:
 	_recent_kill_times.clear()
@@ -1350,61 +1715,143 @@ func add_shield(amount: int) -> void:
 	shield += amount
 
 func use_mp(cost: float) -> bool:
+	# Arcane Surge (meter-full move): next 3 spells are free MP.
+	if _get_player_class() == "wizard" and has_meta("arcane_surge_charges"):
+		cost = 0.0
+	# Wizard Mana Flow: each stack reduces this cast's MP cost by up to 15% at full.
+	elif _get_player_class() == "wizard" and class_meter > 0.0:
+		cost = cost * (1.0 - class_meter * 0.0015)
 	if mp < cost:
 		return false
 	mp -= cost
 	_mp_regen_delay = MP_REGEN_DELAY
 	mp_changed.emit(mp)
+	# Charging: every spell cast adds 20 to the Mana Flow meter
+	if _get_player_class() == "wizard":
+		class_meter = minf(class_meter + 20.0, class_meter_max)
+		_rage_decay_grace = 3.0  # brief grace before decay
+		class_meter_changed.emit(class_meter, class_meter_max)
 	return true
 
 func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: bool = false, is_backstab: bool = false, _damage_type: int = 0) -> void:
+	if _dead:
+		return
 	if invincible:
 		return
+	var is_true_damage: bool = _damage_type == CombatTypes.DamageType.TRUE
 
-	# Dashing = full invincibility
-	if _is_dashing or _dash_linger > 0:
+	# Dashing = full invincibility (except for Warrior, who trades invuln for end-of-dash AoE)
+	if (_is_dashing or _dash_linger > 0) and _get_player_class() != "warrior":
 		return
 
-	# PARRY CHECK — perfect block within parry window
-	if _shield_active and _parry_window > 0:
-		_parry_window = 0.0  # consume parry window
-		# No shield charge consumed!
-		# Stun all nearby enemies
-		var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
-		var stun_radius = 16.0 * (4.0 if in_ow else 1.0)
-		for e in get_tree().get_nodes_in_group("enemy"):
-			if is_instance_valid(e) and e.global_position.distance_to(global_position) < stun_radius:
-				if e.has_method("apply_status"):
-					e.apply_status("STUNNED", 1.0)
-		# Warrior: try to reflect incoming projectile
-		if _get_player_class() == "warrior" and source_pos != Vector2.INF:
-			var bullets_container = get_tree().get_first_node_in_group("bullets")
-			if bullets_container:
-				var reflect_range = 16.0 * (4.0 if in_ow else 1.0)
-				for b in bullets_container.get_children():
-					if not is_instance_valid(b) or not b.has_method("reflect"):
-						continue
-					if b.get("is_player_bullet") != null and b.is_player_bullet:
-						continue
-					if b.global_position.distance_to(global_position) < reflect_range:
-						b.reflect()
-						break
-		# VFX + SFX
-		var vfx_p = get_node_or_null("/root/VFXManager")
-		if vfx_p:
-			vfx_p.shockwave(global_position, stun_radius, Color(1.0, 1.0, 1.0, 0.8))
-			vfx_p.shake(2.0, 0.1)
-		var sfx_p = get_node_or_null("/root/SFXManager")
-		if sfx_p:
-			sfx_p.play("clack", 0.0, 0.2)
-		# White flash
-		var tween_p = create_tween()
-		tween_p.tween_property(sprite, "modulate", Color(3.0, 3.0, 3.0), 0.05)
-		tween_p.tween_property(sprite, "modulate", Color.WHITE, 0.15)
-		return  # parry blocks ALL damage, no charge cost
+	# Bullet Shield: absorbs ranged hits (not melee/contact, not true damage)
+	if not is_true_damage and not is_contact and source_pos != Vector2.INF and has_meta("bullet_shield_charges"):
+		var now_bs = Time.get_ticks_msec() / 1000.0
+		var bs_exp = float(get_meta("bullet_shield_expires", 0.0))
+		var bs_charges = int(get_meta("bullet_shield_charges", 0))
+		if bs_charges > 0 and now_bs < bs_exp:
+			bs_charges -= 1
+			if bs_charges <= 0:
+				remove_meta("bullet_shield_charges")
+				remove_meta("bullet_shield_expires")
+			else:
+				set_meta("bullet_shield_charges", bs_charges)
+			var vfx_bs = get_node_or_null("/root/VFXManager")
+			if vfx_bs:
+				vfx_bs.shockwave(global_position, 18.0, Color(0.4, 0.7, 1.0, 0.7))
+			var scene_root_bs2 = get_tree().current_scene if is_inside_tree() else null
+			if scene_root_bs2:
+				FloatingText.spawn(scene_root_bs2, global_position + Vector2(0, -14), "BLOCKED (%d)" % bs_charges, Color(0.4, 0.7, 1.0))
+			return
+
+	# PARRY CHECK — the window lasts a few hundred ms and deflects EVERY shot
+	# during that time. Mini-stun is no longer automatic — only enemies hit by
+	# the reflected bullets get stunned. Direction check uses the mouse cursor,
+	# not the lock-on shoot direction, so you can parry while locked elsewhere.
+	if not is_true_damage and _shield_active and _parry_window > 0:
+		var pc_parry = _get_player_class()
+		var parry_ok := true
+		# Direction always comes from the player's literal aim cursor — never
+		# from the lock-on shoot direction.
+		if source_pos != Vector2.INF:
+			var facing = _get_parry_direction()
+			var to_atk = (source_pos - global_position).normalized()
+			# Warrior has a wide arc; everyone else has a 60° front cone.
+			var cone_threshold = -0.2 if pc_parry == "warrior" else 0.5
+			parry_ok = facing.dot(to_atk) > cone_threshold
+		if parry_ok:
+			# Two-tier window: the first PARRY_WINDOW_TIME - PARRY_WINDOW_LATE seconds
+			# count as "PERFECT" (full effects). Anything still within _parry_window > 0
+			# but past that is "LATE" — blocks damage only, no bonuses, no reflect.
+			var is_perfect_parry = _parry_window > PARRY_WINDOW_LATE
+			var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+			# Reflect bullet only on a PERFECT parry. Late parries just block.
+			if is_perfect_parry and source_pos != Vector2.INF:
+				var off_prof_r = equipment_manager.get_offhand_proficiency_mult(pc_parry) if equipment_manager else 1.0
+				var bullets_container = get_tree().get_first_node_in_group("bullets")
+				if bullets_container:
+					var reflect_range = 56.0 * off_prof_r * (4.0 if in_ow else 1.0)
+					for b in bullets_container.get_children():
+						if not is_instance_valid(b) or not b.has_method("reflect"):
+							continue
+						if b.get("is_player_bullet") != null and b.is_player_bullet:
+							continue
+						if b.global_position.distance_to(global_position) < reflect_range:
+							b.reflect()
+							b.set_meta("parry_stun_on_hit", true)
+							break
+			# Refund the staked stamina on ANY successful parry (perfect or late) —
+			# only once per window. Heal + class bonuses only on PERFECT.
+			if not has_meta("parry_bonuses_consumed"):
+				set_meta("parry_bonuses_consumed", true)
+				# Stamina refund (any success)
+				if has_meta("parry_pending_refund"):
+					var refund: float = float(get_meta("parry_pending_refund"))
+					stamina = minf(stamina + refund, max_stamina)
+					stamina_changed.emit(stamina)
+					remove_meta("parry_pending_refund")
+				# Perfect-only bonuses
+				if is_perfect_parry:
+					var heal_amt = 1
+					if randf() < 0.15:
+						heal_amt = 2
+					hp = mini(hp + heal_amt, max_hp)
+					hp_changed.emit(hp)
+					match pc_parry:
+						"archer", "ranger":
+							class_meter = minf(class_meter + 3.0, class_meter_max)
+							_rage_decay_grace = 4.0
+							class_meter_changed.emit(class_meter, class_meter_max)
+						"mercenary":
+							class_meter = minf(class_meter + 4.0, class_meter_max)
+							_rage_decay_grace = 4.0
+							class_meter_changed.emit(class_meter, class_meter_max)
+						"wizard":
+							mp = minf(mp + 5.0, max_mp)
+							mp_changed.emit(mp)
+			# VFX + SFX — gold ring on perfect, dimmer blue ring on late
+			var vfx_p = get_node_or_null("/root/VFXManager")
+			if vfx_p:
+				var ring_r = 56.0 * (4.0 if in_ow else 1.0)
+				if is_perfect_parry:
+					vfx_p.shockwave(global_position, ring_r, Color(1.0, 0.9, 0.3, 0.75))
+					vfx_p.shake(1.4, 0.07)
+				else:
+					vfx_p.shockwave(global_position, ring_r * 0.7, Color(0.45, 0.6, 1.0, 0.45))
+			var sfx_p = get_node_or_null("/root/SFXManager")
+			if sfx_p:
+				sfx_p.play("clack", 0.0 if is_perfect_parry else -4.0, 0.2)
+			# Sprite flash — bright white on perfect, soft blue on late
+			var tween_p = create_tween()
+			if is_perfect_parry:
+				tween_p.tween_property(sprite, "modulate", Color(3.0, 3.0, 3.0), 0.05)
+			else:
+				tween_p.tween_property(sprite, "modulate", Color(0.7, 0.85, 1.2), 0.04)
+			tween_p.tween_property(sprite, "modulate", Color.WHITE, 0.15)
+			return  # parry blocks ALL damage, no charge cost
 
 	# Warrior shield block — each hit costs 1 charge, blocks ALL damage
-	if _shield_active and _shield_charges > 0:
+	if not is_true_damage and _shield_active and _shield_charges > 0:
 		var blocked = true
 		if source_pos != Vector2.INF:
 			var shield_dir = Vector2(cos(_shield_angle), sin(_shield_angle))
@@ -1412,7 +1859,10 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 			var angle_diff = abs(shield_dir.angle_to(hit_dir))
 			blocked = angle_diff < SHIELD_ARC_ANGLE / 2.0 + 0.15
 		if blocked:
-			_shield_charges -= 1  # 1 charge per hit regardless of damage
+			# Off-class offhand drains charges twice as fast
+			var off_prof = equipment_manager.get_offhand_proficiency_mult(_get_player_class()) if equipment_manager else 1.0
+			var charge_cost = 1 if off_prof >= 1.0 else 2
+			_shield_charges -= charge_cost
 			shield_changed.emit(_shield_charges)
 			var sfx_blk = get_node_or_null("/root/SFXManager")
 			if sfx_blk:
@@ -1437,7 +1887,7 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 
 	# Dodge check
 	var dodge = equipment_manager.get_dodge_chance()
-	if dodge > 0 and randf() * 100.0 < dodge:
+	if not is_true_damage and dodge > 0 and randf() * 100.0 < dodge:
 		# Dodged! Brief white flash + SFX
 		var sfx_dg = get_node_or_null("/root/SFXManager")
 		if sfx_dg:
@@ -1463,7 +1913,7 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 
 	# Armor reduction — weak attacks fully blockable, strong attacks always deal 20% min
 	var armor = int(equipment_manager.get_armor()) + int(status_effects.get_buff_value("armor"))
-	if armor > 0 and not is_backstab:
+	if not is_true_damage and armor > 0 and not is_backstab:
 		var raw = amount
 		amount = maxi(0, amount - armor)
 		# Strong attacks (raw > armor) always deal at least 20% of original damage
@@ -1495,15 +1945,70 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 			amount = maxi(1, int(amount * 0.5))
 
 	# Shield absorption (equipment-based shield, separate from warrior block)
-	if shield > 0:
+	if not is_true_damage and shield > 0:
 		var absorbed = mini(shield, amount)
 		shield -= absorbed
 		amount -= absorbed
+
+	# Bastion: -30% damage when HP is critical (<30%)
+	if not is_true_damage and max_hp > 0 and float(hp) / float(max_hp) < 0.30 and _has_effect("bastion"):
+		amount = maxi(1, int(amount * 0.70))
+		var vfx_b = get_node_or_null("/root/VFXManager")
+		if vfx_b:
+			vfx_b.shockwave(global_position, 24.0, Color(0.85, 0.75, 0.4, 0.6))
+
+	# Last Stand: -25% damage when HP <= 25% (warrior)
+	if not is_true_damage and max_hp > 0 and float(hp) / float(max_hp) <= 0.25 and _has_effect("last_stand"):
+		amount = maxi(1, int(amount * 0.75))
+
+	# Adrenaline: taking damage grants +20% attack speed for 3s
+	if amount > 0 and _has_effect("adrenaline") and status_effects:
+		status_effects.apply_buff("fire_rate", 3.0, 0.20)
+
+	# Vengeful: reflect 30% of incoming damage to nearby enemies
+	if amount > 0 and _has_effect("vengeful") and is_inside_tree():
+		var reflect_dmg = maxi(1, int(amount * 0.30))
+		for e in get_tree().get_nodes_in_group("enemy"):
+			if not is_instance_valid(e) or e.global_position.distance_to(global_position) > 60.0:
+				continue
+			if e.has_method("take_damage"):
+				e.take_damage(reflect_dmg)
+		var vfx_v = get_node_or_null("/root/VFXManager")
+		if vfx_v:
+			vfx_v.shockwave(global_position, 60.0, Color(0.8, 0.2, 0.2, 0.5))
+
+	# Phoenix: lethal-damage save once per dungeon, revive at 25% HP
+	if amount >= hp and _has_effect("phoenix") and not has_meta("phoenix_used"):
+		set_meta("phoenix_used", true)
+		amount = hp - maxi(1, int(max_hp * 0.25))
+		var vfx_pn = get_node_or_null("/root/VFXManager")
+		if vfx_pn:
+			vfx_pn.level_up_burst(global_position)
+		var scene_root_pn = get_tree().current_scene if is_inside_tree() else null
+		if scene_root_pn:
+			FloatingText.spawn(scene_root_pn, global_position + Vector2(0, -20), "PHOENIX!", Color(1.0, 0.6, 0.2))
+
+	# Mystic Shield: divert 20% of damage to MP loss instead of HP
+	if not is_true_damage and amount > 0 and mp > 0 and _has_effect("mystic_shield"):
+		var diverted = int(ceilf(amount * 0.20))
+		var mp_spent = minf(mp, diverted)
+		if mp_spent > 0:
+			mp -= mp_spent
+			mp_changed.emit(mp)
+			amount = maxi(0, amount - int(mp_spent))
+			var vfx_m = get_node_or_null("/root/VFXManager")
+			if vfx_m:
+				vfx_m.shockwave(global_position, 20.0, Color(0.3, 0.6, 1.0, 0.7))
+			var scene_root_m = get_tree().current_scene if is_inside_tree() else null
+			if scene_root_m:
+				FloatingText.spawn(scene_root_m, global_position + Vector2(0, -18), "-%d MP" % int(mp_spent), Color(0.3, 0.6, 1.0))
 
 	if amount <= 0:
 		return
 
 	hp -= amount
+	if hp < 0:
+		hp = 0
 	hp_changed.emit(hp)
 
 	# Floating damage number on player
@@ -1537,21 +2042,31 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 			var _sfx_ud = get_node_or_null("/root/SFXManager")
 			if _sfx_ud: _sfx_ud.play("shield_break", -2.0)
 		else:
+			_dead = true
+			invincible = true
+			hp = 0
+			hp_changed.emit(hp)
 			player_died.emit()
 
 func _on_stats_changed() -> void:
-	var new_max = equipment_manager.get_max_hp()
-	if new_max > max_hp:
-		hp += new_max - max_hp  # Gain HP when equipping HP items
-	max_hp = new_max
-	hp = mini(hp, max_hp)  # Clamp HP down when unequipping HP items
+	# IMPORTANT: do NOT add HP/stamina when max increases — that opened a heal
+	# exploit (equip → +5 HP, unequip → keep, equip → +5 again …). Keep current
+	# values; only top up if the player was AT FULL before the change so it
+	# still feels right when buffing gear while full.
+	var was_full_hp := hp >= max_hp
+	var was_full_stam := stamina >= max_stamina
+	max_hp = equipment_manager.get_max_hp()
+	if was_full_hp:
+		hp = max_hp
+	else:
+		hp = mini(hp, max_hp)
 	max_mp = equipment_manager.get_max_mp()
 	mp = minf(mp, max_mp)
-	var new_max_stam = equipment_manager.get_max_stamina()
-	if new_max_stam > max_stamina:
-		stamina += new_max_stam - max_stamina
-	max_stamina = new_max_stam
-	stamina = minf(stamina, max_stamina)
+	max_stamina = equipment_manager.get_max_stamina()
+	if was_full_stam:
+		stamina = max_stamina
+	else:
+		stamina = minf(stamina, max_stamina)
 	hp_changed.emit(hp)
 	mp_changed.emit(mp)
 	stamina_changed.emit(stamina)
@@ -1559,6 +2074,8 @@ func _on_stats_changed() -> void:
 
 func _on_level_up(new_level: int) -> void:
 	# Restore HP and stamina on level up
+	_dead = false
+	invincible = false
 	max_hp = equipment_manager.get_max_hp()
 	hp = max_hp
 	max_mp = equipment_manager.get_max_mp()
@@ -1581,6 +2098,11 @@ func _on_level_up(new_level: int) -> void:
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
 		vfx.level_up_burst(global_position)
+	# Floating text — "+1 STAT POINT" so player knows to spend it (anywhere via I or P)
+	var scene_root = get_parent()
+	if scene_root:
+		FloatingText.spawn(scene_root, global_position + Vector2(0, -20), "LEVEL %d!" % new_level, Color(1.0, 0.95, 0.2))
+		FloatingText.spawn(scene_root, global_position + Vector2(0, -40), "+1 stat point (open I or P)", Color(0.6, 1.0, 0.6))
 
 func _get_player_class() -> String:
 	var gm = get_node_or_null("/root/GameManager")
@@ -1607,6 +2129,20 @@ func _apply_class_stats() -> void:
 	bs.thorns = player_class.base_thorns
 	if pc == "mercenary":
 		bs.max_stamina = 150.0  # mercenary has extra stamina for versatility
+	# Hall of Souls permanent upgrades
+	var gm = get_node_or_null("/root/GameManager")
+	if gm and gm.has_method("get_hall_upgrade_level"):
+		bs.max_hp += gm.get_hall_upgrade_level("starting_health") * 5
+		bs.attack_damage += gm.get_hall_upgrade_level("starting_damage")
+		bs.hp_regen += gm.get_hall_upgrade_level("heart_of_embers") * 0.1
+		bs.gold_mult += gm.get_hall_upgrade_level("gold_find") * 0.05
+		bs.xp_mult += gm.get_hall_upgrade_level("xp_find") * 0.05
+	# Permanent elixir bonuses (stack up to 3 each; persisted via save_data)
+	if gm and gm.save_data:
+		var atk_stacks = int(gm.save_data.permanent_upgrades.get("elixir_attack", 0))
+		var def_stacks = int(gm.save_data.permanent_upgrades.get("elixir_defence", 0))
+		bs.attack_damage += atk_stacks
+		bs.armor += def_stacks * 2.0
 
 func get_weight() -> float:
 	var pc = _get_player_class()
@@ -1702,6 +2238,11 @@ func _swap_weapons() -> void:
 	if not _secondary_weapon:
 		return
 	_weapon_swap_cooldown = WEAPON_SWAP_COOLDOWN
+	# Mercenary Adrenaline: each swap adds 25 to the meter
+	if _get_player_class() == "mercenary":
+		class_meter = minf(class_meter + 25.0, class_meter_max)
+		_rage_decay_grace = 3.0
+		class_meter_changed.emit(class_meter, class_meter_max)
 	var current_weapon = equipment_manager.get_equipped_weapon()
 	if not current_weapon:
 		return
@@ -1728,7 +2269,7 @@ func _swap_weapons() -> void:
 func _use_quickbar_slot(slot_index: int) -> void:
 	if not is_inside_tree():
 		return
-	var hud = get_tree().get_first_node_in_group("game_hud") as GameHUD
+	var hud = get_tree().get_first_node_in_group("game_hud") as CanvasLayer
 	if not hud:
 		return
 	hud._on_quickbar_pressed(slot_index)
@@ -1738,7 +2279,7 @@ var _shield_visual: Polygon2D = null
 var _shield_angle: float = 0.0  # current shield facing angle
 const SHIELD_ARC_INNER_BASE = 6.0   # inner radius in dungeon (8px tiles)
 const SHIELD_ARC_OUTER_BASE = 10.0   # outer radius in dungeon
-const SHIELD_ARC_ANGLE = PI * 0.7  # ~126 degree arc wrapping around
+const SHIELD_ARC_ANGLE = PI * 0.42  # ~76 degree arc — tight front cone
 const SHIELD_ARC_SEGMENTS = 12
 const SHIELD_TURN_SPEED = 3.5  # radians per second — takes ~0.5s to turn 180°
 var _shield_charges_label: Label = null
@@ -1758,7 +2299,7 @@ func _update_shield_visual(active: bool) -> void:
 			_shield_visual.color = Color(0.4, 0.55, 0.85, 0.45)
 			_shield_visual.z_index = 1
 			add_child(_shield_visual)
-			_shield_angle = _get_shoot_direction().angle()
+			_shield_angle = _get_parry_direction().angle()
 			# Shield HP label centered on arc
 			_shield_charges_label = Label.new()
 			_shield_charges_label.add_theme_font_size_override("font_size", 8 if sc < 2.0 else 16)
@@ -1766,8 +2307,8 @@ func _update_shield_visual(active: bool) -> void:
 			_shield_charges_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			_shield_charges_label.z_index = 2
 			add_child(_shield_charges_label)
-		# Rotate shield toward current shoot direction
-		var target_angle = _get_shoot_direction().angle()
+		# Rotate shield toward the mouse / aim joystick (NOT the lock-on target)
+		var target_angle = _get_parry_direction().angle()
 		var diff = angle_difference(_shield_angle, target_angle)
 		var max_turn = SHIELD_TURN_SPEED * get_physics_process_delta_time()
 		_shield_angle += clampf(diff, -max_turn, max_turn)
@@ -1787,10 +2328,16 @@ func _update_shield_visual(active: bool) -> void:
 		var r = lerpf(0.8, 0.4, ratio)
 		var g = lerpf(0.3, 0.55, ratio)
 		_shield_visual.color = Color(r, g, 0.85, 0.3 + 0.35 * ratio)
-		# Position HP label at shield center
-		var label_pos = Vector2(cos(_shield_angle), sin(_shield_angle)) * (inner + outer) * 0.5
-		_shield_charges_label.text = str(_shield_charges)
-		_shield_charges_label.position = label_pos - Vector2(12, 6)
+		# Charge label — only for actual shields (not buckler/parrying dagger),
+		# since bucklers don't absorb damage as a stacked pool.
+		var off_for_label = equipment_manager.get_equipped_offhand_type() if equipment_manager else ""
+		if off_for_label == "shield":
+			var label_pos = Vector2(cos(_shield_angle), sin(_shield_angle)) * (inner + outer) * 0.5
+			_shield_charges_label.text = str(_shield_charges)
+			_shield_charges_label.position = label_pos - Vector2(12, 6)
+			_shield_charges_label.visible = true
+		else:
+			_shield_charges_label.visible = false
 		sprite.modulate = Color(0.7, 0.8, 1.0)
 	else:
 		if _shield_visual:
@@ -1800,8 +2347,26 @@ func _update_shield_visual(active: bool) -> void:
 			_shield_charges_label.queue_free()
 			_shield_charges_label = null
 
+## Returns the player's facing direction for *defensive* actions (shield visual,
+## parry cone). Always uses the literal mouse cursor / aim joystick — never the
+## lock-on auto-aim, since the player's threat awareness should follow their
+## eyes, not their gunbarrel.
+func _get_parry_direction() -> Vector2:
+	if touch_controls and touch_controls.visible:
+		var aim = touch_controls.get_aim_input()
+		if aim.length() > 0.1:
+			return aim.normalized()
+	var mouse_pos = get_global_mouse_position()
+	var dir = (mouse_pos - global_position).normalized()
+	return dir if dir.length() > 0 else _last_move_dir
+
 func _get_shoot_direction() -> Vector2:
 	## Returns the direction the player is currently shooting (for shield facing)
+	# Lock-on overrides aim — always point toward the locked target if valid.
+	if is_instance_valid(_lock_on_target):
+		var d = _lock_on_target.global_position - global_position
+		if d.length() > 1.0:
+			return d.normalized()
 	if touch_controls and touch_controls.visible:
 		var aim = touch_controls.get_aim_input()
 		if aim.length() > 0:
@@ -1812,6 +2377,177 @@ func _get_shoot_direction() -> Vector2:
 
 func _get_aim_direction() -> Vector2:
 	return _get_shoot_direction()
+
+## Auto-relock to the nearest on-screen enemy when the current target dies/leaves.
+func _auto_relock() -> void:
+	if not is_inside_tree():
+		return
+	var best: Node2D = null
+	var best_d := INF
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		if "state" in e and e.state == e.State.DEAD:
+			continue
+		if not _is_on_screen(e.global_position):
+			continue
+		var d = global_position.distance_to(e.global_position)
+		if d > LOCK_ON_MAX_RANGE:
+			continue
+		if d < best_d:
+			best = e
+			best_d = d
+	_lock_on_target = best
+
+## Class-specific signature move that fires when the class meter hits 100%.
+## Consumes the full meter; each class gets a distinct payoff:
+##   Warrior  Rage       → "Bloodthirst" — 5s of +30% dmg + 4% max-HP heal per hit
+##   Wizard   Mana Flow  → "Arcane Surge" — next 3 spells cost 0 MP + 75% dmg
+##   Archer   Focus      → "Killshot" — next shot is a guaranteed 5× crit that pierces all
+##   Mercenary Adrenaline → "Reckless Strike" — full stamina + 4s of +75% fire rate
+func _unleash_class_meter_move() -> void:
+	var pc = _get_player_class()
+	var vfx = get_node_or_null("/root/VFXManager")
+	var sfx = get_node_or_null("/root/SFXManager")
+	var scene_root = get_tree().current_scene if is_inside_tree() else null
+	match pc:
+		"warrior":
+			set_meta("bloodthirst_until", Time.get_ticks_msec() / 1000.0 + 5.0)
+			if status_effects:
+				status_effects.apply_buff("damage", 5.0, 0.30)
+			if vfx:
+				vfx.shockwave(global_position, 40.0, Color(0.85, 0.10, 0.10, 0.75))
+				vfx.shake(2.5, 0.18)
+			if sfx:
+				sfx.play("special_b", 0.0, 0.0)
+			if scene_root:
+				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "BLOODTHIRST!", Color(1.0, 0.2, 0.2))
+		"wizard":
+			set_meta("arcane_surge_charges", 3)
+			if vfx:
+				vfx.shockwave(global_position, 40.0, Color(0.45, 0.55, 1.0, 0.75))
+			if sfx:
+				sfx.play("mystical", 0.0, 0.0)
+			if scene_root:
+				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "ARCANE SURGE!", Color(0.5, 0.7, 1.0))
+		"ranger", "archer":
+			set_meta("killshot_charge", true)
+			if vfx:
+				vfx.shockwave(global_position, 36.0, Color(0.55, 1.0, 0.55, 0.85))
+			if sfx:
+				sfx.play("special_a", 0.0, 0.0)
+			if scene_root:
+				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "KILLSHOT!", Color(0.6, 1.0, 0.6))
+		"mercenary":
+			stamina = max_stamina
+			stamina_changed.emit(stamina)
+			if status_effects:
+				status_effects.apply_buff("fire_rate", 4.0, 0.75)
+			if vfx:
+				vfx.shockwave(global_position, 40.0, Color(1.0, 0.75, 0.20, 0.75))
+				vfx.shake(2.0, 0.12)
+			if sfx:
+				sfx.play("special_b", 0.0, 0.0)
+			if scene_root:
+				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "RECKLESS STRIKE!", Color(1.0, 0.75, 0.2))
+	# Consume the meter
+	class_meter = 0.0
+	class_meter_changed.emit(class_meter, class_meter_max)
+
+## Returns true if the world position is inside the camera's visible rect.
+func _is_on_screen(world_pos: Vector2) -> bool:
+	var cam = get_node_or_null("Camera2D") as Camera2D
+	if not cam:
+		return true
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	var half = vp_size * 0.5 / maxf(cam.zoom.x, 0.001)
+	var cam_pos = cam.get_screen_center_position() if cam.has_method("get_screen_center_position") else cam.global_position
+	var rel = world_pos - cam_pos
+	return absf(rel.x) <= half.x and absf(rel.y) <= half.y
+
+## Pick the nearest *on-screen* enemy; cycle on repeat press.
+func _cycle_lock_on() -> void:
+	if not is_inside_tree():
+		return
+	var enemies = get_tree().get_nodes_in_group("enemy")
+	if enemies.is_empty():
+		_lock_on_target = null
+		queue_redraw()
+		return
+	var current_dist := INF if not is_instance_valid(_lock_on_target) else global_position.distance_to(_lock_on_target.global_position)
+	var best: Node2D = null
+	var best_d := INF
+	# First pass: cycle to a *farther* enemy than the current one
+	for e in enemies:
+		if not is_instance_valid(e) or e == _lock_on_target:
+			continue
+		if "state" in e and e.state == e.State.DEAD:
+			continue
+		if not _is_on_screen(e.global_position):
+			continue
+		var d = global_position.distance_to(e.global_position)
+		if d > LOCK_ON_MAX_RANGE:
+			continue
+		if is_instance_valid(_lock_on_target):
+			if d <= current_dist or d > LOCK_ON_CYCLE_RANGE * 2.0:
+				continue
+		if d < best_d:
+			best = e
+			best_d = d
+	if best:
+		_lock_on_target = best
+	elif not is_instance_valid(_lock_on_target):
+		# Fresh lock: nearest on-screen enemy in range
+		for e in enemies:
+			if not is_instance_valid(e):
+				continue
+			if "state" in e and e.state == e.State.DEAD:
+				continue
+			if not _is_on_screen(e.global_position):
+				continue
+			var d = global_position.distance_to(e.global_position)
+			if d > LOCK_ON_MAX_RANGE:
+				continue
+			if d < best_d:
+				best = e
+				best_d = d
+		_lock_on_target = best
+	else:
+		# No more on-screen candidates to cycle to — release the lock
+		_lock_on_target = null
+	queue_redraw()
+
+func _draw() -> void:
+	if not is_instance_valid(_lock_on_target):
+		return
+	# Reticle around the locked target, drawn in the player's local space.
+	var rel = _lock_on_target.global_position - global_position
+	var r := 7.0
+	var col := Color(1.0, 0.85, 0.30, 0.95)
+	# Four corner brackets
+	var l := 3.0
+	# top-left
+	draw_line(rel + Vector2(-r, -r), rel + Vector2(-r + l, -r), col, 1.5)
+	draw_line(rel + Vector2(-r, -r), rel + Vector2(-r, -r + l), col, 1.5)
+	# top-right
+	draw_line(rel + Vector2(r, -r), rel + Vector2(r - l, -r), col, 1.5)
+	draw_line(rel + Vector2(r, -r), rel + Vector2(r, -r + l), col, 1.5)
+	# bottom-left
+	draw_line(rel + Vector2(-r, r), rel + Vector2(-r + l, r), col, 1.5)
+	draw_line(rel + Vector2(-r, r), rel + Vector2(-r, r - l), col, 1.5)
+	# bottom-right
+	draw_line(rel + Vector2(r, r), rel + Vector2(r - l, r), col, 1.5)
+	draw_line(rel + Vector2(r, r), rel + Vector2(r, r - l), col, 1.5)
+	# Small diamond pip in the center top
+	draw_polyline([
+		rel + Vector2(0, -r - 2),
+		rel + Vector2(2, -r),
+		rel + Vector2(0, -r + 2),
+		rel + Vector2(-2, -r),
+		rel + Vector2(0, -r - 2),
+	], col, 1.0)
+	# Faint line from player to target
+	draw_line(Vector2.ZERO, rel, Color(col.r, col.g, col.b, 0.18), 1.0)
 
 func get_high_ground_level() -> int:
 	## Returns 0-3 based on player's current height tile. Ramps count as the higher level.
@@ -1834,10 +2570,11 @@ func get_high_ground_level() -> int:
 	return h
 
 func get_high_ground_damage_mult() -> float:
-	return 1.0 + 0.20 * float(get_high_ground_level())
+	# Pits (negative levels) give no bonus but no debuff either.
+	return 1.0 + 0.20 * float(maxi(0, get_high_ground_level()))
 
 func get_high_ground_crit_bonus() -> float:
-	return 10.0 * float(get_high_ground_level())
+	return 10.0 * float(maxi(0, get_high_ground_level()))
 
 func _give_starting_items() -> void:
 	var player_class = _get_player_class()
@@ -1859,8 +2596,10 @@ func _give_starting_items() -> void:
 				equipment_manager.toggle_equip(equipment_manager.inventory.size() - 1)
 				_quickbar_preload[shield_item.item_name] = 1
 		"mercenary":
+			# Sword + short bow (weapon-swap) + Wooden Buckler (offhand, parry)
 			var merc_sword = load("res://resources/items/loy/sword.tres") as EquipmentItem
 			var short_bow = load("res://resources/items/loy/short_bow.tres") as EquipmentItem
+			var merc_buckler = load("res://resources/items/loy/wooden_buckler.tres") as EquipmentItem
 			if merc_sword:
 				equipment_manager.add_to_inventory(merc_sword.make_copy())
 				equipment_manager.toggle_equip(equipment_manager.inventory.size() - 1)
@@ -1870,18 +2609,22 @@ func _give_starting_items() -> void:
 				equipment_manager.add_to_inventory(sb_copy)
 				_quickbar_preload[short_bow.item_name] = 1
 				_secondary_weapon = sb_copy
+			if merc_buckler:
+				equipment_manager.add_to_inventory(merc_buckler.make_copy())
+				equipment_manager.toggle_equip(equipment_manager.inventory.size() - 1)
+				_quickbar_preload[merc_buckler.item_name] = 2
 		"ranger":
+			# Long bow + Parrying Dagger (offhand, throw-parry)
 			var bow = load("res://resources/items/loy/long_bow.tres") as EquipmentItem
-			var dagger = load("res://resources/items/loy/dagger.tres") as EquipmentItem
+			var parry_dgr = load("res://resources/items/loy/parrying_dagger.tres") as EquipmentItem
 			if bow:
 				equipment_manager.add_to_inventory(bow.make_copy())
 				equipment_manager.toggle_equip(equipment_manager.inventory.size() - 1)
 				_quickbar_preload[bow.item_name] = 0
-			if dagger:
-				var dg_copy = dagger.make_copy()
-				equipment_manager.add_to_inventory(dg_copy)
-				_quickbar_preload[dagger.item_name] = 1
-				_secondary_weapon = dg_copy
+			if parry_dgr:
+				equipment_manager.add_to_inventory(parry_dgr.make_copy())
+				equipment_manager.toggle_equip(equipment_manager.inventory.size() - 1)
+				_quickbar_preload[parry_dgr.item_name] = 1
 		"wizard":
 			var staff = load("res://resources/items/loy/staff.tres") as EquipmentItem
 			if staff:
@@ -1907,6 +2650,34 @@ func _give_starting_items() -> void:
 		for i in range(5):
 			equipment_manager.add_to_inventory(mana_potion.make_copy())
 
+	# Hall of Souls starting-bonus carry-overs
+	var gm_h = get_node_or_null("/root/GameManager")
+	if gm_h and gm_h.has_method("get_hall_upgrade_level") and gm_h.save_data:
+		# Apothecary's Gift: extra red potions
+		var extra_pots = gm_h.get_hall_upgrade_level("starting_potions")
+		if extra_pots > 0 and red_potion:
+			for i in range(extra_pots):
+				equipment_manager.add_to_inventory(red_potion.make_copy())
+		# Veteran's Stipend: starting gold
+		var bonus_gold = gm_h.get_hall_upgrade_level("starting_gold") * 50
+		if bonus_gold > 0 and gm_h.has_method("add_gold"):
+			gm_h.add_gold(bonus_gold, false)
+		# Free Stat Points
+		var bonus_stat_pts = gm_h.get_hall_upgrade_level("free_stat_points") * 2
+		if bonus_stat_pts > 0 and level_system:
+			level_system.unspent_stat_points += bonus_stat_pts
+		# Perk Token Carryover
+		var bonus_tokens = gm_h.get_hall_upgrade_level("perk_token_carryover")
+		if bonus_tokens > 0:
+			var pm = get_node_or_null("/root/PerkManager")
+			if pm and pm.has_method("add_token"):
+				pm.add_token(bonus_tokens)
+		# Soul Anchor: start at higher level
+		var anchor_levels = gm_h.get_hall_upgrade_level("soul_anchor")
+		if anchor_levels > 0 and level_system and level_system.level == 1:
+			for _i in range(anchor_levels):
+				level_system.gain_xp(level_system.xp_to_next_level(), 1.0)
+
 	# Pre-populate quickbar with weapons + potions (deferred so HUD is ready)
 	var qb_data = _quickbar_preload.duplicate()
 	call_deferred("_populate_quickbar", qb_data)
@@ -1915,12 +2686,12 @@ func _populate_quickbar(qb_data: Dictionary) -> void:
 	if not is_inside_tree():
 		return
 	# Wait one more frame if HUD still not ready
-	var hud = get_tree().get_first_node_in_group("game_hud") as GameHUD
+	var hud = get_tree().get_first_node_in_group("game_hud") as CanvasLayer
 	if not hud:
 		await get_tree().process_frame
 		if not is_inside_tree():
 			return
-		hud = get_tree().get_first_node_in_group("game_hud") as GameHUD
+		hud = get_tree().get_first_node_in_group("game_hud") as CanvasLayer
 	if not hud:
 		return
 	for item_name in qb_data:
@@ -1948,6 +2719,9 @@ func _start_dash() -> void:
 	_dash_direction = _last_move_dir
 	_dash_hit_enemies.clear()
 	sprite.modulate.a = 0.4  # ghost effect
+	# Phase through enemies while dashing so we never get pinned by a heavy elite.
+	# Walls (layer 16) and decals (layer 64) still collide.
+	set_collision_mask_value(2, false)
 	var _ns_dash = get_node_or_null("/root/NoiseSystem")
 	if _ns_dash: _ns_dash.emit_noise(global_position, 80.0, 0.5)
 	# Combat Roll perk: dash grants 1s stealth
@@ -1964,6 +2738,80 @@ func _start_dash() -> void:
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
 		vfx.dash_afterimage(sprite, global_position, null, z_index - 1)
+
+	# Wraithwalk: dash leaves a damaging shadow trail
+	if _has_effect("wraithwalk"):
+		_spawn_wraithwalk_trail()
+
+func _warrior_dash_burst() -> void:
+	# Warrior dash end: AoE around player, knockback + damage
+	var base_dmg = equipment_manager.get_damage() if equipment_manager else 1
+	var dmg = maxi(2, int(base_dmg * 2.0 + level_system.level * 0.5))
+	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_mult = 4.0 if in_ow else 1.0
+	var radius = 32.0 * scale_mult
+	var kb_force = (180.0 + base_dmg * 4.0) * scale_mult
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		var to_e = e.global_position - global_position
+		var dist = to_e.length()
+		if dist > radius:
+			continue
+		if e.has_method("take_damage"):
+			e.take_damage(dmg)
+		var kb_dir = to_e.normalized() if dist > 0.01 else Vector2.RIGHT
+		e.velocity = kb_dir * kb_force
+		if e.has_method("apply_status"):
+			e.apply_status("STUNNED", 0.8)
+	var vfx_db = get_node_or_null("/root/VFXManager")
+	if vfx_db:
+		vfx_db.shockwave(global_position, radius, Color(1.0, 0.6, 0.2, 0.7))
+		vfx_db.shake(2.5, 0.15)
+	var sfx_db = get_node_or_null("/root/SFXManager")
+	if sfx_db:
+		sfx_db.play("hit", -2.0)
+
+func _spawn_wraithwalk_trail() -> void:
+	# Damaging Area2D that lingers for 1.5s and ticks enemies in radius
+	var trail := Area2D.new()
+	trail.global_position = global_position
+	trail.collision_layer = 0
+	trail.collision_mask = 2  # enemy layer
+	trail.process_mode = Node.PROCESS_MODE_PAUSABLE
+	var shape := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 22.0
+	shape.shape = circle
+	trail.add_child(shape)
+	# Visual: purple shadow puff
+	var vfx_w = get_node_or_null("/root/VFXManager")
+	if vfx_w and vfx_w.has_method("status_puff"):
+		vfx_w.status_puff(global_position, "CONFUSED")
+	# Damage tick on enter + every 0.4s
+	var dmg = maxi(2, equipment_manager.get_damage() / 4) if equipment_manager else 4
+	var trail_script := GDScript.new()
+	trail_script.source_code = """extends Area2D
+var dmg: int = 4
+var ttl: float = 1.5
+var tick: float = 0.0
+func _physics_process(delta: float) -> void:
+	ttl -= delta
+	tick -= delta
+	if tick <= 0.0:
+		tick = 0.4
+		for body in get_overlapping_bodies():
+			if body and body.has_method('take_damage') and body.is_in_group('enemy'):
+				body.take_damage(dmg)
+	if ttl <= 0.0:
+		queue_free()
+"""
+	trail_script.reload()
+	trail.set_script(trail_script)
+	trail.set("dmg", dmg)
+	var parent = get_parent()
+	if parent:
+		parent.add_child(trail)
 
 ## Dash-strike: damage and knockback enemies we collide with during dash (melee only)
 ## Also nudges ALL nearby enemies in dash direction (environmental knockback)
@@ -1992,14 +2840,16 @@ func _dash_strike_check() -> void:
 		if dist > nudge_range:
 			continue
 		# Bosses immune to nudge but take damage
-		if e.get("definition") and e.definition and e.definition.size_class >= 2:  # BOSS
+		var enemy_def = e.get("definition")
+		if enemy_def != null and enemy_def.size_class >= 2:  # BOSS
 			if is_melee and not _dash_hit_enemies.has(e.get_instance_id()):
 				_dash_hit_enemies[e.get_instance_id()] = true
 				var boss_dmg = int(dmg * DASH_BOSS_DMG_MULT)
 				if _lunge_active:
 					_lunge_hit_count += 1
 					boss_dmg = int(boss_dmg * (1.0 + _lunge_hit_count * 0.5))
-				e.take_damage(boss_dmg) if e.has_method("take_damage") else null
+				if e.has_method("take_damage"):
+					e.take_damage(boss_dmg)
 			continue
 		# Melee dash-strike damage (only melee weapons)
 		if is_melee and not _dash_hit_enemies.has(e.get_instance_id()):
@@ -2013,18 +2863,22 @@ func _dash_strike_check() -> void:
 				e.take_damage(hit_dmg)
 			# Spear lunge pushes enemies far in the charge direction (not radially)
 			if _lunge_active:
-				if "_pushed_velocity" in e:
-					e._pushed_velocity = _dash_direction * kb_force
+				var lunge_push = e.get("_pushed_velocity")
+				if lunge_push != null:
+					e.set("_pushed_velocity", _dash_direction * kb_force)
 				else:
 					e.velocity = _dash_direction * kb_force
-				e._contact_bounce = 0.3 if "_contact_bounce" in e else 0.0
+				if e.get("_contact_bounce") != null:
+					e.set("_contact_bounce", 0.3)
 			else:
 				var kb_dir = (e.global_position - global_position).normalized()
-				if "_pushed_velocity" in e:
-					e._pushed_velocity = kb_dir * kb_force
+				var enemy_push = e.get("_pushed_velocity")
+				if enemy_push != null:
+					e.set("_pushed_velocity", kb_dir * kb_force)
 				else:
 					e.velocity = kb_dir * kb_force
-				e._contact_bounce = 0.2 if "_contact_bounce" in e else 0.0
+				if e.get("_contact_bounce") != null:
+					e.set("_contact_bounce", 0.2)
 			# VFX: impact spark per hit during lunge
 			if _lunge_active:
 				var vfx = get_node_or_null("/root/VFXManager")
@@ -2034,6 +2888,55 @@ func _dash_strike_check() -> void:
 		elif e.get("_nudge_timer") != null and e._nudge_timer <= 0:
 			e._nudge_velocity = _dash_direction * nudge_speed
 			e._nudge_timer = 0.15
+
+# --- Off-hand Throw (Parrying Dagger; bullet-clear + chip damage) ---
+
+func _throw_secondary(offhand_item: EquipmentItem = null) -> void:
+	if not is_inside_tree() or not weapon_system or not weapon_system.bullet_scene:
+		return
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	# Off-class penalty: half damage, 1 bullet kill (vs 3), double stamina cost.
+	var prof = equipment_manager.get_offhand_proficiency_mult(_get_player_class()) if equipment_manager else 1.0
+	var stam_cost = OFFHAND_THROW_STAMINA * (1.0 if prof >= 1.0 else 2.0)
+	if stamina < stam_cost:
+		return
+	stamina = maxf(stamina - stam_cost, 0.0)
+	_stamina_regen_delay = 0.5
+	stamina_changed.emit(stamina)
+	_offhand_throw_cooldown = OFFHAND_THROW_COOLDOWN
+
+	# Aim at the mouse / aim joystick, NOT the lock-on shoot direction.
+	var aim_dir = _get_parry_direction()
+	var base_dmg = equipment_manager.get_damage() if equipment_manager else 1
+	var dmg = maxi(1, int(base_dmg * 0.4 * prof))  # chip damage scaled by proficiency
+
+	var bullet = weapon_system.bullet_scene.instantiate()
+	bullet.global_position = global_position + aim_dir * 8.0
+	bullet.direction = aim_dir
+	bullet.is_player_bullet = true
+	bullet.speed = OFFHAND_THROW_SPEED
+	bullet.lifetime = OFFHAND_THROW_LIFETIME
+	bullet.damage = dmg
+	# Pierces enemies (chip damage + WEAKEN on hit) and destroys enemy bullets
+	bullet.set("_hits_remaining", 6)
+	bullet.set_meta("offhand_throw", true)
+	# Bullet destruction limit scales by proficiency (3 native, 1 off-class)
+	bullet.set_meta("destroys_bullets_left", OFFHAND_BULLET_DESTROY_LIMIT if prof >= 1.0 else 2)
+	bullet.set_meta("apply_weaken", 1.5 if prof >= 1.0 else 0.8)
+	bullet.collision_layer = 4
+	bullet.collision_mask = 2 | 8 | 16  # enemies + enemy bullets + walls
+	# Visual tint from item enchantment if present
+	if offhand_item and offhand_item.enchantment:
+		var spr_t = bullet.get_node_or_null("Sprite2D")
+		if spr_t:
+			spr_t.modulate = offhand_item.enchantment.get_color()
+	bullets_container.add_child(bullet)
+
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("swing", -8.0, 0.1)
 
 # --- Bow Multishot ---
 
@@ -2048,15 +2951,45 @@ func _fire_multishot(aim_dir: Vector2) -> void:
 		return
 	var base_damage = equipment_manager.get_damage()
 	var speed = equipment_manager.get_bullet_speed()
-	for i in range(MULTISHOT_EXTRA_BULLETS):
-		var angle_offset = MULTISHOT_SPREAD * (i + 1) * (1.0 if i % 2 == 0 else -1.0)
+	# Class identity tuning:
+	#   Archer (native): 2 extra bullets, 60% dmg, narrow spread — the bow specialist
+	#   Warrior:         1 extra heavy bullet, 110% dmg, no spread — a "power draw"
+	#   Mercenary:       3 extra bullets, 45% dmg, wider spread — a scattergun feel
+	#   Wizard:          2 extra bullets, 50% dmg, magical purple tint
+	var pc = _get_player_class()
+	var extra_count = MULTISHOT_EXTRA_BULLETS
+	var spread_step = MULTISHOT_SPREAD
+	var per_bullet_dmg = 0.6
+	var tint: Color = Color.WHITE
+	match pc:
+		"warrior":
+			extra_count = 1
+			spread_step = 0.0  # straight power draw
+			per_bullet_dmg = 1.10
+		"mercenary":
+			extra_count = 3
+			spread_step = 0.14
+			per_bullet_dmg = 0.45
+		"wizard":
+			extra_count = 2
+			spread_step = 0.10
+			per_bullet_dmg = 0.5
+			tint = Color(0.6, 0.4, 1.0)
+		_:  # archer/ranger native + fallback
+			extra_count = 2
+			spread_step = MULTISHOT_SPREAD
+			per_bullet_dmg = 0.6
+	for i in range(extra_count):
+		var angle_offset = spread_step * (i + 1) * (1.0 if i % 2 == 0 else -1.0)
 		var spread_dir = aim_dir.rotated(angle_offset)
 		var bullet = bullet_scene.instantiate()
 		bullet.global_position = global_position
 		bullet.direction = spread_dir
 		bullet.is_player_bullet = true
 		bullet.speed = speed
-		bullet.damage = maxi(1, int(base_damage * 0.6))  # 60% damage on spread shots
+		bullet.damage = maxi(1, int(base_damage * per_bullet_dmg))
+		if tint != Color.WHITE and "modulate" in bullet:
+			bullet.modulate = tint
 		bullets_container.add_child(bullet)
 	# SFX for multishot burst
 	var sfx = get_node_or_null("/root/SFXManager")
@@ -2100,7 +3033,9 @@ func _fire_charged_blast() -> void:
 		var size_mult = lerpf(2.0, CHARGE_SIZE_MULT, power_ratio)
 		bullet.speed = equipment_manager.get_bullet_speed() * CHARGE_SPEED_MULT * shield_penalty
 		bullet.damage = maxi(5, int(base_damage * dmg_mult) + flat_bonus)
-		bullet.scale = Vector2(size_mult, size_mult)
+		bullet.set_meta("sprite_scale_mult", size_mult)
+		bullet.set_meta("projectile_fx_kind", "arcane")
+		bullet.set_meta("projectile_fx_energy", 1.0 + ratio * 0.5)
 		bullet.pierce_count = 99  # pierces all enemies
 		bullets_container.add_child(bullet)
 		bullet.collision_mask = bullet.collision_mask & ~16  # passes through walls
@@ -2115,7 +3050,9 @@ func _fire_charged_blast() -> void:
 		# Weak quick shot: base damage +1, no pierce, small projectile
 		bullet.speed = equipment_manager.get_bullet_speed() * 0.8 * shield_penalty
 		bullet.damage = base_damage + 1
-		bullet.scale = Vector2(1.2, 1.2)
+		bullet.set_meta("sprite_scale_mult", 1.2)
+		bullet.set_meta("projectile_fx_kind", "arcane")
+		bullet.set_meta("projectile_fx_energy", 0.7 + ratio * 0.2)
 		bullets_container.add_child(bullet)
 		var sfx2 = get_node_or_null("/root/SFXManager")
 		if sfx2:
@@ -2155,6 +3092,8 @@ func _fire_longshot() -> void:
 	bullet.set_meta("longshot_paralyze", true)
 	bullet.set_meta("longshot_stun_min", LONGSHOT_STUN_MIN)
 	bullet.set_meta("longshot_stun_max", LONGSHOT_STUN_MAX)
+	bullet.set_meta("projectile_fx_kind", "lightning")
+	bullet.set_meta("projectile_fx_energy", 0.95)
 	bullets_container.add_child(bullet)
 	# Tint bullet yellow-green for paralyze
 	var bspr = bullet.get_node_or_null("Sprite2D")
@@ -2251,13 +3190,13 @@ func _setup_starter_spells() -> void:
 	var starter_ids: Array[String] = []
 	match pc:
 		"warrior":
-			starter_ids = ["shield_bash"]
+			starter_ids = ["shield_bash", "iron_skin"]
 		"mercenary":
-			starter_ids = ["battle_cry"]
+			starter_ids = ["battle_cry", "berserk"]
 		"ranger":
-			starter_ids = ["arrow_rain"]
+			starter_ids = ["arrow_rain", "evasion_surge", "heal"]
 		"wizard":
-			starter_ids = ["frost_nova"]
+			starter_ids = ["minor_heal", "bullet_shield", "frost_nova"]
 
 	var all_spells = {
 		"shield_bash": "res://resources/spells/shield_bash.tres",
@@ -2281,6 +3220,10 @@ func _setup_starter_spells() -> void:
 		"life_drain": "res://resources/spells/life_drain.tres",
 		"fear_shout": "res://resources/spells/fear_shout.tres",
 		"shadow_strike": "res://resources/spells/shadow_strike.tres",
+		"mana_shield": "res://resources/spells/mana_shield.tres",
+		"evasion_surge": "res://resources/spells/evasion_surge.tres",
+		"minor_heal": "res://resources/spells/minor_heal.tres",
+		"bullet_shield": "res://resources/spells/bullet_shield.tres",
 	}
 	var slot_idx = 0
 	for sid in starter_ids:
@@ -2354,6 +3297,10 @@ func _use_spell_slot(index: int) -> void:
 				_ability_fear_shout()
 			"shadow_strike":
 				_ability_shadow_strike()
+			"minor_heal":
+				_ability_minor_heal()
+			"bullet_shield":
+				_ability_bullet_shield()
 			_:
 				_cast_crafted_spell(index, spell)
 	else:
@@ -2436,6 +3383,20 @@ func _ability_shield_bash() -> void:
 	if sfx:
 		sfx.play("area_effect_a", 0.0)
 
+func _update_double_tap_sprint() -> void:
+	# If we're already sprinting from a double-tap, hold it; the main sprint
+	# block decides when to drop the flag based on stamina / movement input.
+	if _double_tap_sprint:
+		return
+	var now := Time.get_ticks_msec() / 1000.0
+	for action in ["move_up", "move_down", "move_left", "move_right"]:
+		if Input.is_action_just_pressed(action):
+			var last: float = _last_move_tap_time.get(action, -1.0)
+			if last > 0.0 and now - last <= DOUBLE_TAP_SPRINT_WINDOW:
+				_double_tap_sprint = true
+			_last_move_tap_time[action] = now
+
+
 func _stone_toss() -> void:
 	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
 	var scale_mult = 4.0 if in_ow else 1.0
@@ -2484,8 +3445,9 @@ func _wrestle_grab() -> void:
 		if not is_instance_valid(e) or e.state == e.State.DEAD:
 			continue
 		# Boss immunity
-		if e.definition and e.definition.size_class >= e.definition.SizeClass.BOSS:
-			continue
+			var grapple_def = e.get("definition")
+			if grapple_def != null and grapple_def.size_class >= grapple_def.SizeClass.BOSS:
+				continue
 		var to_e = e.global_position - global_position
 		var d = to_e.length()
 		if d > grab_range:
@@ -2652,8 +3614,7 @@ func _ability_teleport() -> void:
 	# VFX at start and end
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
-		vfx.hit_spark(start_pos, Color(0.4, 0.5, 1.5))
-		vfx.hit_spark(target, Color(0.4, 0.5, 1.5))
+		vfx.warp_link(start_pos, target, Color(0.86, 0.08, 0.05, 0.98), 14.0, 22.0)
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("teleport", -2.0, 0.05)
@@ -2915,6 +3876,37 @@ func _ability_heal() -> void:
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
 		vfx.status_puff(global_position, Color(0.2, 1.0, 0.3))
+
+func _ability_minor_heal() -> void:
+	# Wizard starter: quick small heal
+	var amount = 8 + level_system.level
+	heal(amount)
+	sprite.modulate = Color(0.6, 1.8, 0.6)
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate", Color.WHITE, 0.2)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("heal_a", -3.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.status_puff(global_position, Color(0.4, 1.0, 0.5))
+
+func _ability_bullet_shield() -> void:
+	# Wizard starter: absorbs the next 4 bullets. take_damage checks "bullet_shield_charges".
+	set_meta("bullet_shield_charges", 4)
+	set_meta("bullet_shield_expires", Time.get_ticks_msec() / 1000.0 + 12.0)
+	sprite.modulate = Color(0.6, 0.9, 1.6)
+	var tween = create_tween()
+	tween.tween_property(sprite, "modulate", Color.WHITE, 0.25)
+	var sfx = get_node_or_null("/root/SFXManager")
+	if sfx:
+		sfx.play("clack", -3.0)
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position, 32.0, Color(0.4, 0.7, 1.0, 0.85))
+	var scene_root_bs = get_tree().current_scene if is_inside_tree() else null
+	if scene_root_bs:
+		FloatingText.spawn(scene_root_bs, global_position + Vector2(0, -18), "+4 Bullet Shield", Color(0.4, 0.7, 1.0))
 
 func _ability_greater_heal() -> void:
 	# Restore 50 + level*3 HP
@@ -3206,7 +4198,7 @@ func _ability_blood_pact() -> void:
 	hp = maxi(hp, 1)
 	hp_changed.emit(hp)
 	status_effects.apply_buff("damage", 8.0, 1.0)
-	status_effects.apply_buff("attack_speed", 8.0, -0.15)  # negative = faster
+	status_effects.apply_buff("fire_rate", 8.0, -0.15)  # negative = faster
 	# Red blood visual
 	sprite.modulate = Color(2.0, 0.3, 0.3)
 	var tween = create_tween()
