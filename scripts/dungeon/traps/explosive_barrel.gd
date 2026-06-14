@@ -255,7 +255,10 @@ func _explode() -> void:
 	set_physics_process(false)
 
 	var explosion_radius := EXPLOSION_RADIUS_TILES * TILE_SIZE
-	var damage := 10 + floor_number * 3
+	var floor_i := maxi(floor_number, 1)
+	var damage := 10 + floor_i * 3
+	if floor_i > 3:
+		damage += (floor_i - 3) * 2
 
 	# Erase barrel tile (wherever it currently sits)
 	var cur_tile := Vector2i(

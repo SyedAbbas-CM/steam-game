@@ -28,5 +28,14 @@ for preset in "${PRESETS[@]}"; do
   "$GODOT_BIN" --headless --path "$ROOT_DIR" --export-release "$preset"
 done
 
+MAC_APP="$ROOT_DIR/builds/macos/DungeonCrawl.app"
+if [[ -d "$MAC_APP" ]]; then
+  echo
+  echo "==> Normalizing macOS bundle names"
+  python3 "$ROOT_DIR/scripts/tools/fix_macos_bundle_names.py" "$MAC_APP" "DungeonCrawl"
+  echo "==> Re-signing macOS bundle"
+  codesign --force --deep --sign - "$MAC_APP"
+fi
+
 echo
 echo "Exports completed."

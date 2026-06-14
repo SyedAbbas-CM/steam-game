@@ -512,7 +512,7 @@ func _build_spells_tab() -> VBoxContainer:
 	vbox.add_child(slots_hbox)
 
 	_spell_slot_buttons.clear()
-	for i in range(6):
+	for i in range(7):
 		var btn = Button.new()
 		btn.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
 		btn.focus_mode = Control.FOCUS_NONE

@@ -1,10 +1,10 @@
 extends Node2D
 
 const PlayerQuery = preload("res://scripts/systems/player_query.gd")
-
 @onready var mine_manager = $MineManager
 @onready var death_screen: DeathScreen = $DeathScreen
 @onready var inventory_screen: InventoryScreen = $InventoryScreen
+@onready var scene_player: CharacterBody2D = $MineManager/Player
 
 var game_hud: CanvasLayer  ## SigilHUD or GameHUD — picked by UIPrefs.use_sigil_hud.
 var companion_scene: PackedScene
@@ -12,7 +12,7 @@ var _mine_help_shown: bool = false
 var perf_overlay: PerfOverlay
 
 func _ready() -> void:
-	var player = PlayerQuery.get_primary_player(get_tree())
+	var player = scene_player
 	companion_scene = preload("res://scenes/companions/companion.tscn")
 	$Bullets.add_to_group("bullets")
 
@@ -73,9 +73,6 @@ func _ready() -> void:
 	if lm and lm.has_method("apply_outline_to_subtree"):
 		lm.apply_outline_to_subtree(self)
 
-	player.equipment_manager.base_stats.move_speed *= 0.25
-	player.equipment_manager.base_stats.bullet_speed *= 0.25
-
 	if GameManager and GameManager.pending_biome_name != "":
 		mine_manager.starting_biome_name = GameManager.pending_biome_name
 	if GameManager and GameManager.pending_mine_id != "":
@@ -127,10 +124,7 @@ func _on_floor_changed(floor_num: int) -> void:
 		fpv.wall_layer = mine_manager.wall_layer
 		fpv.floor_layer = mine_manager.floor_layer
 		fpv.set_walkable(mine_manager.nav)
-	var player = PlayerQuery.get_primary_player(get_tree())
-	var lm = get_node_or_null("/root/LightingManager")
-	if player and lm and lm.has_method("setup_player_lantern"):
-		lm.setup_player_lantern(player)
+	call_deferred("_refresh_scene_player_lantern")
 
 func _on_room_changed(_room_index: int, _room_data: RoomData) -> void:
 	game_hud.set_room_info("Mine Depth")
@@ -165,3 +159,8 @@ func _on_use_effect(effect: String) -> void:
 func _exit_tree() -> void:
 	if has_node("/root/PerfTelemetry"):
 		PerfTelemetry.detach_scene(self)
+
+func _refresh_scene_player_lantern() -> void:
+	var lm = get_node_or_null("/root/LightingManager")
+	if scene_player and lm and lm.has_method("setup_player_lantern"):
+		lm.setup_player_lantern(scene_player)

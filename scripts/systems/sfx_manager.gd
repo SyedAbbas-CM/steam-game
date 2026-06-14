@@ -66,8 +66,9 @@ func _create_pool() -> void:
 		add_child(p)
 		_players.append(p)
 
-## Play a sound by name. Optional volume offset (dB) and pitch randomization.
-func play(sound_name: String, volume_offset_db: float = 0.0, pitch_variance: float = 0.05) -> void:
+## Play a sound by name. Optional volume offset (dB), pitch randomization,
+## and a fixed pitch scale (default 1.0 = unchanged; 0.5 = one octave down).
+func play(sound_name: String, volume_offset_db: float = 0.0, pitch_variance: float = 0.05, pitch_scale: float = 1.0) -> void:
 	if not enabled:
 		return
 	if not _sounds.has(sound_name):
@@ -93,7 +94,7 @@ func play(sound_name: String, volume_offset_db: float = 0.0, pitch_variance: flo
 		return
 	player.stream = _sounds[sound_name]
 	player.volume_db = master_volume_db + volume_offset_db
-	player.pitch_scale = 1.0 + randf_range(-pitch_variance, pitch_variance)
+	player.pitch_scale = pitch_scale + randf_range(-pitch_variance, pitch_variance)
 	player.play()
 
 ## Play with positional awareness (louder when closer to listener).

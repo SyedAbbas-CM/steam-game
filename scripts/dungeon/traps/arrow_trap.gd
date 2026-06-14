@@ -14,7 +14,7 @@ func _ready() -> void:
 	super._ready()
 
 func get_damage() -> int:
-	return 4 + floor_number * 2
+	return _scaled_trap_damage(4, 2, 1)
 
 func trigger_remote() -> void:
 	if _triggered:

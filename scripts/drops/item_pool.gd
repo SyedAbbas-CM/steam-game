@@ -291,8 +291,9 @@ func create_drop_table(floor_num: int, is_elite: bool, base_difficulty: int = 0)
 	if is_elite:
 		dt.drop_chance = 0.60
 
-	# Normal enemies get 6 random items in their pool (mix of equipment + consumables)
-	var items = get_random_items(6, floor_num, base_difficulty)
+	# Enemies should drop real gear when they drop something — consumables fall
+	# out of containers / quests, not corpses. Use equipment-only pool here.
+	var items = get_random_equipment(6, floor_num, base_difficulty)
 	for item in items:
 		var entry = DropEntry.new()
 		entry.item = item

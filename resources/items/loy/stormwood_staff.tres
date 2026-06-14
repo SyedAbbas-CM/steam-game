@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="mod_0"]
+script = ExtResource("2")
+stat = 2
+flat_bonus = 2.0
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 5
+flat_bonus = 1.0
+
+[sub_resource type="Resource" id="mod_2"]
+script = ExtResource("2")
+stat = 9
+flat_bonus = 6.0
+
+[sub_resource type="Resource" id="mod_3"]
+script = ExtResource("2")
+stat = 11
+flat_bonus = 0.4
+
+[resource]
+script = ExtResource("1")
+item_name = "Stormwood Staff"
+weapon_type = "staff"
+loy_tile_index = 234
+description = "Cut from a tree the storm refused to let die. Every cast splits into a forked bolt — and the wielder feels the rain pulling mana back into the wood."
+slot_type = 2
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2"), SubResource("mod_3")])
+rarity = 1
+buy_price = 260
+sell_value = 65

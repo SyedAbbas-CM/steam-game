@@ -44,6 +44,17 @@ var _environment: Environment = null
 const PLAYER_LIGHT_RADIUS_SCALE := 0.85
 const MAX_FLICKER_LIGHTS := 64
 
+var _builtin_mood_presets: Dictionary = {
+	"default": preload("res://resources/moods/default.tres"),
+	"dungeon_dark": preload("res://resources/moods/dungeon_dark.tres"),
+	"dungeon_infernal": preload("res://resources/moods/dungeon_infernal.tres"),
+	"town_cool": preload("res://resources/moods/town_cool.tres"),
+	"town_golden": preload("res://resources/moods/town_golden.tres"),
+	"wilderness_cold": preload("res://resources/moods/wilderness_cold.tres"),
+	"wilderness_desert": preload("res://resources/moods/wilderness_desert.tres"),
+	"wilderness_green": preload("res://resources/moods/wilderness_green.tres"),
+}
+
 # Preloaded default mood profiles (auto-mapped by tileset/theme)
 var _mood_cache: Dictionary = {}  # id -> AreaMoodProfile
 
@@ -178,6 +189,11 @@ func _create_world_environment() -> void:
 	add_child(_world_env)
 
 func _load_mood_presets() -> void:
+	_mood_cache.clear()
+	for mood_id in _builtin_mood_presets.keys():
+		var preset = _builtin_mood_presets[mood_id]
+		if preset is AreaMoodProfile:
+			_mood_cache[mood_id] = preset
 	var mood_dir = "res://resources/moods/"
 	var dir = DirAccess.open(mood_dir)
 	if not dir:
@@ -191,6 +207,47 @@ func _load_mood_presets() -> void:
 				var id = file_name.get_basename()
 				_mood_cache[id] = res
 		file_name = dir.get_next()
+
+func _build_fallback_dungeon_mood(mood_id: String, biome: DungeonBiome) -> AreaMoodProfile:
+	var darkness_level := 0.55
+	if biome != null:
+		darkness_level = clampf(maxf(biome.darkness_level, 0.25), 0.0, 1.0)
+	var profile := AreaMoodProfile.new()
+	profile.is_dark = true
+	if mood_id == "dungeon_infernal":
+		profile.darkness_color = Color(
+			lerpf(0.17, 0.05, darkness_level),
+			lerpf(0.08, 0.03, darkness_level),
+			lerpf(0.08, 0.03, darkness_level)
+		)
+		profile.torch_color = Color(1.0, 0.45, 0.18)
+		profile.player_light_color = Color(1.0, 0.72, 0.42)
+		profile.vignette_strength = 0.34
+		profile.vignette_color = Color(0.08, 0.02, 0.01, 0.76)
+		profile.glow_enabled = true
+		profile.glow_intensity = 0.28
+		profile.glow_bloom = 0.14
+	else:
+		profile.darkness_color = Color(
+			lerpf(0.16, 0.05, darkness_level),
+			lerpf(0.16, 0.05, darkness_level),
+			lerpf(0.18, 0.06, darkness_level)
+		)
+		profile.torch_color = Color(1.0, 0.82, 0.45)
+		profile.player_light_color = Color(0.9, 0.85, 0.7)
+		profile.vignette_strength = 0.42
+		profile.vignette_color = Color(0.0, 0.0, 0.0, 0.78)
+		profile.glow_enabled = true
+		profile.glow_intensity = 0.24
+		profile.glow_bloom = 0.12
+	profile.torch_intensity = lerpf(0.72, 0.95, darkness_level)
+	profile.torch_radius = lerpf(88.0, 118.0, darkness_level)
+	profile.torch_flicker = true
+	profile.torch_shadows = false
+	profile.player_light_radius = lerpf(124.0, 164.0, darkness_level)
+	profile.player_light_energy = lerpf(0.88, 1.18, darkness_level)
+	profile.player_light_shadows = false
+	return profile
 
 func _on_tree_node_added(node: Node) -> void:
 	if not outlines_enabled:
@@ -321,8 +378,7 @@ func apply_dungeon_mood(biome: DungeonBiome) -> void:
 			bright_mood.vignette_strength = 0.0
 			apply_mood(bright_mood, true)
 	else:
-		_canvas_mod.color = Color(0.09, 0.09, 0.11)
-		_environment.glow_enabled = false
+		apply_mood(_build_fallback_dungeon_mood(mood_id, biome), true)
 
 func apply_mine_mood(mine: MineDefinition) -> void:
 	## Mines need a much stronger visual identity than normal dungeon themes.
@@ -593,7 +649,10 @@ func setup_player_lantern(player: Node) -> void:
 	light.energy = mood.player_light_energy
 	light.texture_scale = (mood.player_light_radius * PLAYER_LIGHT_RADIUS_SCALE) / 128.0
 	light.blend_mode = Light2D.BLEND_MODE_ADD
-	light.shadow_enabled = mood.player_light_shadows
+	# Exported desktop builds have been failing specifically on shadowed player lanterns
+	# in normal dungeons, while mines remain readable because they already disable this path.
+	# Keep editor behavior unchanged, but force the player lantern shadow path off in exports.
+	light.shadow_enabled = mood.player_light_shadows if OS.has_feature("editor") else false
 	light.shadow_color = Color(0.0, 0.0, 0.0, 0.24)
 	player.add_child(light)
 	_player_lantern = light
@@ -609,6 +668,43 @@ func clear_player_lantern() -> void:
 	if _player_lantern and is_instance_valid(_player_lantern):
 		_player_lantern.queue_free()
 		_player_lantern = null
+
+func get_debug_snapshot(player_override: Node = null) -> Dictionary:
+	var player := player_override
+	if player == null and get_tree():
+		player = PlayerQuery.get_primary_player(get_tree())
+	var mood_id := "<none>"
+	if _current_mood != null:
+		for key in _mood_cache.keys():
+			if _mood_cache[key] == _current_mood:
+				mood_id = str(key)
+				break
+	var lantern_parent := "<none>"
+	var lantern_exists := _player_lantern != null and is_instance_valid(_player_lantern)
+	if lantern_exists and _player_lantern.get_parent():
+		lantern_parent = str(_player_lantern.get_parent().get_path())
+	return {
+		"enabled": enabled,
+		"quality": lighting_quality,
+		"scene_root": str(get_tree().current_scene.get_path()) if get_tree() and get_tree().current_scene else "<none>",
+		"canvas_color": _canvas_mod.color if _canvas_mod else Color.WHITE,
+		"mood_id": mood_id,
+		"mood_dark": _current_mood != null and _current_mood.is_dark,
+		"mood_darkness": _current_mood.darkness_color if _current_mood != null else Color.WHITE,
+		"mood_player_radius": _current_mood.player_light_radius if _current_mood != null else 0.0,
+		"mood_player_energy": _current_mood.player_light_energy if _current_mood != null else 0.0,
+		"mood_player_shadows": _current_mood.player_light_shadows if _current_mood != null else false,
+		"lantern_exists": lantern_exists,
+		"lantern_energy": _player_lantern.energy if lantern_exists else 0.0,
+		"lantern_scale": _player_lantern.texture_scale if lantern_exists else 0.0,
+		"lantern_shadow_enabled": _player_lantern.shadow_enabled if lantern_exists else false,
+		"lantern_parent": lantern_parent,
+		"torch_count": _active_torches.size(),
+		"mood_cache_size": _mood_cache.size(),
+		"cache_has_dungeon_dark": _mood_cache.has("dungeon_dark"),
+		"cache_has_dungeon_infernal": _mood_cache.has("dungeon_infernal"),
+		"player_path": str(player.get_path()) if player != null else "<none>",
+	}
 
 func reset() -> void:
 	## Full reset — call when switching scenes (overworld ↔ dungeon).

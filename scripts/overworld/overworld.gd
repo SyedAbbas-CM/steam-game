@@ -693,7 +693,8 @@ func _show_zone_name(zone_name: String) -> void:
 		_last_zone_chime_msec = now
 		var sfx = get_node_or_null("/root/SFXManager")
 		if sfx:
-			sfx.play("chime", -4.0, 0.0)
+			# Lower-pitched + quieter zone arrival cue (was -4 dB at full pitch).
+			sfx.play("chime", -12.0, 0.03, 0.55)
 	if not _zone_label:
 		_setup_zone_label()
 	if not _zone_label:
@@ -1830,6 +1831,18 @@ func _unhandled_input(event: InputEvent) -> void:
 				sfx.play("teleport", -2.0, 0.0)
 			var biome_name = _nearby_entrance.get_meta("biome_name", "Dungeon") as String
 			var mine_id = _nearby_entrance.get_meta("mine_id", "") as String
+			if biome_name == "" or biome_name == "Dungeon":
+				var entrance_tile := Vector2i(
+					int(floor(_nearby_entrance.global_position.x / 32.0)),
+					int(floor(_nearby_entrance.global_position.y / 32.0))
+				)
+				var zone := _find_zone_data_for_tile(entrance_tile)
+				if zone == null:
+					zone = _current_zone
+				if zone:
+					biome_name = zone.dungeon_base if zone.dungeon_base != "" else zone.zone_name
+					if mine_id == "":
+						mine_id = _get_default_mine_id_for_biome(biome_name)
 			# Special-case: push/weight test arena is a standalone scene, not a dungeon floor
 			if biome_name == "PushTest":
 				get_viewport().set_input_as_handled()

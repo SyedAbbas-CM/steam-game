@@ -26,7 +26,7 @@ func _ready() -> void:
 	_fire_timer = randf() * FIRE_INTERVAL
 
 func get_damage() -> int:
-	return 6 + floor_number * 2
+	return _scaled_trap_damage(6, 2, 2)
 
 func _physics_process(delta: float) -> void:
 	if not _active or not is_inside_tree():

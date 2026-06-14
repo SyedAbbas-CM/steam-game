@@ -3,6 +3,15 @@ extends RefCounted
 
 const ARCHETYPE_DIR := "res://resources/enemy_generation/archetypes"
 const AFFIX_DIR := "res://resources/enemy_generation/affixes"
+const MOVE_WEIGHTED := 0
+const MOVE_ORBIT_PLAYER := 1
+const MOVE_ORBIT_POINT := 2
+const MOVE_ORBIT_ALLY := 3
+const MOVE_PATROL_H := 4
+const MOVE_PATROL_V := 5
+const MOVE_FLEE := 6
+const MOVE_TELEPORT := 12
+const MOVE_MIRROR := 13
 
 enum Tier {
 	ELITE,
@@ -79,8 +88,18 @@ const _HEAVY_BOMB_ATTACKS := {
 	EnemyDefinition.AttackType.METEOR_SHOWER: true,
 }
 
-static var _archetypes: Array[EliteArchetypeDefinition] = []
-static var _affixes: Array[EliteAffixDefinition] = []
+const _AREA_DENIAL_ATTACKS := {
+	EnemyDefinition.AttackType.MINEFIELD: true,
+	EnemyDefinition.AttackType.SEEKING_MINES: true,
+	EnemyDefinition.AttackType.MINE_DROP: true,
+	EnemyDefinition.AttackType.POISON_CLOUD: true,
+	EnemyDefinition.AttackType.BARRIER_WALL: true,
+	EnemyDefinition.AttackType.TELEGRAPH_EXPLOSION: true,
+	EnemyDefinition.AttackType.ORBIT_LAUNCH: true,
+}
+
+static var _archetypes: Array = []
+static var _affixes: Array = []
 static var _loaded: bool = false
 
 static func apply_generated_identity(def: EnemyDefinition, tier: int) -> void:
@@ -90,10 +109,10 @@ static func apply_generated_identity(def: EnemyDefinition, tier: int) -> void:
 	if _archetypes.is_empty():
 		return
 	var role := _classify_role(def)
-	var archetype := _pick_archetype(role)
+	var archetype: Resource = _pick_archetype(def, role, tier)
 	if archetype == null:
 		return
-	var affixes := _pick_affixes(def, role, tier)
+	var affixes: Array = _pick_affixes(def, role, tier)
 	_apply_archetype(def, archetype)
 	for affix in affixes:
 		_apply_affix(def, affix)
@@ -105,11 +124,11 @@ static func _ensure_loaded() -> void:
 	_loaded = true
 	_archetypes.clear()
 	for res in _load_resources_in_dir(ARCHETYPE_DIR):
-		if res is EliteArchetypeDefinition:
+		if res != null:
 			_archetypes.append(res)
 	_affixes.clear()
 	for res in _load_resources_in_dir(AFFIX_DIR):
-		if res is EliteAffixDefinition:
+		if res != null:
 			_affixes.append(res)
 
 static func _load_resources_in_dir(dir_path: String) -> Array:
@@ -136,18 +155,32 @@ static func _classify_role(def: EnemyDefinition) -> String:
 		return "support"
 	return "ranged"
 
-static func _pick_archetype(role: String) -> EliteArchetypeDefinition:
-	var candidates: Array[EliteArchetypeDefinition] = []
+static func _pick_archetype(def: EnemyDefinition, role: String, tier: int):
+	var candidates: Array = []
+	var lvl := maxi(def.level if def else 1, 1)
 	for archetype in _archetypes:
 		if archetype == null:
 			continue
+		if lvl <= 4 and tier <= Tier.ELITE:
+			if archetype.summon_on_phase_change:
+				continue
+			if archetype.forced_attack_type in _SUPPORT_ATTACKS:
+				continue
+			var archetype_pool: Array = archetype.attack_pool
+			var has_support_attack := false
+			for attack_type in archetype_pool:
+				if _SUPPORT_ATTACKS.has(attack_type) or _AREA_DENIAL_ATTACKS.has(attack_type):
+					has_support_attack = true
+					break
+			if has_support_attack:
+				continue
 		if _role_allowed(role, archetype.allowed_roles):
 			candidates.append(archetype)
 	if candidates.is_empty():
 		return null
 	return candidates[randi() % candidates.size()]
 
-static func _pick_affixes(def: EnemyDefinition, role: String, tier: int) -> Array[EliteAffixDefinition]:
+static func _pick_affixes(def: EnemyDefinition, role: String, tier: int) -> Array:
 	var target_count := 1
 	if tier >= Tier.HYPER:
 		target_count = 2
@@ -155,12 +188,22 @@ static func _pick_affixes(def: EnemyDefinition, role: String, tier: int) -> Arra
 		target_count = 3
 	var projectile_capable := not _MELEE_ATTACKS.has(def.attack_type) and def.attack_type != EnemyDefinition.AttackType.SUMMON
 	var melee_capable := _MELEE_ATTACKS.has(def.attack_type)
-	var candidates: Array[EliteAffixDefinition] = []
+	var candidates: Array = []
 	for affix in _affixes:
 		if affix == null:
 			continue
 		if affix.min_tier > tier:
 			continue
+		if def.level <= 4 and tier <= Tier.ELITE:
+			if affix.affix_id in ["toxic", "phantom", "bulwark"]:
+				continue
+			var has_area_denial := false
+			for attack_type in affix.add_attack_types:
+				if _AREA_DENIAL_ATTACKS.has(attack_type) or _SUPPORT_ATTACKS.has(attack_type):
+					has_area_denial = true
+					break
+			if has_area_denial:
+				continue
 		if not _role_allowed(role, affix.allowed_roles):
 			continue
 		if affix.requires_projectiles and not projectile_capable:
@@ -169,7 +212,7 @@ static func _pick_affixes(def: EnemyDefinition, role: String, tier: int) -> Arra
 			continue
 		candidates.append(affix)
 	candidates.shuffle()
-	var picked: Array[EliteAffixDefinition] = []
+	var picked: Array = []
 	for affix in candidates:
 		if picked.size() >= target_count:
 			break
@@ -181,7 +224,7 @@ static func _role_allowed(role: String, allowed_roles: Array[String]) -> bool:
 		return true
 	return "any" in allowed_roles or role in allowed_roles
 
-static func _apply_archetype(def: EnemyDefinition, archetype: EliteArchetypeDefinition) -> void:
+static func _apply_archetype(def: EnemyDefinition, archetype) -> void:
 	def.max_hp = maxi(1, int(round(def.max_hp * archetype.hp_mult)))
 	def.attack_damage = maxi(1, int(round(def.attack_damage * archetype.damage_mult)))
 	def.move_speed *= archetype.move_speed_mult
@@ -202,7 +245,7 @@ static func _apply_archetype(def: EnemyDefinition, archetype: EliteArchetypeDefi
 		def.summon_phase_count = maxi(def.summon_phase_count, archetype.summon_phase_count)
 	def.sprite_color = def.sprite_color.lerp(archetype.color_tint, 0.35)
 
-static func _apply_affix(def: EnemyDefinition, affix: EliteAffixDefinition) -> void:
+static func _apply_affix(def: EnemyDefinition, affix) -> void:
 	def.max_hp = maxi(1, int(round(def.max_hp * affix.hp_mult)))
 	def.attack_damage = maxi(1, int(round(def.attack_damage * affix.damage_mult)))
 	def.move_speed *= affix.move_speed_mult
@@ -222,10 +265,10 @@ static func _apply_affix(def: EnemyDefinition, affix: EliteAffixDefinition) -> v
 	def.sprite_color = def.sprite_color.lerp(affix.color_tint, 0.28)
 	def.attack_modifier = _merge_affix_modifier(def.attack_modifier, affix)
 
-static func _merge_affix_modifier(base_modifier: AttackModifier, affix: EliteAffixDefinition) -> AttackModifier:
-	var mod: AttackModifier = null
+static func _merge_affix_modifier(base_modifier, affix):
+	var mod = null
 	if base_modifier != null:
-		mod = base_modifier.duplicate(true) as AttackModifier
+		mod = base_modifier.duplicate(true)
 	else:
 		mod = AttackModifier.new()
 	mod.homing_strength = clampf(mod.homing_strength + affix.homing_strength, 0.0, 1.25)
@@ -248,7 +291,7 @@ static func _merge_affix_modifier(base_modifier: AttackModifier, affix: EliteAff
 	mod.explode_radius = maxf(mod.explode_radius, affix.explode_radius)
 	return mod
 
-static func _finalize_generated_identity(def: EnemyDefinition, archetype: EliteArchetypeDefinition, affixes: Array[EliteAffixDefinition], role: String, tier: int) -> void:
+static func _finalize_generated_identity(def: EnemyDefinition, archetype, affixes: Array, role: String, tier: int) -> void:
 	var attack_pool := _build_attack_pool(def, archetype, affixes, role, tier)
 	if def.phase_2_attack == EnemyDefinition.AttackType.NONE and attack_pool.size() > 0:
 		def.phase_2_attack = int(attack_pool[min(1, attack_pool.size() - 1)])
@@ -263,7 +306,7 @@ static func _finalize_generated_identity(def: EnemyDefinition, archetype: EliteA
 	def.set_meta("generated_affix_ids", affix_ids)
 	def.enemy_name = _compose_name(def.enemy_name, archetype, affixes)
 
-static func _build_attack_pool(def: EnemyDefinition, archetype: EliteArchetypeDefinition, affixes: Array[EliteAffixDefinition], role: String, tier: int) -> Array[int]:
+static func _build_attack_pool(def: EnemyDefinition, archetype, affixes: Array, role: String, tier: int) -> Array[int]:
 	var pool: Array[int] = []
 	var max_size := 2 if tier == Tier.ELITE else 3
 	if def.attack_type != EnemyDefinition.AttackType.NONE:
@@ -295,15 +338,38 @@ static func _build_attack_pool(def: EnemyDefinition, archetype: EliteArchetypeDe
 
 static func _attack_allowed_for_context(attack_type: int, def: EnemyDefinition, tier: int) -> bool:
 	if not _HEAVY_BOMB_ATTACKS.has(attack_type):
+		if _AREA_DENIAL_ATTACKS.has(attack_type) and _movement_discourages_commitment(def.movement_pattern):
+			return false
 		return true
 	var lvl := maxi(def.level if def else 1, 1)
 	if tier <= Tier.ELITE and lvl <= 5:
 		return false
 	if tier <= Tier.HYPER and lvl <= 3:
 		return false
+	if _movement_discourages_commitment(def.movement_pattern):
+		return false
 	return true
 
-static func _compose_name(base_name: String, archetype: EliteArchetypeDefinition, affixes: Array[EliteAffixDefinition]) -> String:
+static func _movement_discourages_commitment(p) -> bool:
+	if p == null:
+		return false
+	var skittish := [
+		MOVE_ORBIT_PLAYER,
+		MOVE_ORBIT_POINT,
+		MOVE_ORBIT_ALLY,
+		MOVE_PATROL_H,
+		MOVE_PATROL_V,
+		MOVE_FLEE,
+		MOVE_TELEPORT,
+		MOVE_MIRROR,
+	]
+	if skittish.has(p.move_type):
+		return true
+	return p.move_type == MOVE_WEIGHTED \
+		and p.approach_weight <= 0.45 \
+		and (p.hold_weight + p.retreat_weight) >= 0.55
+
+static func _compose_name(base_name: String, archetype, affixes: Array) -> String:
 	var prefix_parts: Array[String] = []
 	if archetype.display_prefix != "":
 		prefix_parts.append(archetype.display_prefix)

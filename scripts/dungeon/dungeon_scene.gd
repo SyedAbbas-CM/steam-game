@@ -1,11 +1,11 @@
 extends Node2D
 
 const PlayerQuery = preload("res://scripts/systems/player_query.gd")
-
 @onready var dungeon_manager = $DungeonManager
 @onready var reward_screen: RewardScreen = $RewardScreen
 @onready var death_screen: DeathScreen = $DeathScreen
 @onready var inventory_screen: InventoryScreen = $InventoryScreen
+@onready var scene_player: CharacterBody2D = $DungeonManager/Player
 
 var game_hud: CanvasLayer  ## Either SigilHUD or GameHUD — both share the public API used here.
 var _mine_help_shown: bool = false
@@ -15,7 +15,7 @@ var companion_scene: PackedScene
 var perf_overlay: PerfOverlay
 
 func _ready() -> void:
-	var player = PlayerQuery.get_primary_player(get_tree())
+	var player = scene_player
 	var t_start = Time.get_ticks_msec()
 	print("TIMING: dungeon_scene _ready START")
 	companion_scene = preload("res://scenes/companions/companion.tscn")
@@ -84,10 +84,6 @@ func _ready() -> void:
 			lm.setup_player_lantern(player)
 	if lm and lm.has_method("apply_outline_to_subtree"):
 		lm.apply_outline_to_subtree(self)
-
-	# Scale player for dungeon (8px tiles vs 32px overworld = 0.25 ratio)
-	player.equipment_manager.base_stats.move_speed *= 0.25
-	player.equipment_manager.base_stats.bullet_speed *= 0.25
 
 	if GameManager and GameManager.pending_biome_name != "":
 		dungeon_manager.starting_biome_name = GameManager.pending_biome_name
@@ -199,10 +195,7 @@ func _on_floor_changed(floor_num: int) -> void:
 		fpv.wall_layer = dungeon_manager.wall_layer
 		fpv.floor_layer = dungeon_manager.floor_layer
 		fpv.set_walkable(dungeon_manager.nav)
-	var player = PlayerQuery.get_primary_player(get_tree())
-	var lm = get_node_or_null("/root/LightingManager")
-	if player and lm and lm.has_method("setup_player_lantern"):
-		lm.setup_player_lantern(player)
+	call_deferred("_refresh_scene_player_lantern")
 
 func _on_room_changed(room_index: int, room_data: RoomData) -> void:
 	if room_data and room_data.type in [RoomData.RoomType.ELITE, RoomData.RoomType.SUPER_ELITE, RoomData.RoomType.BOSS]:
@@ -417,3 +410,8 @@ func _on_merchant_opened(items: Array, grid_pos: Vector2i) -> void:
 func _exit_tree() -> void:
 	if has_node("/root/PerfTelemetry"):
 		PerfTelemetry.detach_scene(self)
+
+func _refresh_scene_player_lantern() -> void:
+	var lm = get_node_or_null("/root/LightingManager")
+	if scene_player and lm and lm.has_method("setup_player_lantern"):
+		lm.setup_player_lantern(scene_player)

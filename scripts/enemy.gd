@@ -402,7 +402,6 @@ static func _load_movement_pools() -> void:
 	_MOVE_POOL_RANGED = [
 		_hold_ranged, _hold_ranged, _hold_ranged,     # hold position (common)
 		_kite_ranged, _kite_ranged,                    # kite away when close
-		_anchor_turret,                                # anchor and shoot
 		_strafe_run,                                   # strafe while shooting
 		# Special types
 		_orbit_player, _kite, _patrol_h, _patrol_v, _flee,
@@ -410,11 +409,12 @@ static func _load_movement_pools() -> void:
 	]
 	# Support pool: basic defensive + special utility
 	_MOVE_POOL_SUPPORT = [
-		_defensive_wall, _defensive_wall,              # hold ground (common)
 		_hold_ranged, _hold_ranged,                    # stay at range
+		_kite_ranged,                                  # keep moving if pressured
+		_strafe_run,                                   # reposition while supporting
 		_kite_ranged,                                  # kite if pressured
 		# Special types
-		_orbit_ally, _orbit_point, _teleport, _mirror, _ambush, _flee,
+		_orbit_ally, _teleport, _flee,
 	]
 	# Boss pool: no basic — always dramatic
 	_MOVE_POOL_BOSS = [
@@ -793,7 +793,7 @@ func _physics_process(delta: float) -> void:
 				vfx_en.shake(2.0, 0.15)
 			var sfx_en = get_node_or_null("/root/SFXManager")
 			if sfx_en:
-				sfx_en.play("special_b", -2.0, 0.05)
+				sfx_en.play("special_b", -10.0, 0.08)
 
 	# Boss ground slam (periodic AoE)
 	if definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS and state == State.CHASE:
@@ -1066,7 +1066,7 @@ func _physics_process(delta: float) -> void:
 				state = State.ATTACK
 				var sfx_bs = get_node_or_null("/root/SFXManager")
 				if sfx_bs:
-					sfx_bs.play("attack_a", -3.0, 0.1)
+					sfx_bs.play("attack_a", -10.0, 0.12)
 
 		State.INVESTIGATE:
 			_investigate_timer += delta
@@ -1140,7 +1140,7 @@ func _physics_process(delta: float) -> void:
 				vfx_t.hit_spark(global_position)
 			var sfx_t = get_node_or_null("/root/SFXManager")
 			if sfx_t:
-				sfx_t.play("impact_a", -3.0)
+				sfx_t.play("impact_a", -10.0)
 		# Check enemy-enemy collision
 		for e in get_tree().get_nodes_in_group("enemy"):
 			if e == self or not is_instance_valid(e) or e.state == State.DEAD:
@@ -1549,16 +1549,21 @@ func _apply_movement_pattern(p: MovementPattern, dir: Vector2, dist: float, delt
 	# Without this, hold/kite/orbit identities can devolve into stationary turret behavior.
 	if dist > 72.0:
 		var pursuit_dir := _steer_around_walls(dir)
+		var active_attack := _get_active_attack_type(false)
+		var is_area_denial := _is_area_denial_attack(active_attack)
 		var can_force_pursuit := p.move_type in [
 			MovementPattern.MoveType.WEIGHTED,
 			MovementPattern.MoveType.KITE,
+			MovementPattern.MoveType.ORBIT_PLAYER,
 			MovementPattern.MoveType.ORBIT_POINT,
 			MovementPattern.MoveType.ORBIT_ALLY,
 			MovementPattern.MoveType.PATROL_H,
 			MovementPattern.MoveType.PATROL_V,
 			MovementPattern.MoveType.TELEPORT,
+			MovementPattern.MoveType.MIRROR,
 		]
-		if can_force_pursuit and (_chase_timer > 2.5 or velocity.length() < eff_speed * 0.22):
+		var pursuit_delay := 1.35 if is_area_denial else 2.5
+		if can_force_pursuit and (_chase_timer > pursuit_delay or velocity.length() < eff_speed * 0.22):
 			velocity = (velocity * 0.45 + pursuit_dir * eff_speed * 0.9).limit_length(eff_speed)
 
 ## Orbit around a center point at orbit_radius — always tangential, corrects radius
@@ -2129,6 +2134,17 @@ func _is_heavy_bomb_attack(atk: int) -> bool:
 		EnemyDefinition.AttackType.POISON_CLOUD,
 		EnemyDefinition.AttackType.MORTAR,
 		EnemyDefinition.AttackType.METEOR_SHOWER,
+	]
+
+func _is_area_denial_attack(atk: int) -> bool:
+	return atk in [
+		EnemyDefinition.AttackType.MINEFIELD,
+		EnemyDefinition.AttackType.SEEKING_MINES,
+		EnemyDefinition.AttackType.MINE_DROP,
+		EnemyDefinition.AttackType.POISON_CLOUD,
+		EnemyDefinition.AttackType.BARRIER_WALL,
+		EnemyDefinition.AttackType.TELEGRAPH_EXPLOSION,
+		EnemyDefinition.AttackType.ORBIT_LAUNCH,
 	]
 
 func _get_effective_attack_range(atk: int) -> float:
@@ -3123,7 +3139,7 @@ func _do_slam() -> void:
 	tween.tween_property($Sprite2D, "scale", Vector2(1, 1), 0.2)
 	var sfx_slam = get_node_or_null("/root/SFXManager")
 	if sfx_slam:
-		sfx_slam.play("boom_a", -2.0, 0.08)
+		sfx_slam.play("boom_a", -10.0, 0.1)
 	var vfx_slam = get_node_or_null("/root/VFXManager")
 	if vfx_slam:
 		vfx_slam.shockwave(global_position, radius, Color(0.8, 0.4, 0.1, 0.5))
@@ -3576,7 +3592,7 @@ func _shoot_shield_bash(dir: Vector2) -> void:
 	var center: Vector2 = global_position
 	var b = bullet_scene.instantiate()
 	if sfx_sh:
-		sfx_sh.play("spell_a", -5.0, 0.1)
+		sfx_sh.play("spell_a", -13.0, 0.18)
 	if not bc:
 		return
 	# Spawn a 3-segment barrier arc in front of the enemy
@@ -4088,7 +4104,7 @@ func _shoot_telegraph_explosion() -> void:
 			# Spawn ring of bullets at the telegraph position
 			var sfx_boom = get_node_or_null("/root/SFXManager")
 			if sfx_boom:
-				sfx_boom.play("boom_b", -3.0, 0.08)
+				sfx_boom.play("boom_b", -11.0, 0.1)
 			if not bc:
 				return
 			for j in range(ring_count):
@@ -4342,7 +4358,7 @@ func _shoot_barrier_wall(dir: Vector2) -> void:
 	if existing_barriers >= max_segments:
 		return  # walls still up, skip
 	if sfx:
-		sfx.play("spell_a", -5.0, 0.1)
+		sfx.play("spell_a", -13.0, 0.18)
 	var seg_hp = 5 if _is_boss_or_large else 3
 	var seg_lifetime = 6.0 if _is_boss_or_large else 4.0
 	var perp = Vector2(-dir.y, dir.x)
@@ -4583,7 +4599,7 @@ func _shoot_shield_wall(dir: Vector2) -> void:
 	var sfx = get_node_or_null("/root/SFXManager")
 	var count: int = clampi(_get_active_bullet_count(), 3, 5)
 	if sfx:
-		sfx.play("spell_a", -5.0, 0.1)
+		sfx.play("spell_a", -13.0, 0.18)
 	if not bc:
 		return
 	var spacing = 8.0
@@ -4701,7 +4717,7 @@ func _shoot_leaping_slam(dir: Vector2) -> void:
 			for i in range(ring_count):
 				_spawn_bullet(bc, Vector2(cos(angle), sin(angle)), bspeed)
 		if sfx2:
-			sfx2.play("boom_a", -2.0, 0.08)
+			sfx2.play("boom_a", -10.0, 0.1)
 	)
 
 ## ARROW_VOLLEY: 3-5 lobbed arrows that rain down around player position
@@ -5301,7 +5317,7 @@ func _shoot_melee_shield_bash(dir: Vector2) -> void:
 		if not is_instance_valid(self) or hp <= 0 or state == State.DEAD:
 			return
 		if sfx2:
-			sfx2.play("impact_a", -3.0, 0.1)
+			sfx2.play("impact_a", -10.0, 0.12)
 		# Wide sweep bar — 140° cone in front
 		_spawn_sweep_bar(bash_dir.angle() - 1.2, bash_dir.angle() + 1.2, 18.0, int(base_dmg * 1.3), 0.12)
 		if vfx:
@@ -6183,7 +6199,7 @@ func _on_phase_change(phase: int) -> void:
 	tween.tween_property($Sprite2D, "modulate", definition.sprite_color if definition else Color.WHITE, 0.4)
 	var sfx_ph = get_node_or_null("/root/SFXManager")
 	if sfx_ph:
-		sfx_ph.play("special_b", -2.0, 0.05)
+		sfx_ph.play("special_b", -10.0, 0.08)
 	var vfx_ph = get_node_or_null("/root/VFXManager")
 	if vfx_ph:
 		vfx_ph.shockwave(global_position, 24.0, Color(1.0, 0.3, 0.3, 0.6))
@@ -6507,9 +6523,9 @@ func _die() -> void:
 				if dropped:
 					bag_items.append(dropped.make_copy())
 
-	# Normal enemy equipment drops: 1 item at 20% chance
+	# Normal enemy equipment drops: 1 item at 40% chance (was 20% — felt empty)
 	elif drop_table:
-		if randf() < 0.20:
+		if randf() < 0.40:
 			var dropped = drop_table.roll()
 			if dropped:
 				bag_items.append(dropped.make_copy())
@@ -6537,17 +6553,19 @@ func _die() -> void:
 			vfx.shake(3.0, 0.25)  # bosses shake the screen
 		elif sc == 1:
 			vfx.shake(1.5, 0.15)
-	# SFX: creature death cry based on kingdom
+	# SFX: creature death cry based on kingdom, with a chunky impact under it
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		if definition:
 			match definition.kingdom:
-				"undead": sfx.play("skeleton", -6.0, 0.15)
-				"crawler": sfx.play("beetle", -6.0, 0.15)
-				"animal": sfx.play("mouse", -6.0, 0.15)
-				"demon": sfx.play("mystical", -6.0, 0.15)
-				"orc": sfx.play("claw", -6.0, 0.15)
-				"magical": sfx.play("mystical", -6.0, 0.15)
+				"undead": sfx.play("skeleton", -4.0, 0.15)
+				"crawler": sfx.play("beetle", -4.0, 0.15)
+				"animal": sfx.play("mouse", -4.0, 0.15)
+				"demon": sfx.play("mystical", -4.0, 0.15)
+				"orc": sfx.play("claw", -4.0, 0.15)
+				"magical": sfx.play("mystical", -4.0, 0.15)
+			# Extra impact thud on every kill so the player feels it
+			sfx.play("impact_b", -5.0, 0.18, 0.85)
 		# Size-based death explosion
 		var sc2 = definition.size_class if definition else 0
 		if sc2 >= 2:
@@ -6573,7 +6591,7 @@ func _explode_on_death() -> void:
 	var radius = definition.explode_radius if definition else 20.0
 	var sfx_ex = get_node_or_null("/root/SFXManager")
 	if sfx_ex:
-		sfx_ex.play("boom_a", -2.0, 0.08)
+		sfx_ex.play("boom_a", -10.0, 0.1)
 	var vfx_ex = get_node_or_null("/root/VFXManager")
 	if vfx_ex:
 		vfx_ex.shockwave(global_position, radius, Color(1.0, 0.4, 0.1, 0.7))
@@ -6624,7 +6642,7 @@ const RARE_MATERIALS: Array = [
 func _try_drop_crafting_material() -> void:
 	if not definition:
 		return
-	var drop_chance = 0.10  # 10% base (down from 25%)
+	var drop_chance = 0.20  # 20% base — felt too dry at 10%
 	if definition.size_class == 1:
 		drop_chance = 0.50
 	elif definition.size_class >= 2:

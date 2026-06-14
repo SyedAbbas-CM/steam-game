@@ -55,7 +55,11 @@ func _ready() -> void:
 	set_physics_process(true)
 
 func get_damage() -> int:
-	return 4 + floor_number * 2
+	var floor_i := maxi(floor_number, 1)
+	var dmg := 4 + floor_i * 2
+	if floor_i > 3:
+		dmg += (floor_i - 3) * 2
+	return dmg
 
 func set_active(active: bool) -> void:
 	_active = active

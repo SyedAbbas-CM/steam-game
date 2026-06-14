@@ -31,21 +31,108 @@ signal player_died
 var stamina: float = 100.0
 var max_stamina: float = 100.0
 
-# Class meter (0-100). Each class has a unique meaning:
-#   Warrior   "rage"       — kills add stacks, +0.5% damage per stack, decays out of combat
-#   Wizard    "mana_flow"  — spell casts charge it; at 100 the next spell is +50% dmg / -50% MP
-#   Archer    "focus"      — repeat hits on same enemy build it; at 100 next shot pierces & crits
-#   Mercenary "adrenaline" — weapon swaps build it; at 100 next attack guaranteed crit + +30 stamina
+# Class meter (0-100). Per-class identity (Phase 1 redesign):
+#   Warrior   "rage"       — builds on damage TAKEN (+0.25%/HP, 0.5s grace).
+#                            Fuels dash/dash-burst (+0.4%/stack), weapon dmg (+0.3%/stack),
+#                            and reduces Iron Skin / Shield Bash MP cost 1:1.
+#                            X: Blood Dream — 30s vampiric trance, banked HP restore + end debuff.
+#   Mercenary "adrenaline" — +1 crit, +5 parry, +2 kill, +15 weapon-swap.
+#                            +0.5%/stack fire rate (max +50%) and +0.15%/stack crit chance.
+#                            X: Reckless Strike — 30s glass-cannon (50% evade, 2× dmg taken,
+#                            +50% fire rate, 5% on-hit stun, full stamina refill).
+#   Archer    "focus"       — builds passively in combat when clean (6/s walking, 12/s stationary).
+#                            +5/kill. -15% + 3s lockout on damage taken. Decays out of combat.
+#                            ≥75 grants +20% bullet speed/range; 50-74 grants +10%/+10%.
+#                            X: Killshot — 3×–5× crit pierce 3, available at focus ≥60, drains bar.
+#   Wizard    "mana_flow"   — +4/cast, +2/spell-kill, +1/s while MP>50%.
+#                            Spend mana flow to fire EMPOWERED versions of spells.
+#                            X: Overflow — 6s of free empowered casts + 3× cooldown speed.
 var class_meter: float = 0.0
 var class_meter_max: float = 100.0
-var _last_focus_target: Node = null
 var _rage_decay_grace: float = 0.0
 signal class_meter_changed(value: float, max_value: float)
+
+# Warrior Rage — only count one damage instance per ~0.5s so heavy hits aren't double-dipped.
+var _rage_damage_grace: float = 0.0
+
+# Warrior Blood Dream (X) — vampiric trance state.
+var _blood_dream_active: bool = false
+var _blood_dream_until: float = 0.0
+var _blood_dream_banked_hp: int = 0
+var _blood_dream_heal_budget: float = 0.0      # caps lifesteal to ~30% max HP/sec
+var _blood_dream_heal_budget_until: float = 0.0 # 1-second window for the cap
+const BLOOD_DREAM_DURATION := 30.0
+const BLOOD_DREAM_LIFESTEAL_CAP_PCT := 0.30     # 30% max HP per second
+const BLOOD_DREAM_END_PARALYZE := 3.0
+const BLOOD_DREAM_END_SLOW := 6.0
+const BLOOD_DREAM_RAGE_LEFTOVER := 20.0
+
+# Mercenary Reckless Strike (X) — glass-cannon timer.
+var _reckless_strike_until: float = 0.0
+const RECKLESS_STRIKE_DURATION := 30.0
+const RECKLESS_STRIKE_EVASION := 0.5            # 50% chance to dodge
+const RECKLESS_STRIKE_DMG_TAKEN_MULT := 2.0     # landed hits deal 2× damage
+const RECKLESS_STRIKE_FIRE_RATE_BONUS := 0.50   # +50% fire rate on top of meter
+const RECKLESS_STRIKE_STUN_CHANCE := 0.05       # 5% per hit
+const RECKLESS_STRIKE_STUN_DURATION := 0.5
+
+# Archer Focus — regen / lockout state.
+var _archer_focus_lockout: float = 0.0          # 3s after taking damage, no regen
+var _archer_shoot_grace: float = 0.0            # ticks down; if >0, you are "shooting" (not aiming down sights)
+const ARCHER_FOCUS_LOCKOUT := 3.0
+const ARCHER_FOCUS_REGEN_BASE := 6.0            # /sec while in combat, no damage
+const ARCHER_FOCUS_REGEN_STATIONARY := 12.0     # /sec while standing still and not shooting
+const ARCHER_FOCUS_OOC_DECAY := 10.0            # out of combat: drains to 0 in ~10s
+const ARCHER_FOCUS_DAMAGE_PENALTY_PCT := 0.15   # 15% of max meter lost per damage instance
+const ARCHER_FOCUS_KILL_BONUS := 5.0            # restore on kill (also works during lockout)
+const ARCHER_COMBAT_RADIUS := 600.0
+const ARCHER_STATIONARY_VEL_THRESHOLD := 5.0
+const KILLSHOT_MIN_FOCUS := 60.0
+const KILLSHOT_BASE_MULT := 3.0                 # at 60 focus → 3 + 60/100 × 2 = 4.2×
+const KILLSHOT_PER_FOCUS_MULT := 2.0            # at 100 focus → 5×
+const KILLSHOT_PIERCE_COUNT := 3
+
+# Wizard Mana Flow — passive regen window + empowered-cast state.
+var _wizard_mp_regen_passive_accum: float = 0.0  # +1 per second while MP > 50%
+var _empowered_cast_pending: bool = false        # true for one spell when empowerment triggered
+var _wizard_overflow_until: float = 0.0          # X-key window
+# Bullet shield (wizard H spell) — pure member vars instead of meta so the
+# state can never get orphaned on respawn / scene reload.
+var _bullet_shield_charges: int = 0
+var _bullet_shield_until: float = 0.0
+# Watchdog for the `invincible` flag — without this, a failed tween callback
+# (scene change mid-blink) can leave the player permanently untargetable.
+var _invincible_until: float = 0.0
+const WIZARD_MANAFLOW_PER_CAST := 4.0
+const WIZARD_MANAFLOW_PER_SPELL_KILL := 2.0
+const WIZARD_MANAFLOW_PASSIVE_PER_SEC := 1.0
+const WIZARD_OVERFLOW_DURATION := 10.0
+const WIZARD_OVERFLOW_COOLDOWN_MULT := 3.0
+const WIZARD_OVERFLOW_DAMAGE_BUFF := 0.40  # +40% damage to spells + shots during Overflow
+const WIZARD_MANAFLOW_REGEN_MAX_BONUS := 4.0  # +0..4 MP/s on top of base, scaled by class_meter %
+# Empowerment cost per spell ID (Mana Flow consumed in addition to MP).
+# Cheaper for utility, higher for game-changers. Empty value = empowerment unavailable.
+const WIZARD_EMPOWERMENT_COSTS := {
+	"fireball_spell": 40,
+	"frost_nova": 35,
+	"heal": 25,
+	"greater_heal": 40,
+	"chain_lightning": 45,
+	"arrow_rain": 35,
+	"battle_cry": 30,
+	"shadow_strike": 40,
+	"stone_toss": 20,
+	"life_drain": 35,
+	"mana_surge": 30,
+}
 
 # Lock-on: TAB cycles to nearest enemy in front; press again to cycle next or release.
 var _lock_on_target: Node2D = null
 const LOCK_ON_MAX_RANGE := 360.0
 const LOCK_ON_CYCLE_RANGE := 240.0
+const LOCK_ON_DOUBLE_TAP_WINDOW := 0.28
+var _last_lock_on_press_time: float = -1.0
+var _lock_on_suppressed: bool = false
 
 # Shield block (Warrior)
 var _shield_active: bool = false
@@ -56,6 +143,7 @@ var _shield_regen_accum: float = 0.0
 var _shield_broken: bool = false
 var _shield_break_stun: float = 0.0
 var _shield_raise_cooldown: float = 0.0  # delay after lowering before can raise again
+var _last_offhand_type: String = ""
 const SHIELD_RAISE_DELAY = 0.35  # parry-stick / fallback delay
 const SHIELD_RAISE_DELAY_BIG = 0.9  # heavy shield (warrior native) — slower to toggle
 const SHIELD_RAISE_DELAY_LIGHT = 0.30  # buckler — snappy but you can't mash through it
@@ -260,6 +348,8 @@ const PUSH_SPEED_MULT = 0.55  # 55% move speed while pushing
 const PUSH_ACCEL_MULT = 0.35  # 35% acceleration -> heavy inertia
 const PUSH_FORCE = 110.0      # per-tick push force vs enemies (vs 50 default)
 const PUSH_BOSS_RECOIL = 35.0 # boss pushback applied to player per contact tick
+const DUNGEON_MOVE_SCALE = 0.25
+const DUNGEON_PROJECTILE_SCALE = 0.25
 
 # Parry mechanic
 var _parry_window: float = 0.0
@@ -320,14 +410,15 @@ func _ready() -> void:
 		var sec_res = load(gm.save_data.secondary_weapon_path) as EquipmentItem
 		if sec_res:
 			_secondary_weapon = sec_res.make_copy()
+	_refresh_offhand_state()
 
-	# Load spellbook or setup starters
+	# Load spellbook AND always run the starter pass — _setup_starter_spells is
+	# additive (idempotent on learn, only fills empty slots), so existing
+	# wizards pick up newly-added starters (lightning_x, arcane_familiar,
+	# inferno_lance) without losing their custom bindings.
 	if gm and gm.has_method("load_spellbook"):
-		var loaded_spells = gm.load_spellbook(spell_book)
-		if not loaded_spells:
-			_setup_starter_spells()
-	else:
-		_setup_starter_spells()
+		gm.load_spellbook(spell_book)
+	_setup_starter_spells()
 
 	# Apply class-specific base stats
 	_apply_class_stats()
@@ -512,31 +603,28 @@ func _physics_process(delta: float) -> void:
 		stamina = minf(stamina + regen_rate * delta, max_stamina)
 		stamina_changed.emit(stamina)
 
-	# MP regen (slow, delayed after use)
+	# MP regen (slow, delayed after use). For wizard, the class_meter ("Mana
+	# Flow") scales regen up to +4 MP/s at full meter — so the more you cast,
+	# the faster you regen. That's the new identity instead of an X-key dump.
 	if _mp_regen_delay > 0:
 		_mp_regen_delay -= delta
 	elif mp < max_mp:
 		var mp_rate = MP_REGEN_RATE_WIZARD if _get_player_class() == "wizard" else MP_REGEN_RATE
+		if _get_player_class() == "wizard" and class_meter_max > 0.0:
+			mp_rate += WIZARD_MANAFLOW_REGEN_MAX_BONUS * (class_meter / class_meter_max)
 		mp = minf(mp + mp_rate * delta, max_mp)
 		mp_changed.emit(mp)
 
-	# Class meter decay — all four classes use the same passive ramp.
-	# Tuned so a full meter (100) drains to 0 in ~20-30s if you stop "feeding" it.
-	if class_meter > 0.0:
-		if _rage_decay_grace > 0.0:
-			_rage_decay_grace -= delta
-		else:
-			var pc_mt = _get_player_class()
-			var decay_rate := 3.0  # 100 → 0 in ~33s
-			match pc_mt:
-				"warrior":   decay_rate = 3.0
-				"wizard":    decay_rate = 4.0   # 25s
-				"ranger", "archer": decay_rate = 5.0   # 20s (resets faster on target switch too)
-				"mercenary": decay_rate = 3.5   # 28s
-			var new_v = maxf(0.0, class_meter - decay_rate * delta)
-			if new_v != class_meter:
-				class_meter = new_v
-				class_meter_changed.emit(class_meter, class_meter_max)
+	# Per-class meter dynamics. Each class now has a distinct identity here.
+	_tick_class_meter(delta)
+	# Per-class trance/burst timers (Blood Dream, Reckless Strike, Overflow).
+	_tick_class_meter_buffs(delta)
+	# Warrior 0.5s grace between damage instances (so heavy hits don't double-charge rage).
+	if _rage_damage_grace > 0.0:
+		_rage_damage_grace = maxf(0.0, _rage_damage_grace - delta)
+	# Archer "are you shooting?" grace — set on every try_shoot call, decays fast.
+	if _archer_shoot_grace > 0.0:
+		_archer_shoot_grace = maxf(0.0, _archer_shoot_grace - delta)
 
 	# Handle lingering i-frames after dash
 	if _dash_linger > 0:
@@ -583,7 +671,7 @@ func _physics_process(delta: float) -> void:
 				tween.tween_property(sprite, "modulate:a", 1.0, DASH_LINGER_TIME)
 		else:
 			var dash_speed_mod = 0.5 if _shield_active else 1.0  # slower dash while shielding
-			velocity = _dash_direction * equipment_manager.get_move_speed() * DASH_SPEED_MULT * dash_speed_mod
+			velocity = _dash_direction * equipment_manager.get_move_speed() * _get_scene_motion_scale() * DASH_SPEED_MULT * dash_speed_mod
 			move_and_slide()
 			# Dash push: shove enemies we collide with during dash
 			var player_w_d = get_weight()
@@ -852,13 +940,29 @@ func _physics_process(delta: float) -> void:
 			ps_tween.tween_property(sprite, "modulate", Color(0.6, 0.85, 1.0), 0.04)
 			ps_tween.tween_property(sprite, "modulate", Color.WHITE, 0.16)
 
-	# Lock-on (TAB) — cycle nearest enemy in front, press again to switch
+	# Lock-on (TAB)
+	#   single tap: acquire / cycle target
+	#   fast double tap: clear lock
 	if Input.is_action_just_pressed("lock_on"):
-		_cycle_lock_on()
+		var now_lock := Time.get_ticks_msec() / 1000.0
+		if _last_lock_on_press_time > 0.0 and now_lock - _last_lock_on_press_time <= LOCK_ON_DOUBLE_TAP_WINDOW:
+			_lock_on_target = null
+			_lock_on_suppressed = true
+			_last_lock_on_press_time = -1.0
+			queue_redraw()
+		else:
+			_last_lock_on_press_time = now_lock
+			_lock_on_suppressed = false
+			_cycle_lock_on()
 
 	# Class-meter full move (X key) — fires when class_meter is full, consumes it
-	if Input.is_action_just_pressed("class_meter_use") and class_meter >= class_meter_max:
-		_unleash_class_meter_move()
+	if Input.is_action_just_pressed("class_meter_use"):
+		# Archer Killshot can fire at >=60 focus (partial-charge shot). Everyone else
+		# still needs the full meter. The handler enforces the archer minimum itself.
+		var pc_x = _get_player_class()
+		var min_needed = KILLSHOT_MIN_FOCUS if (pc_x == "archer" or pc_x == "ranger") else class_meter_max
+		if class_meter >= min_needed:
+			_unleash_class_meter_move()
 	# Refresh reticle every frame while locked (target moves)
 	if is_instance_valid(_lock_on_target):
 		queue_redraw()
@@ -1090,28 +1194,10 @@ func _physics_process(delta: float) -> void:
 			_update_charge_indicator()
 			# Out of stamina — force premature fire (always fires, uses available MP)
 			if stamina <= 0 and _charge_active:
-				_stamina_regen_delay = 1.0
-				var mp_to_use = minf(mp, CHARGE_MP_COST)
-				if mp_to_use > 0:
-					use_mp(mp_to_use)
-				_fire_charged_blast()
-				_charge_active = false
-				_charge_time = 0.0
-				_hide_charge_indicator()
-				if _player_anim:
-					_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK, 1)
+				_release_staff_charge(true)
 		elif _charge_active:
-			# Released — always fire, use whatever MP is available
-			_stamina_regen_delay = 1.0
-			var mp_to_use = minf(mp, CHARGE_MP_COST)
-			if mp_to_use > 0:
-				use_mp(mp_to_use)
-			_fire_charged_blast()
-			_charge_active = false
-			_charge_time = 0.0
-			_hide_charge_indicator()
-			if _player_anim:
-				_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK, 1)
+			# Released — sub-min taps cancel, real charges fire.
+			_release_staff_charge(false)
 
 	# BOW: Ranger gets Longshot (Space), non-ranger bow gets Dash
 	if _wtype == "bow":
@@ -1127,13 +1213,15 @@ func _physics_process(delta: float) -> void:
 			if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= DASH_STAMINA_COST:
 				_start_dash()
 
-	# Spell slots: F/G/H/J/K/L (6 slots)
-	for si in range(6):
+	# Spell slots: 4 5 6 7 8 9 0 (7 slots). Items occupy hotkeys 1 2 3.
+	for si in range(7):
 		if Input.is_action_just_pressed("spell_slot_%d" % (si + 1)):
 			_use_spell_slot(si)
 
-	# Quickbar keys 1-6 — use/equip items from quickbar slots
-	for qi in range(6):
+	# Quickbar keys 1-3 only — keys 4-0 are spell slots now. Slots 4-6 of the
+	# quickbar still exist in the data model (inventory shows them) but have
+	# no bound hotkeys.
+	for qi in range(3):
 		if Input.is_action_just_pressed("quickbar_%d" % (qi + 1)):
 			_use_quickbar_slot(qi)
 
@@ -1246,7 +1334,8 @@ func _physics_process(delta: float) -> void:
 
 	var push_mult = PUSH_SPEED_MULT if _pushing else 1.0
 	var speed_mult = status_effects.get_speed_multiplier() * (SPRINT_SPEED_MULT if _is_sprinting else 1.0) * shield_mult * buff_speed * sneak_mult * push_mult * aimed_mult * charge_mult * stance_mult
-	var target_velocity = direction * equipment_manager.get_move_speed() * speed_mult
+	var scene_move_mult = _get_scene_motion_scale()
+	var target_velocity = direction * equipment_manager.get_move_speed() * speed_mult * scene_move_mult
 	var accel = equipment_manager.get_acceleration()
 	if _pushing:
 		accel *= PUSH_ACCEL_MULT  # heavier inertia while braced
@@ -1483,9 +1572,7 @@ func _physics_process(delta: float) -> void:
 		# Desktop: mouse/keyboard shooting (skip entirely on mobile to avoid emulated mouse)
 		var _mouse_shooting = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 		var _kb_shooting = Input.is_action_pressed("shoot") and not _mouse_shooting
-		# Lock-on: auto-fire toward the locked target for every class. The whole
-		# point of locking is hands-free aim; no reason to require holding fire.
-		var _auto_shoot = is_instance_valid(_lock_on_target)
+		var _auto_shoot = is_instance_valid(_lock_on_target) and not _lock_on_suppressed
 		if _mouse_shooting or (_kb_shooting and not _space_suppressed) or _auto_shoot:
 			var _was_sneak_fire2 = _sneaking
 			_sneaking = false  # firing breaks sneak
@@ -1541,6 +1628,22 @@ func _physics_process(delta: float) -> void:
 			_animator.set_state(SpriteAnimator.State.IDLE)
 
 func _process(delta: float) -> void:
+	_refresh_offhand_state()
+
+	# Watchdogs for time-bound damage avoidance — without these, a failed
+	# tween callback or a respawn can leave you permanently untargetable.
+	var now_wd := Time.get_ticks_msec() / 1000.0
+	if _bullet_shield_charges > 0 and now_wd >= _bullet_shield_until:
+		_bullet_shield_charges = 0
+		_bullet_shield_until = 0.0
+	if invincible and _invincible_until > 0.0 and now_wd >= _invincible_until:
+		invincible = false
+		_invincible_until = 0.0
+		# If a teleport tween failed to fire its callback, the mask bits stay
+		# disabled. Restore them defensively so enemies become solid again.
+		if not _is_dashing:
+			set_collision_mask_value(2, true)
+			set_collision_mask_value(4, true)
 	var hp_regen = equipment_manager.get_hp_regen()
 	if hp_regen > 0 and hp < max_hp:
 		_regen_accumulator += hp_regen * delta
@@ -1572,6 +1675,22 @@ func _has_effect(effect_name: String) -> bool:
 
 func is_sneaking() -> bool:
 	return _sneaking
+
+func _refresh_offhand_state() -> void:
+	if equipment_manager == null:
+		return
+	var off_type := equipment_manager.get_equipped_offhand_type()
+	if off_type == _last_offhand_type:
+		return
+	_last_offhand_type = off_type
+	_shield_active = false
+	_parry_window = 0.0
+	_shield_raise_cooldown = 0.0
+	_shield_regen_accum = 0.0
+	_shield_broken = false
+	_shield_charges = _shield_max_charges
+	shield_changed.emit(_shield_charges)
+	_update_shield_visual(false)
 
 ## Attempt a stealth kill on the nearest valid target
 func _try_stealth_kill() -> void:
@@ -1664,20 +1783,30 @@ func on_enemy_killed_for_massacre() -> void:
 	# Berserker Frenzy: attack-speed buff on kill
 	if _has_effect("frenzy") and status_effects:
 		status_effects.apply_buff("fire_rate", 3.0, 0.30)
-	# Class meters on kill — small ramps so kills feel like incremental progress,
-	# not chunks. Specific build actions (swap/cast/focus-hits) still do more.
+	# Class meters on kill — per Phase 1 redesign each class has its own kill payout.
+	# Warrior gets NOTHING (rage is from damage taken, not kills).
 	var _pc_kill = _get_player_class()
 	match _pc_kill:
 		"warrior":
-			class_meter = minf(class_meter + 5.0, class_meter_max)  # Rage
+			pass  # No on-kill rage. See take_damage() for the build path.
 		"mercenary":
-			class_meter = minf(class_meter + 4.0, class_meter_max)  # Adrenaline
+			class_meter = minf(class_meter + 2.0, class_meter_max)
+			_rage_decay_grace = 4.0
+			class_meter_changed.emit(class_meter, class_meter_max)
 		"wizard":
-			class_meter = minf(class_meter + 3.0, class_meter_max)  # Mana Flow
+			# +2 Mana Flow per spell-kill — current weapon being a magic weapon is the heuristic.
+			var holding_mag = false
+			if equipment_manager:
+				var w = equipment_manager.get_equipped_weapon()
+				holding_mag = w and w.slot_type == EquipmentItem.SlotType.WEAPON_MAGIC
+			if holding_mag:
+				class_meter = minf(class_meter + WIZARD_MANAFLOW_PER_SPELL_KILL, class_meter_max)
+				_rage_decay_grace = 3.0
+				class_meter_changed.emit(class_meter, class_meter_max)
 		"ranger", "archer":
-			class_meter = minf(class_meter + 2.5, class_meter_max)  # Focus
-	_rage_decay_grace = 4.0
-	class_meter_changed.emit(class_meter, class_meter_max)
+			# +5 Focus per kill. Bypasses the regen lockout — kills during lockout still pay.
+			class_meter = minf(class_meter + ARCHER_FOCUS_KILL_BONUS, class_meter_max)
+			class_meter_changed.emit(class_meter, class_meter_max)
 
 func _trigger_massacre_fear() -> void:
 	_recent_kill_times.clear()
@@ -1715,21 +1844,21 @@ func add_shield(amount: int) -> void:
 	shield += amount
 
 func use_mp(cost: float) -> bool:
-	# Arcane Surge (meter-full move): next 3 spells are free MP.
-	if _get_player_class() == "wizard" and has_meta("arcane_surge_charges"):
+	# Overflow (X-key, wizard only): all spells cost 0 MP for 6s.
+	var now_um = Time.get_ticks_msec() / 1000.0
+	if _get_player_class() == "wizard" and now_um < _wizard_overflow_until:
 		cost = 0.0
-	# Wizard Mana Flow: each stack reduces this cast's MP cost by up to 15% at full.
-	elif _get_player_class() == "wizard" and class_meter > 0.0:
-		cost = cost * (1.0 - class_meter * 0.0015)
 	if mp < cost:
 		return false
 	mp -= cost
-	_mp_regen_delay = MP_REGEN_DELAY
+	# Wizards regen on the move — short post-cast lockout so the bar isn't
+	# tied to standing still. Other classes keep the original 3 s delay.
+	_mp_regen_delay = 0.4 if _get_player_class() == "wizard" else MP_REGEN_DELAY
 	mp_changed.emit(mp)
-	# Charging: every spell cast adds 20 to the Mana Flow meter
+	# Mana Flow build: +4 per spell cast (wizard only).
 	if _get_player_class() == "wizard":
-		class_meter = minf(class_meter + 20.0, class_meter_max)
-		_rage_decay_grace = 3.0  # brief grace before decay
+		class_meter = minf(class_meter + WIZARD_MANAFLOW_PER_CAST, class_meter_max)
+		_rage_decay_grace = 3.0
 		class_meter_changed.emit(class_meter, class_meter_max)
 	return true
 
@@ -1744,24 +1873,37 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 	if (_is_dashing or _dash_linger > 0) and _get_player_class() != "warrior":
 		return
 
-	# Bullet Shield: absorbs ranged hits (not melee/contact, not true damage)
-	if not is_true_damage and not is_contact and source_pos != Vector2.INF and has_meta("bullet_shield_charges"):
-		var now_bs = Time.get_ticks_msec() / 1000.0
-		var bs_exp = float(get_meta("bullet_shield_expires", 0.0))
-		var bs_charges = int(get_meta("bullet_shield_charges", 0))
-		if bs_charges > 0 and now_bs < bs_exp:
-			bs_charges -= 1
-			if bs_charges <= 0:
-				remove_meta("bullet_shield_charges")
-				remove_meta("bullet_shield_expires")
-			else:
-				set_meta("bullet_shield_charges", bs_charges)
+	# Mercenary Reckless Strike: 50/50 coin-flip evasion. Eats the hit entirely.
+	# Checked before any damage math so it skips armor/dodge/etc.
+	if not is_true_damage and Time.get_ticks_msec() / 1000.0 < _reckless_strike_until \
+			and _get_player_class() == "mercenary" and randf() < RECKLESS_STRIKE_EVASION:
+		var sfx_rs = get_node_or_null("/root/SFXManager")
+		if sfx_rs:
+			sfx_rs.play("woosh_b", -5.0, 0.15)
+		var tween_rs = create_tween()
+		tween_rs.tween_property(sprite, "modulate", Color(2.2, 1.8, 0.4), 0.05)
+		tween_rs.tween_property(sprite, "modulate", Color.WHITE, 0.1)
+		return
+
+	# Bullet Shield: absorbs ranged hits while charges + timer are positive.
+	# Member-var state — never read from meta here.
+	if _bullet_shield_charges > 0:
+		var now_bs := Time.get_ticks_msec() / 1000.0
+		if now_bs >= _bullet_shield_until:
+			# Expired naturally — drop the state and fall through to normal damage.
+			_bullet_shield_charges = 0
+			_bullet_shield_until = 0.0
+		elif not is_true_damage and not is_contact and source_pos != Vector2.INF:
+			_bullet_shield_charges -= 1
+			if _bullet_shield_charges <= 0:
+				_bullet_shield_until = 0.0
 			var vfx_bs = get_node_or_null("/root/VFXManager")
 			if vfx_bs:
 				vfx_bs.shockwave(global_position, 18.0, Color(0.4, 0.7, 1.0, 0.7))
 			var scene_root_bs2 = get_tree().current_scene if is_inside_tree() else null
 			if scene_root_bs2:
-				FloatingText.spawn(scene_root_bs2, global_position + Vector2(0, -14), "BLOCKED (%d)" % bs_charges, Color(0.4, 0.7, 1.0))
+				var label := "BLOCKED" if _bullet_shield_charges <= 0 else "BLOCKED (%d left)" % _bullet_shield_charges
+				FloatingText.spawn(scene_root_bs2, global_position + Vector2(0, -14), label, Color(0.4, 0.7, 1.0))
 			return
 
 	# PARRY CHECK — the window lasts a few hundred ms and deflects EVERY shot
@@ -1771,14 +1913,14 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 	if not is_true_damage and _shield_active and _parry_window > 0:
 		var pc_parry = _get_player_class()
 		var parry_ok := true
+		var parry_dir = _get_shield_facing_direction()
 		# Direction always comes from the player's literal aim cursor — never
 		# from the lock-on shoot direction.
 		if source_pos != Vector2.INF:
-			var facing = _get_parry_direction()
 			var to_atk = (source_pos - global_position).normalized()
 			# Warrior has a wide arc; everyone else has a 60° front cone.
 			var cone_threshold = -0.2 if pc_parry == "warrior" else 0.5
-			parry_ok = facing.dot(to_atk) > cone_threshold
+			parry_ok = parry_dir.dot(to_atk) > cone_threshold
 		if parry_ok:
 			# Two-tier window: the first PARRY_WINDOW_TIME - PARRY_WINDOW_LATE seconds
 			# count as "PERFECT" (full effects). Anything still within _parry_window > 0
@@ -1786,20 +1928,17 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 			var is_perfect_parry = _parry_window > PARRY_WINDOW_LATE
 			var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
 			# Reflect bullet only on a PERFECT parry. Late parries just block.
-			if is_perfect_parry and source_pos != Vector2.INF:
+			if is_perfect_parry:
 				var off_prof_r = equipment_manager.get_offhand_proficiency_mult(pc_parry) if equipment_manager else 1.0
-				var bullets_container = get_tree().get_first_node_in_group("bullets")
-				if bullets_container:
-					var reflect_range = 56.0 * off_prof_r * (4.0 if in_ow else 1.0)
-					for b in bullets_container.get_children():
-						if not is_instance_valid(b) or not b.has_method("reflect"):
-							continue
-						if b.get("is_player_bullet") != null and b.is_player_bullet:
-							continue
-						if b.global_position.distance_to(global_position) < reflect_range:
-							b.reflect()
-							b.set_meta("parry_stun_on_hit", true)
-							break
+				var reflect_range = 56.0 * off_prof_r * (4.0 if in_ow else 1.0)
+				var reflect_dir = _get_parry_reflect_direction()
+				var reflect_speed_mult = _get_parry_reflect_speed_mult()
+				var reflected_bullet = _find_parry_reflect_bullet(source_pos, reflect_range)
+				if reflected_bullet:
+					reflected_bullet.reflect(reflect_dir, reflect_speed_mult, _get_parry_reflect_min_speed())
+					reflected_bullet.set_meta("parry_stun_on_hit", true)
+				else:
+					_spawn_parry_counter_projectile(reflect_dir, reflect_speed_mult, amount, off_prof_r)
 			# Refund the staked stamina on ANY successful parry (perfect or late) —
 			# only once per window. Heal + class bonuses only on PERFECT.
 			if not has_meta("parry_bonuses_consumed"):
@@ -1819,11 +1958,12 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 					hp_changed.emit(hp)
 					match pc_parry:
 						"archer", "ranger":
+							# Parry still gives focus, but the new Focus model means
+							# archers rarely rely on this — it's a niche bonus now.
 							class_meter = minf(class_meter + 3.0, class_meter_max)
-							_rage_decay_grace = 4.0
 							class_meter_changed.emit(class_meter, class_meter_max)
 						"mercenary":
-							class_meter = minf(class_meter + 4.0, class_meter_max)
+							class_meter = minf(class_meter + 5.0, class_meter_max)
 							_rage_decay_grace = 4.0
 							class_meter_changed.emit(class_meter, class_meter_max)
 						"wizard":
@@ -1840,7 +1980,14 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 					vfx_p.shockwave(global_position, ring_r * 0.7, Color(0.45, 0.6, 1.0, 0.45))
 			var sfx_p = get_node_or_null("/root/SFXManager")
 			if sfx_p:
-				sfx_p.play("clack", 0.0 if is_perfect_parry else -4.0, 0.2)
+				# Layered impact: metallic clack + a chime ring on perfect, just
+				# a softer clack on late. Gives the parry a real "TING!" feel.
+				if is_perfect_parry:
+					sfx_p.play("clack", 2.0, 0.1)
+					sfx_p.play("ding", -2.0, 0.05, 1.2)
+					sfx_p.play("impact_b", -4.0, 0.15)
+				else:
+					sfx_p.play("clack", -4.0, 0.2)
 			# Sprite flash — bright white on perfect, soft blue on late
 			var tween_p = create_tween()
 			if is_perfect_parry:
@@ -1883,6 +2030,10 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 				var vfx_sb = get_node_or_null("/root/VFXManager")
 				if vfx_sb:
 					vfx_sb.shake(2.5, 0.15)
+			# Shield ABSORBS rage the same as a raw hit — based on RAW incoming damage,
+			# not the (zeroed) post-block amount. The warrior is "absorbing punishment"
+			# even when his shield eats it.
+			_grant_warrior_rage_from_hit(amount)
 			return  # fully blocked, no damage gets through
 
 	# Dodge check
@@ -1896,6 +2047,20 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 		tween.tween_property(sprite, "modulate", Color(2, 2, 2), 0.05)
 		tween.tween_property(sprite, "modulate", Color.WHITE, 0.1)
 		return
+
+	# The hit IS going to land in some form (dodge already burned its check).
+	# Grant warrior rage off the RAW incoming damage now — before Iron Skin
+	# armor / damage reduction perks zero it out. The 0.5s grace stops
+	# multi-tick hits from double-charging.
+	if not is_true_damage:
+		_grant_warrior_rage_from_hit(amount)
+		# Archer focus loss is also based on raw input (the punishment is
+		# "got hit at all", not "took N HP through armor").
+		var _pc_focus = _get_player_class()
+		if _pc_focus == "archer" or _pc_focus == "ranger":
+			class_meter = maxf(0.0, class_meter - class_meter_max * ARCHER_FOCUS_DAMAGE_PENALTY_PCT)
+			_archer_focus_lockout = ARCHER_FOCUS_LOCKOUT
+			class_meter_changed.emit(class_meter, class_meter_max)
 
 	# Backstab — stealth enemy hit from behind deals 25% max HP, bypasses armor
 	if is_backstab and source_pos != Vector2.INF:
@@ -2006,6 +2171,11 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 	if amount <= 0:
 		return
 
+	# Mercenary Reckless Strike: landed hits do 2× damage (the coin-flip cost).
+	if not is_true_damage and Time.get_ticks_msec() / 1000.0 < _reckless_strike_until \
+			and _get_player_class() == "mercenary":
+		amount = int(amount * RECKLESS_STRIKE_DMG_TAKEN_MULT)
+
 	hp -= amount
 	if hp < 0:
 		hp = 0
@@ -2027,10 +2197,14 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 	# Iframes — disabled by default, can be enabled by armor perks later
 	if iframes_enabled:
 		invincible = true
+		_invincible_until = Time.get_ticks_msec() / 1000.0 + 0.12
 		var iframe_tween = create_tween()
 		iframe_tween.tween_property(sprite, "modulate:a", 0.3, 0.04)
 		iframe_tween.tween_property(sprite, "modulate:a", 1.0, 0.04)
-		iframe_tween.tween_callback(func(): invincible = false)
+		iframe_tween.tween_callback(func():
+			invincible = false
+			_invincible_until = 0.0
+		)
 
 	if hp <= 0:
 		# Undying perk: survive lethal hit once per dungeon
@@ -2238,9 +2412,9 @@ func _swap_weapons() -> void:
 	if not _secondary_weapon:
 		return
 	_weapon_swap_cooldown = WEAPON_SWAP_COOLDOWN
-	# Mercenary Adrenaline: each swap adds 25 to the meter
+	# Mercenary Adrenaline: each swap adds 15 to the meter (dialed down from 25 in Phase 1 redesign).
 	if _get_player_class() == "mercenary":
-		class_meter = minf(class_meter + 25.0, class_meter_max)
+		class_meter = minf(class_meter + 15.0, class_meter_max)
 		_rage_decay_grace = 3.0
 		class_meter_changed.emit(class_meter, class_meter_max)
 	var current_weapon = equipment_manager.get_equipped_weapon()
@@ -2360,6 +2534,93 @@ func _get_parry_direction() -> Vector2:
 	var dir = (mouse_pos - global_position).normalized()
 	return dir if dir.length() > 0 else _last_move_dir
 
+func _get_shield_facing_direction() -> Vector2:
+	var dir = Vector2(cos(_shield_angle), sin(_shield_angle))
+	return dir.normalized() if dir.length() > 0.0 else _get_parry_direction()
+
+func _get_parry_movement_direction() -> Vector2:
+	if _is_dashing and _dash_direction.length() > 0.0:
+		return _dash_direction.normalized()
+	if velocity.length() > 6.0:
+		return velocity.normalized()
+	return Vector2.ZERO
+
+func _get_parry_reflect_direction() -> Vector2:
+	var shield_dir = _get_shield_facing_direction()
+	var move_dir = _get_parry_movement_direction()
+	if move_dir == Vector2.ZERO:
+		return shield_dir
+	var move_weight := 0.45 if _is_dashing else 0.22
+	return (shield_dir + move_dir * move_weight).normalized()
+
+func _get_parry_reflect_speed_mult() -> float:
+	if _is_dashing:
+		return 1.9
+	var base_move = 0.0
+	if equipment_manager:
+		base_move = equipment_manager.get_move_speed() * _get_scene_motion_scale()
+	var current_speed = velocity.length()
+	if base_move <= 1.0:
+		return 0.9 if current_speed <= 6.0 else 1.2
+	var speed_ratio = clampf(current_speed / base_move, 0.0, 1.35)
+	return lerpf(0.9, 1.45, speed_ratio / 1.35)
+
+func _get_parry_reflect_min_speed() -> float:
+	var base_speed = 320.0 * _get_scene_projectile_scale()
+	if equipment_manager:
+		base_speed = maxf(base_speed, equipment_manager.get_bullet_speed() * _get_scene_projectile_scale() * 0.9)
+	return base_speed
+
+func _get_parry_reflect_damage(incoming_damage: int, proficiency: float) -> int:
+	var scaled_incoming = float(maxi(1, incoming_damage)) * 3.0
+	var base_weapon = 4.0
+	if equipment_manager:
+		base_weapon = maxf(base_weapon, equipment_manager.get_damage() * 0.5 * proficiency)
+	return maxi(1, int(round(maxf(scaled_incoming, base_weapon))))
+
+func _find_parry_reflect_bullet(source_pos: Vector2, reflect_range: float) -> Node:
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return null
+	var best: Node = null
+	var best_score := INF
+	for b in bullets_container.get_children():
+		if not is_instance_valid(b) or not b.has_method("reflect"):
+			continue
+		if b.get("is_player_bullet") != null and b.is_player_bullet:
+			continue
+		var dist_to_player = b.global_position.distance_to(global_position)
+		if dist_to_player > reflect_range:
+			continue
+		var score = dist_to_player
+		if source_pos != Vector2.INF:
+			score += b.global_position.distance_to(source_pos) * 0.75
+		if score < best_score:
+			best_score = score
+			best = b
+	return best
+
+func _spawn_parry_counter_projectile(direction: Vector2, speed_mult: float, incoming_damage: int, proficiency: float) -> void:
+	if not is_inside_tree() or not weapon_system or not weapon_system.bullet_scene:
+		return
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var bullet = weapon_system.bullet_scene.instantiate()
+	bullet.global_position = global_position + direction * 8.0
+	bullet.direction = direction
+	bullet.is_player_bullet = true
+	bullet.speed = _get_parry_reflect_min_speed() * speed_mult
+	bullet.damage = _get_parry_reflect_damage(incoming_damage, proficiency)
+	bullet.lifetime = OFFHAND_THROW_LIFETIME
+	bullet.set_meta("parry_stun_on_hit", true)
+	bullet.set_meta("projectile_fx_kind", "lightning")
+	bullet.set_meta("projectile_fx_energy", 0.85)
+	var sprite_scale_mult := 1.15 if _is_dashing else 1.0
+	if sprite_scale_mult != 1.0:
+		bullet.set_meta("sprite_scale_mult", sprite_scale_mult)
+	bullets_container.add_child(bullet)
+
 func _get_shoot_direction() -> Vector2:
 	## Returns the direction the player is currently shooting (for shield facing)
 	# Lock-on overrides aim — always point toward the locked target if valid.
@@ -2375,15 +2636,29 @@ func _get_shoot_direction() -> Vector2:
 	var dir = (mouse_pos - global_position).normalized()
 	return dir if dir.length() > 0 else _last_move_dir
 
+func _get_free_aim_direction() -> Vector2:
+	## Returns raw mouse/touch aim and intentionally ignores lock-on.
+	if touch_controls and touch_controls.visible:
+		var aim = touch_controls.get_aim_input()
+		if aim.length() > 0:
+			return aim.normalized()
+	var mouse_pos = get_global_mouse_position()
+	var dir = (mouse_pos - global_position).normalized()
+	return dir if dir.length() > 0 else _last_move_dir
+
 func _get_aim_direction() -> Vector2:
 	return _get_shoot_direction()
 
-## Auto-relock to the nearest on-screen enemy when the current target dies/leaves.
-func _auto_relock() -> void:
+func _get_scene_motion_scale() -> float:
+	return DUNGEON_MOVE_SCALE if in_dungeon else 1.0
+
+func _get_scene_projectile_scale() -> float:
+	return DUNGEON_PROJECTILE_SCALE if in_dungeon else 1.0
+
+func _get_lock_on_candidates() -> Array[Node2D]:
+	var out: Array[Node2D] = []
 	if not is_inside_tree():
-		return
-	var best: Node2D = null
-	var best_d := INF
+		return out
 	for e in get_tree().get_nodes_in_group("enemy"):
 		if not is_instance_valid(e):
 			continue
@@ -2394,10 +2669,31 @@ func _auto_relock() -> void:
 		var d = global_position.distance_to(e.global_position)
 		if d > LOCK_ON_MAX_RANGE:
 			continue
-		if d < best_d:
-			best = e
-			best_d = d
-	_lock_on_target = best
+		if e.has_method("get_awareness") and float(e.get_awareness()) < 0.3 and d > LOCK_ON_CYCLE_RANGE:
+			continue
+		out.append(e)
+	return out
+
+func _get_cursor_priority_score(enemy: Node2D) -> float:
+	var aim_dir := _get_free_aim_direction()
+	var cursor_anchor := global_position + aim_dir * minf(LOCK_ON_MAX_RANGE, 220.0)
+	var cursor_dist := enemy.global_position.distance_to(cursor_anchor)
+	var player_dist := enemy.global_position.distance_to(global_position)
+	return cursor_dist + player_dist * 0.12
+
+## Auto-relock to the nearest on-screen enemy when the current target dies/leaves.
+func _auto_relock() -> void:
+	if _lock_on_suppressed:
+		_lock_on_target = null
+		return
+	var candidates := _get_lock_on_candidates()
+	if candidates.is_empty():
+		_lock_on_target = null
+		return
+	candidates.sort_custom(func(a: Node2D, b: Node2D) -> bool:
+		return _get_cursor_priority_score(a) < _get_cursor_priority_score(b)
+	)
+	_lock_on_target = candidates[0]
 
 ## Class-specific signature move that fires when the class meter hits 100%.
 ## Consumes the full meter; each class gets a distinct payoff:
@@ -2410,49 +2706,235 @@ func _unleash_class_meter_move() -> void:
 	var vfx = get_node_or_null("/root/VFXManager")
 	var sfx = get_node_or_null("/root/SFXManager")
 	var scene_root = get_tree().current_scene if is_inside_tree() else null
+	var now = Time.get_ticks_msec() / 1000.0
+	# Archer Killshot is special: it consumes the FOCUS bar but only when at ≥60.
+	# All other classes require a full meter (the input gate at the call site
+	# already checks that — but archer's lower gate has to be enforced here).
+	if pc == "archer" or pc == "ranger":
+		if class_meter < KILLSHOT_MIN_FOCUS:
+			return
 	match pc:
 		"warrior":
-			set_meta("bloodthirst_until", Time.get_ticks_msec() / 1000.0 + 5.0)
-			if status_effects:
-				status_effects.apply_buff("damage", 5.0, 0.30)
+			# Blood Dream — 30s vampiric trance. Snapshot HP, fill the bar, lifesteal everything.
+			# Backlash on expiry: paralyze 3s + slow 6s. Rage drops to 20% (head start).
+			_blood_dream_active = true
+			_blood_dream_until = now + BLOOD_DREAM_DURATION
+			_blood_dream_banked_hp = hp
+			_blood_dream_heal_budget = float(max_hp) * BLOOD_DREAM_LIFESTEAL_CAP_PCT
+			_blood_dream_heal_budget_until = now + 1.0
+			hp = max_hp
+			hp_changed.emit(hp)
 			if vfx:
-				vfx.shockwave(global_position, 40.0, Color(0.85, 0.10, 0.10, 0.75))
-				vfx.shake(2.5, 0.18)
+				vfx.shockwave(global_position, 40.0, Color(0.85, 0.05, 0.10, 0.75))
+				vfx.shake(2.8, 0.20)
 			if sfx:
 				sfx.play("special_b", 0.0, 0.0)
 			if scene_root:
-				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "BLOODTHIRST!", Color(1.0, 0.2, 0.2))
+				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "BLOOD DREAM!", Color(0.95, 0.15, 0.15))
+			class_meter = 0.0
+			class_meter_changed.emit(class_meter, class_meter_max)
 		"wizard":
-			set_meta("arcane_surge_charges", 3)
+			# Overflow — 10 s of free empowered casts, 3× cooldown ticks,
+			# +40% damage. Also tops MP and applies a brief damage buff so the
+			# wave of spells feels like a real ultimate, not "free cast for 6s".
+			_wizard_overflow_until = now + WIZARD_OVERFLOW_DURATION
+			mp = max_mp
+			mp_changed.emit(mp)
+			if status_effects:
+				status_effects.apply_buff("damage", WIZARD_OVERFLOW_DURATION, WIZARD_OVERFLOW_DAMAGE_BUFF)
 			if vfx:
-				vfx.shockwave(global_position, 40.0, Color(0.45, 0.55, 1.0, 0.75))
+				vfx.shockwave(global_position, 44.0, Color(0.45, 0.55, 1.0, 0.85))
+				vfx.shake(2.0, 0.15)
 			if sfx:
 				sfx.play("mystical", 0.0, 0.0)
 			if scene_root:
-				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "ARCANE SURGE!", Color(0.5, 0.7, 1.0))
+				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "OVERFLOW!", Color(0.5, 0.7, 1.0))
+			class_meter = 0.0
+			class_meter_changed.emit(class_meter, class_meter_max)
 		"ranger", "archer":
+			# Killshot — 1 medium-speed crit, pierces 3, damage scales with focus spent.
+			# Bullet damage mult computed in weapon_system from the stored focus_spent meta.
 			set_meta("killshot_charge", true)
+			set_meta("killshot_focus_spent", class_meter)
 			if vfx:
 				vfx.shockwave(global_position, 36.0, Color(0.55, 1.0, 0.55, 0.85))
 			if sfx:
 				sfx.play("special_a", 0.0, 0.0)
 			if scene_root:
-				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "KILLSHOT!", Color(0.6, 1.0, 0.6))
+				var pct = int(round(class_meter))
+				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "KILLSHOT %d!" % pct, Color(0.6, 1.0, 0.6))
+			# Drain bar to 0 (Killshot always burns ALL focus, regardless of how much).
+			class_meter = 0.0
+			class_meter_changed.emit(class_meter, class_meter_max)
 		"mercenary":
+			# Reckless Strike — 30s glass-cannon: +50% fire rate (meta), 50% evade, 2× dmg taken, 5% stun.
+			_reckless_strike_until = now + RECKLESS_STRIKE_DURATION
 			stamina = max_stamina
 			stamina_changed.emit(stamina)
 			if status_effects:
-				status_effects.apply_buff("fire_rate", 4.0, 0.75)
+				# Fire-rate buff applied as a status; consumed by weapon_system fire path.
+				status_effects.apply_buff("fire_rate", RECKLESS_STRIKE_DURATION, RECKLESS_STRIKE_FIRE_RATE_BONUS)
 			if vfx:
-				vfx.shockwave(global_position, 40.0, Color(1.0, 0.75, 0.20, 0.75))
+				vfx.shockwave(global_position, 40.0, Color(1.0, 0.75, 0.20, 0.85))
 				vfx.shake(2.0, 0.12)
 			if sfx:
 				sfx.play("special_b", 0.0, 0.0)
 			if scene_root:
 				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "RECKLESS STRIKE!", Color(1.0, 0.75, 0.2))
-	# Consume the meter
-	class_meter = 0.0
+			class_meter = 0.0
+			class_meter_changed.emit(class_meter, class_meter_max)
+
+## Per-class meter dynamics. Each class behaves differently:
+##  - Warrior/Mercenary use the legacy decay model (kills + build actions feed it).
+##  - Archer is REGEN-based: builds in combat when clean, decays out of combat, 3s lockout on damage.
+##  - Wizard also has a passive +1/s while MP > 50% (rewards conservative casting).
+func _tick_class_meter(delta: float) -> void:
+	var pc_mt = _get_player_class()
+	if pc_mt == "ranger" or pc_mt == "archer":
+		_tick_archer_focus(delta)
+		return
+	# Wizard passive regen while MP > 50%.
+	if pc_mt == "wizard" and max_mp > 0.0 and mp / max_mp > 0.5 and class_meter < class_meter_max:
+		_wizard_mp_regen_passive_accum += WIZARD_MANAFLOW_PASSIVE_PER_SEC * delta
+		if _wizard_mp_regen_passive_accum >= 1.0:
+			var inc = floor(_wizard_mp_regen_passive_accum)
+			_wizard_mp_regen_passive_accum -= inc
+			class_meter = minf(class_meter + inc, class_meter_max)
+			class_meter_changed.emit(class_meter, class_meter_max)
+	# Decay (warrior / mercenary / wizard) with grace.
+	if class_meter <= 0.0:
+		return
+	if _rage_decay_grace > 0.0:
+		_rage_decay_grace -= delta
+		return
+	var decay_rate := 3.0
+	match pc_mt:
+		"warrior":   decay_rate = 3.0   # 100→0 in ~33s
+		"wizard":    decay_rate = 2.0   # 50s — slow decay so build-up matters
+		"mercenary": decay_rate = 3.5   # 28s
+	var new_v = maxf(0.0, class_meter - decay_rate * delta)
+	if new_v != class_meter:
+		class_meter = new_v
+		class_meter_changed.emit(class_meter, class_meter_max)
+
+## Archer focus model: builds in combat when clean, decays out of combat,
+## damage triggers 3s regen lockout + flat 15% loss.
+func _tick_archer_focus(delta: float) -> void:
+	if _archer_focus_lockout > 0.0:
+		_archer_focus_lockout = maxf(0.0, _archer_focus_lockout - delta)
+		return
+	var in_combat = _has_enemies_nearby(ARCHER_COMBAT_RADIUS)
+	var changed := false
+	if in_combat:
+		if class_meter < class_meter_max:
+			var stationary = velocity.length() < ARCHER_STATIONARY_VEL_THRESHOLD and _archer_shoot_grace <= 0.0
+			var regen = ARCHER_FOCUS_REGEN_STATIONARY if stationary else ARCHER_FOCUS_REGEN_BASE
+			class_meter = minf(class_meter + regen * delta, class_meter_max)
+			changed = true
+	else:
+		if class_meter > 0.0:
+			class_meter = maxf(0.0, class_meter - ARCHER_FOCUS_OOC_DECAY * delta)
+			changed = true
+	if changed:
+		class_meter_changed.emit(class_meter, class_meter_max)
+
+## Per-frame book-keeping for Blood Dream / Reckless Strike / Overflow.
+## Reckless Strike and Overflow are checked lazily by hot paths — only Blood
+## Dream needs its own tick (heal-budget reset + duration expiry).
+func _tick_class_meter_buffs(_delta: float) -> void:
+	if not _blood_dream_active:
+		return
+	var now = Time.get_ticks_msec() / 1000.0
+	if now >= _blood_dream_heal_budget_until:
+		_blood_dream_heal_budget = float(max_hp) * BLOOD_DREAM_LIFESTEAL_CAP_PCT
+		_blood_dream_heal_budget_until = now + 1.0
+	if now >= _blood_dream_until:
+		_end_blood_dream()
+
+## Distance check: is at least one alive enemy within `radius` pixels?
+func _has_enemies_nearby(radius: float) -> bool:
+	if not is_inside_tree():
+		return false
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		if e.has_method("get") and "state" in e and "State" in e and e.state == e.State.DEAD:
+			continue
+		if e.global_position.distance_to(global_position) <= radius:
+			return true
+	return false
+
+## End-of-Blood-Dream backlash: restore banked HP regardless of where the temp
+## bar ended, then paralyze + slow + leave 20% rage as a head-start.
+func _end_blood_dream() -> void:
+	_blood_dream_active = false
+	# Overwrite HP back to banked. If banked > current, this effectively heals.
+	hp = clampi(_blood_dream_banked_hp, 1, max_hp)
+	hp_changed.emit(hp)
+	# End-of-trance debuff: paralyze + slow.
+	if status_effects:
+		# Apply both via status_effects so existing systems handle the move/attack lock.
+		if status_effects.has_method("apply_status"):
+			status_effects.apply_status("STUNNED", BLOOD_DREAM_END_PARALYZE)
+		if status_effects.has_method("apply_status"):
+			status_effects.apply_status("SLOWED", BLOOD_DREAM_END_SLOW)
+	# Leave 20% rage as a head start.
+	class_meter = BLOOD_DREAM_RAGE_LEFTOVER
 	class_meter_changed.emit(class_meter, class_meter_max)
+	# Floating + VFX cue so the player FEELS the trance end.
+	var scene_root = get_tree().current_scene if is_inside_tree() else null
+	if scene_root:
+		FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "TRANCE ENDS", Color(0.9, 0.2, 0.2))
+	var vfx = get_node_or_null("/root/VFXManager")
+	if vfx:
+		vfx.shockwave(global_position, 36.0, Color(0.6, 0.05, 0.05, 0.6))
+		vfx.shake(2.0, 0.18)
+
+## Apply per-class on-crit hook (called by weapon_system when a bullet rolls a crit).
+func on_crit_landed() -> void:
+	if _get_player_class() == "mercenary":
+		class_meter = minf(class_meter + 1.0, class_meter_max)
+		_rage_decay_grace = 2.0
+		class_meter_changed.emit(class_meter, class_meter_max)
+
+## Warrior rage gain — fires whenever the warrior is HIT (shield-blocked OR
+## damage-dealt). Scales with the RAW incoming damage so Iron Skin / armor /
+## shield absorbing the hit doesn't starve the meter.
+## 0.5s grace prevents multi-tick hits (DoTs, lasers) from double-charging.
+func _grant_warrior_rage_from_hit(raw_incoming: int) -> void:
+	if _get_player_class() != "warrior" or raw_incoming <= 0:
+		return
+	if _rage_damage_grace > 0.0:
+		return
+	var gain = float(raw_incoming) * 1.5
+	class_meter = minf(class_meter + gain, class_meter_max)
+	_rage_damage_grace = 0.5
+	_rage_decay_grace = 4.0
+	class_meter_changed.emit(class_meter, class_meter_max)
+
+## Called by bullet.gd / ability handlers whenever the player deals damage.
+## During Blood Dream, the player heals 1:1 (capped at 30% max HP per second).
+## Also feeds Wizard "Mana Flow on spell kill" — handled separately at the kill hook.
+func apply_blood_dream_lifesteal(damage_dealt: int) -> void:
+	if not _blood_dream_active or damage_dealt <= 0:
+		return
+	var amount = minf(float(damage_dealt), _blood_dream_heal_budget)
+	if amount <= 0.0:
+		return
+	_blood_dream_heal_budget -= amount
+	hp = mini(hp + int(amount), max_hp)
+	hp_changed.emit(hp)
+
+## Returns true if a wizard cast is empowered (and consumes the flag).
+## Spell ability functions check this to decide which form to fire.
+func _consume_empowered() -> bool:
+	if _empowered_cast_pending:
+		_empowered_cast_pending = false
+		var scene_root = get_tree().current_scene if is_inside_tree() else null
+		if scene_root:
+			FloatingText.spawn(scene_root, global_position + Vector2(0, -22), "EMPOWERED", Color(0.55, 0.75, 1.0))
+		return true
+	return false
 
 ## Returns true if the world position is inside the camera's visible rect.
 func _is_on_screen(world_pos: Vector2) -> bool:
@@ -2467,54 +2949,28 @@ func _is_on_screen(world_pos: Vector2) -> bool:
 
 ## Pick the nearest *on-screen* enemy; cycle on repeat press.
 func _cycle_lock_on() -> void:
-	if not is_inside_tree():
-		return
-	var enemies = get_tree().get_nodes_in_group("enemy")
-	if enemies.is_empty():
+	if _lock_on_suppressed:
 		_lock_on_target = null
 		queue_redraw()
 		return
-	var current_dist := INF if not is_instance_valid(_lock_on_target) else global_position.distance_to(_lock_on_target.global_position)
-	var best: Node2D = null
-	var best_d := INF
-	# First pass: cycle to a *farther* enemy than the current one
-	for e in enemies:
-		if not is_instance_valid(e) or e == _lock_on_target:
-			continue
-		if "state" in e and e.state == e.State.DEAD:
-			continue
-		if not _is_on_screen(e.global_position):
-			continue
-		var d = global_position.distance_to(e.global_position)
-		if d > LOCK_ON_MAX_RANGE:
-			continue
-		if is_instance_valid(_lock_on_target):
-			if d <= current_dist or d > LOCK_ON_CYCLE_RANGE * 2.0:
-				continue
-		if d < best_d:
-			best = e
-			best_d = d
-	if best:
-		_lock_on_target = best
-	elif not is_instance_valid(_lock_on_target):
-		# Fresh lock: nearest on-screen enemy in range
-		for e in enemies:
-			if not is_instance_valid(e):
-				continue
-			if "state" in e and e.state == e.State.DEAD:
-				continue
-			if not _is_on_screen(e.global_position):
-				continue
-			var d = global_position.distance_to(e.global_position)
-			if d > LOCK_ON_MAX_RANGE:
-				continue
-			if d < best_d:
-				best = e
-				best_d = d
-		_lock_on_target = best
-	else:
-		# No more on-screen candidates to cycle to — release the lock
+	var candidates := _get_lock_on_candidates()
+	if candidates.is_empty():
 		_lock_on_target = null
+		queue_redraw()
+		return
+	candidates.sort_custom(func(a: Node2D, b: Node2D) -> bool:
+		return _get_cursor_priority_score(a) < _get_cursor_priority_score(b)
+	)
+	if not is_instance_valid(_lock_on_target):
+		_lock_on_target = candidates[0]
+	else:
+		var idx := candidates.find(_lock_on_target)
+		if idx < 0:
+			_lock_on_target = candidates[0]
+		elif idx + 1 < candidates.size():
+			_lock_on_target = candidates[idx + 1]
+		else:
+			_lock_on_target = candidates[0]
 	queue_redraw()
 
 func _draw() -> void:
@@ -2744,9 +3200,11 @@ func _start_dash() -> void:
 		_spawn_wraithwalk_trail()
 
 func _warrior_dash_burst() -> void:
-	# Warrior dash end: AoE around player, knockback + damage
+	# Warrior dash end: AoE around player, knockback + damage.
+	# Rage scaling: +0.4% damage per stack on the AoE (up to +40% at 100 rage).
 	var base_dmg = equipment_manager.get_damage() if equipment_manager else 1
-	var dmg = maxi(2, int(base_dmg * 2.0 + level_system.level * 0.5))
+	var rage_mult = 1.0 + class_meter * 0.004
+	var dmg = maxi(2, int((base_dmg * 2.0 + level_system.level * 0.5) * rage_mult))
 	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
 	var scale_mult = 4.0 if in_ow else 1.0
 	var radius = 32.0 * scale_mult
@@ -2950,7 +3408,7 @@ func _fire_multishot(aim_dir: Vector2) -> void:
 	if not bullet_scene:
 		return
 	var base_damage = equipment_manager.get_damage()
-	var speed = equipment_manager.get_bullet_speed()
+	var speed = equipment_manager.get_bullet_speed() * _get_scene_projectile_scale()
 	# Class identity tuning:
 	#   Archer (native): 2 extra bullets, 60% dmg, narrow spread — the bow specialist
 	#   Warrior:         1 extra heavy bullet, 110% dmg, no spread — a "power draw"
@@ -3031,7 +3489,7 @@ func _fire_charged_blast() -> void:
 		var dmg_mult = lerpf(3.0, CHARGE_DMG_MULT, power_ratio)
 		var flat_bonus = int(lerpf(8.0, CHARGE_FLAT_DMG, power_ratio))
 		var size_mult = lerpf(2.0, CHARGE_SIZE_MULT, power_ratio)
-		bullet.speed = equipment_manager.get_bullet_speed() * CHARGE_SPEED_MULT * shield_penalty
+		bullet.speed = equipment_manager.get_bullet_speed() * _get_scene_projectile_scale() * CHARGE_SPEED_MULT * shield_penalty
 		bullet.damage = maxi(5, int(base_damage * dmg_mult) + flat_bonus)
 		bullet.set_meta("sprite_scale_mult", size_mult)
 		bullet.set_meta("projectile_fx_kind", "arcane")
@@ -3048,7 +3506,7 @@ func _fire_charged_blast() -> void:
 			vfx.shake(1.0 + ratio * 2.0, 0.15)
 	else:
 		# Weak quick shot: base damage +1, no pierce, small projectile
-		bullet.speed = equipment_manager.get_bullet_speed() * 0.8 * shield_penalty
+		bullet.speed = equipment_manager.get_bullet_speed() * _get_scene_projectile_scale() * 0.8 * shield_penalty
 		bullet.damage = base_damage + 1
 		bullet.set_meta("sprite_scale_mult", 1.2)
 		bullet.set_meta("projectile_fx_kind", "arcane")
@@ -3080,7 +3538,7 @@ func _fire_longshot() -> void:
 	bullet.global_position = global_position
 	bullet.direction = aim_dir
 	bullet.is_player_bullet = true
-	bullet.speed = equipment_manager.get_bullet_speed()
+	bullet.speed = equipment_manager.get_bullet_speed() * _get_scene_projectile_scale()
 	bullet.damage = LONGSHOT_DMG
 	bullet.pierce_count = LONGSHOT_PIERCE
 	# Use same range as equipped bow
@@ -3103,6 +3561,25 @@ func _fire_longshot() -> void:
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("woosh_a", -1.0, 0.05)
+
+func _release_staff_charge(force_fire: bool) -> void:
+	if not _charge_active:
+		return
+	var should_fire := force_fire or _charge_time >= CHARGE_MIN_TIME
+	if should_fire:
+		_stamina_regen_delay = 1.0
+		var mp_to_use = minf(mp, CHARGE_MP_COST)
+		if mp_to_use > 0:
+			use_mp(mp_to_use)
+		_fire_charged_blast()
+		if _player_anim:
+			_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK, 1)
+	else:
+		if _player_anim:
+			_player_anim.set_state(PlayerAnimator.AnimState.IDLE)
+	_charge_active = false
+	_charge_time = 0.0
+	_hide_charge_indicator()
 
 var _charge_circle: Polygon2D = null  # grey growing circle pointing at shoot dir
 const CHARGE_CIRCLE_SEGMENTS = 16
@@ -3196,7 +3673,8 @@ func _setup_starter_spells() -> void:
 		"ranger":
 			starter_ids = ["arrow_rain", "evasion_surge", "heal"]
 		"wizard":
-			starter_ids = ["minor_heal", "bullet_shield", "frost_nova"]
+			# Wizard's whole identity is spells, so they start with a full hand.
+			starter_ids = ["frost_nova", "bullet_shield", "lightning_x", "arcane_familiar", "inferno_lance", "minor_heal"]
 
 	var all_spells = {
 		"shield_bash": "res://resources/spells/shield_bash.tres",
@@ -3224,16 +3702,34 @@ func _setup_starter_spells() -> void:
 		"evasion_surge": "res://resources/spells/evasion_surge.tres",
 		"minor_heal": "res://resources/spells/minor_heal.tres",
 		"bullet_shield": "res://resources/spells/bullet_shield.tres",
+		"lightning_x": "res://resources/spells/lightning_x.tres",
+		"arcane_familiar": "res://resources/spells/arcane_familiar.tres",
+		"inferno_lance": "res://resources/spells/inferno_lance.tres",
 	}
-	var slot_idx = 0
+	# Additive: learn anything new, equip into the first empty slot. Doesn't
+	# overwrite spells the player has bound somewhere already, and runs even
+	# when load_spellbook restored an older 6-slot save (so newly-added wizard
+	# starters land in the now-vacant slot 6 / 7).
 	for sid in starter_ids:
 		if not all_spells.has(sid):
 			continue
 		var spell = load(all_spells[sid]) as SpellDefinition
-		if spell:
-			spell_book.learn_spell(spell)
-			spell_book.equip_spell(spell, slot_idx)
-			slot_idx += 1
+		if not spell:
+			continue
+		# Already bound somewhere → leave it alone.
+		var already_equipped := false
+		for i in range(spell_book.MAX_SPELL_SLOTS):
+			if spell_book.spell_slots[i] and spell_book.spell_slots[i].id == sid:
+				already_equipped = true
+				break
+		spell_book.learn_spell(spell)
+		if already_equipped:
+			continue
+		# Find first empty slot, equip there.
+		for i in range(spell_book.MAX_SPELL_SLOTS):
+			if spell_book.spell_slots[i] == null:
+				spell_book.equip_spell(spell, i)
+				break
 
 func _use_spell_slot(index: int) -> void:
 	if not spell_book or index < 0 or index >= spell_book.MAX_SPELL_SLOTS:
@@ -3242,14 +3738,51 @@ func _use_spell_slot(index: int) -> void:
 	if not spell:
 		return
 
-	if not spell_book.can_cast(index, mp):
+	# --- Per-class pre-cast effects ---
+	# Warrior Rage spell-fuel: Iron Skin & Shield Bash MP cost reduced 1:1 by current rage.
+	var effective_mp_cost = float(spell.mp_cost)
+	var rage_spent := 0.0
+	var pc_sp = _get_player_class()
+	if pc_sp == "warrior" and (spell.id == "iron_skin" or spell.id == "shield_bash") and class_meter > 0.0:
+		var discount = minf(effective_mp_cost, class_meter)
+		effective_mp_cost = maxf(0.0, effective_mp_cost - discount)
+		rage_spent = discount
+
+	# Wizard empowerment: now ONLY happens during Overflow (X-key window).
+	# Mana Flow no longer gets drained by every empowerable cast — it's a pure
+	# passive resource that boosts MP regen and feeds Overflow.
+	_empowered_cast_pending = false
+	var now_sp = Time.get_ticks_msec() / 1000.0
+	if pc_sp == "wizard" and now_sp < _wizard_overflow_until:
+		var emp_cost = float(WIZARD_EMPOWERMENT_COSTS.get(spell.id, -1))
+		_empowered_cast_pending = emp_cost > 0
+
+	# --- Cast guards ---
+	# Cooldown gate (always enforced).
+	if spell_book.slot_cooldowns[index] > 0.0:
+		_empowered_cast_pending = false
 		return
-	# Mana Surge costs stamina instead of MP
+	# MP gate: warrior rage-fuel + wizard Overflow both bypass it.
+	var can_pay = mp >= effective_mp_cost or (pc_sp == "wizard" and now_sp < _wizard_overflow_until)
+	if not can_pay:
+		_empowered_cast_pending = false
+		return
 	if spell.id == "mana_surge" and stamina < 30.0:
+		_empowered_cast_pending = false
 		return
-	use_mp(spell.mp_cost)
+
+	# Pay costs.
+	use_mp(effective_mp_cost)
+	if rage_spent > 0.0:
+		class_meter = maxf(0.0, class_meter - rage_spent)
+		class_meter_changed.emit(class_meter, class_meter_max)
+
+	# Cooldown — Overflow ticks cooldowns 3× faster, so reduce the locked time accordingly.
 	var cdr = clampf(equipment_manager.get_total_cooldown_reduction(), 0.0, 50.0)
-	spell_book.slot_cooldowns[index] = spell.cooldown * (1.0 - cdr / 100.0)
+	var cd_time = spell.cooldown * (1.0 - cdr / 100.0)
+	if pc_sp == "wizard" and now_sp < _wizard_overflow_until:
+		cd_time /= WIZARD_OVERFLOW_COOLDOWN_MULT
+	spell_book.slot_cooldowns[index] = cd_time
 
 	if _player_anim:
 		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
@@ -3301,6 +3834,12 @@ func _use_spell_slot(index: int) -> void:
 				_ability_minor_heal()
 			"bullet_shield":
 				_ability_bullet_shield()
+			"lightning_x":
+				_ability_lightning_x()
+			"arcane_familiar":
+				_ability_arcane_familiar()
+			"inferno_lance":
+				_ability_inferno_lance()
 			_:
 				_cast_crafted_spell(index, spell)
 	else:
@@ -3400,17 +3939,15 @@ func _update_double_tap_sprint() -> void:
 func _stone_toss() -> void:
 	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
 	var scale_mult = 4.0 if in_ow else 1.0
-	# Land at cursor position, clamped to max range
+	# Stone goes wherever you aim — no range cap. Lob duration scales below so
+	# longer throws don't blur into hyperspeed.
 	var target_pos: Vector2
 	if touch_controls and touch_controls.visible and touch_controls.get_aim_input().length() > 0.1:
 		var aim_dir = touch_controls.get_aim_input().normalized()
-		target_pos = global_position + aim_dir * STONE_TOSS_RANGE * scale_mult
+		# Touch has no cursor — fall back to a generous default reach.
+		target_pos = global_position + aim_dir * STONE_TOSS_RANGE * 6.0 * scale_mult
 	else:
 		target_pos = get_global_mouse_position()
-		var to_target = target_pos - global_position
-		var max_range = STONE_TOSS_RANGE * scale_mult
-		if to_target.length() > max_range:
-			target_pos = global_position + to_target.normalized() * max_range
 	var aim_dir = (target_pos - global_position).normalized()
 	var bullet_scn = preload("res://scenes/bullet.tscn")
 	var stone = bullet_scn.instantiate()
@@ -3418,12 +3955,17 @@ func _stone_toss() -> void:
 	stone.direction = aim_dir
 	stone.is_player_bullet = true
 	stone.damage = 0  # no damage — triggers noise on landing
-	stone.lifetime = 2.0
+	# Scale lob duration with distance so a long throw still feels like an arc
+	# instead of a hitscan. ~250 px / sec at dungeon scale, ~1000 in overworld.
+	var throw_dist := global_position.distance_to(target_pos)
+	var travel_speed: float = 1000.0 if in_ow else 250.0
+	var lob_time: float = clampf(throw_dist / travel_speed, 0.25, 1.5)
+	stone.lifetime = lob_time + 0.5
 	stone.bullet_sprite_index = 131  # grey bolt from lofi_obj.png
 	stone.behavior = stone.BulletBehavior.LOBBED
 	stone._target_pos = target_pos
 	stone._lob_start_pos = global_position
-	stone._lob_duration = 0.4
+	stone._lob_duration = lob_time
 	stone._lob_height = 0.8
 	stone._lob_aoe_radius = 0.0
 	stone._lob_ring_count = 0
@@ -3527,13 +4069,15 @@ func _ability_arrow_rain() -> void:
 		sfx.play("shotgun", -2.0)
 
 func _ability_frost_nova() -> void:
-	# Targeted AoE freeze at aim position — distributes damage across enemies
+	# Targeted AoE freeze at aim position — distributes damage across enemies.
+	# EMPOWERED: ~70% larger radius, longer freeze, survivors get a 4s SLOWED chill after thaw.
+	var empowered = _consume_empowered()
 	var base_dmg = equipment_manager.get_damage()
-	var max_total_dmg = maxi(3, int(base_dmg * 3.0 + level_system.level * 0.8))
+	var max_total_dmg = maxi(3, int(base_dmg * (4.0 if empowered else 3.0) + level_system.level * 0.8))
 	var in_ow_fn = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
 	var ow_scale = 4.0 if in_ow_fn else 1.0
-	var radius = (28.0 + level_system.level * 0.5) * ow_scale
-	var freeze_dur = 1.5 + level_system.level * 0.04
+	var radius = ((48.0 if empowered else 28.0) + level_system.level * 0.5) * ow_scale
+	var freeze_dur = (2.2 if empowered else 1.5) + level_system.level * 0.04
 	var luck = equipment_manager.get_luck()
 	var crit_mult = equipment_manager.get_crit_damage()
 	if luck > 0 and randf() * 100.0 < luck:
@@ -3562,6 +4106,10 @@ func _ability_frost_nova() -> void:
 			hit_enemies.append(e)
 			if e.has_method("apply_status"):
 				e.apply_status("FROZEN", freeze_dur)
+				# Empowered: 4s SLOWED status after the freeze wears off (overwrites
+				# nothing — SLOWED takes hold once FROZEN ticks down).
+				if empowered:
+					e.apply_status("SLOWED", freeze_dur + 4.0)
 
 	# Distribute damage: total pool split across all hit enemies (min 1 each)
 	if hit_enemies.size() > 0:
@@ -3586,35 +4134,67 @@ func _ability_frost_nova() -> void:
 		vfx.shake(1.5, 0.15)
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
-		sfx.play("sorcery", 0.0)
+		# Pitched down + quieter + a lower crackle underneath. The default
+		# sorcery sample was too high and shrill for a frost effect.
+		sfx.play("sorcery", -8.0, 0.06, 0.55)
+		sfx.play("lightning_b", -10.0, 0.08, 0.7)
 
 func _ability_teleport() -> void:
-	# Blink forward in aim direction — distance scales with level
-	var aim_dir = _get_shoot_direction()
+	# Blink forward in aim direction — distance scales with level.
+	# Doubled base distance + per-level so the wizard actually escapes / repositions.
+	var aim_dir = _get_free_aim_direction()
 	var in_ow_tp = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
-	var base_dist = 60.0 + level_system.level * 1.5
-	var dist = base_dist * (4.0 if in_ow_tp else 1.0)
+	var base_dist = 130.0 + level_system.level * 3.0
+	var dist = base_dist * (4.0 if in_ow_tp else _get_scene_motion_scale())
 	var start_pos = global_position
 	var target = global_position + aim_dir * dist
-	# Raycast to prevent teleporting through walls / out of bounds
+	# Raycast to prevent teleporting through walls / out of bounds. If we hit
+	# a wall, try to phase through up to ~2 tiles of it — peek past the hit
+	# point and if there's clear floor on the other side, blink there.
 	var space = get_world_2d().direct_space_state
 	var query = PhysicsRayQueryParameters2D.create(global_position, target, collision_mask)
 	var result = space.intersect_ray(query)
 	if result:
-		# Stop short of the wall (2px buffer so we don't clip inside)
-		target = result.position - aim_dir * 2.0
-	# Brief invincibility during teleport
+		var tile_size: float = 32.0 if in_ow_tp else 8.0
+		var wall_budget: float = tile_size * 2.0 + 2.0  # 2 tiles + tiny buffer
+		var exit_pos: Vector2 = result.position + aim_dir * wall_budget
+		# Clamp exit_pos to the desired target if we'd overshoot the player's pick
+		if (exit_pos - global_position).length() > (target - global_position).length():
+			exit_pos = target
+		var pq := PhysicsPointQueryParameters2D.new()
+		pq.position = exit_pos
+		pq.collision_mask = collision_mask
+		pq.collide_with_areas = false
+		pq.collide_with_bodies = true
+		if space.intersect_point(pq, 1).is_empty():
+			# Other side is open space — blink across the wall.
+			target = exit_pos
+		else:
+			# Wall too thick or no clear floor past it; stop short.
+			target = result.position - aim_dir * 2.0
+	# Brief invincibility during teleport (watchdog-bounded to 0.3 s).
+	# Also phase through enemies + enemy bullets — landing on an enemy mid-blink
+	# shouldn't shove you back or eat a contact hit. Restored on tween callback.
 	invincible = true
+	_invincible_until = Time.get_ticks_msec() / 1000.0 + 0.3
+	set_collision_mask_value(2, false)  # enemy bodies (CharacterBody2D)
+	set_collision_mask_value(4, false)  # enemy bullets (Area2D)
 	global_position = target
 	# Visual: fade out at start, fade in at end
 	sprite.modulate = Color(0.5, 0.5, 2.0, 0.3)
 	var tween = create_tween()
 	tween.tween_property(sprite, "modulate", Color.WHITE, 0.2)
-	tween.tween_callback(func(): invincible = false)
-	# VFX at start and end
+	tween.tween_callback(func():
+		invincible = false
+		_invincible_until = 0.0
+		set_collision_mask_value(2, true)
+		set_collision_mask_value(4, true)
+	)
+	# VFX at start and end — small radii + duration_scale 0.25 so the shader
+	# disappears almost instantly instead of lingering after the blink.
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
-		vfx.warp_link(start_pos, target, Color(0.86, 0.08, 0.05, 0.98), 14.0, 22.0)
+		vfx.warp_link(start_pos, target, Color(0.86, 0.08, 0.05, 0.98), 4.5, 6.5, null, 0.25)
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("teleport", -2.0, 0.05)
@@ -3720,6 +4300,7 @@ func _ability_smoke_bomb() -> void:
 	set_meta("battle_aoe", {"radius": radius, "damage": 0, "stun": blind_duration, "knockback": 0.0})
 	# Player gets invisibility + speed buff + sneak mode + stealth buff
 	invincible = true
+	_invincible_until = Time.get_ticks_msec() / 1000.0 + blind_duration
 	_sneaking = true
 	sprite.modulate.a = 0.3
 	if status_effects:
@@ -3729,6 +4310,7 @@ func _ability_smoke_bomb() -> void:
 	tween.tween_interval(blind_duration)
 	tween.tween_callback(func():
 		invincible = false
+		_invincible_until = 0.0
 		_sneaking = false
 		sprite.modulate.a = 1.0
 	)
@@ -3863,9 +4445,18 @@ func _ability_iron_skin() -> void:
 		sfx.play("clack", -2.0)
 
 func _ability_heal() -> void:
-	# Restore 20 + level*2 HP
+	# Restore 20 + level*2 HP.
+	# EMPOWERED: AoE heal pulse — heals self for 1.5× AND adds a small shield (10 + level).
+	var empowered = _consume_empowered()
 	var amount = 20 + level_system.level * 2
+	if empowered:
+		amount = int(amount * 1.5)
 	heal(amount)
+	if empowered:
+		shield += 10 + level_system.level
+		var scene_root = get_tree().current_scene if is_inside_tree() else null
+		if scene_root:
+			FloatingText.spawn(scene_root, global_position + Vector2(0, -28), "+%d Shield" % (10 + level_system.level), Color(0.6, 0.85, 1.0))
 	# Visual: green flash + status puff
 	sprite.modulate = Color(0.5, 2.0, 0.5)
 	var tween = create_tween()
@@ -3876,6 +4467,8 @@ func _ability_heal() -> void:
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
 		vfx.status_puff(global_position, Color(0.2, 1.0, 0.3))
+		if empowered:
+			vfx.shockwave(global_position, 28.0, Color(0.4, 1.0, 0.5, 0.5))
 
 func _ability_minor_heal() -> void:
 	# Wizard starter: quick small heal
@@ -3891,10 +4484,138 @@ func _ability_minor_heal() -> void:
 	if vfx:
 		vfx.status_puff(global_position, Color(0.4, 1.0, 0.5))
 
+func _ability_arcane_familiar() -> void:
+	# Summon a single floating wisp that auto-fires + can be steered with V.
+	var familiar_script: GDScript = load("res://scripts/objects/arcane_familiar.gd")
+	if not familiar_script:
+		return
+	# Despawn any previous one — one familiar at a time.
+	for node in get_tree().get_nodes_in_group("arcane_familiar"):
+		if is_instance_valid(node):
+			node.queue_free()
+	var fam = familiar_script.new()
+	fam.add_to_group("arcane_familiar")
+	fam.player = self
+	fam.global_position = global_position + Vector2(20, -10)
+	get_tree().current_scene.add_child(fam)
+	var sfx_af = get_node_or_null("/root/SFXManager")
+	if sfx_af:
+		sfx_af.play("mystical", -6.0, 0.1, 1.3)
+	var vfx_af = get_node_or_null("/root/VFXManager")
+	if vfx_af and vfx_af.has_method("shockwave"):
+		vfx_af.shockwave(global_position, 20.0, Color(0.6, 0.8, 1.0, 0.7))
+
+
+func _ability_inferno_lance() -> void:
+	# Charged fire spear — fast piercing projectile that explodes on impact.
+	var in_ow_il := get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_il := 4.0 if in_ow_il else 1.0
+	var aim_dir: Vector2
+	if touch_controls and touch_controls.visible and touch_controls.get_aim_input().length() > 0.1:
+		aim_dir = touch_controls.get_aim_input().normalized()
+	else:
+		aim_dir = (get_global_mouse_position() - global_position).normalized()
+	if aim_dir.length() < 0.1:
+		aim_dir = _last_move_dir if _last_move_dir.length() > 0.0 else Vector2.RIGHT
+	var bullet = preload("res://scenes/bullet.tscn").instantiate()
+	bullet.global_position = global_position + aim_dir * 6.0 * scale_il
+	bullet.direction = aim_dir
+	bullet.is_player_bullet = true
+	var base_dmg = equipment_manager.get_damage()
+	bullet.damage = maxi(15, int(base_dmg * 4.0 + level_system.level * 0.6))
+	bullet.speed = 200.0 * scale_il
+	bullet.lifetime = 1.4
+	bullet.bullet_sprite_index = 131
+	# Use the existing fireball AoE hook so impact spawns a flame burst.
+	if "set_meta" in bullet:
+		bullet.set_meta("fireball_aoe", true)
+		bullet.set_meta("fireball_aoe_radius", 26.0 * scale_il)
+	if "pierce_count" in bullet:
+		bullet.pierce_count = 2
+	get_tree().current_scene.add_child(bullet)
+	var sfx_il = get_node_or_null("/root/SFXManager")
+	if sfx_il:
+		sfx_il.play("bazooka", -4.0, 0.08, 0.85)
+	var vfx_il = get_node_or_null("/root/VFXManager")
+	if vfx_il and vfx_il.has_method("shockwave"):
+		vfx_il.shockwave(global_position, 14.0, Color(1.0, 0.5, 0.15, 0.7))
+
+
+func _ability_lightning_x() -> void:
+	# Mark the ground at the cursor with a glowing X. After 3 s, lightning
+	# strikes a medium AoE: 10 base damage + 5 s stun on hit.
+	var in_ow_lx := get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	var scale_lx: float = 4.0 if in_ow_lx else 1.0
+	var target_pos: Vector2
+	if touch_controls and touch_controls.visible and touch_controls.get_aim_input().length() > 0.1:
+		target_pos = global_position + touch_controls.get_aim_input().normalized() * 80.0 * scale_lx
+	else:
+		target_pos = get_global_mouse_position()
+	var radius_lx: float = 36.0 * scale_lx
+	# Visual: pulsing X glyph at the target.
+	var glyph := Node2D.new()
+	glyph.position = target_pos
+	glyph.z_index = 5
+	get_tree().current_scene.add_child(glyph)
+	var bar1 := ColorRect.new()
+	bar1.color = Color(0.55, 0.85, 1.0, 0.85)
+	bar1.size = Vector2(radius_lx * 1.4, 2.0)
+	bar1.position = -bar1.size * 0.5
+	bar1.rotation = PI / 4.0
+	glyph.add_child(bar1)
+	var bar2 := ColorRect.new()
+	bar2.color = Color(0.55, 0.85, 1.0, 0.85)
+	bar2.size = Vector2(radius_lx * 1.4, 2.0)
+	bar2.position = -bar2.size * 0.5
+	bar2.rotation = -PI / 4.0
+	glyph.add_child(bar2)
+	# Telegraph pulse — alpha throbs until impact.
+	var pulse := create_tween()
+	pulse.set_loops()
+	pulse.tween_property(glyph, "modulate:a", 0.35, 0.25)
+	pulse.tween_property(glyph, "modulate:a", 1.0, 0.25)
+	var sfx_pre = get_node_or_null("/root/SFXManager")
+	if sfx_pre:
+		sfx_pre.play("ping", -6.0, 0.05)
+	# Schedule the strike.
+	var dmg_lx := 10
+	var stun_dur := 5.0
+	get_tree().create_timer(3.0).timeout.connect(func():
+		if not is_instance_valid(glyph):
+			return
+		pulse.kill()
+		glyph.queue_free()
+		var vfx_lx = get_node_or_null("/root/VFXManager")
+		if vfx_lx:
+			if vfx_lx.has_method("shockwave"):
+				vfx_lx.shockwave(target_pos, radius_lx * 1.4, Color(0.5, 0.85, 1.0, 0.9))
+			if vfx_lx.has_method("shake"):
+				vfx_lx.shake(2.5, 0.18)
+		var sfx_hit = get_node_or_null("/root/SFXManager")
+		if sfx_hit:
+			sfx_hit.play("boom_b", -4.0, 0.08, 0.85)
+		for e in get_tree().get_nodes_in_group("enemy"):
+			if not is_instance_valid(e):
+				continue
+			if e.global_position.distance_to(target_pos) > radius_lx:
+				continue
+			if e.has_method("take_damage"):
+				e.take_damage(dmg_lx)
+			if e.has_method("apply_status"):
+				e.apply_status("STUNNED", stun_dur)
+	)
+
+
 func _ability_bullet_shield() -> void:
-	# Wizard starter: absorbs the next 4 bullets. take_damage checks "bullet_shield_charges".
-	set_meta("bullet_shield_charges", 4)
-	set_meta("bullet_shield_expires", Time.get_ticks_msec() / 1000.0 + 12.0)
+	# Wizard starter: absorbs the next 4 bullets within 12 s. State lives in
+	# _bullet_shield_charges / _bullet_shield_until (see take_damage).
+	_bullet_shield_charges = 4
+	_bullet_shield_until = Time.get_ticks_msec() / 1000.0 + 12.0
+	# Clean up the legacy meta if anything ever set it (older saves / scripts).
+	if has_meta("bullet_shield_charges"):
+		remove_meta("bullet_shield_charges")
+	if has_meta("bullet_shield_expires"):
+		remove_meta("bullet_shield_expires")
 	sprite.modulate = Color(0.6, 0.9, 1.6)
 	var tween = create_tween()
 	tween.tween_property(sprite, "modulate", Color.WHITE, 0.25)
@@ -3958,10 +4679,12 @@ func _ability_mana_surge() -> void:
 		FloatingText.spawn(scene_root, global_position + Vector2(0, -8), "+%d MP" % int(restore), Color(0.3, 0.5, 1.0))
 
 func _ability_fireball() -> void:
-	# Large slow projectile, explodes on impact for AoE + BURNING
+	# Large slow projectile, explodes on impact for AoE + BURNING.
+	# EMPOWERED: ~80% larger AoE and longer burn (5s vs 3s).
+	var empowered = _consume_empowered()
 	var aim_dir = _get_shoot_direction()
 	var base_dmg = equipment_manager.get_damage()
-	var dmg = int(base_dmg * 2.0 + level_system.level)
+	var dmg = int(base_dmg * (2.6 if empowered else 2.0) + level_system.level)
 	var luck = equipment_manager.get_luck()
 	if luck > 0 and randf() * 100.0 < luck:
 		dmg = int(dmg * equipment_manager.get_crit_damage())
@@ -3976,9 +4699,9 @@ func _ability_fireball() -> void:
 	fireball.damage = dmg
 	fireball.lifetime = 2.0
 	fireball.set_meta("fireball_aoe", true)
-	fireball.set_meta("fireball_aoe_radius", 20.0 * scale_mult)
-	fireball.set_meta("fireball_aoe_dmg_pct", 0.6)
-	fireball.set_meta("apply_burning", 3.0)
+	fireball.set_meta("fireball_aoe_radius", (36.0 if empowered else 20.0) * scale_mult)
+	fireball.set_meta("fireball_aoe_dmg_pct", 0.8 if empowered else 0.6)
+	fireball.set_meta("apply_burning", 5.0 if empowered else 3.0)
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	if bullets_container:
 		bullets_container.add_child(fireball)
@@ -3989,7 +4712,9 @@ func _ability_fireball() -> void:
 		sfx.play("sorcery", -2.0)
 
 func _ability_chain_lightning() -> void:
-	# Instant hit on nearest enemy, chains to 2 more
+	# Instant hit on nearest enemy, chains to 2 more.
+	# EMPOWERED: chains to 5 more (6 hits total), each jump applies 0.4s STUNNED.
+	var empowered = _consume_empowered()
 	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
 	var scale_mult = 4.0 if in_ow else 1.0
 	var max_range = 40.0 * scale_mult
@@ -3999,6 +4724,7 @@ func _ability_chain_lightning() -> void:
 	var luck = equipment_manager.get_luck()
 	if luck > 0 and randf() * 100.0 < luck:
 		dmg = int(dmg * equipment_manager.get_crit_damage())
+	var jumps = 5 if empowered else 2
 	# Find nearest enemy
 	var enemies = get_tree().get_nodes_in_group("enemy")
 	var nearest: Node2D = null
@@ -4022,10 +4748,10 @@ func _ability_chain_lightning() -> void:
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
 		vfx.hit_spark(nearest.global_position, Color(0.8, 0.9, 1.0))
-	# Chain to 2 more
+	# Chain to N more (empowered = 5 extra jumps for 6 total, plus per-jump stun)
 	var current = nearest
 	var chain_dmg = dmg
-	for _i in range(2):
+	for _i in range(jumps):
 		chain_dmg = int(chain_dmg * 0.7)
 		var next_target: Node2D = null
 		var next_dist: float = chain_range + 1.0
@@ -4041,6 +4767,8 @@ func _ability_chain_lightning() -> void:
 		hit_targets.append(next_target)
 		if next_target.has_method("take_damage"):
 			next_target.take_damage(chain_dmg)
+		if empowered and next_target.has_method("apply_status"):
+			next_target.apply_status("STUNNED", 0.4)
 		if vfx:
 			vfx.hit_spark(next_target.global_position, Color(0.8, 0.9, 1.0))
 		current = next_target
@@ -4164,6 +4892,7 @@ func _ability_shadow_strike() -> void:
 	var arrive_pos = target.global_position + dir_to_player * (-8.0 * scale_mult)
 	var start_pos = global_position
 	invincible = true
+	_invincible_until = Time.get_ticks_msec() / 1000.0 + 0.3
 	global_position = arrive_pos
 	# Deal damage
 	if target.has_method("take_damage"):
@@ -4176,7 +4905,10 @@ func _ability_shadow_strike() -> void:
 	sprite.modulate = Color(1.0, 0.3, 1.5, 0.5)
 	var tween = create_tween()
 	tween.tween_property(sprite, "modulate", Color.WHITE, 0.2)
-	tween.tween_callback(func(): invincible = false)
+	tween.tween_callback(func():
+		invincible = false
+		_invincible_until = 0.0
+	)
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
 		vfx.hit_spark(start_pos, Color(0.5, 0.2, 0.8))
@@ -4785,9 +5517,9 @@ func _wand_blink() -> void:
 	if _player_anim:
 		_player_anim.set_state(PlayerAnimator.AnimState.SPECIAL_ATTACK)
 
-	var dir = _last_move_dir if _last_move_dir != Vector2.ZERO else _get_shoot_direction()
+	var dir = _get_free_aim_direction()
 	var in_ow = get_tree().current_scene and get_tree().current_scene.name == "Overworld"
-	var blink_dist = 60.0 * (4.0 if in_ow else 1.0)
+	var blink_dist = 60.0 * (4.0 if in_ow else _get_scene_motion_scale())
 	var target = global_position + dir * blink_dist
 	invincible = true
 	sprite.modulate.a = 0.3
@@ -4979,7 +5711,9 @@ func _earthquake_slam() -> void:
 		vfx.shake(1.5, 0.1)
 	var sfx_eq = get_node_or_null("/root/SFXManager")
 	if sfx_eq:
-		sfx_eq.play("area_effect_a", -6.0, 0.1)
+		# Pitched down + much quieter — was -6 dB every 0.5 s, which read as
+		# constant "dun dun dun" while walking with a hammer.
+		sfx_eq.play("area_effect_a", -16.0, 0.15, 0.75)
 
 func _flail_chain_lash() -> void:
 	stamina -= 20.0

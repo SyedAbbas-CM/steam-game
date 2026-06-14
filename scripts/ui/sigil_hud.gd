@@ -3,11 +3,13 @@ extends CanvasLayer
 
 ## Ashfields "Sigil" HUD.
 ##
-## - HP orb top-left, with stamina ring around it.
-## - MP orb top-right.
+## - HP orb bottom-left, with stamina ring around it.
+## - Class-meter orb bottom-right (fills with current class color: Rage/Adrenaline/Focus/Mana Flow),
+##   with MP shown as a ring around it.
+## - Level + XP panel top-left.
 ## - Spell rune column mid-left, 6 carved runes (cooldown sweep, gold glow when ready).
 ## - Quickbar dock bottom-center (sits above the touch joysticks on mobile).
-## - Small minimap top-right, below the MP orb.
+## - Small minimap top-right.
 ## - Quest objective arrow on screen edge when target is off-screen.
 ##
 ## Public API mirrors GameHUD so callers can use either:
@@ -35,9 +37,9 @@ const ORB_RADIUS := 60.0
 const ORB_MARGIN := 24.0
 const SPELL_RUNE_SIZE := 64.0
 const SPELL_RUNE_GAP := 76.0
-const SPELL_SLOTS := 6
-const SPELL_KEYS := ["F", "G", "H", "J", "K", "L"]
-const QUICKBAR_SLOTS := 6
+const SPELL_SLOTS := 7  # was 6 — 7th slot for the key-0 spell
+const SPELL_KEYS := ["4", "5", "6", "7", "8", "9", "0"]
+const QUICKBAR_SLOTS := 6  # data slots stay 6; only first 3 have hotkeys (1/2/3)
 const QUICKBAR_SLOT_SIZE := 80.0
 const QUICKBAR_ICON_SIZE := 56.0
 
@@ -50,11 +52,22 @@ var _quickbar_buttons: Array[Button] = []
 
 # ── Orb nodes ──
 var _hp_orb: _Orb
-var _mp_orb: _Orb
-var _level_label: Label
+var _class_orb: _Orb  # Right orb: class meter fill + MP ring around it
+var _class_meter_label: Label  # "RAGE 50%" floating above the class orb
+var _level_label: Label  # Small "Lv N" pill near the HP orb
+
+# ── Top-left XP / level panel ──
+var _xp_panel: Panel
+var _xp_bar_bg: ColorRect
+var _xp_bar_fill: ColorRect
+var _xp_level_label: Label  # Big "LEVEL 5" headline
+var _xp_amount_label: Label  # "1200 / 3500" overlay on the bar
+const _XP_PANEL_W := 220.0
+const _XP_PANEL_H := 56.0
+const _XP_BAR_H := 10.0
 
 # ── Spell rune column ──
-var _spell_runes: Array[_SpellRune] = []
+var _spell_runes: Array = []  # holds the action-bar spell Buttons (was _SpellRune)
 
 # ── Top zone / floor banner ──
 var _zone_label: Label
@@ -84,14 +97,14 @@ func _ready() -> void:
 	layer = 100
 	add_to_group("game_hud")
 	# Build synchronously so setup(player) (called right after add_child) can
-	# write into _hp_orb / _mp_orb without hitting Nil.
+	# write into _hp_orb / _class_orb without hitting Nil.
 	_build_orbs()
-	_build_quickbar()
+	_build_action_bar()  # one function, all 10 slots, no panels, no anchors
 	_build_zone_banner()
 	_build_minimap_panel()
 	_build_quest_arrow()
 	_build_flash_label()
-	_build_class_meter()
+	_build_xp_panel()
 	# Reposition once after first viewport size is locked in.
 	call_deferred("_reposition_for_viewport")
 	set_process(true)
@@ -114,11 +127,12 @@ func _reposition_for_viewport() -> void:
 	var safe_y: float = vp_size.y - orb_d - 28.0  # bottom row top edge
 	if _hp_orb:
 		_hp_orb.position = Vector2(ORB_MARGIN + 16, safe_y)
-	if _mp_orb:
-		_mp_orb.position = Vector2(vp_size.x - ORB_MARGIN - orb_d - 16, safe_y)
-	if _level_label:
-		# Level sits ABOVE the HP orb (room is tighter at the bottom now)
-		_level_label.position = Vector2(_hp_orb.position.x + ORB_RADIUS - 24, safe_y - 32)
+	if _class_orb:
+		_class_orb.position = Vector2(vp_size.x - ORB_MARGIN - orb_d - 16, safe_y)
+	# Level label is removed. Class meter label sits centered INSIDE the orb.
+	if _class_meter_label and _class_orb:
+		_class_meter_label.position = _class_orb.position
+		_class_meter_label.size = Vector2(ORB_RADIUS * 2, ORB_RADIUS * 2)
 
 	# Banner + minimap + flash live at the top (free of action congestion)
 	if _zone_label:
@@ -131,12 +145,8 @@ func _reposition_for_viewport() -> void:
 		_minimap_panel.position = Vector2(vp_size.x - _minimap_size.x - 8, 8)
 	if _flash_label:
 		_flash_label.position = Vector2(vp_size.x * 0.5 - 450, vp_size.y * 0.4)
-	if _meter_panel:
-		# Sit directly above the quickbar with a comfortable gap. Quickbar top
-		# edge ≈ vp_size.y - 128 (slot top), so meter at vp_size.y - 200 keeps
-		# ~50px of gap between the bar and the slots — easier to read while
-		# playing, away from the top-center gold/zone text.
-		_meter_panel.position = Vector2(vp_size.x * 0.5 - _METER_W * 0.5, vp_size.y - 200)
+	if _xp_panel:
+		_xp_panel.position = Vector2(8, 8)
 
 	_reposition_quickbar()
 
@@ -167,19 +177,16 @@ func setup(player: CharacterBody2D) -> void:
 		player.class_meter_changed.connect(_on_class_meter_changed)
 		var pc_id = player._get_player_class() if player.has_method("_get_player_class") else ""
 		_update_class_meter_label_for_class(pc_id)
-		# Show the meter immediately so it's visible at 0% — no need to wait for the
-		# first build event.
-		if _meter_panel:
-			_meter_panel.visible = true
-		# Seed initial value so the fill bar renders even at 0%
+		# Seed initial value so the orb fill renders even at 0%
 		var init_val = float(player.get("class_meter")) if "class_meter" in player else 0.0
 		var init_max = float(player.get("class_meter_max")) if "class_meter_max" in player else 100.0
 		_on_class_meter_changed(init_val, init_max)
 
 	_hp_orb.set_value(player.hp, player.max_hp)
 	_hp_orb.set_ring(player.stamina, player.max_stamina)
-	_mp_orb.set_value(player.mp, player.max_mp)
+	_class_orb.set_ring(player.mp, player.max_mp)  # MP is the ring now
 	_set_level(player.level_system.level)
+	_update_xp_bar(float(player.level_system.xp), float(player.level_system.xp_to_next_level()))
 
 	var gm = get_node_or_null("/root/GameManager")
 	if gm and gm.has_method("load_quickbar"):
@@ -220,23 +227,48 @@ func _build_orbs() -> void:
 	_hp_orb.position = Vector2(ORB_MARGIN, ORB_MARGIN)
 	add_child(_hp_orb)
 
-	_mp_orb = _Orb.new()
-	_mp_orb.orb_size = ORB_RADIUS * 2
-	_mp_orb.fill_color = MP_FILL
-	_mp_orb.bg_color = MP_BG
-	_mp_orb.has_ring = false
-	_mp_orb.position = Vector2(vp_size.x - ORB_MARGIN - ORB_RADIUS * 2, ORB_MARGIN)
-	add_child(_mp_orb)
+	# Right orb: class meter fill (color per class) + MP ring around it.
+	# Fill colour is overwritten by _update_class_meter_label_for_class() once
+	# the player class is known; the neutral grey is just a startup placeholder.
+	_class_orb = _Orb.new()
+	_class_orb.orb_size = ORB_RADIUS * 2
+	_class_orb.fill_color = Color(0.55, 0.55, 0.55)
+	_class_orb.bg_color = Color(0.10, 0.10, 0.13, 0.95)
+	_class_orb.has_ring = true
+	_class_orb.ring_color = MP_FILL
+	_class_orb.ring_bg = MP_BG
+	_class_orb.fill_ratio = 0.0  # meter starts empty
+	_class_orb.position = Vector2(vp_size.x - ORB_MARGIN - ORB_RADIUS * 2, ORB_MARGIN)
+	add_child(_class_orb)
 
-	# Level badge — small pill below HP orb
-	_level_label = Label.new()
-	_level_label.text = "Lv 1"
-	_level_label.add_theme_font_size_override("font_size", 22)
-	_level_label.add_theme_color_override("font_color", GOLD)
-	_level_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	_level_label.add_theme_constant_override("outline_size", 3)
-	_level_label.position = Vector2(ORB_MARGIN + ORB_RADIUS - 24, ORB_MARGIN + ORB_RADIUS * 2 + 6)
-	add_child(_level_label)
+	# Class meter label — sits above the orb like the level label sits above HP.
+	# Starts hidden; populated when the player class is known.
+	_class_meter_label = Label.new()
+	_class_meter_label.text = ""
+	_class_meter_label.add_theme_font_size_override("font_size", 18)
+	_class_meter_label.add_theme_color_override("font_color", Color(0.92, 0.92, 0.92))
+	_class_meter_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_class_meter_label.add_theme_constant_override("outline_size", 3)
+	add_child(_class_meter_label)
+
+	# Level badge removed by request — the HP orb no longer shows "Lv N".
+	# Mana Flow / Rage / Focus percentage moves to a label CENTERED INSIDE the
+	# class orb instead of floating above it.
+	if _class_meter_label and is_instance_valid(_class_meter_label):
+		_class_meter_label.queue_free()
+	_class_meter_label = Label.new()
+	_class_meter_label.text = ""
+	_class_meter_label.add_theme_font_size_override("font_size", 22)
+	_class_meter_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	_class_meter_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_class_meter_label.add_theme_constant_override("outline_size", 3)
+	_class_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_class_meter_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_class_meter_label.size = Vector2(ORB_RADIUS * 2, ORB_RADIUS * 2)
+	_class_meter_label.position = _class_orb.position
+	_class_meter_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_class_meter_label.z_index = 5
+	add_child(_class_meter_label)
 
 
 func _on_hp_changed(hp: float) -> void:
@@ -245,8 +277,9 @@ func _on_hp_changed(hp: float) -> void:
 
 
 func _on_mp_changed(mp: float) -> void:
-	if _player and _mp_orb:
-		_mp_orb.set_value(mp, _player.max_mp)
+	# MP is now displayed as the ring around the class-meter orb.
+	if _player and _class_orb:
+		_class_orb.set_ring(mp, _player.max_mp)
 
 
 func _on_stamina_changed(stam: float) -> void:
@@ -254,48 +287,209 @@ func _on_stamina_changed(stam: float) -> void:
 		_hp_orb.set_ring(stam, _player.max_stamina)
 
 
-func _on_xp_changed(_xp: float) -> void:
-	pass  # XP not shown permanently in sigil HUD
+func _on_xp_changed(xp: float, xp_needed: float) -> void:
+	_update_xp_bar(xp, xp_needed)
 
 
 func _on_level_up(lvl: int) -> void:
 	_set_level(lvl)
+	# Re-pull XP-to-next so the bar shows the new level's curve immediately.
+	if _player and _player.level_system:
+		var needed = float(_player.level_system.xp_to_next_level())
+		_update_xp_bar(float(_player.level_system.xp), needed)
 
 
 func _set_level(lvl: int) -> void:
-	_level_label.text = "Lv %d" % lvl
+	# Level label removed from the HUD; only update the big XP screen if present.
+	if _xp_level_label:
+		_xp_level_label.text = "LEVEL %d" % lvl
+
+
+func _build_xp_panel() -> void:
+	_xp_panel = Panel.new()
+	_xp_panel.size = Vector2(_XP_PANEL_W, _XP_PANEL_H)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.05, 0.07, 0.92)
+	sb.border_color = GOLD_DARK
+	sb.border_width_left = 2
+	sb.border_width_right = 2
+	sb.border_width_top = 2
+	sb.border_width_bottom = 2
+	sb.corner_radius_top_left = 6
+	sb.corner_radius_top_right = 6
+	sb.corner_radius_bottom_left = 6
+	sb.corner_radius_bottom_right = 6
+	sb.shadow_color = Color(0, 0, 0, 0.6)
+	sb.shadow_size = 4
+	_xp_panel.add_theme_stylebox_override("panel", sb)
+	add_child(_xp_panel)
+
+	_xp_level_label = Label.new()
+	_xp_level_label.text = "LEVEL 1"
+	_xp_level_label.add_theme_font_size_override("font_size", 18)
+	_xp_level_label.add_theme_color_override("font_color", GOLD)
+	_xp_level_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_xp_level_label.add_theme_constant_override("outline_size", 2)
+	_xp_level_label.position = Vector2(10, 4)
+	_xp_panel.add_child(_xp_level_label)
+
+	# XP bar background
+	_xp_bar_bg = ColorRect.new()
+	_xp_bar_bg.color = Color(0.10, 0.10, 0.13, 0.95)
+	_xp_bar_bg.position = Vector2(10, _XP_PANEL_H - _XP_BAR_H - 8)
+	_xp_bar_bg.size = Vector2(_XP_PANEL_W - 20, _XP_BAR_H)
+	_xp_panel.add_child(_xp_bar_bg)
+
+	# XP bar fill — gold, grows left → right
+	_xp_bar_fill = ColorRect.new()
+	_xp_bar_fill.color = GOLD
+	_xp_bar_fill.position = Vector2(10, _XP_PANEL_H - _XP_BAR_H - 8)
+	_xp_bar_fill.size = Vector2(0, _XP_BAR_H)
+	_xp_panel.add_child(_xp_bar_fill)
+
+	# XP amount overlay ("1200 / 3500"), centred on the bar
+	_xp_amount_label = Label.new()
+	_xp_amount_label.text = "0 / 0"
+	_xp_amount_label.add_theme_font_size_override("font_size", 11)
+	_xp_amount_label.add_theme_color_override("font_color", Color(0.97, 0.97, 0.97))
+	_xp_amount_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_xp_amount_label.add_theme_constant_override("outline_size", 2)
+	_xp_amount_label.position = Vector2(10, _XP_PANEL_H - _XP_BAR_H - 10)
+	_xp_amount_label.size = Vector2(_XP_PANEL_W - 20, _XP_BAR_H + 4)
+	_xp_amount_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_xp_amount_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_xp_panel.add_child(_xp_amount_label)
+
+
+func _update_xp_bar(xp: float, xp_needed: float) -> void:
+	if not _xp_bar_fill:
+		return
+	var ratio = 0.0 if xp_needed <= 0.0 else clampf(xp / xp_needed, 0.0, 1.0)
+	_xp_bar_fill.size = Vector2((_XP_PANEL_W - 20) * ratio, _XP_BAR_H)
+	if _xp_amount_label:
+		_xp_amount_label.text = "%d / %d" % [int(xp), int(xp_needed)]
 
 
 # ──────────────────────────────────────────────────────────────
-# Spell rune column (left side, mid-screen)
+# Unified bottom action bar — 3 quickbar items + 7 spells = 10 buttons
 # ──────────────────────────────────────────────────────────────
 
+const ACTION_BAR_SIZE := 80.0
+const ACTION_BAR_GAP := 8.0
+const ACTION_BAR_TOTAL := 10
+const ACTION_BAR_BOTTOM_MARGIN := 24.0
+const ACTION_BAR_LABELS := ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+const ACTION_BAR_WIDTH := ACTION_BAR_TOTAL * ACTION_BAR_SIZE + (ACTION_BAR_TOTAL - 1) * ACTION_BAR_GAP
+var _action_bar_panel: Control  # legacy ref — kept for save/migration code paths
+
+
+# Project is locked to 1920×1080 viewport (project.godot). Hardcode so we never
+# get a 0×0 viewport at build time.
+const _HUD_WIDTH := 1920.0
+const _HUD_HEIGHT := 1080.0
+
+
+func _action_bar_slot_world_pos(index: int) -> Vector2:
+	var start_x := _HUD_WIDTH * 0.5 - ACTION_BAR_WIDTH * 0.5
+	var y := _HUD_HEIGHT - ACTION_BAR_SIZE - ACTION_BAR_BOTTOM_MARGIN
+	return Vector2(start_x + index * (ACTION_BAR_SIZE + ACTION_BAR_GAP), y)
+
+
+# Single builder for ALL 10 slots. No parent container, no anchors. Direct
+# children of the HUD CanvasLayer. Quickbar refs land in _quickbar_buttons
+# (first 3 visible + 3 hidden off-screen for the inventory data slots);
+# spell refs land in _spell_runes.
+func _build_action_bar() -> void:
+	# Visible quickbar slots 0, 1, 2 (hotkeys 1, 2, 3).
+	for i in 3:
+		var btn := _make_action_bar_slot(i)
+		btn.position = _action_bar_slot_world_pos(i)
+		var slot_idx = i
+		btn.pressed.connect(func(): _on_quickbar_pressed(slot_idx))
+		add_child(btn)
+		_quickbar_buttons.append(btn)
+	# Hidden quickbar data slots 3, 4, 5 (inventory drag/drop still references them).
+	for i in range(3, QUICKBAR_SLOTS):
+		var hidden_btn := Button.new()
+		hidden_btn.focus_mode = Control.FOCUS_NONE
+		hidden_btn.custom_minimum_size = Vector2(ACTION_BAR_SIZE, ACTION_BAR_SIZE)
+		hidden_btn.size = hidden_btn.custom_minimum_size
+		hidden_btn.position = Vector2(-1000, -1000)
+		hidden_btn.visible = false
+		var hidden_idx = i
+		hidden_btn.pressed.connect(func(): _on_quickbar_pressed(hidden_idx))
+		add_child(hidden_btn)
+		_quickbar_buttons.append(hidden_btn)
+	# Visible spell slots 3..9 of the action bar (hotkeys 4-0).
+	for s in SPELL_SLOTS:
+		var bar_index := 3 + s
+		var btn2 := _make_action_bar_slot(bar_index)
+		btn2.position = _action_bar_slot_world_pos(bar_index)
+		add_child(btn2)
+		_spell_runes.append(btn2)
+
+
+func _make_action_bar_slot(bar_index: int) -> Button:
+	# One shared chrome for all 10 slots — items, spells, anything.
+	# Caller is responsible for setting btn.position (world coords) and parenting.
+	var btn := Button.new()
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.custom_minimum_size = Vector2(ACTION_BAR_SIZE, ACTION_BAR_SIZE)
+	btn.size = btn.custom_minimum_size
+
+	var sty := StyleBoxFlat.new()
+	sty.bg_color = Color(0.085, 0.072, 0.060, 0.92)
+	sty.border_color = Color(0.55, 0.45, 0.22)
+	sty.set_border_width_all(2)
+	sty.set_corner_radius_all(6)
+	btn.add_theme_stylebox_override("normal", sty)
+
+	var hover := sty.duplicate()
+	hover.bg_color = Color(0.15, 0.13, 0.10, 0.96)
+	hover.border_color = Color(0.918, 0.702, 0.031)
+	hover.set_border_width_all(3)
+	btn.add_theme_stylebox_override("hover", hover)
+
+	var pressed := sty.duplicate()
+	pressed.bg_color = Color(0.06, 0.05, 0.04, 0.98)
+	btn.add_theme_stylebox_override("pressed", pressed)
+
+	# Hotkey badge in the top-left corner.
+	var lbl := Label.new()
+	lbl.text = ACTION_BAR_LABELS[bar_index]
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
+	lbl.add_theme_color_override("font_outline_color", Color.BLACK)
+	lbl.add_theme_constant_override("outline_size", 2)
+	lbl.position = Vector2(6, 4)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.z_index = 10
+	btn.add_child(lbl)
+	return btn
+
+
+# Kept as a no-op for older code paths that may reference it. Real building
+# happens in _build_action_bar().
 func _build_spell_column() -> void:
-	var vp_size := get_viewport().get_visible_rect().size
-	var start_y: float = vp_size.y * 0.5 - (SPELL_SLOTS * SPELL_RUNE_GAP) * 0.5
-	for i in SPELL_SLOTS:
-		var rune := _SpellRune.new()
-		rune.rune_size = SPELL_RUNE_SIZE
-		rune.key_label_text = SPELL_KEYS[i]
-		rune.position = Vector2(ORB_MARGIN, start_y + i * SPELL_RUNE_GAP)
-		add_child(rune)
-		_spell_runes.append(rune)
+	pass
 
 
 func _refresh_spell_slots() -> void:
-	if not _player or not _player.has_method("get_equipped_spells"):
+	# Action-bar buttons just show a label for now; spell icons can be wired in
+	# next pass via ItemIconHelper / a TextureRect child.
+	if not _player:
 		return
-	# spell_book.equipped_spells holds SpellDefinition refs in order
 	var sb = _player.get("spell_book")
-	if sb == null or not sb.has_method("get_equipped"):
+	if sb == null:
 		return
-	var spells = sb.get_equipped() if sb.has_method("get_equipped") else null
 	for i in _spell_runes.size():
-		var rune := _spell_runes[i]
-		if spells and i < spells.size() and spells[i] != null:
-			rune.set_spell(spells[i])
-		else:
-			rune.clear_spell()
+		var btn := _spell_runes[i] as Button
+		if not btn:
+			continue
+		var spell = null
+		if i < sb.spell_slots.size():
+			spell = sb.spell_slots[i]
+		btn.tooltip_text = spell.spell_name if spell and "spell_name" in spell else ""
 
 
 # ──────────────────────────────────────────────────────────────
@@ -303,61 +497,8 @@ func _refresh_spell_slots() -> void:
 # ──────────────────────────────────────────────────────────────
 
 func _build_quickbar() -> void:
-	var vp_size := get_viewport().get_visible_rect().size
-	var total_w: float = QUICKBAR_SLOTS * QUICKBAR_SLOT_SIZE + (QUICKBAR_SLOTS - 1) * 8.0
-	var start_x: float = vp_size.x * 0.5 - total_w * 0.5
-	var y: float = vp_size.y - QUICKBAR_SLOT_SIZE - 32.0
-
-	for i in QUICKBAR_SLOTS:
-		var btn := Button.new()
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.custom_minimum_size = Vector2(QUICKBAR_SLOT_SIZE, QUICKBAR_SLOT_SIZE)
-		btn.size = btn.custom_minimum_size
-		btn.position = Vector2(start_x + i * (QUICKBAR_SLOT_SIZE + 8.0), y)
-
-		# Normal — dark panel, subtle warm border
-		var sty := StyleBoxFlat.new()
-		sty.bg_color = PANEL_BG
-		sty.border_color = BORDER
-		sty.set_border_width_all(2)
-		sty.set_corner_radius_all(4)
-		btn.add_theme_stylebox_override("normal", sty)
-
-		# Hover — bright gold border, slight bg lift
-		var hover := sty.duplicate() as StyleBoxFlat
-		hover.bg_color = PANEL_BG.lightened(0.10)
-		hover.border_color = GOLD
-		hover.set_border_width_all(3)
-		btn.add_theme_stylebox_override("hover", hover)
-
-		# Pressed — darker bg, full gold border
-		var pressed_sty := sty.duplicate() as StyleBoxFlat
-		pressed_sty.bg_color = Color(0.075, 0.067, 0.060, 0.95)
-		pressed_sty.border_color = GOLD
-		pressed_sty.set_border_width_all(3)
-		btn.add_theme_stylebox_override("pressed", pressed_sty)
-
-		# Focus — bright gold (keyboard navigation)
-		var focus_sty := sty.duplicate() as StyleBoxFlat
-		focus_sty.border_color = GOLD
-		focus_sty.set_border_width_all(3)
-		btn.add_theme_stylebox_override("focus", focus_sty)
-
-		# Number badge
-		var num := Label.new()
-		num.text = str(i + 1)
-		num.add_theme_font_size_override("font_size", 18)
-		num.add_theme_color_override("font_color", GOLD)
-		num.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-		num.add_theme_constant_override("outline_size", 2)
-		num.position = Vector2(6, 4)
-		num.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		btn.add_child(num)
-
-		var slot_idx = i
-		btn.pressed.connect(func(): _on_quickbar_pressed(slot_idx))
-		add_child(btn)
-		_quickbar_buttons.append(btn)
+	# No-op — all action-bar building now happens in _build_action_bar().
+	pass
 
 
 const EQUIPPED_GREEN := Color(0.353, 0.918, 0.502)
@@ -412,15 +553,16 @@ func _refresh_quickbar() -> void:
 					cnt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 					btn.add_child(cnt)
 		# Apply equipped highlight — green border + bg tint when this slot holds
-		# the currently equipped item. Hover and pressed states are unchanged.
+		# the currently equipped item; otherwise the universal amber slot chrome.
+		# Hover and pressed states are unchanged.
 		var sty := btn.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
 		if equipped:
 			sty.bg_color = Color(0.094, 0.137, 0.075, 0.92)
 			sty.border_color = EQUIPPED_GREEN
 			sty.set_border_width_all(3)
 		else:
-			sty.bg_color = PANEL_BG
-			sty.border_color = BORDER
+			sty.bg_color = Color(0.085, 0.072, 0.060, 0.92)
+			sty.border_color = Color(0.55, 0.45, 0.22)
 			sty.set_border_width_all(2)
 		btn.add_theme_stylebox_override("normal", sty)
 
@@ -868,10 +1010,13 @@ class _SpellRune extends Control:
 		var lbl := Label.new()
 		lbl.text = key_label_text
 		lbl.add_theme_font_size_override("font_size", 16)
-		lbl.add_theme_color_override("font_color", Color(0.918, 0.702, 0.031))
-		lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+		# Match the quickbar slot label exactly: top-left corner, bright amber.
+		lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
+		lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 		lbl.add_theme_constant_override("outline_size", 2)
-		lbl.position = Vector2(rune_size - 18, rune_size - 22)
+		lbl.position = Vector2(6, 4)
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lbl.z_index = 10
 		add_child(lbl)
 
 	func set_spell(s: Object) -> void:
@@ -883,26 +1028,31 @@ class _SpellRune extends Control:
 		queue_redraw()
 
 	func _draw() -> void:
+		# Match the quickbar slot chrome exactly: 80×80 filled, 2 px amber border,
+		# rounded corners. No more sunken-inside-the-frame look.
 		var has_spell := spell_def != null
 		var center := Vector2(rune_size * 0.5, rune_size * 0.5)
 		var r := rune_size * 0.5 - 2.0
-		# Stone base (always shown)
-		draw_rect(Rect2(2, 2, rune_size - 4, rune_size - 4), Color(0.110, 0.098, 0.090, 0.92), true)
-		draw_rect(Rect2(2, 2, rune_size - 4, rune_size - 4), Color(0.471, 0.443, 0.420), false, 1.0)
+		# Full-size base
+		draw_rect(Rect2(0, 0, rune_size, rune_size), Color(0.085, 0.072, 0.060, 0.92), true)
+		# 2 px amber border
+		var border_col := Color(0.55, 0.45, 0.22)
+		draw_rect(Rect2(0, 0, rune_size, rune_size), border_col, false, 2.0)
 		if not has_spell:
-			# Scratched empty rune
-			draw_line(Vector2(rune_size * 0.3, rune_size * 0.3), Vector2(rune_size * 0.7, rune_size * 0.7), Color(0.4, 0.4, 0.4), 1.0)
+			# Empty slot — thin diagonal scratch like a chalked-off rune
+			draw_line(Vector2(rune_size * 0.3, rune_size * 0.3), Vector2(rune_size * 0.7, rune_size * 0.7), Color(0.4, 0.4, 0.4, 0.6), 1.0)
 			return
-		# Glow when ready
+		# Glow when ready (no cooldown)
 		if cooldown_ratio <= 0.001:
 			draw_circle(center, r * 0.6, Color(0.918, 0.702, 0.031, 0.18))
-		# Center sigil — placeholder filled circle in gold
+		# Center sigil placeholder — gold circle. (Replaced by an item icon
+		# once we wire spell icons into the renderer.)
 		draw_circle(center, r * 0.4, Color(0.792, 0.541, 0.016, 0.85))
 		draw_arc(center, r * 0.4, 0.0, TAU, 32, Color(0.918, 0.702, 0.031), 2.0)
-		# Cooldown sweep — a dark mask covering the bottom portion
+		# Cooldown sweep
 		if cooldown_ratio > 0.0:
-			var height := (rune_size - 4) * cooldown_ratio
-			draw_rect(Rect2(2, 2 + (rune_size - 4) - height, rune_size - 4, height), Color(0, 0, 0, 0.55), true)
+			var height := rune_size * cooldown_ratio
+			draw_rect(Rect2(0, rune_size - height, rune_size, height), Color(0, 0, 0, 0.55), true)
 
 
 class _QuestArrowPainter extends Control:
@@ -930,12 +1080,7 @@ class _QuestArrowPainter extends Control:
 
 # ── Class Meter (Rage / Mana Flow / Focus / Adrenaline) ────────────────────
 
-var _meter_panel: Panel
-var _meter_fill: ColorRect
-var _meter_label: Label
 var _meter_name: String = ""
-const _METER_W := 540.0  # wider so the % readout has room
-const _METER_H := 22.0   # taller so it reads from the corner of your eye
 
 const _METER_COLORS := {
 	"warrior": Color(0.95, 0.25, 0.18),
@@ -953,70 +1098,21 @@ const _METER_NAMES := {
 	"mercenary": "ADRENALINE",
 }
 
-func _build_class_meter() -> void:
-	var vp_size := get_viewport().get_visible_rect().size
-	_meter_panel = Panel.new()
-	_meter_panel.position = Vector2(vp_size.x * 0.5 - _METER_W * 0.5, vp_size.y - 200)
-	_meter_panel.size = Vector2(_METER_W, _METER_H + 28)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.06, 0.05, 0.07, 0.92)
-	sb.border_color = Color(0.42, 0.40, 0.36, 0.95)
-	sb.border_width_left = 2
-	sb.border_width_right = 2
-	sb.border_width_top = 2
-	sb.border_width_bottom = 2
-	sb.corner_radius_top_left = 6
-	sb.corner_radius_top_right = 6
-	sb.corner_radius_bottom_left = 6
-	sb.corner_radius_bottom_right = 6
-	sb.shadow_color = Color(0, 0, 0, 0.6)
-	sb.shadow_size = 4
-	_meter_panel.add_theme_stylebox_override("panel", sb)
-	add_child(_meter_panel)
-
-	_meter_label = Label.new()
-	_meter_label.add_theme_font_size_override("font_size", 16)
-	_meter_label.add_theme_color_override("font_color", Color(0.92, 0.92, 0.92))
-	_meter_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	_meter_label.add_theme_constant_override("outline_size", 2)
-	_meter_label.position = Vector2(10, 2)
-	_meter_label.size = Vector2(_METER_W - 20, 22)
-	_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_meter_label.text = ""
-	_meter_panel.add_child(_meter_label)
-
-	var bar_bg := ColorRect.new()
-	bar_bg.color = Color(0.10, 0.10, 0.13, 0.95)
-	bar_bg.position = Vector2(6, 22)
-	bar_bg.size = Vector2(_METER_W - 12, _METER_H)
-	_meter_panel.add_child(bar_bg)
-
-	_meter_fill = ColorRect.new()
-	_meter_fill.position = Vector2(6, 22)
-	_meter_fill.size = Vector2(0, _METER_H)
-	_meter_fill.color = Color(1, 1, 1)
-	_meter_panel.add_child(_meter_fill)
-
-	_meter_panel.visible = false  # only shows once a class is set up
-
 func _on_class_meter_changed(value: float, max_value: float) -> void:
-	if not _meter_panel:
-		return
+	# Drives the right orb's fill + the small label above it.
 	var ratio = clampf(value / maxf(max_value, 0.001), 0.0, 1.0)
-	if _meter_fill:
-		_meter_fill.size = Vector2((_METER_W - 12) * ratio, _METER_H)
-	_meter_panel.visible = true
-	if _meter_label:
+	if _class_orb:
+		_class_orb.set_value(value, max_value)
+	if _class_meter_label:
 		var disp_name: String = _meter_name if _meter_name != "" else "METER"
-		_meter_label.text = disp_name + "  %d%%" % int(ratio * 100.0)
+		_class_meter_label.text = "%s  %d%%" % [disp_name, int(ratio * 100.0)]
 
 func _update_class_meter_label_for_class(class_id: String) -> void:
-	if not _meter_panel:
-		return
 	_meter_name = String(_METER_NAMES.get(class_id, "METER"))
 	var col: Color = _METER_COLORS.get(class_id, Color(0.7, 0.7, 0.7))
-	if _meter_label:
-		_meter_label.text = _meter_name + "  0%"
-		_meter_label.add_theme_color_override("font_color", col)
-	if _meter_fill:
-		_meter_fill.color = col
+	if _class_meter_label:
+		_class_meter_label.text = _meter_name + "  0%"
+		_class_meter_label.add_theme_color_override("font_color", col)
+	if _class_orb:
+		_class_orb.fill_color = col
+		_class_orb.queue_redraw()

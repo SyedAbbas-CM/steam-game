@@ -45,20 +45,21 @@ const ATLAS_FLOOR := Vector2i(5, 0)
 const ATLAS_WALL := Vector2i(4, 0)
 const TILE_SOURCE := 0
 
-const ROOM_COUNT := 11
+const ROOM_COUNT := 12
 
 const PROMPTS := [
-	"1/11  MOVEMENT  —  WASD or arrow keys to walk.\nWalk to the next door.",
-	"2/11  SHOOT  —  Hold SPACE or LEFT CLICK to fire.\nDrop the three skeletons.",
-	"3/11  DASH  —  TAP SPACE (don't hold) to roll forward.\nRoll 3 times.",
-	"4/11  SPRINT  —  Double-tap a direction (WW, AA, SS or DD) to start sprinting.\nSprint for 2 seconds total.",
-	"5/11  STONE TOSS  —  Press T to throw a stone. Hit the BARRELS to blow up the skeletons behind them.",
-	"6/11  SHIELD + PARRY  —  Press R to block with a shield or parry with a buckler.\nSurvive the archer.",
-	"7/11  SNEAK  —  Press C to toggle sneak.\nSneak past the guards.",
-	"8/11  SPELLS  —  F and G cast your equipped spells.\nPress both keys.",
-	"9/11  LOCK-ON  —  Press TAB to lock onto the nearest enemy. Press TAB again to cycle.\nShots auto-aim. Drop all three.",
-	"10/11  INVENTORY  —  Press B to open. Stats tab spends level points.\nOpen and close the inventory.",
-	"11/11  CAPSTONE  —  Use everything you've learned.\nDrop the warden to leave.",
+	"1/12  MOVEMENT  —  WASD or arrow keys to walk.\nWalk to the next door.",
+	"2/12  SHOOT  —  Hold SPACE or LEFT CLICK to fire.\nDrop the three skeletons.",
+	"3/12  DASH  —  TAP SPACE (don't hold) to roll forward.\nRoll 3 times.",
+	"4/12  SPRINT  —  Double-tap a direction (WW, AA, SS or DD) to start sprinting.\nSprint for 2 seconds total.",
+	"5/12  SCOUT VIEW  —  Hold V to peek toward where you're aiming.\nHold V for 2 seconds.",
+	"6/12  STONE TOSS  —  Press T to throw a stone. Hit the BARRELS to blow up the skeletons behind them — or pelt the skeleton directly to STUN it.",
+	"7/12  SHIELD + PARRY  —  Press R to block with a shield or parry with a buckler.\nSurvive the archer.",
+	"8/12  SNEAK  —  Press C to toggle sneak.\nSneak past the guards.",
+	"9/12  SPELLS  —  F and G cast your equipped spells.\nPress both keys.",
+	"10/12  LOCK-ON  —  Press TAB to lock onto the nearest enemy. Press TAB again to cycle.\nShots auto-aim. Drop all three.",
+	"11/12  INVENTORY  —  Press B to open. Stats tab spends level points.\nOpen and close the inventory.",
+	"12/12  CAPSTONE  —  Use everything you've learned.\nDrop the warden to leave.",
 ]
 
 var _player: Node2D
@@ -84,6 +85,7 @@ var _label_layer: CanvasLayer
 var _current_room: int = 0
 var _dash_taps: int = 0
 var _sprint_held: float = 0.0
+var _scout_held: float = 0.0
 var _stone_throws: int = 0
 var _shield_timer: float = 0.0
 var _shield_started: bool = false
@@ -414,7 +416,7 @@ func _process(delta: float) -> void:
 func _update_room_logic(delta: float) -> void:
 	# Top up MP + stamina in the spell room so F/G can always fire, regardless
 	# of equipped weapon/class costs.
-	if _current_room == 7 and _player:
+	if _current_room == 8 and _player:
 		if "mp" in _player and "max_mp" in _player:
 			_player.mp = _player.max_mp
 		if "stamina" in _player and "max_stamina" in _player:
@@ -425,11 +427,10 @@ func _update_room_logic(delta: float) -> void:
 			if not _room_completed[0] and _player.global_position.x > -ROOM_W * 0.25:
 				_complete_room(0)
 		1:
-			# Combat: clear the dummies. Auto-pass if armed and no enemies left.
 			if not _room_completed[1] and _was_armed(1) and _alive_in_room(1) == 0:
 				_complete_room(1)
 		2:
-			# Dash: rising-edge press counts. Tap, don't hold.
+			# Dash
 			if not _room_completed[2]:
 				if Input.is_action_just_pressed("dash"):
 					_dash_taps += 1
@@ -437,8 +438,7 @@ func _update_room_logic(delta: float) -> void:
 				if _dash_taps >= 3:
 					_complete_room(2)
 		3:
-			# Sprint: accumulate time the player is actually sprinting (any path:
-			# double-tap WASD or SHIFT-on-empty-weapon both set _is_sprinting).
+			# Sprint
 			if not _room_completed[3]:
 				if _player.get("_is_sprinting"):
 					_sprint_held += delta
@@ -446,35 +446,41 @@ func _update_room_logic(delta: float) -> void:
 				if _sprint_held >= 2.0:
 					_complete_room(3)
 		4:
-			# Stone toss: kill the three targets. Player learns by aiming and tossing.
+			# Scout view: hold V for 2 seconds total
 			if not _room_completed[4]:
-				if Input.is_action_just_pressed("stone_toss"):
-					_stone_throws += 1
-				var alive := _alive_in_room(4)
-				_set_progress("Targets left: %d   (T tosses, throws made: %d)" % [alive, _stone_throws])
-				if _was_armed(4) and alive == 0:
+				if Input.is_action_pressed("scout_view"):
+					_scout_held += delta
+				_set_progress("Hold V to peek — %.1f / 2.0 s" % _scout_held)
+				if _scout_held >= 2.0:
 					_complete_room(4)
 		5:
-			# Shield + parry: timer ticks unconditionally while in the room so
-			# the door cannot get stuck. Either survive 5 s OR drop the archer.
+			# Stone toss
 			if not _room_completed[5]:
-				_shield_timer += delta
+				if Input.is_action_just_pressed("stone_toss"):
+					_stone_throws += 1
 				var alive := _alive_in_room(5)
-				_set_progress("Hold R to block — %.1f / 5.0 s    Archer left: %d" % [_shield_timer, alive])
-				if _shield_timer >= 5.0 or (_was_armed(5) and alive == 0):
+				_set_progress("Targets left: %d   (T tosses, throws made: %d)" % [alive, _stone_throws])
+				if _was_armed(5) and alive == 0:
 					_complete_room(5)
 		6:
-			# Sneak: detect a C press while in the room. (The old "cross the room"
-			# threshold lived past the room-flip point, so the door never opened.)
+			# Shield + parry
 			if not _room_completed[6]:
+				_shield_timer += delta
+				var alive := _alive_in_room(6)
+				_set_progress("Hold R to block — %.1f / 5.0 s    Archer left: %d" % [_shield_timer, alive])
+				if _shield_timer >= 5.0 or (_was_armed(6) and alive == 0):
+					_complete_room(6)
+		7:
+			# Sneak
+			if not _room_completed[7]:
 				if Input.is_action_just_pressed("sneak_toggle"):
 					_sneaked_once = true
 				_set_progress("Press C to sneak — %s" % ("done" if _sneaked_once else "waiting"))
 				if _sneaked_once:
-					_complete_room(6)
-		7:
-			# Spells: press F and G
-			if not _room_completed[7]:
+					_complete_room(7)
+		8:
+			# Spells F + G
+			if not _room_completed[8]:
 				if Input.is_action_just_pressed("spell_slot_1"):
 					_spell_f_pressed = true
 				if Input.is_action_just_pressed("spell_slot_2"):
@@ -484,30 +490,28 @@ func _update_room_logic(delta: float) -> void:
 					"DONE" if _spell_g_pressed else "press G",
 				])
 				if _spell_f_pressed and _spell_g_pressed:
-					_complete_room(7)
-		8:
-			# Lock-on: count TAB presses (acquire + cycle) and require all enemies dead
-			if not _room_completed[8]:
-				if Input.is_action_just_pressed("lock_on"):
-					_lock_on_presses += 1
-				var alive := _alive_in_room(8)
-				_set_progress("TAB presses: %d / 2   Targets left: %d" % [_lock_on_presses, alive])
-				if _was_armed(8) and _lock_on_presses >= 2 and alive == 0:
 					_complete_room(8)
 		9:
-			# Inventory: latch when the screen opens. Just opening it once counts
-			# — the user can close it however they like. Open→close edge detection
-			# was unreliable because CanvasLayer.visible doesn't track the panel.
+			# Lock-on
 			if not _room_completed[9]:
+				if Input.is_action_just_pressed("lock_on"):
+					_lock_on_presses += 1
+				var alive := _alive_in_room(9)
+				_set_progress("TAB presses: %d / 2   Targets left: %d" % [_lock_on_presses, alive])
+				if _was_armed(9) and _lock_on_presses >= 2 and alive == 0:
+					_complete_room(9)
+		10:
+			# Inventory
+			if not _room_completed[10]:
 				if _inventory_screen and _inventory_screen.is_open():
 					_inventory_was_open = true
 				_set_progress("Press B to open the inventory." if not _inventory_was_open else "Done — door open.")
 				if _inventory_was_open:
-					_complete_room(9)
-		10:
+					_complete_room(10)
+		11:
 			# Capstone
-			if not _room_completed[10] and _was_armed(10) and _alive_in_room(10) == 0:
-				_complete_room(10)
+			if not _room_completed[11] and _was_armed(11) and _alive_in_room(11) == 0:
+				_complete_room(11)
 
 
 func _was_armed(idx: int) -> bool:
@@ -525,67 +529,64 @@ func _arm_room(idx: int) -> void:
 			_tag_room(_spawn_dummy(Vector2(cx1 - 30, -15), 6), 1)
 			_tag_room(_spawn_dummy(Vector2(cx1, 0), 6), 1)
 			_tag_room(_spawn_dummy(Vector2(cx1 + 30, 15), 6), 1)
-		4:
-			# Three barrel + skeleton pairs. Stone hits barrel → barrel explodes
-			# → skeleton in the blast dies. Teaches stone toss AND environmental kills.
-			var room_cx: float = ROOM_GAP * 4
+		5:
+			# Stone toss — three barrel + skeleton pairs. Throw at the barrel for
+			# the explosion combo, or pelt the skeleton directly to stun-kill it.
+			var room_cx: float = ROOM_GAP * 5
 			var pairs := [Vector2(0, -28), Vector2(20, 0), Vector2(0, 28)]
 			for offset in pairs:
 				var enemy := _spawn_dummy(Vector2(room_cx + 50, 0) + offset, 15)
 				if enemy:
 					enemy.speed = 0.0
 					enemy.shoot_interval = 9999.0
-					_tag_room(enemy, 4)
-				# Barrel sits a few pixels in front of the enemy (toward the player)
+					_tag_room(enemy, 5)
 				_spawn_barrel(Vector2(room_cx + 35, 0) + offset)
-		5:
-			# Killable archer — survive timer OR drop it. Low HP since the room
-			# is about blocking, not a damage check.
-			var atk := _spawn_dummy_from(ARCHER_DEF, Vector2(ROOM_GAP * 5 + 50, 0), 15)
+		6:
+			# Killable archer — survive timer OR drop it.
+			var atk := _spawn_dummy_from(ARCHER_DEF, Vector2(ROOM_GAP * 6 + 50, 0), 15)
 			if atk:
 				atk.shoot_interval = 2.0
 				atk.speed = 0.0
-				_tag_room(atk, 5)
-		6:
+				_tag_room(atk, 6)
+		7:
 			# Three harmless guards — slow, don't shoot. Sneak through or kill.
-			var cx6: float = ROOM_GAP * 6
+			var cx7: float = ROOM_GAP * 7
 			for offset in [Vector2(0, -28), Vector2(20, 0), Vector2(0, 28)]:
-				var guard := _spawn_dummy(Vector2(cx6, 0) + offset, 18)
+				var guard := _spawn_dummy(Vector2(cx7, 0) + offset, 18)
 				if guard:
 					guard.speed = 6.0
 					guard.shoot_interval = 9999.0
-					_tag_room(guard, 6)
-		7:
-			# Spell room — three skeletons to practice F / G casts on.
-			# Mana is auto-replenished while you're in this room (see _update_room_logic).
-			var cx7: float = ROOM_GAP * 7
+					_tag_room(guard, 7)
+		8:
+			# Spell room — three skeletons. Mana refilled each frame in _process.
+			var cx8: float = ROOM_GAP * 8
 			for offset in [Vector2(30, -25), Vector2(40, 0), Vector2(30, 25)]:
-				var t := _spawn_dummy(Vector2(cx7, 0) + offset, 20)
+				var t := _spawn_dummy(Vector2(cx8, 0) + offset, 20)
 				if t:
 					t.speed = 0.0
 					t.shoot_interval = 9999.0
-					_tag_room(t, 7)
-		8:
-			# Lock-on room — three skeletons in a row so cycling matters.
-			var cx8: float = ROOM_GAP * 8
-			for offset in [Vector2(40, -25), Vector2(50, 0), Vector2(40, 25)]:
-				var t := _spawn_dummy(Vector2(cx8, 0) + offset, 18)
-				if t:
-					t.speed = 8.0  # slight motion so lock-on feels meaningful
-					t.shoot_interval = 9999.0
 					_tag_room(t, 8)
-		10:
+		9:
+			# Lock-on room — three skeletons in a row so cycling matters.
+			var cx9: float = ROOM_GAP * 9
+			for offset in [Vector2(40, -25), Vector2(50, 0), Vector2(40, 25)]:
+				var t := _spawn_dummy(Vector2(cx9, 0) + offset, 18)
+				if t:
+					t.speed = 8.0
+					t.shoot_interval = 9999.0
+					_tag_room(t, 9)
+		11:
 			# Capstone warden — tougher archer plus two skeleton flankers.
-			var boss := _spawn_dummy_from(ARCHER_DEF, Vector2(ROOM_GAP * 10 + 20, 0), 120)
+			var boss := _spawn_dummy_from(ARCHER_DEF, Vector2(ROOM_GAP * 11 + 20, 0), 120)
 			if boss:
 				boss.shoot_interval = 1.0
-				_tag_room(boss, 10)
-			var cx10: float = ROOM_GAP * 10
+				_tag_room(boss, 11)
+			var cx11: float = ROOM_GAP * 11
 			for offset in [Vector2(0, -32), Vector2(0, 32)]:
-				var flanker := _spawn_dummy(Vector2(cx10 + 35, 0) + offset, 40)
+				var flanker := _spawn_dummy(Vector2(cx11 + 35, 0) + offset, 40)
 				if flanker:
 					flanker.speed = 22.0
-					_tag_room(flanker, 10)
+					_tag_room(flanker, 11)
 
 
 func _tag_room(enemy: Node, idx: int) -> void:

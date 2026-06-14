@@ -30,6 +30,20 @@ var _btn_map: Button
 var _quickbar_slots: Array[Button] = []
 var _quickbar_panel: Control
 const QUICKBAR_SLOT_SIZE = 80
+# Unified bottom action bar — 3 quickbar items + 7 spell slots = 10 identical
+# buttons living inside a single bottom-anchored panel. No viewport math at
+# build time; positions are local to the panel which is bottom-centered.
+const ACTION_BAR_SLOT_SIZE = 80
+const ACTION_BAR_GAP = 8
+const ACTION_BAR_TOTAL_SLOTS = 10
+const ACTION_BAR_BOTTOM_MARGIN = 24
+const ACTION_BAR_LABELS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+const ACTION_BAR_TOTAL_WIDTH = ACTION_BAR_TOTAL_SLOTS * ACTION_BAR_SLOT_SIZE + (ACTION_BAR_TOTAL_SLOTS - 1) * ACTION_BAR_GAP
+# Slot position is LOCAL to the action-bar panel — y = 0 because the panel
+# is exactly the height of one slot.
+static func _action_bar_slot_local_pos(index: int) -> Vector2:
+	return Vector2(index * (ACTION_BAR_SLOT_SIZE + ACTION_BAR_GAP), 0)
+var _action_bar_panel: Control
 const QUICKBAR_ICON_SIZE = 52
 const QUICKBAR_SLOTS = 6
 const QUICKBAR_GAP = 84
@@ -45,9 +59,9 @@ var _spell_panel: Control
 var _stone_toss_btn: Button
 const SPELL_SLOT_SIZE = 72
 const SPELL_ICON_SIZE = 44
-const SPELL_SLOTS = 6
+const SPELL_SLOTS = 7  # was 6 — added a 7th slot so spells map to keys 4-0
 const SPELL_GAP = 76
-const SPELL_KEYS = ["F", "G", "H", "J", "K", "L"]
+const SPELL_KEYS = ["4", "5", "6", "7", "8", "9", "0"]
 var _mobile_spell_slots: Array[Button] = []
 var _mobile_spell_panel: Control
 var _mobile_stone_toss_btn: Button
@@ -134,17 +148,39 @@ func setup(player: CharacterBody2D) -> void:
 	_update_level(player.level_system.level)
 	if gm and gm.has_method("load_quickbar"):
 		gm.load_quickbar(self)
-	# Pre-populate quickbar if all slots empty (first run)
+	# Pre-populate quickbar if all slots empty (first run).
+	# Layout (hotkeys 1, 2, 3 are quickbar; 4-9, 0 are spells):
+	#   slot 0  →  starter weapon (sword / bow / staff per class)
+	#   slot 1  →  Red Potion (HP)
+	#   slot 2  →  Blue Potion (MP)
 	var all_empty = true
 	for s in _quickbar_items:
 		if s != "":
 			all_empty = false
 			break
 	if all_empty:
-		_quickbar_items[0] = "Red Potion"
-		_quickbar_items[1] = "Apple"
+		_quickbar_items[0] = _starter_weapon_name_for_class()
+		_quickbar_items[1] = "Red Potion"
+		_quickbar_items[2] = "Blue Potion"
 	_refresh_quickbar()
 	_refresh_spell_slots()
+
+
+func _starter_weapon_name_for_class() -> String:
+	# Pick a sensible weapon slot icon per class. Items are looked up by name,
+	# so these strings must match a real item resource in the registry.
+	var pc := ""
+	if _player and _player.has_method("_get_player_class"):
+		pc = _player._get_player_class()
+	match pc:
+		"archer", "ranger":
+			return "Bow"
+		"wizard":
+			return "Staff"
+		"warrior":
+			return "Short Sword"
+		_:
+			return "Short Sword"
 
 func _build_vitals_panel() -> void:
 	var panel = Control.new()
@@ -846,45 +882,89 @@ func get_quickbar_slot_at_pos(screen_pos: Vector2) -> int:
 				return i
 	return -1
 
-func _build_quickbar() -> void:
-	_quickbar_panel = Control.new()
-	_quickbar_panel.name = "Quickbar"
-	add_child(_quickbar_panel)
+func _ensure_action_bar_panel() -> void:
+	if _action_bar_panel and is_instance_valid(_action_bar_panel):
+		return
+	_action_bar_panel = Control.new()
+	_action_bar_panel.name = "ActionBar"
+	_action_bar_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_action_bar_panel.size = Vector2(ACTION_BAR_TOTAL_WIDTH, ACTION_BAR_SLOT_SIZE)
+	# Anchor bottom-center — any viewport size, the panel sits at the same place.
+	_action_bar_panel.anchor_left = 0.5
+	_action_bar_panel.anchor_right = 0.5
+	_action_bar_panel.anchor_top = 1.0
+	_action_bar_panel.anchor_bottom = 1.0
+	_action_bar_panel.offset_left = -ACTION_BAR_TOTAL_WIDTH * 0.5
+	_action_bar_panel.offset_right = ACTION_BAR_TOTAL_WIDTH * 0.5
+	_action_bar_panel.offset_top = -(ACTION_BAR_SLOT_SIZE + ACTION_BAR_BOTTOM_MARGIN)
+	_action_bar_panel.offset_bottom = -ACTION_BAR_BOTTOM_MARGIN
+	add_child(_action_bar_panel)
 
-	# BAG button is at y = 1080 - 220 - MARGIN = 846
-	# Stack 6 slots above it, offset up to avoid overlap with BAG/LOG
-	var base_x = 1920 - 94 - MARGIN
-	var bag_top_y = 1080 - 220 - MARGIN - 100
+
+func _build_quickbar() -> void:
+	_ensure_action_bar_panel()
+	_quickbar_panel = _action_bar_panel  # alias so the rest of the file keeps working
 	_quickbar_slots.clear()
 
+	# Slots 0-2 are visible quickbar buttons (hotkeys 1/2/3). Slots 3-5 of the
+	# data array stay hidden — kept for the inventory drag/drop UI to bind to.
 	for i in range(QUICKBAR_SLOTS):
-		var slot_y = bag_top_y - (QUICKBAR_SLOTS - i) * QUICKBAR_GAP
 		var btn = Button.new()
 		btn.focus_mode = Control.FOCUS_NONE
-		btn.size = Vector2(QUICKBAR_SLOT_SIZE, QUICKBAR_SLOT_SIZE)
-		btn.position = Vector2(base_x, slot_y)
+		btn.size = Vector2(ACTION_BAR_SLOT_SIZE, ACTION_BAR_SLOT_SIZE)
+		_apply_universal_slot_style(btn)
 
-		# Quickbar slot — gold border
-		var sty = StyleBoxFlat.new()
-		sty.bg_color = Color(0.110, 0.098, 0.090, 0.88)
-		sty.border_color = Color(0.471, 0.443, 0.420)
-		sty.set_border_width_all(1)
-		sty.set_corner_radius_all(4)
-		btn.add_theme_stylebox_override("normal", sty)
-
-		var hover_sty = sty.duplicate()
-		hover_sty.bg_color = Color(0.149, 0.137, 0.122, 0.95)
-		hover_sty.border_color = Color(0.918, 0.702, 0.031)
-		hover_sty.set_border_width_all(2)
-		btn.add_theme_stylebox_override("hover", hover_sty)
-
-		var pressed_sty = sty.duplicate()
-		pressed_sty.bg_color = Color(0.075, 0.067, 0.060, 0.98)
-		btn.add_theme_stylebox_override("pressed", pressed_sty)
+		if i < 3:
+			btn.position = _action_bar_slot_local_pos(i)
+			_add_slot_key_label(btn, ACTION_BAR_LABELS[i])
+		else:
+			btn.position = Vector2(-1000, -1000)
+			btn.visible = false
 
 		btn.pressed.connect(_on_quickbar_pressed.bind(i))
-		_quickbar_panel.add_child(btn)
+		_action_bar_panel.add_child(btn)
 		_quickbar_slots.append(btn)
+
+
+func _add_slot_key_label(btn: Button, label_text: String) -> void:
+	# Small hotkey badge in the top-left corner of an action-bar slot.
+	# Named "HotkeyBadge" so _refresh_quickbar can preserve it across refreshes.
+	var lbl := Label.new()
+	lbl.name = "HotkeyBadge"
+	lbl.text = label_text
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	lbl.add_theme_constant_override("outline_size", 2)
+	lbl.position = Vector2(6, 4)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.z_index = 10
+	btn.add_child(lbl)
+
+
+func _apply_universal_slot_style(btn: Button) -> void:
+	# Every slot — item or spell — gets the same warm amber border. The icon
+	# inside the slot tells you what's bound to it, not the chrome around it.
+	var sty := StyleBoxFlat.new()
+	sty.bg_color = Color(0.085, 0.072, 0.060, 0.92)
+	sty.border_color = Color(0.55, 0.45, 0.22)
+	sty.set_border_width_all(2)
+	sty.set_corner_radius_all(6)
+	sty.content_margin_left = 4
+	sty.content_margin_right = 4
+	sty.content_margin_top = 4
+	sty.content_margin_bottom = 4
+	btn.add_theme_stylebox_override("normal", sty)
+
+	var hover := sty.duplicate()
+	hover.bg_color = Color(0.15, 0.13, 0.10, 0.96)
+	hover.border_color = Color(0.918, 0.702, 0.031)
+	hover.set_border_width_all(3)
+	btn.add_theme_stylebox_override("hover", hover)
+
+	var pressed := sty.duplicate()
+	pressed.bg_color = Color(0.06, 0.05, 0.04, 0.98)
+	btn.add_theme_stylebox_override("pressed", pressed)
 
 func _build_mobile_quickbar() -> void:
 	_mobile_quickbar_panel = Control.new()
@@ -924,46 +1004,30 @@ func _build_mobile_quickbar() -> void:
 		_mobile_quickbar_slots.append(btn)
 
 func _build_spell_slots() -> void:
-	_spell_panel = Control.new()
-	_spell_panel.name = "SpellSlots"
-	add_child(_spell_panel)
-
-	# Stack 6 slots on the LEFT side, matching quickbar positioning on right
-	var base_x = MARGIN
-	var bag_top_y = 1080 - 220 - MARGIN - 100
+	_ensure_action_bar_panel()
+	_spell_panel = _action_bar_panel  # same parent as quickbar — one continuous row
 	_spell_slots.clear()
 
+	# Spells occupy slots 3..9 inside the same action bar (hotkeys 4-9, 0).
 	for i in range(SPELL_SLOTS):
-		var slot_y = bag_top_y - (SPELL_SLOTS - i) * SPELL_GAP
+		var bar_index := 3 + i
 		var btn = Button.new()
 		btn.focus_mode = Control.FOCUS_NONE
-		btn.size = Vector2(SPELL_SLOT_SIZE, SPELL_SLOT_SIZE)
-		btn.position = Vector2(base_x, slot_y)
-
-		# Spell slot — arcane purple border
-		var sty = StyleBoxFlat.new()
-		sty.bg_color = Color(0.110, 0.098, 0.090, 0.88)
-		sty.border_color = Color(0.486, 0.227, 0.929)
-		sty.set_border_width_all(1)
-		sty.set_corner_radius_all(4)
-		btn.add_theme_stylebox_override("normal", sty)
-
-		var hover_sty = sty.duplicate()
-		hover_sty.bg_color = Color(0.149, 0.137, 0.122, 0.95)
-		hover_sty.border_color = Color(0.640, 0.421, 0.998)
-		hover_sty.set_border_width_all(2)
-		btn.add_theme_stylebox_override("hover", hover_sty)
+		btn.size = Vector2(ACTION_BAR_SLOT_SIZE, ACTION_BAR_SLOT_SIZE)
+		btn.position = _action_bar_slot_local_pos(bar_index)
+		_apply_universal_slot_style(btn)
+		_add_slot_key_label(btn, ACTION_BAR_LABELS[bar_index])
 
 		btn.pressed.connect(_on_spell_slot_pressed.bind(i))
-		_spell_panel.add_child(btn)
+		_action_bar_panel.add_child(btn)
 		_spell_slots.append(btn)
 
-	# Stone toss indicator (below spell slots, T key)
-	var stone_y = bag_top_y + SPELL_GAP * 0.15
+	# Stone toss indicator — T key. Park it to the LEFT of the leftmost action
+	# bar slot, in the same panel so it travels with the bar.
 	_stone_toss_btn = Button.new()
 	_stone_toss_btn.focus_mode = Control.FOCUS_NONE
-	_stone_toss_btn.size = Vector2(SPELL_SLOT_SIZE, SPELL_SLOT_SIZE)
-	_stone_toss_btn.position = Vector2(base_x, stone_y)
+	_stone_toss_btn.size = Vector2(ACTION_BAR_SLOT_SIZE * 0.7, ACTION_BAR_SLOT_SIZE * 0.7)
+	_stone_toss_btn.position = Vector2(-(ACTION_BAR_SLOT_SIZE * 0.7) - 12, (ACTION_BAR_SLOT_SIZE - ACTION_BAR_SLOT_SIZE * 0.7) * 0.5)
 	var stone_sty = StyleBoxFlat.new()
 	stone_sty.bg_color = Color(0.1, 0.08, 0.04, 0.85)
 	stone_sty.border_color = Color(0.6, 0.5, 0.3)
@@ -1309,16 +1373,21 @@ func _refresh_quickbar() -> void:
 	if _quickbar_slots.size() >= QUICKBAR_SLOTS:
 		for i in range(QUICKBAR_SLOTS):
 			var btn = _quickbar_slots[i]
-			# Clear old children
+			# Clear old icon + labels, but PRESERVE the "HotkeyBadge" number label.
 			for child in btn.get_children():
-				child.queue_free()
+				if child is TextureRect:
+					child.queue_free()
+				elif child is Label and child.name != "HotkeyBadge":
+					child.queue_free()
 
 			var item_name = _quickbar_items[i]
-			var sty = btn.get_theme_stylebox("normal") as StyleBoxFlat
-
+			var sty := btn.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
+			# Universal amber chrome — same as spell slots so the row reads continuous.
 			if sty:
-				sty.border_color = Color(0.4, 0.35, 0.25)
-				sty.set_border_width_all(1)
+				sty.bg_color = Color(0.085, 0.072, 0.060, 0.92)
+				sty.border_color = Color(0.55, 0.45, 0.22)
+				sty.set_border_width_all(2)
+				btn.add_theme_stylebox_override("normal", sty)
 
 			if item_name == "":
 				# Empty slot — show slot number
@@ -1391,18 +1460,12 @@ func _refresh_quickbar() -> void:
 				count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				btn.add_child(count_lbl)
 
-			# Equipped badge + green border for equippable items
+			# Equipped highlight — bright green border + soft green-tinted bg.
 			if em.is_equipped(item):
-				var eq_lbl = Label.new()
-				eq_lbl.text = "E"
-				eq_lbl.add_theme_font_size_override("font_size", 10)
-				eq_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
-				eq_lbl.position = Vector2(2, 0)
-				eq_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				btn.add_child(eq_lbl)
 				if sty:
-					sty.border_color = Color(0.2, 0.6, 0.2)
-					sty.set_border_width_all(2)
+					sty.bg_color = Color(0.094, 0.137, 0.075, 0.92)
+					sty.border_color = Color(0.353, 0.918, 0.502)
+					sty.set_border_width_all(3)
 
 			# "R" key hint for shields and items with special abilities
 			if item.slot_type == EquipmentItem.SlotType.SHIELD or (item.ability_id != "" and item.ability_id != null):

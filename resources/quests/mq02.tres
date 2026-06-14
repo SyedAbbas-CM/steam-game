@@ -6,14 +6,14 @@
 script = ExtResource("1_gen")
 id = "mq02"
 title = "What the Dead Left Behind"
-summary = "The ichor trail leads from the farm to the crypts beneath Ravenhollow's graveyard. Slay 5 blighted undead, defeat the Bone Golem guarding the depths, and recover the carved tablet."
+summary = "The ichor trail leads to the dungeons beneath Ravenhollow itself. Slay 5 blighted undead, defeat the Bone Golem in the depths, and recover the carved tablet."
 level = 2
 location = "haven"
-target_location = "barrows"
+target_location = "haven"
 prerequisite = "mq01"
-boss_dungeon = "Barrows"
+boss_dungeon = "Haven-Dungeons"
 boss_enemy_path = "res://resources/enemies/basic/bone_golem.tres"
-boss_dungeon = "Barrows"
+boss_dungeon = "Haven-Dungeons"
 boss_enemy_path = "res://resources/enemies/basic/bone_golem.tres"
 properties = [{
 "index": 0,

@@ -252,7 +252,10 @@ static func _paint_alchemist_lab(dm, origin: Vector2i, mask: Array,
 	_place(dm, origin, mask, w, h, cx - 2, zy + zh / 2, DecoTiles.DECO_BOOK_STAND, placed)
 	_place(dm, origin, mask, w, h, zx + 1, zy + 3, DecoTiles.DECO_BOOKSHELF_LEFT, placed)
 	_place(dm, origin, mask, w, h, zx + 2, zy + 3, DecoTiles.DECO_BOOKSHELF_RIGHT, placed)
-	_place(dm, origin, mask, w, h, zx + zw - 3, zy + zh - 3, DecoTiles.DECO_EXPLOSIVE_BARREL, placed)
+	# Removed: DECO_EXPLOSIVE_BARREL placed as pure tile (no script) — looked like
+	# an armed barrel but did nothing when shot. Real barrels come from
+	# dungeon_manager._spawn_corridor_explosive_tiles + the "explosive_barrel"
+	# trap_name branch, both of which attach the ExplosiveBarrel script.
 
 	_place_floor_candle(dm, origin, mask, w, h, cx - 1, zy + zh / 2 - 1, placed)
 	_place_floor_candle(dm, origin, mask, w, h, cx + 1, zy + zh / 2 + 1, placed)

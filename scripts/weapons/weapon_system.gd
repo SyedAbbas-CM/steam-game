@@ -13,6 +13,7 @@ var damage_mult: float = 1.0  # set by player for aimed mode (crossbow)
 # Pattern cache: weapon_type → WeaponPattern instance
 var _pattern_cache: Dictionary = {}
 var _default_pattern: WeaponPattern
+var _spell_fire_counter: int = 0  # only every Nth wizard fire plays the spell SFX
 
 @onready var cooldown_timer: Timer = Timer.new()
 
@@ -101,13 +102,20 @@ func try_shoot(origin: Vector2, aim_direction: Vector2) -> void:
 	var cooldown = weapon_pattern.cooldown_override
 	if cooldown <= 0.0:
 		cooldown = equipment_manager.get_attack_speed()
-	# Apply fire_rate buff from status effects (e.g. Battle Cry)
+	# Apply fire_rate buff from status effects (e.g. Battle Cry, Reckless Strike).
 	var total_fire_mult = fire_rate_mult
 	var p = get_parent()
 	if p and p.get("status_effects") and p.status_effects.has_method("get_buff_multiplier"):
 		total_fire_mult *= p.status_effects.get_buff_multiplier("fire_rate")
+	# Mercenary Adrenaline: +0.5%/stack fire rate (up to +50% at full meter).
+	if p and "class_meter" in p and p.has_method("_get_player_class") and p._get_player_class() == "mercenary":
+		total_fire_mult *= 1.0 + p.class_meter * 0.005
 	cooldown_timer.wait_time = maxf(cooldown / total_fire_mult, 0.05)
 	cooldown_timer.start()
+	# Notify the player that a shot was fired — archer uses this to detect
+	# "aiming-down-sights" (stationary regen only when NOT shooting).
+	if p and "_archer_shoot_grace" in p:
+		p._archer_shoot_grace = 0.18
 
 	var fire_data = weapon_pattern.get_fire_data(aim_direction, equipment_manager)
 
@@ -132,11 +140,17 @@ func try_shoot(origin: Vector2, aim_direction: Vector2) -> void:
 					EquipmentItem.SlotType.WEAPON_MELEE:
 						sfx.play("swing", -9.0, 0.1)
 					EquipmentItem.SlotType.WEAPON_RANGED:
-						sfx.play("shoot_a", -9.0, 0.1)
+						sfx.play("shoot_a", -12.0, 0.15)
 					EquipmentItem.SlotType.WEAPON_MAGIC:
-						sfx.play("spell_a", -9.0, 0.1)
+						# Wizard shot used to play "spell_a" at -9 dB every pull, which
+						# read as constant explosions. Throttled to every 3rd cast and
+						# halved in volume — the visual VFX carries the rest.
+						_spell_fire_counter += 1
+						if _spell_fire_counter >= 3:
+							_spell_fire_counter = 0
+							sfx.play("spell_a", -16.0, 0.18, 0.9)
 					_:
-						sfx.play("shoot_a", -9.0, 0.1)
+						sfx.play("shoot_a", -12.0, 0.15)
 
 	for data in fire_data:
 		if data["delay"] > 0.0:
@@ -155,13 +169,31 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	bullet.global_position = origin + data["offset"]
 	bullet.direction = data["direction"]
 	bullet.is_player_bullet = true
-	bullet.speed = equipment_manager.get_bullet_speed() * data["speed_mult"]
+	var player = equipment_manager.get_parent()
+	var projectile_scale = 0.25 if player and player.get("in_dungeon") else 1.0
+	var p = get_parent()
+	# Archer Focus: high focus → faster bullets + longer effective range.
+	#  ≥75 focus: +20% bullet speed (and lifetime scales below for +20% range).
+	#  50–74:    +10% / +10%.
+	#  <50:      baseline.
+	var _archer_speed_mult := 1.0
+	var _archer_range_mult := 1.0
+	if p and "class_meter" in p and p.has_method("_get_player_class"):
+		var _pc_a = p._get_player_class()
+		if _pc_a == "archer" or _pc_a == "ranger":
+			var _f = float(p.class_meter)
+			if _f >= 75.0:
+				_archer_speed_mult = 1.2
+				_archer_range_mult = 1.2
+			elif _f >= 50.0:
+				_archer_speed_mult = 1.1
+				_archer_range_mult = 1.1
+	bullet.speed = equipment_manager.get_bullet_speed() * projectile_scale * data["speed_mult"] * _archer_speed_mult
 	var base_damage = equipment_manager.get_damage()
 	# Apply damage_mult (e.g. crossbow aimed mode)
 	if damage_mult != 1.0:
 		base_damage = int(base_damage * damage_mult)
 	# Apply damage buff from status effects (e.g. Battle Cry)
-	var p = get_parent()
 	if p and p.get("status_effects") and p.status_effects.has_method("get_buff_multiplier"):
 		base_damage = int(base_damage * p.status_effects.get_buff_multiplier("damage"))
 	# WEAKENED/STRENGTHENED damage multiplier
@@ -170,38 +202,28 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	# High-ground combat bonus: +20% damage per height level
 	if p and p.has_method("get_high_ground_damage_mult"):
 		base_damage = int(base_damage * p.get_high_ground_damage_mult())
-	# Class-meter damage hooks — passive ramps that scale with current stack.
-	# Meters are NEVER consumed; they decay over time so the player stays in
-	# their "rhythm zone" by repeating the build-action (kills, casts, focused
-	# hits, swaps). At 100 stacks the effect peaks; at 0 there's no bonus.
+	# Class-meter damage hooks. Phase 1 redesign:
+	#  - Warrior: keep weapon-damage scaling (+0.3%/stack from Rage).
+	#  - Mercenary: damage scaling REMOVED — fire rate + crit chance ramps replace it (above + below).
+	#  - Archer: NO base-damage scaling (Killshot is the only damage spike); per-stack bullet speed/range applied to the bullet itself further down.
+	#  - Wizard: damage scaling REMOVED — empowerment is the lever now.
+	var _killshot_pierce_bonus := 0  # archer Killshot: +3 pierces, applied AFTER the equipment pierce line so it isn't overwritten
 	if p and "class_meter" in p:
 		var pc = p._get_player_class() if p.has_method("_get_player_class") else ""
 		var stack: float = p.class_meter
 		if pc == "warrior":
-			# Rage: up to +30% damage at full stack
+			# Rage: up to +30% weapon damage at full stack
 			base_damage = int(base_damage * (1.0 + stack * 0.003))
-		elif pc == "wizard":
-			# Mana Flow: up to +25% damage at full stack
-			base_damage = int(base_damage * (1.0 + stack * 0.0025))
-			# Arcane Surge meter-full move — next 3 spells +75% damage and free MP
-			if p.has_meta("arcane_surge_charges"):
-				var charges = int(p.get_meta("arcane_surge_charges"))
-				if charges > 0:
-					base_damage = int(base_damage * 1.75)
-					p.set_meta("arcane_surge_charges", charges - 1)
-					if charges - 1 <= 0:
-						p.remove_meta("arcane_surge_charges")
 		elif pc == "ranger" or pc == "archer":
-			# Focus: up to +35% damage at full stack (precision builds)
-			base_damage = int(base_damage * (1.0 + stack * 0.0035))
-			# Killshot meter-full move — next shot is a 5× crit that pierces all
+			# Killshot — scales with focus spent: dmg = 3× + (focus_spent / 100) × 2×.
+			# At 60 focus: 4.2×; at 100 focus: 5×. Pierces 3 enemies.
 			if p.has_meta("killshot_charge"):
-				base_damage = int(base_damage * 5.0)
-				bullet.set("_hits_remaining", 9999)
+				var fs = float(p.get_meta("killshot_focus_spent", 100.0))
+				var mult = 3.0 + clampf(fs / 100.0, 0.0, 1.0) * 2.0
+				base_damage = int(base_damage * mult)
+				_killshot_pierce_bonus = 3
 				p.remove_meta("killshot_charge")
-		elif pc == "mercenary":
-			# Adrenaline: up to +25% damage at full stack
-			base_damage = int(base_damage * (1.0 + stack * 0.0025))
+				p.remove_meta("killshot_focus_spent")
 	# Per-bullet damage split from pattern (e.g. shotgun pellets share total damage)
 	if data.has("damage_mult"):
 		base_damage = maxi(1, int(base_damage * data["damage_mult"]))
@@ -212,9 +234,15 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	# High-ground combat bonus: +10 crit chance per height level
 	if p and p.has_method("get_high_ground_crit_bonus"):
 		crit_chance += p.get_high_ground_crit_bonus()
+	# Mercenary Adrenaline: +0.15%/stack passive crit chance (up to +15% at full meter).
+	if p and "class_meter" in p and p.has_method("_get_player_class") and p._get_player_class() == "mercenary":
+		crit_chance += p.class_meter * 0.15
 	if crit_chance > 0 and randf() * 100.0 < crit_chance:
 		bullet.is_crit = true
 		bullet.damage = int(base_damage * equipment_manager.get_crit_damage())
+		# Mercenary: every crit landed adds +1 to Adrenaline.
+		if p and p.has_method("on_crit_landed"):
+			p.on_crit_landed()
 	else:
 		bullet.damage = base_damage
 
@@ -222,6 +250,9 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	# Pattern-specified pierce bonus (e.g. spear trident center bullet)
 	if data.has("pierce"):
 		bullet.pierce_count += data["pierce"]
+	# Killshot pierce bonus — applied AFTER equipment so it survives.
+	if _killshot_pierce_bonus > 0:
+		bullet.pierce_count += _killshot_pierce_bonus
 	bullet.lifetime = equipment_manager.get_bullet_lifetime()
 
 	# Apply weapon-specific bullet sprite and range
@@ -231,10 +262,10 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 		# Convert range to lifetime: lifetime = range / speed (in seconds)
 		# In dungeon (8px tiles) scale is 4x smaller than overworld (32px tiles)
 		var range_scale = 1.0
-		var player = equipment_manager.get_parent()
+		player = equipment_manager.get_parent()
 		if player and player.get("in_dungeon"):
 			range_scale = 0.25
-		bullet.lifetime = wrange * range_scale / maxf(bullet.speed, 1.0) * 100.0
+		bullet.lifetime = wrange * range_scale * _archer_range_mult / maxf(bullet.speed, 1.0) * 100.0
 
 	# Apply bullet modifiers from equipment
 	for item in equipment_manager.get_equipped_items():

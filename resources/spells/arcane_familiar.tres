@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "arcane_familiar"
+spell_name = "Arcane Familiar"
+description = "Summon a floating wisp that auto-fires at nearby enemies for 15s. Hold V to steer it toward your cursor."
+effect_type = 5
+delivery = 2
+magnitude = 6
+duration = 15.0
+mp_cost = 22.0
+cooldown = 18.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

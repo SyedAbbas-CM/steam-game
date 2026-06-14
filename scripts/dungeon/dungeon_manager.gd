@@ -563,7 +563,7 @@ func _find_mine_by_name(name: String) -> MineDefinition:
 				return mine
 	return null
 
-const MAX_DUNGEON_FLOORS = 4
+const MAX_DUNGEON_FLOORS = 3
 
 func _find_level_chain(level_id: String) -> Array[DungeonLevelData]:
 	var chain: Array[DungeonLevelData] = []
@@ -2697,6 +2697,8 @@ func _spawn_corridor_wall_lanes(mounts: Array[Dictionary], corr_dir: String, flo
 				spear.sync_offset = spear_sync_offset
 				spear.position = wall_world
 				hazard_container.add_child(spear)
+				if spear.has_method("activate"):
+					spear.activate()
 				heavy_traps += 1
 				spawned_any = true
 			elif _DartTrapScript and ((idx + pack_idx) % 2 == 0):
@@ -2711,6 +2713,8 @@ func _spawn_corridor_wall_lanes(mounts: Array[Dictionary], corr_dir: String, flo
 				dart.wall_pos = wall_tile
 				deco_layer.set_cell(floor_tile, 0, dart.trap_atlas)
 				hazard_container.add_child(dart)
+				if dart.has_method("activate"):
+					dart.activate()
 				spawned_any = true
 			elif _ArrowTrapScript:
 				var arrow = _ArrowTrapScript.new()
@@ -2723,6 +2727,8 @@ func _spawn_corridor_wall_lanes(mounts: Array[Dictionary], corr_dir: String, flo
 				arrow.trap_atlas = plate_atlas
 				deco_layer.set_cell(floor_tile, 0, arrow.trap_atlas)
 				hazard_container.add_child(arrow)
+				if arrow.has_method("activate"):
+					arrow.activate()
 				spawned_any = true
 			placed += 1
 	if not spawned_any:
@@ -2747,6 +2753,8 @@ func _spawn_guaranteed_corridor_spear_pair(mounts: Array[Dictionary], corr_dir: 
 		spear.sync_offset = 0.0
 		spear.position = wall_world
 		hazard_container.add_child(spear)
+		if spear.has_method("activate"):
+			spear.activate()
 
 ## --- Corridor Debris Blockages ---
 
@@ -3390,6 +3398,31 @@ const DECO_MOSS = [Vector2i(0, 5), Vector2i(1, 5)]
 const DECO_BLOOD = [Vector2i(10, 6), Vector2i(11, 6), Vector2i(12, 6), Vector2i(13, 6), Vector2i(14, 6), Vector2i(15, 6)]
 const DECO_SKULLS = [Vector2i(0, 6), Vector2i(1, 6), Vector2i(9, 6)]
 
+## Map a decoration tile atlas coord to a LootContainer type, or -1 if the
+## tile is just static scenery. Keeps the visible decor pool unified with the
+## interactive-container pool so the player can press E on what they already see.
+func _container_type_for_tile(tile: Vector2i) -> int:
+	# These coords mirror DecoTiles.DECO_BARREL / DECO_CRATE / DECO_SACKS /
+	# DECO_CHEST / DECO_WARDROBE (lofi_dungeon_features.png).
+	if tile == Vector2i(0, 0): return LootContainer.ContainerType.BARREL
+	if tile == Vector2i(1, 0): return LootContainer.ContainerType.CRATE
+	if tile == Vector2i(4, 0): return LootContainer.ContainerType.SACK
+	if tile == Vector2i(2, 0): return LootContainer.ContainerType.CHEST
+	if tile == Vector2i(7, 2): return LootContainer.ContainerType.WARDROBE
+	return -1
+
+
+func _spawn_decor_loot_container(abs_tile: Vector2i, container_type: int) -> void:
+	# Hand the current floor + item pool through so containers can roll real
+	# dungeon-pool equipment (sword / bow / staff / armor) on top of their
+	# hardcoded basics. This is what gives loot variety on later floors.
+	var floor_num = run_state.current_floor if run_state else 1
+	var bd: int = current_biome.base_difficulty if current_biome else 0
+	var container = LootContainer.create_loot_container(container_type, true, floor_num, _item_pool, bd)
+	container.global_position = Vector2(abs_tile.x * TILE_SIZE + 4, abs_tile.y * TILE_SIZE + 4)
+	enemy_container.add_child(container)
+
+
 func _paint_room_decorations(origin: Vector2i, mask: Array, w: int, h: int, room_data: RoomData, grid_pos: Vector2i = Vector2i.ZERO) -> void:
 	# Use biome-specific decorations if available, otherwise default set
 	var tiles: Array[Vector2i] = []
@@ -3464,7 +3497,14 @@ func _paint_room_decorations(origin: Vector2i, mask: Array, w: int, h: int, room
 		if deco_layer.get_cell_source_id(origin + pos) != -1:
 			continue
 		var tile = tiles[randi() % tiles.size()]
-		deco_layer.set_cell(origin + pos, 1, tile)
+		# Container-style decor (barrel / crate / sack / chest / wardrobe) gets
+		# spawned as an interactive LootContainer instead of a static deco tile,
+		# so the player can press E on the existing scenery for loot.
+		var container_type := _container_type_for_tile(tile)
+		if container_type >= 0:
+			_spawn_decor_loot_container(origin + pos, container_type)
+		else:
+			deco_layer.set_cell(origin + pos, 1, tile)
 		placed_positions[pos] = true
 
 func _paint_corridor(from_grid: Vector2i, to_grid: Vector2i, direction: String, theme_row: int) -> void:
@@ -4047,9 +4087,11 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 	var bd = current_biome.base_difficulty if current_biome else 0
 	var rec_level = current_level.recommended_level if current_level else 0
 	var player_level = player.level_system.level if player and player.level_system else 1
-	var effective_level = rec_level + player_level
-	var level_scale = 1.0 + effective_level * 0.10
-	var dmg_scale = 1.0 + effective_level * 0.05
+	var enemy_scaling := _get_enemy_scaling_context(rec_level, player_level)
+	var effective_level = enemy_scaling["effective_level"]
+	var level_scale = enemy_scaling["level_scale"]
+	var dmg_scale = enemy_scaling["dmg_scale"]
+	var overlevel = enemy_scaling["overlevel"]
 
 	# Elite budget: how many actual elites should an ELITE room contain at this
 	# dungeon's difficulty tier. The rest stay as normal enemies (still scaled but
@@ -4071,19 +4113,6 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 		else:
 			elite_budget = 99  # rec_level 16+: full elite room, normal mult
 	var elites_used := 0
-	# Starter-dungeon mercy: rec_level 1-2 enemies are 25% less tanky and ~12%
-	# less damaging so the first dungeon doesn't feel like a wall to a lvl-1 hero.
-	if rec_level <= 2:
-		level_scale *= 0.75
-		dmg_scale *= 0.88
-
-	# Over-level penalty: when player out-levels the dungeon by 5+, enemies get an extra boost
-	# and elites have a chance to promote to super_elite.
-	var overlevel = maxi(0, player_level - rec_level - 5)
-	if overlevel > 0:
-		var ol_factor = 1.0 + overlevel * 0.08
-		level_scale *= ol_factor
-		dmg_scale *= 1.0 + overlevel * 0.03  # was 0.05 — overlevel damage was too brutal
 	var floor_idx = run_state.current_floor
 
 
@@ -4252,9 +4281,12 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 		elif not _is_fixed and room_data.type == RoomData.RoomType.ELITE and _is_elite_slot:
 			# Elite budget: in early dungeons we only promote N enemies, the rest stay normal.
 			elites_used += 1
-			# Over-level promotion: 5% per overlevel point past 5, capped at 50%, to upgrade elite -> hyper elite
-			var promote_chance = minf(overlevel * 0.05, 0.5)
-			var hyper_promote = overlevel >= 5 and randf() < promote_chance
+			# Hyper promotion is driven by dungeon danger, not by the player outleveling
+			# starter content. This preserves late-game escalation without punishing Haven runs.
+			var promote_chance := 0.0
+			if rec_level >= 8:
+				promote_chance = minf(0.35, 0.06 + float(rec_level - 8) * 0.025 + maxf(0.0, float(floor_idx - 1)) * 0.01)
+			var hyper_promote = promote_chance > 0.0 and randf() < promote_chance
 			if hyper_promote:
 				# Hyper elite: clone of SUPER_ELITE buffs, name-prefixed
 				def.max_hp = maxi(1, int(def.max_hp * 1.5))
@@ -4270,8 +4302,8 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 				def.size_class = EnemyDefinition.SizeClass.BOSS
 				def.bullet_speed *= 1.3
 				def.boss_phases = 3
-				def.summon_on_phase_change = true
-				def.summon_phase_count = 3
+				def.summon_on_phase_change = rec_level > 4
+				def.summon_phase_count = 3 if rec_level > 4 else 0
 				if def.phase_2_attack == EnemyDefinition.AttackType.NONE:
 					def.phase_2_attack = _get_boss_phase_attack(def.attack_type, 2)
 				if def.phase_3_attack == EnemyDefinition.AttackType.NONE:
@@ -4283,7 +4315,7 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 				_apply_generated_elite_identity(def, EliteGenerator.Tier.HYPER)
 				def.xp_value = maxi(int(def.xp_value * 3.0), 50)
 				def.score_value = int(def.score_value * 3.0)
-				print("Hyper Elite spawned: %s (overlevel=%d)" % [def.enemy_name, overlevel])
+				print("Hyper Elite spawned: %s (rec_level=%d, floor=%d)" % [def.enemy_name, rec_level, floor_idx])
 			# Mini-boss: LARGE, 2 phases, escalated attacks, spawns minions (skip if already promoted to hyper)
 			if not hyper_promote:
 				var is_bomb_elite = _is_bomb_attack_type(def.attack_type)
@@ -4299,8 +4331,8 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 					def.bullet_count += 3
 				def.bullet_speed *= 1.2
 				def.boss_phases = 2
-				def.summon_on_phase_change = true
-				def.summon_phase_count = 2  # 2 minions per phase change
+				def.summon_on_phase_change = rec_level > 3
+				def.summon_phase_count = 2 if rec_level > 3 else 0  # no summon-flood in starter dungeons
 				if not def.summon_definition:
 					def.summon_definition = _get_weakest_enemy(loy_pool, pool)
 				# Archetype-based phase 2 attack (same system as bosses)
@@ -4400,7 +4432,9 @@ func _spawn_loot_containers(grid_pos: Vector2i, room_data: RoomData, max_count: 
 			c_type = LootContainer.ContainerType.CRATE
 		elif roll < 0.5:
 			c_type = LootContainer.ContainerType.SACK
-		var container = LootContainer.create_loot_container(c_type, true)
+		var floor_num = run_state.current_floor if run_state else 1
+		var bd: int = current_biome.base_difficulty if current_biome else 0
+		var container = LootContainer.create_loot_container(c_type, true, floor_num, _item_pool, bd)
 		container.global_position = positions[i]
 		enemy_container.add_child(container)
 
@@ -4449,9 +4483,9 @@ func _spawn_horde_wave_2(grid_pos: Vector2i) -> void:
 		# Apply same scaling as wave 1
 		var rec_level = current_level.recommended_level if current_level else 0
 		var player_level = player.level_system.level if player and player.level_system else 1
-		var effective_level = rec_level + player_level
-		var level_scale = 1.0 + effective_level * 0.10
-		var dmg_scale = 1.0 + effective_level * 0.05
+		var enemy_scaling := _get_enemy_scaling_context(rec_level, player_level)
+		var level_scale = enemy_scaling["level_scale"]
+		var dmg_scale = enemy_scaling["dmg_scale"]
 		def.max_hp = maxi(1, int(def.max_hp * room_data.enemy_hp_mult * level_scale))
 		def.attack_damage = maxi(1, int(def.attack_damage * room_data.enemy_damage_mult * dmg_scale))
 
@@ -4540,10 +4574,38 @@ func _get_active_enemy_pool_for_room(room_data: RoomData) -> Array:
 			return current_mine.enemy_pool
 	return current_biome.enemy_pool if current_biome and current_biome.enemy_pool.size() > 0 else []
 
+func _get_enemy_scaling_context(rec_level: int, player_level: int) -> Dictionary:
+	var effective_level := maxi(1, rec_level)
+	var level_scale := 1.0 + maxf(0.0, float(effective_level - 1)) * 0.08
+	var dmg_scale := 1.0 + maxf(0.0, float(effective_level - 1)) * 0.04
+
+	# Outleveling early dungeons should make them easier, not harder.
+	var overlevel := maxi(0, player_level - rec_level - 3)
+	if overlevel > 0:
+		var hp_mercy := clampf(1.0 - float(overlevel) * 0.025, 0.45, 1.0)
+		var dmg_mercy := clampf(1.0 - float(overlevel) * 0.02, 0.50, 1.0)
+		level_scale *= hp_mercy
+		dmg_scale *= dmg_mercy
+
+	# Starter-dungeon mercy on top of the normal curve.
+	if rec_level <= 2:
+		level_scale *= 0.70
+		dmg_scale *= 0.80
+	elif rec_level <= 4:
+		level_scale *= 0.85
+		dmg_scale *= 0.90
+
+	return {
+		"effective_level": effective_level,
+		"level_scale": level_scale,
+		"dmg_scale": dmg_scale,
+		"overlevel": overlevel,
+	}
+
 func _get_encounter_scaling() -> Dictionary:
 	var rec_level = current_level.recommended_level if current_level else 0
 	var player_level = player.level_system.level if player and player.level_system else 1
-	var effective_level = rec_level + player_level
+	var enemy_scaling := _get_enemy_scaling_context(rec_level, player_level)
 	var floor_idx: int = run_state.current_floor if run_state else 1
 	# Attack speed multiplier: based on dungeon recommended_level.
 	# rec_level 1: 1.4x interval (40% slower attacks).
@@ -4552,8 +4614,10 @@ func _get_encounter_scaling() -> Dictionary:
 	# while mid-game dungeons (Farm=10+) are near-normal speed.
 	var atk_speed_mult: float = maxf(1.0, 1.4 - maxf(0, rec_level - 1) * 0.03)
 	return {
-		"level_scale": 1.0 + effective_level * 0.10,
-		"dmg_scale": 1.0 + effective_level * 0.05,
+		"level_scale": enemy_scaling["level_scale"],
+		"dmg_scale": enemy_scaling["dmg_scale"],
+		"effective_level": enemy_scaling["effective_level"],
+		"overlevel": enemy_scaling["overlevel"],
 		"atk_speed_mult": atk_speed_mult,
 		"floor_idx": floor_idx,
 		"bd": current_biome.base_difficulty if current_biome else 0,

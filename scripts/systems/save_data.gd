@@ -21,7 +21,7 @@ extends Resource
 @export var secondary_weapon_path: String = ""  # weapon swap secondary (mercenary/ranger)
 @export var quickbar_items: Array[String] = ["", "", "", "", "", ""]  # item_name per slot
 @export var learned_spells: Array[Dictionary] = []  # spell data as dicts
-@export var equipped_spell_slots: Array[String] = ["", "", "", "", "", ""]  # spell ids per slot
+@export var equipped_spell_slots: Array[String] = ["", "", "", "", "", "", ""]  # spell ids per slot (7 = keys 4-0)
 @export var pet_data: Array = []  # [{type, name, level, xp, active}]
 
 # --- World data (persists through death) ---
@@ -114,7 +114,7 @@ func wipe_character() -> void:
 	secondary_weapon_path = ""
 	quickbar_items = ["", "", "", "", "", ""]
 	learned_spells.clear()
-	equipped_spell_slots = ["", "", "", "", "", ""]
+	equipped_spell_slots = ["", "", "", "", "", "", ""]
 	pet_data.clear()
 	# Gold is wiped on death; finalize_hall_legacy_selection refunds a
 	# percentage based on the "gold_retention" hall upgrade (20% base, +10% per

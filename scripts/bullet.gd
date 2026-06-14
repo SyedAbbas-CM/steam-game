@@ -1016,6 +1016,19 @@ func _on_area_entered(area: Node2D) -> void:
 				enemy.take_damage(total_dmg, aggro_player, CombatTypes.DamageType.TRUE)
 			else:
 				enemy.take_damage(total_dmg, aggro_player)
+			# Warrior Blood Dream: vampiric drain on every player-bullet hit.
+			# Mercenary Reckless Strike: 5% stun-on-hit while the buff window is open.
+			if is_player_bullet and is_inside_tree():
+				var _p_bd = PlayerQuery.get_nearest_player(get_tree(), global_position)
+				if _p_bd:
+					if _p_bd.has_method("apply_blood_dream_lifesteal"):
+						_p_bd.apply_blood_dream_lifesteal(total_dmg)
+					# Reckless Strike on-hit stun proc.
+					if "_reckless_strike_until" in _p_bd \
+							and Time.get_ticks_msec() / 1000.0 < _p_bd._reckless_strike_until \
+							and _p_bd.has_method("_get_player_class") and _p_bd._get_player_class() == "mercenary" \
+							and randf() < 0.05 and enemy.has_method("apply_status"):
+						enemy.apply_status("STUNNED", 0.5)
 			if not hits_all:
 				_apply_enchant_effect(enemy)
 			# Ability buff on-hit: Fire Fists → BURNING, Venom Coat → POISONED
@@ -1350,13 +1363,17 @@ func _create_force_ring(color: Color, is_pull: bool) -> void:
 	ring.is_pull = is_pull
 	add_child(ring)
 
-## Reflect this bullet back (parry). Reverses direction, makes it a player bullet.
-func reflect() -> void:
-	direction = -direction
+## Reflect this bullet back (parry). Reverses direction by default, but callers
+## can override both the new travel direction and launch speed to match shield
+## facing / movement-driven parry logic.
+func reflect(new_direction: Vector2 = Vector2.ZERO, speed_mult: float = 1.0, min_speed: float = -1.0) -> void:
+	direction = new_direction.normalized() if new_direction.length() > 0.0 else -direction
 	is_player_bullet = true
 	# Parry-reflected shots fly back at least as fast as a typical player bullet
 	# (enemy projectiles are slow on purpose; bouncing one shouldn't feel limp).
-	speed = maxf(speed * 1.5, 480.0)
+	var speed_floor = min_speed if min_speed > 0.0 else 480.0
+	var reflect_speed = maxf(speed * 1.5, speed_floor)
+	speed = reflect_speed * maxf(speed_mult, 0.1)
 	# Reset collision layers for player bullet
 	collision_layer = 4
 	collision_mask = 2 | 8 | 16 | 32  # enemies + enemy bullets + walls + traps

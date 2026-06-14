@@ -7,7 +7,7 @@
 script = ExtResource("1")
 affix_id = "phantom"
 display_prefix = "Phantom"
-min_tier = 1
+min_tier = 2
 allowed_roles = Array[String](["ranged", "support", "melee"])
 movement_override = ExtResource("2")
 add_attack_types = Array[int]([41, 29, 37])

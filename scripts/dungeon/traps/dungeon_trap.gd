@@ -44,7 +44,14 @@ func _on_bullet_hit(area: Node2D) -> void:
 		trigger_remote()
 
 func get_damage() -> int:
-	return 4 + floor_number * 2
+	return _scaled_trap_damage(4, 2, 1)
+
+func _scaled_trap_damage(base: int, per_floor: int, late_floor_bonus: int = 0, late_start_floor: int = 3) -> int:
+	var floor_i := maxi(floor_number, 1)
+	var dmg := base + floor_i * per_floor
+	if late_floor_bonus > 0 and floor_i > late_start_floor:
+		dmg += (floor_i - late_start_floor) * late_floor_bonus
+	return dmg
 
 func _find_player() -> Node2D:
 	var player = get_tree().get_first_node_in_group("player")

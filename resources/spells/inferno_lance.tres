@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "inferno_lance"
+spell_name = "Inferno Lance"
+description = "Hurl a piercing fire lance. Punches through two enemies and detonates in a small AoE on impact."
+effect_type = 0
+delivery = 0
+magnitude = 15
+duration = 0.0
+mp_cost = 22.0
+cooldown = 4.5
+bullet_count = 1
+bullet_behavior = 0
+is_starter = true

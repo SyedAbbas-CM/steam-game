@@ -159,6 +159,7 @@ func record_material_discovery(material_id: String, source: String = "seen") -> 
 	save_data.save_to_slot()
 
 func _ready() -> void:
+	_normalize_macos_input_bindings()
 	# Don't auto-load save data; title screen handles slot selection
 	save_data = null
 	_migrate_legacy_save()
@@ -170,6 +171,21 @@ func _ready() -> void:
 			coop.connection_failed.connect(_on_coop_connection_failed)
 		if not coop.session_closed.is_connected(_on_coop_session_closed):
 			coop.session_closed.connect(_on_coop_session_closed)
+
+func _normalize_macos_input_bindings() -> void:
+	if not OS.has_feature("macos"):
+		return
+	_replace_action_key_events("sprint", KEY_SHIFT)
+
+func _replace_action_key_events(action: String, keycode: Key) -> void:
+	if not InputMap.has_action(action):
+		return
+	for event in InputMap.action_get_events(action):
+		if event is InputEventKey:
+			InputMap.action_erase_event(action, event)
+	var input_event := InputEventKey.new()
+	input_event.keycode = keycode
+	InputMap.action_add_event(action, input_event)
 
 func _process(delta: float) -> void:
 	if save_data and active_slot >= 0:
@@ -266,7 +282,7 @@ func start_new_character(class_id: String) -> void:
 	save_data.secondary_weapon_path = ""
 	save_data.quickbar_items = ["", "", "", "", "", ""]
 	save_data.learned_spells.clear()
-	save_data.equipped_spell_slots = ["", "", "", "", "", ""]
+	save_data.equipped_spell_slots = ["", "", "", "", "", "", ""]
 	save_data.pet_data.clear()
 	selected_class = class_id
 	# Give starter gems for testing
@@ -900,7 +916,7 @@ func save_spellbook(sb: SpellBook) -> void:
 	save_data.learned_spells.clear()
 	for spell in sb.learned_spells:
 		save_data.learned_spells.append(spell.to_dict())
-	save_data.equipped_spell_slots = ["", "", "", "", "", ""]
+	save_data.equipped_spell_slots = ["", "", "", "", "", "", ""]
 	for i in range(SpellBook.MAX_SPELL_SLOTS):
 		if sb.spell_slots[i]:
 			save_data.equipped_spell_slots[i] = sb.spell_slots[i].id
@@ -918,9 +934,11 @@ func load_spellbook(sb: SpellBook) -> bool:
 		if spell.is_starter and ResourceLoader.exists("res://resources/spells/%s.tres" % spell.id):
 			spell = load("res://resources/spells/%s.tres" % spell.id) as SpellDefinition
 		sb.learn_spell(spell)
-	# Restore equipped slots
-	if save_data.equipped_spell_slots.size() >= SpellBook.MAX_SPELL_SLOTS:
-		for i in range(SpellBook.MAX_SPELL_SLOTS):
+	# Restore equipped slots — accept any prior size (e.g. 6-slot saves from
+	# before the bar expanded to 7) and only iterate as far as the save has.
+	var saved_count: int = save_data.equipped_spell_slots.size()
+	if saved_count > 0:
+		for i in range(mini(saved_count, SpellBook.MAX_SPELL_SLOTS)):
 			var spell_id = save_data.equipped_spell_slots[i]
 			if spell_id == "":
 				continue

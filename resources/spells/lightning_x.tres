@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SpellDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/spell_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "lightning_x"
+spell_name = "Lightning X"
+description = "Mark the ground with a glyph. After 3 seconds, lightning strikes a medium area, dealing 10 damage and stunning enemies for 5 seconds."
+effect_type = 1
+delivery = 1
+magnitude = 10
+duration = 5.0
+mp_cost = 18.0
+cooldown = 9.0
+bullet_count = 0
+bullet_behavior = 0
+is_starter = true

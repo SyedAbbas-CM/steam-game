@@ -16,7 +16,7 @@ func _ready() -> void:
 	super._ready()
 
 func get_damage() -> int:
-	return 5 + floor_number * 2
+	return _scaled_trap_damage(5, 2, 1)
 
 func _physics_process(_delta: float) -> void:
 	if _triggered or not is_inside_tree():

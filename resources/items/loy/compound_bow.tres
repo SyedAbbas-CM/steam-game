@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2"]
+
+[sub_resource type="Resource" id="mod_0"]
+script = ExtResource("2")
+stat = 2
+flat_bonus = 3.5
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2")
+stat = 4
+flat_bonus = 0.25
+
+[sub_resource type="Resource" id="mod_2"]
+script = ExtResource("2")
+stat = 7
+flat_bonus = 1.0
+
+[resource]
+script = ExtResource("1")
+item_name = "Compound Bow"
+weapon_type = "bow"
+loy_tile_index = 290
+description = "Cammed limbs hold the draw weight for you. Slower to nock, but every shot lands like a thrown spear and punches through the first body it meets."
+slot_type = 1
+modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])
+rarity = 1
+buy_price = 280
+sell_value = 70

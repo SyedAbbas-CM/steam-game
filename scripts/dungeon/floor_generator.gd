@@ -624,6 +624,16 @@ static func _roll_mine_room_type(floor_number: int) -> RoomData.RoomType:
 	return RoomData.RoomType.ELITE
 
 static func _roll_room_type(floor_number: int) -> RoomData.RoomType:
+	if floor_number <= 2:
+		var early_roll := randf()
+		if early_roll < 0.72:
+			return RoomData.RoomType.COMBAT
+		elif early_roll < 0.84:
+			return RoomData.RoomType.TREASURE
+		elif early_roll < 0.93:
+			return RoomData.RoomType.SHRINE
+		return RoomData.RoomType.SHOP
+
 	# Higher floors = more combat, less free loot
 	var combat_chance = 0.60 + floor_number * 0.02  # 60% base, grows per floor
 	combat_chance = minf(combat_chance, 0.80)
@@ -639,6 +649,8 @@ static func _roll_room_type(floor_number: int) -> RoomData.RoomType:
 	elif roll < combat_chance + 0.22:
 		return RoomData.RoomType.SHOP
 	else:
+		if floor_number <= 4:
+			return RoomData.RoomType.ELITE
 		# Elite roll — small chance to upgrade to SUPER_ELITE
 		# 50% chance to even consider, then max 1 on early floors, max 2 on deep floors
 		var max_super = 1 if floor_number < 5 else 2
