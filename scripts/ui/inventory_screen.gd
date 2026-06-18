@@ -566,8 +566,9 @@ func _refresh_spells_tab() -> void:
 		return
 	var sb: SpellBook = player.spell_book
 
-	# Refresh equipped spell slots (top row)
-	for i in range(6):
+	# Refresh equipped spell slots (top row). Walks all 7 buttons; the unified
+	# action bar has 10 spell slots, but only 7 fit in this top-row chrome.
+	for i in range(_spell_slot_buttons.size()):
 		var btn = _spell_slot_buttons[i]
 		for child in btn.get_children():
 			child.queue_free()
@@ -601,13 +602,9 @@ func _refresh_spells_tab() -> void:
 			mp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			btn.add_child(mp_lbl)
 
-		var key_lbl = Label.new()
-		key_lbl.text = SPELL_SLOT_KEYS[i]
-		key_lbl.add_theme_font_size_override("font_size", 26)
-		key_lbl.add_theme_color_override("font_color", Color(0.4, 0.4, 0.6) if not spell else Color(0.7, 0.7, 0.9))
-		key_lbl.position = Vector2(4, 2)
-		key_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		btn.add_child(key_lbl)
+		# Hotkey number labels (FGHJKL → 1-0) removed: the action-bar tile in the
+		# main HUD already shows the hotkey number, and these tiles map to the
+		# same slot index, so doubling the badge here only added visual noise.
 
 	# Refresh learned spells grid (big inventory-style)
 	for child in _spell_inv_grid.get_children():
@@ -631,9 +628,10 @@ func _refresh_spells_tab() -> void:
 		hover.set_border_width_all(2)
 		btn.add_theme_stylebox_override("hover", hover)
 
-		# Check if equipped — highlight
+		# Check if equipped — highlight. Walks all 10 unified spell slots so
+		# spells bound to any of the new high-index slots also show as equipped.
 		var equipped_slot = -1
-		for si in range(6):
+		for si in range(sb.spell_slots.size()):
 			if sb.spell_slots[si] and sb.spell_slots[si].id == spell.id:
 				equipped_slot = si
 				break
@@ -661,14 +659,9 @@ func _refresh_spells_tab() -> void:
 		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn.add_child(name_lbl)
 
-		if equipped_slot >= 0:
-			var eq_lbl = Label.new()
-			eq_lbl.text = "[%s]" % SPELL_SLOT_KEYS[equipped_slot]
-			eq_lbl.add_theme_font_size_override("font_size", 22)
-			eq_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
-			eq_lbl.position = Vector2(2, 0)
-			eq_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			btn.add_child(eq_lbl)
+		# Equipped-slot letter badge ("[F]"/"[G]"/...) removed — equipped spells
+		# now show via the slot's green border + the action-bar tile's hotkey
+		# number, so the redundant letter label is gone.
 
 		var mp_lbl = Label.new()
 		mp_lbl.text = "MP:%.0f" % spell.mp_cost
@@ -973,7 +966,8 @@ func _build_display_list() -> void:
 			var is_eq = equipment_manager.is_equipped(item)
 			_display_list.append({"item": item, "count": 1, "inv_index": i, "is_equipped": is_eq})
 	# Append spells as inline tiles so the inventory grid holds everything.
-	# Spells are tagged is_spell=true and cannot be dragged, dropped, or sold.
+	# Spells are tagged is_spell=true; they can be dragged onto the action bar
+	# (see _start_drag / _end_drag) but not dropped on the ground or sold.
 	var sb := _get_spell_book()
 	if sb:
 		for spell in sb.learned_spells:
@@ -992,6 +986,33 @@ func _build_display_list() -> void:
 				"count": 1,
 				"inv_index": -1,
 				"is_equipped": slot_idx >= 0,
+			})
+	# Append gems from save_data.gem_bag as inline tiles. They keep their
+	# separate storage (the bag) — this just surfaces them inside the main grid
+	# so players can SEE their gems without opening the socket NPC. Stackable
+	# by path so dupes show as "x N".
+	var gm_disp = get_node_or_null("/root/GameManager")
+	if gm_disp and gm_disp.has_method("get_gem_bag"):
+		var bag: Array = gm_disp.get_gem_bag()
+		var gem_stacks: Dictionary = {}  # path → display list index
+		for gem_path in bag:
+			if gem_path == "":
+				continue
+			if gem_stacks.has(gem_path):
+				_display_list[gem_stacks[gem_path]]["count"] += 1
+				continue
+			var gem_def = load(gem_path) as GemDefinition
+			if not gem_def:
+				continue
+			gem_stacks[gem_path] = _display_list.size()
+			_display_list.append({
+				"item": null,
+				"is_gem": true,
+				"gem": gem_def,
+				"gem_path": gem_path,
+				"count": 1,
+				"inv_index": -1,
+				"is_equipped": false,
 			})
 
 
@@ -1046,6 +1067,60 @@ func _refresh_inv_grid() -> void:
 		if i < _display_list.size():
 			var entry = _display_list[i]
 			var is_spell_entry := bool(entry.get("is_spell", false))
+			var is_gem_entry := bool(entry.get("is_gem", false))
+
+			# Gem tile: shows the gem's icon (or a colored gem shape if no icon
+			# is set), name, stack count. Click opens the SOCKET tab focused on
+			# this gem so the player can drop it into an item's socket.
+			if is_gem_entry:
+				var gem := entry.get("gem") as GemDefinition
+				if gem == null:
+					continue
+				if sty:
+					sty.bg_color = Color(0.07, 0.10, 0.13, 0.88)
+					sty.border_color = gem.color_hint
+					sty.set_border_width_all(2)
+				var gem_icon := TextureRect.new() if gem.icon else null
+				if gem_icon:
+					gem_icon.texture = gem.icon
+					gem_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+					gem_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+					gem_icon.size = Vector2(ICON_SIZE, ICON_SIZE)
+					gem_icon.position = Vector2(SLOT_SIZE * 0.5 - ICON_SIZE * 0.5, 2)
+					gem_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					btn.add_child(gem_icon)
+				else:
+					# Fallback: tinted diamond in the gem's colour.
+					var shape := ColorRect.new()
+					shape.color = gem.color_hint
+					shape.position = Vector2(SLOT_SIZE * 0.5 - ICON_SIZE * 0.3, SLOT_SIZE * 0.2)
+					shape.size = Vector2(ICON_SIZE * 0.6, ICON_SIZE * 0.6)
+					shape.rotation = PI * 0.25
+					shape.pivot_offset = shape.size * 0.5
+					shape.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					btn.add_child(shape)
+				var gem_lbl := Label.new()
+				var gn: String = gem.gem_name if gem.gem_name != "" else "Gem"
+				gem_lbl.text = gn.substr(0, 9) if gn.length() > 9 else gn
+				gem_lbl.add_theme_font_size_override("font_size", 22)
+				gem_lbl.add_theme_color_override("font_color", gem.color_hint.lightened(0.4))
+				gem_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				gem_lbl.position = Vector2(0, SLOT_SIZE - 20)
+				gem_lbl.size = Vector2(SLOT_SIZE, 18)
+				gem_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(gem_lbl)
+				var gem_count: int = entry.get("count", 1)
+				if gem_count > 1:
+					var cnt_lbl := Label.new()
+					cnt_lbl.text = "x%d" % gem_count
+					cnt_lbl.add_theme_font_size_override("font_size", 20)
+					cnt_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+					cnt_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.95))
+					cnt_lbl.add_theme_constant_override("outline_size", 2)
+					cnt_lbl.position = Vector2(SLOT_SIZE - 28, 2)
+					cnt_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					btn.add_child(cnt_lbl)
+				continue
 
 			# Spell tile: purple frame, sigil-style icon, treated as locked content
 			# (no drag, no drop, no salvage). Click toggles equip into a slot.
@@ -1082,17 +1157,9 @@ func _refresh_inv_grid() -> void:
 				name_lbl.size = Vector2(SLOT_SIZE, 18)
 				name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				btn.add_child(name_lbl)
-				# Slot key marker if equipped
-				if equipped_spell:
-					var slot_lbl := Label.new()
-					var keys := ["F", "G", "H", "J", "K", "L"]
-					var sk := int(entry.get("spell_slot", -1))
-					slot_lbl.text = keys[sk] if sk >= 0 and sk < keys.size() else "E"
-					slot_lbl.add_theme_font_size_override("font_size", 22)
-					slot_lbl.add_theme_color_override("font_color", AshfieldsUI.ARCANE.lightened(0.5))
-					slot_lbl.position = Vector2(2, 0)
-					slot_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-					btn.add_child(slot_lbl)
+				# Equipped-slot letter badge ("[F]"/"[G]"/...) removed — the
+				# action-bar tile in the HUD already shows the hotkey number for
+				# this spell, so duplicating it here only added clutter.
 				continue
 
 			var item = entry["item"] as EquipmentItem
@@ -1335,6 +1402,11 @@ func _on_inv_slot_clicked(index: int) -> void:
 	if bool(entry.get("is_spell", false)):
 		_toggle_spell_equip(entry)
 		return
+	# Gem tiles: clicking does nothing here. Socketing is only available at the
+	# Blacksmith NPC; opening the SOCKET tab remotely would bypass that gate.
+	# Tooltip on hover still surfaces the gem's stats so players can inspect.
+	if bool(entry.get("is_gem", false)):
+		return
 	var item = entry["item"] as EquipmentItem
 	var inv_index = entry["inv_index"] as int
 	var sfx = get_node_or_null("/root/SFXManager")
@@ -1348,25 +1420,36 @@ func _on_inv_slot_clicked(index: int) -> void:
 func _start_drag(display_idx: int) -> void:
 	if display_idx < 0 or display_idx >= _display_list.size():
 		return
-	# Spells aren't draggable — they can't be dropped, sold, or salvaged.
-	if bool(_display_list[display_idx].get("is_spell", false)):
+	var preview_entry = _display_list[display_idx]
+	# Gems can't be dragged out of the bag — there's no drop target that knows
+	# how to ingest a gem yet (sockets are handled by the socket tab UI), so a
+	# drag here would just visually fail. Click to jump to the SOCKET tab.
+	if bool(preview_entry.get("is_gem", false)):
 		_drag_mouse_down = false
 		_drag_active = false
 		_drag_display_idx = -1
 		return
 	_drag_active = true
 	_drop_zone.visible = true
-	var item = _display_list[display_idx]["item"] as EquipmentItem
-	# Create ghost icon following mouse
+	var entry = preview_entry
 	_drag_ghost = TextureRect.new()
 	_drag_ghost.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_drag_ghost.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_drag_ghost.size = Vector2(ICON_SIZE, ICON_SIZE)
 	_drag_ghost.modulate = Color(1, 1, 1, 0.7)
 	_drag_ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var tex = ItemIconHelper.get_icon_texture(item)
-	if tex:
-		_drag_ghost.texture = tex
+	if bool(entry.get("is_spell", false)):
+		# Spell ghost: a flat tinted square in the spell's school colour. Same
+		# size as the item ghost so the drop-target rect math matches.
+		var spell := entry.get("spell") as SpellDefinition
+		var img := Image.create(ICON_SIZE, ICON_SIZE, false, Image.FORMAT_RGBA8)
+		img.fill(_get_spell_color(spell) if spell else Color(0.55, 0.55, 0.9))
+		_drag_ghost.texture = ImageTexture.create_from_image(img)
+	else:
+		var item = entry["item"] as EquipmentItem
+		var tex = ItemIconHelper.get_icon_texture(item)
+		if tex:
+			_drag_ghost.texture = tex
 	_drag_ghost.position = _drag_start_pos - Vector2(ICON_SIZE / 2, ICON_SIZE / 2)
 	add_child(_drag_ghost)
 
@@ -1378,6 +1461,36 @@ func _end_drag(drop_pos: Vector2) -> void:
 	if _drag_display_idx < 0 or _drag_display_idx >= _display_list.size():
 		return
 	var entry = _display_list[_drag_display_idx]
+	var is_spell := bool(entry.get("is_spell", false))
+
+	# Spell-entry branch: only HUD action-bar drop is meaningful. Dropping a
+	# spell on the world drop zone or onto an inventory grid slot would do
+	# nothing the player wants, so we bail silently in those cases.
+	if is_spell:
+		var spell := entry.get("spell") as SpellDefinition
+		var sb := _get_spell_book()
+		if not spell or not sb:
+			return
+		var hud_s = _get_hud()
+		if not hud_s:
+			return
+		var qb_slot_s: int = hud_s.get_quickbar_slot_at_pos(drop_pos) if hud_s.has_method("get_quickbar_slot_at_pos") else -1
+		if qb_slot_s < 0:
+			return
+		# Clear any item that was occupying the slot — without this the unified
+		# router's item-wins rule would keep the spell invisible and uncastable.
+		if "_quickbar_items" in hud_s and qb_slot_s < hud_s._quickbar_items.size():
+			hud_s._quickbar_items[qb_slot_s] = ""
+		sb.equip_spell(spell, qb_slot_s)
+		# Refresh both faces (HUD bar + inventory tile state).
+		if hud_s.has_method("_refresh_quickbar"):
+			hud_s._refresh_quickbar()
+		_refresh()
+		var sfx_s = get_node_or_null("/root/SFXManager")
+		if sfx_s:
+			sfx_s.play("click", -4.0)
+		return
+
 	var item = entry["item"] as EquipmentItem
 	var inv_index = entry["inv_index"] as int
 
@@ -1399,11 +1512,16 @@ func _end_drag(drop_pos: Vector2) -> void:
 			_refresh_quickslots()
 			return
 
-	# Check if dropped on a HUD quickbar slot (fallback)
+	# Check if dropped on a HUD quickbar slot
 	var hud2 = _get_hud()
 	if hud2:
 		var qb_slot = hud2.get_quickbar_slot_at_pos(drop_pos)
 		if qb_slot >= 0:
+			# Item takes priority — unequip any spell at that slot so the bar
+			# row reads "item lives here" without a ghost spell behind it.
+			var sb2 := _get_spell_book()
+			if sb2 and qb_slot < sb2.MAX_SPELL_SLOTS and sb2.spell_slots[qb_slot] != null:
+				sb2.unequip_spell(qb_slot)
 			hud2.assign_to_quickbar(qb_slot, item.item_name)
 			return
 
@@ -1470,7 +1588,28 @@ func _on_inv_hovered(index: int) -> void:
 	if bool(entry.get("is_spell", false)):
 		_show_spell_tooltip(entry.get("spell") as SpellDefinition, bool(entry.get("is_equipped", false)))
 		return
+	if bool(entry.get("is_gem", false)):
+		_show_gem_tooltip(entry.get("gem") as GemDefinition)
+		return
 	_show_item_tooltip(_display_list[index]["item"] as EquipmentItem)
+
+func _show_gem_tooltip(gem: GemDefinition) -> void:
+	if gem == null or _tooltip_panel == null:
+		return
+	if _tooltip_name:
+		_tooltip_name.text = gem.gem_name
+		_tooltip_name.add_theme_color_override("font_color", gem.color_hint.lightened(0.3))
+	if _tooltip_desc:
+		_tooltip_desc.text = gem.description if gem.description != "" else "Slot into an item socket at the Blacksmith."
+	if _tooltip_stats:
+		var lines: Array[String] = []
+		for mod in gem.modifiers:
+			if mod:
+				lines.append(mod.get_description() if mod.has_method("get_description") else "+stat")
+		_tooltip_stats.text = "\n".join(lines)
+	if _tooltip_req:
+		_tooltip_req.text = "Tier %d" % gem.tier
+	_tooltip_panel.visible = true
 
 
 ## Toggle a spell between unequipped and equipped (in the first empty slot).

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dr63v6pe01v1u"
-path="res://.godot/imported/chars2.png-0a72fac5fde65708f4b60f0d27bb59f3.ctex"
+uid="uid://faw72jp2whkf"
+path="res://.godot/imported/oryx_16bit_fantasy_fx_trans.png-549da39b608d754f2a2e0d6520ec652a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://scripts/tools/electron-editor/app/chars2.png"
-dest_files=["res://.godot/imported/chars2.png-0a72fac5fde65708f4b60f0d27bb59f3.ctex"]
+source_file="res://assets/sprites/oryx_16bit_fantasy_fx_trans.png"
+dest_files=["res://.godot/imported/oryx_16bit_fantasy_fx_trans.png-549da39b608d754f2a2e0d6520ec652a.ctex"]
 
 [params]
 

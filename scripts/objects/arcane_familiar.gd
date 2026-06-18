@@ -18,7 +18,6 @@ var player: Node2D
 var _life_remaining: float = LIFETIME
 var _fire_cooldown: float = 0.0
 var _sprite: Sprite2D
-var _glow: ColorRect
 var _bob_t: float = 0.0
 
 
@@ -26,24 +25,36 @@ func _ready() -> void:
 	z_index = 5
 	_sprite = Sprite2D.new()
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	# Tiny procedural wisp — single bright pixel cluster with a soft halo.
-	var img := Image.create(6, 6, false, Image.FORMAT_RGBA8)
-	for x in 6:
-		for y in 6:
-			var d = Vector2(x - 2.5, y - 2.5).length()
-			if d < 1.5:
-				img.set_pixel(x, y, Color(1.0, 0.95, 0.5, 1.0))
-			elif d < 2.5:
-				img.set_pixel(x, y, Color(0.85, 0.7, 1.0, 0.85))
-	_sprite.texture = ImageTexture.create_from_image(img)
+	# Mirror the wizard's sprite — smaller, transparent, tinted yellowish so
+	# it reads as a shimmering copy of the caster following them around.
+	# Fall back to a tiny procedural wisp if the player ref isn't set yet.
+	var copied := false
+	if is_instance_valid(player):
+		var ps = player.get("sprite") as Sprite2D
+		if ps and ps.texture:
+			_sprite.texture = ps.texture
+			_sprite.hframes = ps.hframes
+			_sprite.vframes = ps.vframes
+			_sprite.frame = ps.frame
+			# Match the player's exact scale so the familiar reads as a true
+			# copy of the wizard. The yellow tint + transparency on modulate
+			# below carries the "ghost double" reading without size changes.
+			_sprite.scale = ps.scale
+			copied = true
+	if not copied:
+		# Procedural wisp fallback — single bright pixel cluster.
+		var img := Image.create(6, 6, false, Image.FORMAT_RGBA8)
+		for x in 6:
+			for y in 6:
+				var d = Vector2(x - 2.5, y - 2.5).length()
+				if d < 1.5:
+					img.set_pixel(x, y, Color(1.0, 0.95, 0.5, 1.0))
+				elif d < 2.5:
+					img.set_pixel(x, y, Color(0.85, 0.7, 1.0, 0.85))
+		_sprite.texture = ImageTexture.create_from_image(img)
+	# Warm yellowish ghost tint — semi-transparent so the world reads through.
+	_sprite.modulate = Color(1.0, 0.92, 0.45, 0.6)
 	add_child(_sprite)
-	_glow = ColorRect.new()
-	_glow.color = Color(0.5, 0.7, 1.0, 0.35)
-	_glow.size = Vector2(14, 14)
-	_glow.position = -_glow.size * 0.5
-	_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_glow.z_index = -1
-	add_child(_glow)
 
 
 func _process(delta: float) -> void:

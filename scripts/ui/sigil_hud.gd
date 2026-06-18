@@ -46,8 +46,12 @@ const QUICKBAR_ICON_SIZE := 56.0
 # ── Player ref ──
 var _player: CharacterBody2D
 
-# ── Quickbar state (mirrors GameHUD) ──
-var _quickbar_items: Array[String] = ["", "", "", "", "", ""]
+# ── Action bar state (unified: 10 slots, each item OR spell) ──
+# _quickbar_items[i] holds the item name for action-bar slot i (or "" if empty).
+# When set, the slot displays the item; click + hotkey route to use-item.
+# When empty, the slot falls through to spell_book.spell_slots[i] for display
+# and cast.
+var _quickbar_items: Array[String] = ["", "", "", "", "", "", "", "", "", ""]
 var _quickbar_buttons: Array[Button] = []
 
 # ── Orb nodes ──
@@ -152,16 +156,11 @@ func _reposition_for_viewport() -> void:
 
 
 func _reposition_quickbar() -> void:
-	if _quickbar_buttons.is_empty():
-		return
-	var vp_size := get_viewport().get_visible_rect().size
-	var total_w: float = QUICKBAR_SLOTS * QUICKBAR_SLOT_SIZE + (QUICKBAR_SLOTS - 1) * 8.0
-	var start_x: float = vp_size.x * 0.5 - total_w * 0.5
-	# Quickbar sits at the same vertical centre as the orbs so they form one row.
-	var orb_centre_y: float = vp_size.y - ORB_RADIUS - 28.0
-	var y: float = orb_centre_y - QUICKBAR_SLOT_SIZE * 0.5
+	# All 10 unified slots share one position function — re-apply on viewport
+	# resize. _quickbar_buttons and _spell_runes point at the same Button
+	# instances now, so we only need to walk one of them.
 	for i in _quickbar_buttons.size():
-		_quickbar_buttons[i].position = Vector2(start_x + i * (QUICKBAR_SLOT_SIZE + 8.0), y)
+		_quickbar_buttons[i].position = _action_bar_slot_world_pos(i)
 
 
 func setup(player: CharacterBody2D) -> void:
@@ -173,6 +172,14 @@ func setup(player: CharacterBody2D) -> void:
 	player.level_system.leveled_up.connect(_on_level_up)
 	player.equipment_manager.inventory_changed.connect(_refresh_quickbar)
 	player.equipment_manager.stats_changed.connect(_refresh_quickbar)
+	# Spell side of the unified bar: refresh whenever a spell is equipped,
+	# unequipped, or cast. Cooldown countdown is repainted from _process.
+	# The signals carry different arg shapes (slot/slot+spell), so wrap each
+	# in a lambda that drops the payload and calls the unified refresh.
+	if player.spell_book:
+		player.spell_book.spell_equipped.connect(func(_s, _sp): _refresh_quickbar())
+		player.spell_book.spell_unequipped.connect(func(_s): _refresh_quickbar())
+		player.spell_book.spell_cast.connect(func(_s, _sp): _refresh_quickbar())
 	if player.has_signal("class_meter_changed"):
 		player.class_meter_changed.connect(_on_class_meter_changed)
 		var pc_id = player._get_player_class() if player.has_method("_get_player_class") else ""
@@ -191,15 +198,10 @@ func setup(player: CharacterBody2D) -> void:
 	var gm = get_node_or_null("/root/GameManager")
 	if gm and gm.has_method("load_quickbar"):
 		gm.load_quickbar(self)
-	# Auto-pop quickbar starter items if completely empty
-	var any := false
-	for s in _quickbar_items:
-		if s != "":
-			any = true
-			break
-	if not any:
-		_quickbar_items[0] = "Red Potion"
-		_quickbar_items[1] = "Apple"
+	# Legacy fallback that wrote Apple + Red Potion to slots 0/1 is removed —
+	# the per-class layout in player.gd is now the only source of action-bar
+	# defaults. That fallback persisted across saves and blocked the class
+	# weapon from claiming slot 0 on wizard/warrior/ranger/merc.
 	_refresh_quickbar()
 
 
@@ -209,6 +211,13 @@ func _process(_delta: float) -> void:
 	# Quest arrow follow
 	if _quest_visible and _quest_arrow:
 		_update_quest_arrow()
+	# Cooldown ticker: if any spell slot has a cooldown remaining, repaint the
+	# action bar so the "N.Ns" overlay counts down smoothly. Cheap when idle.
+	if _player.spell_book:
+		for cd in _player.spell_book.slot_cooldowns:
+			if cd > 0.05:
+				_refresh_quickbar()
+				break
 
 
 # ──────────────────────────────────────────────────────────────
@@ -395,38 +404,20 @@ func _action_bar_slot_world_pos(index: int) -> Vector2:
 	return Vector2(start_x + index * (ACTION_BAR_SIZE + ACTION_BAR_GAP), y)
 
 
-# Single builder for ALL 10 slots. No parent container, no anchors. Direct
-# children of the HUD CanvasLayer. Quickbar refs land in _quickbar_buttons
-# (first 3 visible + 3 hidden off-screen for the inventory data slots);
-# spell refs land in _spell_runes.
+# Single builder for the 10 unified action-bar buttons. No parent container,
+# no anchors. Each button is a direct child of the HUD CanvasLayer. The same
+# 10 buttons are aliased into _quickbar_buttons and _spell_runes so existing
+# code paths (inventory drag-drop, _refresh_quickbar) keep working — they all
+# end up pointing at the same Button instance per slot.
 func _build_action_bar() -> void:
-	# Visible quickbar slots 0, 1, 2 (hotkeys 1, 2, 3).
-	for i in 3:
+	for i in ACTION_BAR_TOTAL:
 		var btn := _make_action_bar_slot(i)
 		btn.position = _action_bar_slot_world_pos(i)
-		var slot_idx = i
-		btn.pressed.connect(func(): _on_quickbar_pressed(slot_idx))
+		var slot_idx := i
+		btn.pressed.connect(func(): _on_action_bar_pressed(slot_idx))
 		add_child(btn)
 		_quickbar_buttons.append(btn)
-	# Hidden quickbar data slots 3, 4, 5 (inventory drag/drop still references them).
-	for i in range(3, QUICKBAR_SLOTS):
-		var hidden_btn := Button.new()
-		hidden_btn.focus_mode = Control.FOCUS_NONE
-		hidden_btn.custom_minimum_size = Vector2(ACTION_BAR_SIZE, ACTION_BAR_SIZE)
-		hidden_btn.size = hidden_btn.custom_minimum_size
-		hidden_btn.position = Vector2(-1000, -1000)
-		hidden_btn.visible = false
-		var hidden_idx = i
-		hidden_btn.pressed.connect(func(): _on_quickbar_pressed(hidden_idx))
-		add_child(hidden_btn)
-		_quickbar_buttons.append(hidden_btn)
-	# Visible spell slots 3..9 of the action bar (hotkeys 4-0).
-	for s in SPELL_SLOTS:
-		var bar_index := 3 + s
-		var btn2 := _make_action_bar_slot(bar_index)
-		btn2.position = _action_bar_slot_world_pos(bar_index)
-		add_child(btn2)
-		_spell_runes.append(btn2)
+		_spell_runes.append(btn)
 
 
 func _make_action_bar_slot(bar_index: int) -> Button:
@@ -475,21 +466,10 @@ func _build_spell_column() -> void:
 
 
 func _refresh_spell_slots() -> void:
-	# Action-bar buttons just show a label for now; spell icons can be wired in
-	# next pass via ItemIconHelper / a TextureRect child.
-	if not _player:
-		return
-	var sb = _player.get("spell_book")
-	if sb == null:
-		return
-	for i in _spell_runes.size():
-		var btn := _spell_runes[i] as Button
-		if not btn:
-			continue
-		var spell = null
-		if i < sb.spell_slots.size():
-			spell = sb.spell_slots[i]
-		btn.tooltip_text = spell.spell_name if spell and "spell_name" in spell else ""
+	# With the unified bar, spell rendering happens inside _refresh_quickbar.
+	# This thunk stays so older code that connects to spell signals keeps a
+	# valid target — it just bounces to the unified refresh.
+	_refresh_quickbar()
 
 
 # ──────────────────────────────────────────────────────────────
@@ -503,20 +483,35 @@ func _build_quickbar() -> void:
 
 const EQUIPPED_GREEN := Color(0.353, 0.918, 0.502)
 
+## Refresh the unified action bar. Each of the 10 slots renders either:
+##   - the item from _quickbar_items[i] (icon + stack count + equipped highlight)
+##   - the spell from spell_book.spell_slots[i] (icon + cooldown overlay)
+##   - empty (just the hotkey badge)
+## Item wins when both are set — match the click/hotkey router behaviour.
 func _refresh_quickbar() -> void:
 	if not _player:
 		return
 	var em = _player.get("equipment_manager") as EquipmentManager
+	var sb = _player.get("spell_book")
 	for i in _quickbar_buttons.size():
 		var btn := _quickbar_buttons[i]
-		# Clear icon + count children
+		# Clear icon + count + spell-name children (HotkeyBadge stays).
+		# Use remove_child before queue_free so the next paint in THIS frame
+		# doesn't render old labels stacked over the new ones. queue_free alone
+		# defers removal until end of frame, which leaks stale "x10" / "1.5s"
+		# text on top of the freshly drawn values.
 		for c in btn.get_children():
+			var should_clear := false
 			if c is TextureRect:
-				c.queue_free()
-			elif c is Label and c.name == "CountLabel":
+				should_clear = true
+			elif c is Label and (c.name == "CountLabel" or c.name == "SpellLabel" or c.name == "CooldownLabel"):
+				should_clear = true
+			if should_clear:
+				btn.remove_child(c)
 				c.queue_free()
 		var item_name: String = _quickbar_items[i] if i < _quickbar_items.size() else ""
 		var equipped := false
+		var is_spell_slot := false
 		if item_name != "" and em != null:
 			var item: EquipmentItem = null
 			var count := 0
@@ -536,8 +531,8 @@ func _refresh_quickbar() -> void:
 					tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 					tr.size = Vector2(QUICKBAR_ICON_SIZE, QUICKBAR_ICON_SIZE)
 					tr.position = Vector2(
-						(QUICKBAR_SLOT_SIZE - QUICKBAR_ICON_SIZE) * 0.5,
-						(QUICKBAR_SLOT_SIZE - QUICKBAR_ICON_SIZE) * 0.5
+						(ACTION_BAR_SIZE - QUICKBAR_ICON_SIZE) * 0.5,
+						(ACTION_BAR_SIZE - QUICKBAR_ICON_SIZE) * 0.5
 					)
 					tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 					btn.add_child(tr)
@@ -549,22 +544,81 @@ func _refresh_quickbar() -> void:
 					cnt.add_theme_color_override("font_color", TEXT)
 					cnt.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.95))
 					cnt.add_theme_constant_override("outline_size", 2)
-					cnt.position = Vector2(QUICKBAR_SLOT_SIZE - 30, QUICKBAR_SLOT_SIZE - 24)
+					cnt.position = Vector2(ACTION_BAR_SIZE - 30, ACTION_BAR_SIZE - 24)
 					cnt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 					btn.add_child(cnt)
-		# Apply equipped highlight — green border + bg tint when this slot holds
-		# the currently equipped item; otherwise the universal amber slot chrome.
-		# Hover and pressed states are unchanged.
+		elif sb and i < sb.spell_slots.size() and sb.spell_slots[i] != null:
+			# Spell branch — show spell name + cooldown remaining (icons can come
+			# in a later pass; SpellDefinition doesn't carry a texture today).
+			is_spell_slot = true
+			var spell = sb.spell_slots[i]
+			var lbl := Label.new()
+			lbl.name = "SpellLabel"
+			var spell_name: String = spell.spell_name if "spell_name" in spell else (spell.id if "id" in spell else "")
+			# Compact 6-char tag fits inside an 80px button.
+			lbl.text = (spell_name.substr(0, 7)).strip_edges()
+			lbl.add_theme_font_size_override("font_size", 14)
+			lbl.add_theme_color_override("font_color", Color(0.78, 0.86, 1.0))
+			lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+			lbl.add_theme_constant_override("outline_size", 2)
+			lbl.position = Vector2(4, ACTION_BAR_SIZE * 0.5 - 10)
+			lbl.size = Vector2(ACTION_BAR_SIZE - 8, 22)
+			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			btn.add_child(lbl)
+			var cd: float = sb.slot_cooldowns[i] if i < sb.slot_cooldowns.size() else 0.0
+			if cd > 0.05:
+				var cd_lbl := Label.new()
+				cd_lbl.name = "CooldownLabel"
+				cd_lbl.text = "%.1fs" % cd
+				cd_lbl.add_theme_font_size_override("font_size", 20)
+				cd_lbl.add_theme_color_override("font_color", Color(1.0, 0.78, 0.32))
+				cd_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.95))
+				cd_lbl.add_theme_constant_override("outline_size", 3)
+				# Floats above the slot instead of covering it — y=-22 lifts the
+				# label clear of the top edge so the spell name underneath stays
+				# readable while it counts down.
+				cd_lbl.position = Vector2(0, -24)
+				cd_lbl.size = Vector2(ACTION_BAR_SIZE, 22)
+				cd_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				cd_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+				cd_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				btn.add_child(cd_lbl)
+		# Slot chrome: equipped item → green; spell slot → cool blue tint;
+		# everything else → universal amber. Hover + pressed unchanged.
 		var sty := btn.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
 		if equipped:
 			sty.bg_color = Color(0.094, 0.137, 0.075, 0.92)
 			sty.border_color = EQUIPPED_GREEN
 			sty.set_border_width_all(3)
+		elif is_spell_slot:
+			sty.bg_color = Color(0.072, 0.094, 0.137, 0.92)
+			sty.border_color = Color(0.45, 0.55, 0.85)
+			sty.set_border_width_all(2)
 		else:
 			sty.bg_color = Color(0.085, 0.072, 0.060, 0.92)
 			sty.border_color = Color(0.55, 0.45, 0.22)
 			sty.set_border_width_all(2)
 		btn.add_theme_stylebox_override("normal", sty)
+
+
+## Unified action-bar click router. Each slot 0..9 can hold either an item or
+## a spell; item takes priority. Player.gd's hotkey handler calls this as well
+## via _on_action_bar_pressed, so the same path serves clicks and keys.
+func _on_action_bar_pressed(slot: int) -> void:
+	if not _player:
+		return
+	if slot < 0 or slot >= ACTION_BAR_TOTAL:
+		return
+	# Item branch: if an item lives in this slot, use it.
+	var item_name: String = _quickbar_items[slot] if slot < _quickbar_items.size() else ""
+	if item_name != "":
+		_on_quickbar_pressed(slot)
+		return
+	# Spell branch: if a spell is equipped at this slot, cast it via the player.
+	if _player.spell_book and slot < _player.spell_book.MAX_SPELL_SLOTS and _player.spell_book.spell_slots[slot] != null:
+		if _player.has_method("_use_spell_slot"):
+			_player._use_spell_slot(slot)
 
 
 ## Called by both the quickbar button press and player.gd's number-key handler
@@ -594,17 +648,17 @@ func _on_quickbar_pressed(slot: int) -> void:
 			return
 
 
-## Assign an item name to a quickbar slot (called by player.gd starter setup
-## and by inventory_screen drag-to-quickbar). Mirrors GameHUD.
+## Assign an item name to an action-bar slot (called by player.gd starter setup
+## and by inventory_screen drag-to-quickbar). Accepts the full 0..9 range now.
 func assign_to_quickbar(slot_index: int, item_name: String) -> void:
-	if slot_index < 0 or slot_index >= QUICKBAR_SLOTS:
+	if slot_index < 0 or slot_index >= ACTION_BAR_TOTAL:
 		return
 	_quickbar_items[slot_index] = item_name
 	_refresh_quickbar()
 
 
 func clear_quickbar_slot(slot_index: int) -> void:
-	if slot_index >= 0 and slot_index < QUICKBAR_SLOTS:
+	if slot_index >= 0 and slot_index < ACTION_BAR_TOTAL:
 		_quickbar_items[slot_index] = ""
 		_refresh_quickbar()
 

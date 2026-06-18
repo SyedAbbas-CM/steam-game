@@ -141,6 +141,35 @@ func _ready() -> void:
 	var sprite = $Sprite2D as Sprite2D
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
+	# Oryx FX overlay: callers set meta "fx_overlay" to a tile name from the
+	# 16-bit FX tilesets. We add a child Sprite2D on top of the regular bullet
+	# sprite (named "FxOverlay") so fireball / firebolt / icebolt projectiles
+	# read as themselves at travel time instead of the default lofi pellet.
+	# The base sprite still gets set up below so enchant tint + tinting logic
+	# stays in one place; the overlay just covers it visually.
+	if has_meta("fx_overlay"):
+		var fx_name := String(get_meta("fx_overlay"))
+		var fx_tex = FXAtlasLookup.get_texture(fx_name)
+		if fx_tex:
+			var overlay := Sprite2D.new()
+			overlay.name = "FxOverlay"
+			overlay.texture = fx_tex
+			overlay.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			overlay.z_index = 1
+			# Native FX sprite is ~32px; bullets sit on 8px tiles in dungeons.
+			# Default scale of 0.4 → ~13px on-screen, which matches the lofi
+			# pellet footprint. Caller can override via "fx_overlay_scale".
+			var fx_scale := float(get_meta("fx_overlay_scale", 0.4))
+			overlay.scale = Vector2.ONE * fx_scale
+			# Rotate the overlay so the sprite (which is drawn facing right on
+			# the sheet) aligns with the bullet's travel direction. Without
+			# this, every projectile always points east regardless of aim.
+			if direction.length() > 0.001:
+				overlay.rotation = direction.angle()
+			add_child(overlay)
+			# Hide the lofi pellet sprite — the overlay replaces it visually.
+			sprite.visible = false
+
 	# Determine which sprite to use
 	var idx = bullet_sprite_index
 	if idx < 0:
@@ -889,6 +918,10 @@ func _on_body_entered(body: Node2D) -> void:
 									var label := kind.capitalize() + " [%d]" % hp_left
 									FloatingText.spawn(scene_root, world_pos + Vector2(0, -10), label, Color(0.75, 0.75, 0.75))
 						break
+		# AoE projectiles (fireball / inferno_lance) detonate on wall hit too —
+		# without this the bullet just disappears against a wall with no boom.
+		if has_meta("fireball_aoe"):
+			_fireball_explode()
 		queue_free()
 		return
 	if _spent:
@@ -1432,6 +1465,19 @@ func _fireball_explode() -> void:
 	if vfx:
 		vfx.shockwave(global_position, aoe_radius, Color(1.0, 0.4, 0.1, 0.7))
 		vfx.shake(2.0, 0.15)
+	# Oryx impact burst — 2-frame flipbook (impact → explosion). Caller can
+	# pass either a single string ("fire_explosion") for back-compat or an
+	# Array of frame names (["fire_impact", "fire_explosion"]) for the proper
+	# 2-frame burst. Footprint ≈ AoE radius × 1.2 so the sprite tracks the
+	# real damage zone instead of doubling over it.
+	if has_meta("fx_impact"):
+		var impact_data = get_meta("fx_impact")
+		var frames: Array = []
+		if impact_data is Array:
+			frames = impact_data
+		else:
+			frames = [String(impact_data)]
+		FXAtlasLookup.spawn_anim(self, frames, global_position, 0.08, aoe_radius * 1.2, 9)
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		sfx.play("boom_b", 0.0)

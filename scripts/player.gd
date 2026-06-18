@@ -100,6 +100,11 @@ var _wizard_overflow_until: float = 0.0          # X-key window
 # state can never get orphaned on respawn / scene reload.
 var _bullet_shield_charges: int = 0
 var _bullet_shield_until: float = 0.0
+# Child Sprite2D that renders the looping bullet_Shield / bullet_Shield_2
+# flipbook on the player while the shield is active. We hold the ref here so
+# the watchdog can free it the instant the charges expire or the timer runs
+# out — no orphaned visuals after the shield dies.
+var _bullet_shield_sprite: Sprite2D = null
 # Watchdog for the `invincible` flag — without this, a failed tween callback
 # (scene change mid-blink) can leave the player permanently untargetable.
 var _invincible_until: float = 0.0
@@ -128,6 +133,10 @@ const WIZARD_EMPOWERMENT_COSTS := {
 
 # Lock-on: TAB cycles to nearest enemy in front; press again to cycle next or release.
 var _lock_on_target: Node2D = null
+# Tracks whether the lock-on reticle was drawn last frame. Used to detect the
+# transition from "had target" → "target gone" without a state=DEAD check, so
+# we can fire one final queue_redraw and wipe the stale corner-brackets.
+var _had_lock_prev: bool = false
 const LOCK_ON_MAX_RANGE := 360.0
 const LOCK_ON_CYCLE_RANGE := 240.0
 const LOCK_ON_DOUBLE_TAP_WINDOW := 0.28
@@ -403,6 +412,11 @@ func _ready() -> void:
 		loaded_equip = gm.load_equipment(equipment_manager)
 	if not loaded_equip and equipment_manager.inventory.is_empty() and equipment_manager.equipped.is_empty():
 		_give_starting_items()
+	# Always apply the class action-bar layout — fresh characters get their
+	# weapon + pots auto-placed, and existing characters with stale legacy
+	# defaults (Apple + Red Potion in slots 0/1) get force-corrected to the
+	# new layout. Customisations the player made past slot 4 stay intact.
+	call_deferred("_apply_class_action_bar_defaults")
 	if gm and gm.has_method("apply_pending_legacy_equipment"):
 		gm.apply_pending_legacy_equipment(equipment_manager)
 	# Restore secondary weapon for mercenary/ranger weapon swap
@@ -817,6 +831,15 @@ func _physics_process(delta: float) -> void:
 	elif _wtype == "claws":
 		if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= 20.0:
 			_claws_pounce()
+	elif _wtype == "staff":
+		# Wizard mobility on Space: tap → teleport (mirrors other classes' dash
+		# on Space). Costs MP, not stamina. Charge-shot is now on hold-Shift —
+		# handled in the staff-charge block further down.
+		if Input.is_action_just_pressed("dash") and _teleport_cooldown <= 0 and mp >= 8.0:
+			_staff_teleport_active = true
+			use_mp(8.0)
+			_ability_teleport()
+			_teleport_cooldown = 0.5
 
 	# Shield block — R key TOGGLE (press to raise, press again to lower).
 	# Requires shield item + melee weapon equipped.
@@ -981,7 +1004,18 @@ func _physics_process(delta: float) -> void:
 			_auto_relock()
 			queue_redraw()
 	else:
-		_lock_on_target = null
+		# Target became invalid without going through the dead/out-of-range
+		# branch above (e.g. queue_free from explode-on-death, scene transition,
+		# parent removal). We still need a queue_redraw to wipe the stale
+		# reticle that _draw painted on the previous frame. _had_lock_prev
+		# tracks "did we draw a reticle last frame?" to fire that one redraw.
+		if _had_lock_prev:
+			_lock_on_target = null
+			_auto_relock()
+			queue_redraw()
+		else:
+			_lock_on_target = null
+	_had_lock_prev = is_instance_valid(_lock_on_target)
 
 	# Scout view (V key) — hold to offset camera in aim direction
 	var cam = get_node_or_null("Camera2D")
@@ -1062,12 +1096,11 @@ func _physics_process(delta: float) -> void:
 		stamina_changed.emit(stamina)
 		if stamina <= 0:
 			_aimed_mode_active = false
-	elif _wtype == "staff" and Input.is_action_just_pressed("sprint") and _teleport_cooldown <= 0 and mp >= 8.0:
-		# Staff: Teleport with very short cooldown
-		_staff_teleport_active = true
-		use_mp(8.0)
-		_ability_teleport()
-		_teleport_cooldown = 0.5
+	# Staff: hold Shift to charge a powershot, release to fire. (Teleport moved
+	# to Space — see SPACE-abilities block.) The actual charge accumulator and
+	# stamina drain run in the dedicated staff-charge block further down.
+	elif _wtype == "staff" and Input.is_action_pressed("sprint"):
+		pass  # charge logic owns the rest; this branch keeps the elif chain intact
 	elif _wtype == "sword" and Input.is_action_pressed("sprint") and stamina > 0:
 		_blade_dance_active = true
 		stamina = maxf(stamina - 30.0 * delta, 0.0)
@@ -1172,10 +1205,14 @@ func _physics_process(delta: float) -> void:
 	# Stamina drains while charging. Need >= 21 stamina to START, but continues until 0.
 	# Always fires on release or stamina depletion — uses whatever MP is available.
 	# Player becomes stationary while channeling.
+	# Staff Powershot — hold SHIFT to charge, release to fire. Matches the
+	# other classes' "special on Shift" pattern. Stamina drains during the
+	# channel; player stands still while charging. Releases on key-up or when
+	# stamina hits zero.
 	if _wtype == "staff":
 		var _can_start_charge = not _charge_active and stamina >= 21
 		var _can_continue_charge = _charge_active and stamina > 0
-		if Input.is_action_pressed("dash") and (_can_start_charge or _can_continue_charge):
+		if Input.is_action_pressed("sprint") and (_can_start_charge or _can_continue_charge):
 			if not _charge_active:
 				_charge_active = true
 				_charge_time = 0.0
@@ -1186,13 +1223,11 @@ func _physics_process(delta: float) -> void:
 				if sfx_ch:
 					sfx_ch.play("spell_a", -6.0, 0.0)
 			_charge_time = minf(_charge_time + delta, CHARGE_MAX_TIME)
-			# Drain stamina proportionally: full charge in CHARGE_MAX_TIME drains all stamina
 			var drain = (max_stamina / CHARGE_MAX_TIME) * delta
 			stamina = maxf(stamina - drain, 0.0)
 			_stamina_regen_delay = 0.5
 			stamina_changed.emit(stamina)
 			_update_charge_indicator()
-			# Out of stamina — force premature fire (always fires, uses available MP)
 			if stamina <= 0 and _charge_active:
 				_release_staff_charge(true)
 		elif _charge_active:
@@ -1213,17 +1248,15 @@ func _physics_process(delta: float) -> void:
 			if Input.is_action_just_pressed("dash") and _dash_cooldown <= 0 and stamina >= DASH_STAMINA_COST:
 				_start_dash()
 
-	# Spell slots: 4 5 6 7 8 9 0 (7 slots). Items occupy hotkeys 1 2 3.
-	for si in range(7):
-		if Input.is_action_just_pressed("spell_slot_%d" % (si + 1)):
-			_use_spell_slot(si)
-
-	# Quickbar keys 1-3 only — keys 4-0 are spell slots now. Slots 4-6 of the
-	# quickbar still exist in the data model (inventory shows them) but have
-	# no bound hotkeys.
+	# Unified action bar: 10 slots, each can hold either an item or a spell.
+	# Hotkeys map: quickbar_1..3 → slots 0..2, spell_slot_1..7 → slots 3..9
+	# (key labels 1,2,3,4,5,6,7,8,9,0). The router checks item first, then spell.
 	for qi in range(3):
 		if Input.is_action_just_pressed("quickbar_%d" % (qi + 1)):
-			_use_quickbar_slot(qi)
+			_on_action_bar_pressed(qi)
+	for si in range(7):
+		if Input.is_action_just_pressed("spell_slot_%d" % (si + 1)):
+			_on_action_bar_pressed(3 + si)
 
 	# B key (spellbook) — removed: spells live in the inventory grid now.
 	# The action binding stays in project.godot but the press is intentionally
@@ -1545,7 +1578,10 @@ func _physics_process(delta: float) -> void:
 		weapon_system.weapon_pattern = _saved_pattern
 		_saved_pattern = null
 
-	# Suppress Space-based shooting for melee (space=dash) and staff (space=charge)
+	# Suppress Space-based shooting for melee (space=dash) and staff (space=
+	# teleport). The "shoot" action is dual-bound to LMB + Space in the input
+	# map; without this suppression, pressing Space would teleport AND fire a
+	# staff bullet on the same frame.
 	var _space_suppressed = _charge_active or _is_dashing or _cur_slot == EquipmentItem.SlotType.WEAPON_MELEE or _wtype == "staff"
 	var _is_touch = touch_controls and touch_controls.visible
 
@@ -1636,6 +1672,11 @@ func _process(delta: float) -> void:
 	if _bullet_shield_charges > 0 and now_wd >= _bullet_shield_until:
 		_bullet_shield_charges = 0
 		_bullet_shield_until = 0.0
+		_clear_bullet_shield_sprite()
+	# If the sprite is alive but the shield is already done (e.g. take_damage
+	# zeroed the charges), wipe the visual too.
+	elif _bullet_shield_charges <= 0 and is_instance_valid(_bullet_shield_sprite):
+		_clear_bullet_shield_sprite()
 	if invincible and _invincible_until > 0.0 and now_wd >= _invincible_until:
 		invincible = false
 		_invincible_until = 0.0
@@ -2448,6 +2489,24 @@ func _use_quickbar_slot(slot_index: int) -> void:
 		return
 	hud._on_quickbar_pressed(slot_index)
 
+## Unified action-bar router. Each of the 10 slots can hold an item OR a spell.
+## Item takes priority — if quickbar_items[slot] is set, the item wins and the
+## spell (if any) is dormant; clear the item slot to surface the spell again.
+func _on_action_bar_pressed(slot: int) -> void:
+	if not is_inside_tree() or slot < 0:
+		return
+	var hud = get_tree().get_first_node_in_group("game_hud") as CanvasLayer
+	if not hud:
+		return
+	var item_name: String = ""
+	if "_quickbar_items" in hud and slot < hud._quickbar_items.size():
+		item_name = hud._quickbar_items[slot]
+	if item_name != "":
+		hud._on_quickbar_pressed(slot)
+		return
+	if spell_book and slot < spell_book.MAX_SPELL_SLOTS and spell_book.spell_slots[slot] != null:
+		_use_spell_slot(slot)
+
 # Shield visual — directional arc that rotates toward shoot direction
 var _shield_visual: Polygon2D = null
 var _shield_angle: float = 0.0  # current shield facing angle
@@ -3088,7 +3147,9 @@ func _give_starting_items() -> void:
 				equipment_manager.toggle_equip(equipment_manager.inventory.size() - 1)
 				_quickbar_preload[staff.item_name] = 0
 
-	if starter_armor:
+	# Leather armor goes to everyone EXCEPT wizard — their kit is staff-only by
+	# design (cloth caster fantasy / no mid-game leather-vs-robe trade-off).
+	if starter_armor and player_class != "wizard":
 		equipment_manager.add_to_inventory(starter_armor.make_copy())
 		equipment_manager.toggle_equip(equipment_manager.inventory.size() - 1)
 
@@ -3105,6 +3166,12 @@ func _give_starting_items() -> void:
 	if mana_potion:
 		for i in range(5):
 			equipment_manager.add_to_inventory(mana_potion.make_copy())
+	# Stamina pot — needed so the auto-fill in _populate_quickbar can put one in
+	# the action bar; without inventory backing the slot would just look broken.
+	var stam_potion = load("res://resources/items/loy/green_potion.tres") as EquipmentItem
+	if stam_potion:
+		for i in range(5):
+			equipment_manager.add_to_inventory(stam_potion.make_copy())
 
 	# Hall of Souls starting-bonus carry-overs
 	var gm_h = get_node_or_null("/root/GameManager")
@@ -3134,14 +3201,18 @@ func _give_starting_items() -> void:
 			for _i in range(anchor_levels):
 				level_system.gain_xp(level_system.xp_to_next_level(), 1.0)
 
-	# Pre-populate quickbar with weapons + potions (deferred so HUD is ready)
-	var qb_data = _quickbar_preload.duplicate()
-	call_deferred("_populate_quickbar", qb_data)
+	# Quickbar layout is applied by _apply_class_action_bar_defaults (deferred
+	# from the main _ready). _quickbar_preload is no longer used as the
+	# placement source; the class layout in _get_class_action_bar_layout() owns
+	# the slot positions.
 
-func _populate_quickbar(qb_data: Dictionary) -> void:
+## Authoritative per-class action-bar layout. Called for both new and existing
+## characters from player._ready (deferred so the HUD has spawned). Forces the
+## weapon into slot 0 and the offhand into slot 1; pots fill empty seed slots
+## only, so player customisation past slot 4 stays intact.
+func _apply_class_action_bar_defaults() -> void:
 	if not is_inside_tree():
 		return
-	# Wait one more frame if HUD still not ready
 	var hud = get_tree().get_first_node_in_group("game_hud") as CanvasLayer
 	if not hud:
 		await get_tree().process_frame
@@ -3150,13 +3221,95 @@ func _populate_quickbar(qb_data: Dictionary) -> void:
 		hud = get_tree().get_first_node_in_group("game_hud") as CanvasLayer
 	if not hud:
 		return
-	for item_name in qb_data:
-		hud.assign_to_quickbar(qb_data[item_name], item_name)
-	# Fill remaining slots with consumables
-	if not qb_data.has("Red Potion"):
-		hud.assign_to_quickbar(4, "Red Potion")
-	if not qb_data.has("Mana Potion"):
-		hud.assign_to_quickbar(5, "Mana Potion")
+	var layout := _get_class_action_bar_layout()
+	# Weapons + offhand: force-overwrite. The class identity says "your sword
+	# lives at hotkey 1", and stale Apple/Red Potion that the old fallback
+	# wrote must be cleared so the weapon is visible without manual cleanup.
+	for entry in layout.get("force", []):
+		var slot: int = entry["slot"]
+		var name: String = entry["name"]
+		# Only place the item if the player actually has it in inventory —
+		# otherwise we leak a phantom name into the bar that the refresh can't
+		# resolve to an icon.
+		if _inventory_has_item(name):
+			hud.assign_to_quickbar(slot, name)
+		elif slot < hud._quickbar_items.size() and hud._quickbar_items[slot] != "":
+			# No item in inventory but a stale name is sitting there — clear it
+			# so the slot doesn't show a broken icon.
+			hud.assign_to_quickbar(slot, "")
+	# Pots: fill empty seed slots only. Lets the player rearrange / drop pots
+	# elsewhere without us undoing their work each scene load.
+	for entry in layout.get("pots", []):
+		var slot: int = entry["slot"]
+		var name: String = entry["name"]
+		if slot >= hud._quickbar_items.size():
+			continue
+		if hud._quickbar_items[slot] == "" and _inventory_has_item(name):
+			hud.assign_to_quickbar(slot, name)
+
+func _inventory_has_item(name: String) -> bool:
+	if name == "" or not equipment_manager:
+		return false
+	for it in equipment_manager.inventory:
+		if it and it.item_name == name:
+			return true
+	return false
+
+## Returns {"force": [{slot, name}, ...], "pots": [{slot, name}, ...]} for the
+## current class. Force-list items always claim their slot (weapons + offhand);
+## pot-list items only fill empty slots so player edits are preserved.
+func _get_class_action_bar_layout() -> Dictionary:
+	var pc := _get_player_class()
+	match pc:
+		"wizard":
+			return {
+				"force": [
+					{"slot": 0, "name": "Staff"},
+				],
+				"pots": [
+					{"slot": 1, "name": "Red Potion"},
+					{"slot": 2, "name": "Mana Potion"},
+					{"slot": 3, "name": "Stamina Potion"},
+				],
+			}
+		"warrior":
+			return {
+				"force": [
+					{"slot": 0, "name": "Sword"},
+					{"slot": 1, "name": "Wooden Shield"},
+				],
+				"pots": [
+					{"slot": 2, "name": "Red Potion"},
+					{"slot": 3, "name": "Mana Potion"},
+					{"slot": 4, "name": "Stamina Potion"},
+				],
+			}
+		"mercenary":
+			return {
+				"force": [
+					{"slot": 0, "name": "Sword"},
+					{"slot": 1, "name": "Short Bow"},
+				],
+				"pots": [
+					{"slot": 2, "name": "Red Potion"},
+					{"slot": 3, "name": "Mana Potion"},
+					{"slot": 4, "name": "Stamina Potion"},
+				],
+			}
+		"ranger":
+			return {
+				"force": [
+					{"slot": 0, "name": "Long Bow"},
+					{"slot": 1, "name": "Parrying Dagger"},
+				],
+				"pots": [
+					{"slot": 2, "name": "Red Potion"},
+					{"slot": 3, "name": "Mana Potion"},
+					{"slot": 4, "name": "Stamina Potion"},
+				],
+			}
+		_:
+			return {"force": [], "pots": []}
 
 func _on_hitbox_area_entered(_area: Area2D) -> void:
 	pass
@@ -3706,10 +3859,11 @@ func _setup_starter_spells() -> void:
 		"arcane_familiar": "res://resources/spells/arcane_familiar.tres",
 		"inferno_lance": "res://resources/spells/inferno_lance.tres",
 	}
-	# Additive: learn anything new, equip into the first empty slot. Doesn't
-	# overwrite spells the player has bound somewhere already, and runs even
-	# when load_spellbook restored an older 6-slot save (so newly-added wizard
-	# starters land in the now-vacant slot 6 / 7).
+	# Additive: learn anything new, equip into the first empty slot AT OR AFTER
+	# the class's ability start slot. The bar layout reserves slots 0..N-1 for
+	# weapons + pots, so starting from N keeps spells from sharing a slot with
+	# an item (item wins display + click in the unified router).
+	var ability_start := _get_ability_start_slot()
 	for sid in starter_ids:
 		if not all_spells.has(sid):
 			continue
@@ -3725,11 +3879,31 @@ func _setup_starter_spells() -> void:
 		spell_book.learn_spell(spell)
 		if already_equipped:
 			continue
-		# Find first empty slot, equip there.
-		for i in range(spell_book.MAX_SPELL_SLOTS):
+		# Find first empty spell-slot AT OR AFTER ability_start. Fall back to
+		# scanning from 0 only if every slot above ability_start is full — the
+		# spell will live somewhere, even if it overlaps an item visually.
+		var placed := false
+		for i in range(ability_start, spell_book.MAX_SPELL_SLOTS):
 			if spell_book.spell_slots[i] == null:
 				spell_book.equip_spell(spell, i)
+				placed = true
 				break
+		if not placed:
+			for i in range(spell_book.MAX_SPELL_SLOTS):
+				if spell_book.spell_slots[i] == null:
+					spell_book.equip_spell(spell, i)
+					break
+
+## Per-class index where abilities start sitting on the action bar. Slots
+## 0..ability_start-1 are reserved for the class's weapon/offhand + HP/MP/
+## stamina pots set up by _give_starting_items + _populate_quickbar.
+func _get_ability_start_slot() -> int:
+	var pc := _get_player_class()
+	match pc:
+		"wizard":
+			return 4  # 0=staff, 1=red, 2=mana, 3=stamina, 4..9=abilities
+		_:
+			return 5  # 0=weapon, 1=offhand, 2=red, 3=mana, 4=stamina, 5..9=abilities
 
 func _use_spell_slot(index: int) -> void:
 	if not spell_book or index < 0 or index >= spell_book.MAX_SPELL_SLOTS:
@@ -4132,6 +4306,11 @@ func _ability_frost_nova() -> void:
 	if vfx:
 		vfx.frost_ring(target_pos, radius)
 		vfx.shake(1.5, 0.15)
+	# Oryx FX overlay — 2-frame impact → explosion flipbook centred on the nova.
+	# ice_impact is the bright initial hit; ice_explosion is the ring shockwave.
+	# target_px ≈ radius × 1.2 keeps the sprite footprint close to the actual
+	# AoE rather than blowing past it like the old 2.0× did.
+	FXAtlasLookup.spawn_anim(self, ["ice_impact", "ice_explosion"], target_pos, 0.10, radius * 1.2, 9, false, 0.5)
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:
 		# Pitched down + quieter + a lower crackle underneath. The default
@@ -4530,6 +4709,14 @@ func _ability_inferno_lance() -> void:
 	if "set_meta" in bullet:
 		bullet.set_meta("fireball_aoe", true)
 		bullet.set_meta("fireball_aoe_radius", 26.0 * scale_il)
+		# Oryx visuals: single firebolt streak in flight, 2-frame fire burst on
+		# impact. Override the default lofi bullet pellet so the lance reads
+		# as a charged spell instead of a regular shot. Scale 0.25 = half of
+		# the previous 0.5 so the projectile reads as a focused spear instead
+		# of a huge fireball blocking the screen.
+		bullet.set_meta("fx_overlay", "firebolt")
+		bullet.set_meta("fx_overlay_scale", 0.25)
+		bullet.set_meta("fx_impact", ["fire_impact", "fire_explosion"])
 	if "pierce_count" in bullet:
 		bullet.pierce_count = 2
 	get_tree().current_scene.add_child(bullet)
@@ -4552,28 +4739,20 @@ func _ability_lightning_x() -> void:
 	else:
 		target_pos = get_global_mouse_position()
 	var radius_lx: float = 36.0 * scale_lx
-	# Visual: pulsing X glyph at the target.
-	var glyph := Node2D.new()
-	glyph.position = target_pos
-	glyph.z_index = 5
-	get_tree().current_scene.add_child(glyph)
-	var bar1 := ColorRect.new()
-	bar1.color = Color(0.55, 0.85, 1.0, 0.85)
-	bar1.size = Vector2(radius_lx * 1.4, 2.0)
-	bar1.position = -bar1.size * 0.5
-	bar1.rotation = PI / 4.0
-	glyph.add_child(bar1)
-	var bar2 := ColorRect.new()
-	bar2.color = Color(0.55, 0.85, 1.0, 0.85)
-	bar2.size = Vector2(radius_lx * 1.4, 2.0)
-	bar2.position = -bar2.size * 0.5
-	bar2.rotation = -PI / 4.0
-	glyph.add_child(bar2)
-	# Telegraph pulse — alpha throbs until impact.
-	var pulse := create_tween()
-	pulse.set_loops()
-	pulse.tween_property(glyph, "modulate:a", 0.35, 0.25)
-	pulse.tween_property(glyph, "modulate:a", 1.0, 0.25)
+	# Telegraph: a flickering electric ball at the target. spawn_anim() handles
+	# the 2-frame loop (electric_ball ↔ electric_ball_2) and self-frees after
+	# total_duration. Sprite footprint ≈ AoE radius so the marker reads as
+	# "this is the danger zone" rather than overhanging the affected area.
+	var glyph := FXAtlasLookup.spawn_anim(
+		self,
+		["electric_ball", "electric_ball_2"],
+		target_pos,
+		0.10,                # frame_duration → tight flicker
+		radius_lx * 1.0,
+		5,
+		true,                # loop
+		3.0                  # total_duration → matches the strike delay
+	)
 	var sfx_pre = get_node_or_null("/root/SFXManager")
 	if sfx_pre:
 		sfx_pre.play("ping", -6.0, 0.05)
@@ -4581,16 +4760,27 @@ func _ability_lightning_x() -> void:
 	var dmg_lx := 10
 	var stun_dur := 5.0
 	get_tree().create_timer(3.0).timeout.connect(func():
-		if not is_instance_valid(glyph):
-			return
-		pulse.kill()
-		glyph.queue_free()
+		# Kill the telegraph the moment the strike lands — let spawn_anim's
+		# internal cleanup handle the fade if the glyph is still around.
+		if is_instance_valid(glyph):
+			glyph.queue_free()
 		var vfx_lx = get_node_or_null("/root/VFXManager")
 		if vfx_lx:
 			if vfx_lx.has_method("shockwave"):
 				vfx_lx.shockwave(target_pos, radius_lx * 1.4, Color(0.5, 0.85, 1.0, 0.9))
 			if vfx_lx.has_method("shake"):
 				vfx_lx.shake(2.5, 0.18)
+		# Strike VFX: 2-frame burst (electric_explosion_1 → electric_explosion_2)
+		# at ~1.3× radius — slight overshoot reads as the bolt actually expanding
+		# past its damage area, without flooding the screen.
+		FXAtlasLookup.spawn_anim(
+			self,
+			["electric_explosion_1", "electric_explosion_2"],
+			target_pos,
+			0.08,
+			radius_lx * 1.3,
+			10
+		)
 		var sfx_hit = get_node_or_null("/root/SFXManager")
 		if sfx_hit:
 			sfx_hit.play("boom_b", -4.0, 0.08, 0.85)
@@ -4604,6 +4794,19 @@ func _ability_lightning_x() -> void:
 			if e.has_method("apply_status"):
 				e.apply_status("STUNNED", stun_dur)
 	)
+
+
+func _clear_bullet_shield_sprite() -> void:
+	# Fade + free the bullet shield bubble. Called by the watchdog the instant
+	# charges hit zero or the 12s timer runs out, so the visual never lingers.
+	if not is_instance_valid(_bullet_shield_sprite):
+		_bullet_shield_sprite = null
+		return
+	var s := _bullet_shield_sprite
+	_bullet_shield_sprite = null
+	var fade := s.create_tween()
+	fade.tween_property(s, "modulate:a", 0.0, 0.2)
+	fade.tween_callback(s.queue_free)
 
 
 func _ability_bullet_shield() -> void:
@@ -4628,6 +4831,41 @@ func _ability_bullet_shield() -> void:
 	var scene_root_bs = get_tree().current_scene if is_inside_tree() else null
 	if scene_root_bs:
 		FloatingText.spawn(scene_root_bs, global_position + Vector2(0, -18), "+4 Bullet Shield", Color(0.4, 0.7, 1.0))
+	# Visual: looping 2-frame Oryx bubble (bullet_Shield ↔ bullet_Shield_2)
+	# parented to the player so it follows movement. Watchdog in _process frees
+	# the sprite the moment charges hit zero or the 12s timer expires.
+	if is_instance_valid(_bullet_shield_sprite):
+		_bullet_shield_sprite.queue_free()
+		_bullet_shield_sprite = null
+	var shield_frame_1 := FXAtlasLookup.get_texture("bullet_Shield")
+	var shield_frame_2 := FXAtlasLookup.get_texture("bullet_Shield_2")
+	if shield_frame_1 and shield_frame_2:
+		var s := Sprite2D.new()
+		s.texture = shield_frame_1
+		s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		# Render behind the wizard sprite so the bubble looks like it's
+		# wrapped around the player rather than plastered on top.
+		# show_behind_parent forces this CanvasItem to draw BEFORE the
+		# player's own children, which puts it under the body sprite.
+		s.show_behind_parent = true
+		s.z_index = -1
+		# Semi-transparent ghost — keeps the wizard sprite readable through
+		# the bubble and softens the visual weight of the FX.
+		s.modulate = Color(1.0, 1.0, 1.0, 0.55)
+		var native: float = float(shield_frame_1.region.size.x)
+		var in_ow_bs := get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+		var ow_scale: float = 4.0 if in_ow_bs else 1.0
+		var target_px: float = 14.0 * ow_scale
+		if native > 0.0:
+			s.scale = Vector2.ONE * (target_px / native)
+		add_child(s)
+		_bullet_shield_sprite = s
+		var flicker := s.create_tween()
+		flicker.set_loops()
+		flicker.tween_callback(func(): if is_instance_valid(s): s.texture = shield_frame_1)
+		flicker.tween_interval(0.15)
+		flicker.tween_callback(func(): if is_instance_valid(s): s.texture = shield_frame_2)
+		flicker.tween_interval(0.15)
 
 func _ability_greater_heal() -> void:
 	# Restore 50 + level*3 HP
@@ -4702,6 +4940,11 @@ func _ability_fireball() -> void:
 	fireball.set_meta("fireball_aoe_radius", (36.0 if empowered else 20.0) * scale_mult)
 	fireball.set_meta("fireball_aoe_dmg_pct", 0.8 if empowered else 0.6)
 	fireball.set_meta("apply_burning", 5.0 if empowered else 3.0)
+	# Tell bullet.gd which Oryx tile to overlay during travel and which to drop
+	# on impact. Bullet reads these in its _ready / _fireball_explode paths.
+	fireball.set_meta("fx_overlay", "firebolt")
+	# 2-frame impact: fire_impact bright flash → fire_explosion bloom.
+	fireball.set_meta("fx_impact", ["fire_impact", "fire_explosion"])
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	if bullets_container:
 		bullets_container.add_child(fireball)

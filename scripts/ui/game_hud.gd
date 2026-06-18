@@ -1095,7 +1095,10 @@ func _refresh_spell_slots() -> void:
 	if _spell_slots.size() >= SPELL_SLOTS:
 		for i in range(SPELL_SLOTS):
 			var btn = _spell_slots[i]
+			# remove_child + queue_free so cooldown / spell-name labels don't
+			# stack on top of each other within a single frame.
 			for child in btn.get_children():
+				btn.remove_child(child)
 				child.queue_free()
 
 			var sty = btn.get_theme_stylebox("normal") as StyleBoxFlat
@@ -1237,7 +1240,9 @@ func _refresh_mobile_spell_slots() -> void:
 	var max_slots = sb.get_max_slots(_player.level_system.level if _player.level_system else 1, spirit)
 	for i in range(SPELL_SLOTS):
 		var btn = _mobile_spell_slots[i]
+		# remove_child before queue_free so old labels don't paint over new.
 		for child in btn.get_children():
+			btn.remove_child(child)
 			child.queue_free()
 		var sty = btn.get_theme_stylebox("normal") as StyleBoxFlat
 		if i >= max_slots:
@@ -1373,11 +1378,18 @@ func _refresh_quickbar() -> void:
 	if _quickbar_slots.size() >= QUICKBAR_SLOTS:
 		for i in range(QUICKBAR_SLOTS):
 			var btn = _quickbar_slots[i]
-			# Clear old icon + labels, but PRESERVE the "HotkeyBadge" number label.
+			# Clear old icon + labels, but PRESERVE the "HotkeyBadge" number
+			# label. remove_child + queue_free ensures the old "x10" / count
+			# label vanishes before the new "x9" is rendered this frame —
+			# queue_free alone defers removal and leaks stale text on top.
 			for child in btn.get_children():
+				var should_clear := false
 				if child is TextureRect:
-					child.queue_free()
+					should_clear = true
 				elif child is Label and child.name != "HotkeyBadge":
+					should_clear = true
+				if should_clear:
+					btn.remove_child(child)
 					child.queue_free()
 
 			var item_name = _quickbar_items[i]

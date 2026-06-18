@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://34ry41nxt3uv"
-path="res://.godot/imported/lofi_obj_packB.png-891a3f86cf8954cbfb8ac465bc02489a.ctex"
+uid="uid://jis362ts7dcs"
+path="res://.godot/imported/oryx_16bit_fx_small.png-de1e125df61716189aa0ac65d4d1135c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://scripts/tools/electron-editor/app/lofi_obj_packB.png"
-dest_files=["res://.godot/imported/lofi_obj_packB.png-891a3f86cf8954cbfb8ac465bc02489a.ctex"]
+source_file="res://assets/sprites/oryx_16bit_fx_small.png"
+dest_files=["res://.godot/imported/oryx_16bit_fx_small.png-de1e125df61716189aa0ac65d4d1135c.ctex"]
 
 [params]
 

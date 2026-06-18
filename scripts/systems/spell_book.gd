@@ -2,9 +2,9 @@ class_name SpellBook
 extends Node
 
 var learned_spells: Array[SpellDefinition] = []
-const MAX_SPELL_SLOTS = 7  # was 6 — 7th slot added so spells map to keys 4-0
-var spell_slots: Array = [null, null, null, null, null, null, null]  # SpellDefinition or null
-var slot_cooldowns: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+const MAX_SPELL_SLOTS = 10  # unified action bar: any of slots 0..9 (hotkeys 1..0) can hold a spell
+var spell_slots: Array = [null, null, null, null, null, null, null, null, null, null]  # SpellDefinition or null
+var slot_cooldowns: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 signal spell_learned(spell: SpellDefinition)
 signal spell_equipped(slot: int, spell: SpellDefinition)

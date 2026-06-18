@@ -38,12 +38,11 @@ func _build_ui() -> void:
 	_label.label_settings = settings
 	_panel.add_child(_label)
 
-func _input(event: InputEvent) -> void:
-	if not PerfTelemetry.is_enabled():
-		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.is_action_pressed("perf_toggle") or event.keycode == KEY_F9:
-			_toggle_overlay()
+func _input(_event: InputEvent) -> void:
+	# Perf overlay no longer responds to any keypress. Was previously bound to
+	# "9" (which doubled as a spell hotkey) and F9; removed by request to keep
+	# the action bar free of debug-overlay interference.
+	pass
 
 func _process(delta: float) -> void:
 	if not PerfTelemetry.is_enabled():

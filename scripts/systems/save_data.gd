@@ -19,9 +19,9 @@ extends Resource
 @export var inventory_quantities: Dictionary = {}  # inv_index(int) -> quantity(int) for ammo items
 @export var inventory_item_states: Dictionary = {}  # inv_index(int) -> per-instance state (sockets, gems, future craft state)
 @export var secondary_weapon_path: String = ""  # weapon swap secondary (mercenary/ranger)
-@export var quickbar_items: Array[String] = ["", "", "", "", "", ""]  # item_name per slot
+@export var quickbar_items: Array[String] = ["", "", "", "", "", "", "", "", "", ""]  # item_name per action-bar slot (10 total)
 @export var learned_spells: Array[Dictionary] = []  # spell data as dicts
-@export var equipped_spell_slots: Array[String] = ["", "", "", "", "", "", ""]  # spell ids per slot (7 = keys 4-0)
+@export var equipped_spell_slots: Array[String] = ["", "", "", "", "", "", "", "", "", ""]  # spell ids per action-bar slot (10 total)
 @export var pet_data: Array = []  # [{type, name, level, xp, active}]
 
 # --- World data (persists through death) ---
@@ -82,8 +82,28 @@ static func load_slot(slot: int) -> SaveData:
 		var data = ResourceLoader.load(path)
 		if data is SaveData:
 			data.slot_index = slot
+			data._migrate_action_bar()
 			return data
 	return null
+
+## Resize legacy action-bar arrays to the unified 10-slot layout.
+## Old layout: quickbar_items=[6] (3 items in 0..2, 3 hidden in 3..5),
+##             equipped_spell_slots=[7] (spells mapped to bar 3..9).
+## New layout: both arrays are length 10; index i corresponds to bar slot i.
+## Old quickbar items 0..2 stay at 0..2; old spell slots 0..6 shift to 3..9.
+func _migrate_action_bar() -> void:
+	if quickbar_items.size() < 10:
+		var new_qb: Array[String] = ["", "", "", "", "", "", "", "", "", ""]
+		for i in mini(3, quickbar_items.size()):
+			new_qb[i] = quickbar_items[i]
+		quickbar_items = new_qb
+	if equipped_spell_slots.size() < 10:
+		var new_ss: Array[String] = ["", "", "", "", "", "", "", "", "", ""]
+		var old := equipped_spell_slots
+		# Old length was up to 7 (or 6 even older); shift each to bar index 3+i.
+		for i in mini(7, old.size()):
+			new_ss[3 + i] = old[i]
+		equipped_spell_slots = new_ss
 
 static func create_new(slot: int) -> SaveData:
 	var data = SaveData.new()
@@ -112,9 +132,9 @@ func wipe_character() -> void:
 	inventory_quantities.clear()
 	inventory_item_states.clear()
 	secondary_weapon_path = ""
-	quickbar_items = ["", "", "", "", "", ""]
+	quickbar_items = ["", "", "", "", "", "", "", "", "", ""]
 	learned_spells.clear()
-	equipped_spell_slots = ["", "", "", "", "", "", ""]
+	equipped_spell_slots = ["", "", "", "", "", "", "", "", "", ""]
 	pet_data.clear()
 	# Gold is wiped on death; finalize_hall_legacy_selection refunds a
 	# percentage based on the "gold_retention" hall upgrade (20% base, +10% per

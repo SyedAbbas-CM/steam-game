@@ -280,9 +280,9 @@ func start_new_character(class_id: String) -> void:
 	save_data.inventory_items.clear()
 	save_data.inventory_item_states.clear()
 	save_data.secondary_weapon_path = ""
-	save_data.quickbar_items = ["", "", "", "", "", ""]
+	save_data.quickbar_items = ["", "", "", "", "", "", "", "", "", ""]
 	save_data.learned_spells.clear()
-	save_data.equipped_spell_slots = ["", "", "", "", "", "", ""]
+	save_data.equipped_spell_slots = ["", "", "", "", "", "", "", "", "", ""]
 	save_data.pet_data.clear()
 	selected_class = class_id
 	# Give starter gems for testing
@@ -879,8 +879,12 @@ func load_quickbar(hud: CanvasLayer) -> void:
 	# Accepts either GameHUD or SigilHUD — both have a `_quickbar_items` array.
 	if not save_data or not hud:
 		return
-	if save_data.quickbar_items.size() == 6:
-		hud.set("_quickbar_items", save_data.quickbar_items.duplicate())
+	# Resize-tolerant: old saves had length 6, the unified bar wants 10.
+	# _migrate_action_bar() on load_slot already normalises persisted saves,
+	# but in-memory SaveData from a fresh run won't have gone through it.
+	if save_data.quickbar_items.size() < 10:
+		save_data._migrate_action_bar()
+	hud.set("_quickbar_items", save_data.quickbar_items.duplicate())
 
 func load_equipment(equip_mgr: EquipmentManager) -> bool:
 	if not save_data or not equip_mgr:
@@ -916,7 +920,7 @@ func save_spellbook(sb: SpellBook) -> void:
 	save_data.learned_spells.clear()
 	for spell in sb.learned_spells:
 		save_data.learned_spells.append(spell.to_dict())
-	save_data.equipped_spell_slots = ["", "", "", "", "", "", ""]
+	save_data.equipped_spell_slots = ["", "", "", "", "", "", "", "", "", ""]
 	for i in range(SpellBook.MAX_SPELL_SLOTS):
 		if sb.spell_slots[i]:
 			save_data.equipped_spell_slots[i] = sb.spell_slots[i].id
