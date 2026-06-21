@@ -79,6 +79,27 @@ func _build_ui(run_state: RunState) -> void:
 	s_tw.tween_interval(1.2)
 	s_tw.tween_property(sub, "modulate:a", 1.0, 0.5)
 
+	# Death recap — answers the tester's "I don't know what killed me" question.
+	# Reads from save_data.last_death_run_summary (populated by player.take_damage
+	# heuristic + GameManager._snapshot_death_legacy).
+	var recap_text := _build_death_recap_line()
+	if recap_text != "":
+		var recap = Label.new()
+		recap.text = recap_text
+		recap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var recap_s = LabelSettings.new()
+		recap_s.font_size = 22
+		recap_s.font_color = Color(0.92, 0.7, 0.4)
+		recap_s.outline_size = 2
+		recap_s.outline_color = Color(0.1, 0.05, 0.0)
+		recap.label_settings = recap_s
+		recap.modulate.a = 0.0
+		_center.add_child(recap)
+		var r_tw = recap.create_tween()
+		r_tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		r_tw.tween_interval(1.4)
+		r_tw.tween_property(recap, "modulate:a", 1.0, 0.5)
+
 	# Run stats
 	_stats_label = Label.new()
 	_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -118,6 +139,24 @@ func _build_ui(run_state: RunState) -> void:
 	b_tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	b_tw.tween_interval(2.0)
 	b_tw.tween_property(btn_box, "modulate:a", 1.0, 0.4)
+
+## Builds the "Killed by X: Y, N damage" line from last_death_run_summary.
+## Returns "" when the recap fields weren't populated (older saves, debug
+## kills) so the screen quietly omits the line instead of showing "Killed
+## by : , 0 damage".
+func _build_death_recap_line() -> String:
+	var gm = get_node_or_null("/root/GameManager")
+	if not gm or not gm.save_data:
+		return ""
+	var summary: Dictionary = gm.save_data.last_death_run_summary
+	if summary.is_empty():
+		return ""
+	var source: String = String(summary.get("recap_source", ""))
+	if source == "":
+		return ""
+	var attack: String = String(summary.get("recap_attack", "Unknown"))
+	var dmg: int = int(summary.get("recap_damage", 0))
+	return "Killed by %s — %s, %d damage" % [source, attack, dmg]
 
 func _make_button(text: String) -> Button:
 	var btn = Button.new()

@@ -27,3 +27,4 @@ bullet_sprite_index = 248
 weapon_range = 3.0
 weapon_type = "short_bow"
 ability_id = "short_bow"
+demo_approved = true

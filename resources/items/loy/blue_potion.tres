@@ -12,3 +12,4 @@ rarity = 0
 buy_price = 120
 sell_value = 30
 heal_hp = 30
+demo_approved = true

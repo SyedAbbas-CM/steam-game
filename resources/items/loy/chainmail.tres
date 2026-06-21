@@ -23,3 +23,4 @@ modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")]
 rarity = 1
 buy_price = 330
 sell_value = 82
+demo_approved = true

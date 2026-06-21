@@ -1,0 +1,80 @@
+[gd_resource type="Resource" script_class="QuestDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/quest_definition.gd" id="1_gen"]
+
+[resource]
+script = ExtResource("1_gen")
+id = "mq_d1_ash_under_ravenhollow"
+title = "Ash Under Ravenhollow"
+summary = "The village dead are walking south, in step, underground. The Elder wants whatever leads them. Find the Skeleton Captain in the first barrow and bring back its grave-token."
+level = 1
+location = "ravenhollow"
+target_location = "ravenhollow"
+giver_npc = "Elder"
+boss_dungeon = "Haven-Dungeons"
+boss_enemy_path = "res://resources/enemies/loy/undead/skeleton_captain.tres"
+start_script = [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "I'll go.",
+"script": [{
+"cmd": "startQuest"
+}]
+}, {
+"name": "Not yet.",
+"script": []
+}],
+"portrait": 0,
+"text": "The dead are walking south. Not wandering. Walking. Something below is calling them, and they answer in step. Bring me what leads them."
+}]
+events = [{
+"param": "Skeleton Captain",
+"script": [{
+"cmd": "showDialog",
+"name": "",
+"options": [{
+"name": "Take the token.",
+"script": [{
+"cmd": "getItem",
+"name": "Grave Token",
+"count": 1
+}]
+}],
+"portrait": 0,
+"text": "The Captain falls. In its rib-cage is a token shaped like a skull, scratched with a name that has been rubbed half off. Take it back to the Elder."
+}],
+"type": "kill"
+}, {
+"param": "Elder",
+"script": [{
+"cmd": "if",
+"attribute": "count-Grave Token",
+"compare": "1",
+"operation": "gte",
+"script": [{
+"cmd": "showDialog",
+"name": "Elder",
+"options": [{
+"name": "Hand over the token.",
+"script": [{
+"cmd": "takeItem",
+"name": "Grave Token",
+"count": 1
+}, {
+"cmd": "getExp",
+"value": "300"
+}, {
+"cmd": "giveGold",
+"value": "150"
+}, {
+"cmd": "completeQuest"
+}]
+}],
+"portrait": 0,
+"text": "Bone, then. And a name half-erased. Someone below is taking names off the dead, child. That is older work than these bones. Rest. The next step is darker."
+}]
+}]
+,
+"type": "activate"
+}]

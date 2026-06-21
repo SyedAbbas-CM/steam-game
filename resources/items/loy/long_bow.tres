@@ -27,3 +27,4 @@ bullet_sprite_index = 248
 weapon_range = 5.0
 weapon_type = "bow"
 ability_id = "arrow_rain"
+demo_approved = true

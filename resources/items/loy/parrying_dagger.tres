@@ -24,3 +24,4 @@ rarity = 1
 buy_price = 180
 sell_value = 45
 weapon_type = "parrying_dagger"
+demo_approved = true

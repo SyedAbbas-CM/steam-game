@@ -393,6 +393,8 @@ static func quests() -> Array[String]:
 		"res://resources/quests/z1.tres",
 		"res://resources/quests/z5.tres",
 		"res://resources/quests/z8.tres",
+		# Demo quest chain — Archlich Veyr / Barrows Road (post-playtest pillar 1)
+		"res://resources/quests/mq_d1_ash_under_ravenhollow.tres",
 		# Main quest chain — The Hollow Tide
 		"res://resources/quests/mq01.tres",
 		"res://resources/quests/mq02.tres",
@@ -1054,6 +1056,7 @@ static func enemies() -> Array[String]:
 		"res://resources/enemies/loy/undead/skeletal_mage.tres",
 		"res://resources/enemies/loy/undead/skeleton.tres",
 		"res://resources/enemies/loy/undead/skeleton_archer.tres",
+		"res://resources/enemies/loy/undead/skeleton_captain.tres",
 		"res://resources/enemies/loy/undead/skeleton_frostbow.tres",
 		"res://resources/enemies/loy/undead/bone_bombardier.tres",
 		"res://resources/enemies/loy/undead/skeleton_king.tres",

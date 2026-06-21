@@ -33,6 +33,14 @@ static func is_equippable(slot: SlotType) -> bool:
 @export var rarity: int = 0  # 0=common, 1=uncommon, 2=rare
 @export var buy_price: int = 0
 @export var sell_value: int = 0
+## Demo allowlist gate — when GameManager.demo_mode is true, drops filter to
+## items where this is true. Default false so any unaudited item is excluded
+## from the demo loot pool until a designer signs off on it.
+@export var demo_approved: bool = false
+## Quest items can't be sold, dropped, or salvaged. Used by grave_token and
+## any future plot-bound material so it stays in the player's bag until the
+## owning quest finishes.
+@export var is_quest_item: bool = false
 @export var enchantment: ItemEnchantment
 @export var loy_tile_index: int = -1  # index into tiles.png (32x32 tiles, 16x16 grid) for item icon
 @export var bullet_sprite_index: int = -1  # index into lofi_obj.png (8x8 tiles, 16x16 grid). -1 = default

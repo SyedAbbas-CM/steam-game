@@ -21,6 +21,12 @@ const HALL_OF_ANCESTORS_SCENE := "res://scenes/ui/hall_of_ancestors.tscn"
 const MAX_ANCESTOR_RECORDS: int = 10
 const LEGACY_ITEM_LIMIT: int = 3
 
+## Demo build gate. When true, any code that rolls random loot or pulls from
+## the generated item pool must filter to items where EquipmentItem.demo_approved
+## is true. Defaults true while the project is in the post-playtest demo polish
+## phase; flip to false once the wider loot pool gets audited.
+var demo_mode: bool = true
+
 signal gold_changed(amount: int)
 signal relics_changed(amount: int)
 signal tokens_changed(amount: int)
@@ -820,6 +826,14 @@ func _snapshot_death_legacy(run_state = null) -> void:
 		"time_seconds": int(run_state.get_duration_seconds()) if run_state else 0,
 		"died_at": Time.get_datetime_string_from_system(),
 	}
+	# Merge the death-recap meta written by player.gd right before player_died.
+	# Keys: source (enemy name), attack (Projectile/Contact/attack id), damage.
+	if save_data.has_meta("last_death_recap"):
+		var recap: Dictionary = save_data.get_meta("last_death_recap")
+		save_data.last_death_run_summary["recap_source"] = String(recap.get("source", "the dark"))
+		save_data.last_death_run_summary["recap_attack"] = String(recap.get("attack", "Unknown"))
+		save_data.last_death_run_summary["recap_damage"] = int(recap.get("damage", 0))
+		save_data.remove_meta("last_death_recap")
 	var ancestor_entry := save_data.last_death_run_summary.duplicate(true)
 	ancestor_entry["class_name"] = selected_class.capitalize()
 	save_data.ancestor_records.insert(0, ancestor_entry)

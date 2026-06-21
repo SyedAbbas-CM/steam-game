@@ -27,3 +27,4 @@ bullet_sprite_index = 240
 weapon_range = 2.1
 weapon_type = "sword"
 ability_id = "shield_bash"
+demo_approved = true

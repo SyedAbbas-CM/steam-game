@@ -26,3 +26,4 @@ sell_value = 50
 bullet_sprite_index = 240
 weapon_range = 2.1
 weapon_type = "sword"
+demo_approved = true

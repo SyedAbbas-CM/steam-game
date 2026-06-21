@@ -27,3 +27,4 @@ bullet_sprite_index = 224
 weapon_range = 4.0
 weapon_type = "staff"
 ability_id = "frost_nova"
+demo_approved = true

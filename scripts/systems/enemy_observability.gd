@@ -1,0 +1,262 @@
+extends Node
+
+# Debug-only enemy spawn telemetry. Records the final composed EnemyDefinition
+# after dungeon scaling, elite promotion, archetypes, affixes, and phase setup.
+
+const LOG_DIR := "user://enemy_observability"
+const MAX_RECENT_EVENTS := 256
+
+var _enabled: bool = false
+var _run_id: String = ""
+var _events: Array[Dictionary] = []
+var _counts_by_name: Dictionary = {}
+var _counts_by_room: Dictionary = {}
+var _counts_by_archetype: Dictionary = {}
+var _counts_by_affix: Dictionary = {}
+var _jsonl_path: String = ""
+var _summary_path: String = ""
+
+func _ready() -> void:
+	_enabled = OS.is_debug_build() or OS.has_feature("editor")
+	set_process(_enabled)
+	if _enabled:
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(LOG_DIR))
+
+func is_enabled() -> bool:
+	return _enabled
+
+func begin_dungeon_run(context: Dictionary = {}) -> void:
+	if not _enabled:
+		return
+	_run_id = "%s_%d" % [String(context.get("dungeon", "dungeon")).replace(" ", "_"), Time.get_unix_time_from_system()]
+	_events.clear()
+	_counts_by_name.clear()
+	_counts_by_room.clear()
+	_counts_by_archetype.clear()
+	_counts_by_affix.clear()
+	_jsonl_path = "%s/%s_spawns.jsonl" % [LOG_DIR, _run_id]
+	_summary_path = "%s/%s_summary.txt" % [LOG_DIR, _run_id]
+	print("[EnemyObs] logging to %s" % ProjectSettings.globalize_path(_summary_path))
+	_append_jsonl({
+		"event": "begin_run",
+		"run_id": _run_id,
+		"context": context,
+		"time_msec": Time.get_ticks_msec(),
+	})
+
+func end_dungeon_run(context: Dictionary = {}) -> void:
+	if not _enabled or _run_id == "":
+		return
+	_append_jsonl({
+		"event": "end_run",
+		"run_id": _run_id,
+		"context": context,
+		"time_msec": Time.get_ticks_msec(),
+	})
+	write_summary()
+
+func record_enemy_spawn(enemy: Node, definition: Resource, context: Dictionary = {}) -> void:
+	if not _enabled or definition == null:
+		return
+	if _run_id == "":
+		begin_dungeon_run(context)
+
+	var event := _build_spawn_event(enemy, definition, context)
+	_events.append(event)
+	if _events.size() > MAX_RECENT_EVENTS:
+		_events.pop_front()
+
+	_count(_counts_by_name, String(event.get("enemy_name", "Unknown")))
+	_count(_counts_by_room, String(event.get("room_type", "unknown")))
+	var archetype := String(event.get("archetype", ""))
+	if archetype != "":
+		_count(_counts_by_archetype, archetype)
+	for affix in event.get("affixes", []):
+		_count(_counts_by_affix, String(affix))
+
+	_append_jsonl(event)
+	if bool(event.get("is_major", false)) or _events.size() % 10 == 0:
+		write_summary()
+	if bool(event.get("is_major", false)):
+		print("[EnemyObs] %s room=%s floor=%s hp=%s dmg=%s atk=%s phases=%s arch=%s affixes=%s summons=%s" % [
+			event.get("enemy_name", "Unknown"),
+			event.get("room_type", "?"),
+			event.get("floor", "?"),
+			event.get("max_hp", "?"),
+			event.get("attack_damage", "?"),
+			event.get("attack_type", "?"),
+			event.get("boss_phases", "?"),
+			event.get("archetype", ""),
+			str(event.get("affixes", [])),
+			event.get("summon_phase_count", 0),
+		])
+
+func write_summary() -> void:
+	if not _enabled or _summary_path == "":
+		return
+	var lines: Array[String] = []
+	lines.append("Enemy Observability Summary")
+	lines.append("Run: %s" % _run_id)
+	lines.append("Events: %d" % _events.size())
+	lines.append("")
+	lines.append("By Enemy")
+	lines.append_array(_format_counts(_counts_by_name))
+	lines.append("")
+	lines.append("By Room")
+	lines.append_array(_format_counts(_counts_by_room))
+	lines.append("")
+	lines.append("By Archetype")
+	lines.append_array(_format_counts(_counts_by_archetype))
+	lines.append("")
+	lines.append("By Affix")
+	lines.append_array(_format_counts(_counts_by_affix))
+	lines.append("")
+	lines.append("Major Spawns")
+	for event in _events:
+		if bool(event.get("is_major", false)):
+			lines.append("- F%s %s %s hp=%s dmg=%s pool=%s arch=%s affixes=%s summons=%s" % [
+				event.get("floor", "?"),
+				event.get("room_type", "?"),
+				event.get("enemy_name", "Unknown"),
+				event.get("max_hp", "?"),
+				event.get("attack_damage", "?"),
+				str(event.get("attack_pool", [])),
+				event.get("archetype", ""),
+				str(event.get("affixes", [])),
+				event.get("summon_phase_count", 0),
+			])
+
+	var file := FileAccess.open(_summary_path, FileAccess.WRITE)
+	if file:
+		file.store_string("\n".join(lines))
+		file.close()
+
+func get_recent_events() -> Array[Dictionary]:
+	return _events.duplicate(true)
+
+func get_summary_path() -> String:
+	return ProjectSettings.globalize_path(_summary_path) if _summary_path != "" else ""
+
+func get_jsonl_path() -> String:
+	return ProjectSettings.globalize_path(_jsonl_path) if _jsonl_path != "" else ""
+
+func _build_spawn_event(enemy: Node, definition: Resource, context: Dictionary) -> Dictionary:
+	var attack_pool: Array = []
+	if definition.has_meta("generated_attack_pool"):
+		for attack_id in definition.get_meta("generated_attack_pool"):
+			attack_pool.append(_attack_name(int(attack_id)))
+
+	var affixes: Array[String] = []
+	if definition.has_meta("generated_affix_ids"):
+		for affix in definition.get_meta("generated_affix_ids"):
+			affixes.append(String(affix))
+
+	var movement := _movement_summary(definition.get("movement_pattern"))
+	var summon_def = definition.get("summon_definition")
+	var event := {
+		"event": "enemy_spawn",
+		"run_id": _run_id,
+		"time_msec": Time.get_ticks_msec(),
+		"enemy_instance_id": enemy.get_instance_id() if enemy else 0,
+		"enemy_name": String(definition.get("enemy_name")),
+		"resource_path": String(definition.resource_path),
+		"floor": int(context.get("floor", 0)),
+		"room_grid": str(context.get("room_grid", Vector2i.ZERO)),
+		"room_type": String(context.get("room_type", "unknown")),
+		"encounter_type": String(context.get("encounter_type", "unknown")),
+		"spawn_reason": String(context.get("spawn_reason", "room_spawn")),
+		"source_pool": String(context.get("source_pool", "")),
+		"recommended_level": int(context.get("recommended_level", 0)),
+		"player_level": int(context.get("player_level", 1)),
+		"overlevel": int(context.get("overlevel", 0)),
+		"level_scale": float(context.get("level_scale", 1.0)),
+		"dmg_scale": float(context.get("dmg_scale", 1.0)),
+		"room_hp_mult": float(context.get("room_hp_mult", 1.0)),
+		"room_damage_mult": float(context.get("room_damage_mult", 1.0)),
+		"max_hp": int(definition.get("max_hp")),
+		"attack_damage": int(definition.get("attack_damage")),
+		"contact_damage": int(definition.get("contact_damage")),
+		"armor": int(definition.get("armor")),
+		"level": int(definition.get("level")),
+		"size_class": _size_name(int(definition.get("size_class"))),
+		"attack_type": _attack_name(int(definition.get("attack_type"))),
+		"phase_2_attack": _attack_name(int(definition.get("phase_2_attack"))),
+		"phase_3_attack": _attack_name(int(definition.get("phase_3_attack"))),
+		"phase_2_bullet_count": int(definition.get("phase_2_bullet_count")),
+		"phase_3_bullet_count": int(definition.get("phase_3_bullet_count")),
+		"attack_speed": float(definition.get("attack_speed")),
+		"bullet_speed": float(definition.get("bullet_speed")),
+		"bullet_count": int(definition.get("bullet_count")),
+		"bomb_aoe_radius": float(definition.get("bomb_aoe_radius")),
+		"bomb_flight_time": float(definition.get("bomb_flight_time")),
+		"movement": movement,
+		"boss_phases": int(definition.get("boss_phases")),
+		"boss_state_count": definition.get("boss_states").size(),
+		"summon_on_phase_change": bool(definition.get("summon_on_phase_change")),
+		"summon_phase_count": int(definition.get("summon_phase_count")),
+		"summon_count": int(definition.get("summon_count")),
+		"summon_definition": String(summon_def.enemy_name) if summon_def else "",
+		"archetype": String(definition.get_meta("generated_archetype_id")) if definition.has_meta("generated_archetype_id") else "",
+		"affixes": affixes,
+		"attack_pool": attack_pool,
+		"melee_secondary": _attack_name(int(definition.get_meta("melee_secondary"))) if definition.has_meta("melee_secondary") else "",
+		"status_effect": String(definition.get("bullet_status_effect")),
+		"status_duration": float(definition.get("bullet_status_duration")),
+		"is_major": _is_major_spawn(definition, context),
+	}
+	return event
+
+func _append_jsonl(payload: Dictionary) -> void:
+	if _jsonl_path == "":
+		return
+	var file := FileAccess.open(_jsonl_path, FileAccess.READ_WRITE)
+	if file == null:
+		file = FileAccess.open(_jsonl_path, FileAccess.WRITE)
+	if file == null:
+		return
+	file.seek_end()
+	file.store_line(JSON.stringify(payload))
+	file.close()
+
+func _is_major_spawn(definition: Resource, context: Dictionary) -> bool:
+	var room_type := String(context.get("room_type", ""))
+	return room_type in ["ELITE", "SUPER_ELITE", "BOSS"] \
+		or int(definition.get("size_class")) >= 1 \
+		or bool(definition.get("summon_on_phase_change")) \
+		or definition.has_meta("generated_archetype_id")
+
+func _count(dict: Dictionary, key: String) -> void:
+	dict[key] = int(dict.get(key, 0)) + 1
+
+func _format_counts(dict: Dictionary) -> Array[String]:
+	var keys := dict.keys()
+	keys.sort_custom(func(a, b): return int(dict[a]) > int(dict[b]))
+	var out: Array[String] = []
+	for key in keys:
+		out.append("- %s: %d" % [String(key), int(dict[key])])
+	return out
+
+func _attack_name(value: int) -> String:
+	for key in EnemyDefinition.AttackType.keys():
+		if int(EnemyDefinition.AttackType[key]) == value:
+			return String(key)
+	return str(value)
+
+func _size_name(value: int) -> String:
+	for key in EnemyDefinition.SizeClass.keys():
+		if int(EnemyDefinition.SizeClass[key]) == value:
+			return String(key)
+	return str(value)
+
+func _movement_summary(movement) -> Dictionary:
+	if movement == null:
+		return {}
+	return {
+		"path": String(movement.resource_path),
+		"move_type": int(movement.get("move_type")),
+		"approach_weight": float(movement.get("approach_weight")),
+		"hold_weight": float(movement.get("hold_weight")),
+		"retreat_weight": float(movement.get("retreat_weight")),
+		"orbit_radius": float(movement.get("orbit_radius")),
+		"preferred_distance": float(movement.get("preferred_distance")),
+	}

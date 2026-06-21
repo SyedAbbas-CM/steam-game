@@ -13,6 +13,12 @@ var peer_owner_id: int = 1
 var player_slot_index: int = 0
 var replicated_proxy: bool = false
 var _dead: bool = false
+# Death recap — captured every time take_damage runs so the death screen can
+# show "Killed by Skeleton Captain: Sword Slash, 14 damage" instead of leaving
+# the player guessing what killed them. Cleared on respawn.
+var _last_damage_source_name: String = ""
+var _last_damage_attack_name: String = ""
+var _last_damage_amount: int = 0
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var equipment_manager: EquipmentManager = $EquipmentManager
@@ -1908,6 +1914,27 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 		return
 	if invincible:
 		return
+	# Capture death-recap source before any guards eat the hit. Heuristic:
+	# nearest enemy within 80px of source_pos is presumed the attacker.
+	# Cheap, good enough for the recap line; precise attribution would need
+	# bullet/contact callsites to pass the source explicitly.
+	if source_pos != Vector2.INF and source_pos.is_finite():
+		var nearest_e: Node = null
+		var nearest_d := 80.0
+		for e in get_tree().get_nodes_in_group("enemy"):
+			if not is_instance_valid(e):
+				continue
+			var d: float = source_pos.distance_to(e.global_position)
+			if d < nearest_d:
+				nearest_d = d
+				nearest_e = e
+		if nearest_e:
+			_last_damage_source_name = String(nearest_e.get("definition").enemy_name) if nearest_e.get("definition") != null else String(nearest_e.name)
+			_last_damage_attack_name = "Contact" if is_contact else "Projectile"
+		else:
+			_last_damage_source_name = "the dark"
+			_last_damage_attack_name = "Contact" if is_contact else "Projectile"
+		_last_damage_amount = amount
 	var is_true_damage: bool = _damage_type == CombatTypes.DamageType.TRUE
 
 	# Dashing = full invincibility (except for Warrior, who trades invuln for end-of-dash AoE)
@@ -2261,6 +2288,16 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 			invincible = true
 			hp = 0
 			hp_changed.emit(hp)
+			# Stash the death recap on GameManager.save_data so the death screen
+			# and Hall of Ancestors can read it without coupling to player state.
+			# Done BEFORE emit so _snapshot_death_legacy picks the values up.
+			var gm_dr = get_node_or_null("/root/GameManager")
+			if gm_dr and gm_dr.save_data:
+				gm_dr.save_data.set_meta("last_death_recap", {
+					"source": _last_damage_source_name,
+					"attack": _last_damage_attack_name,
+					"damage": _last_damage_amount,
+				})
 			player_died.emit()
 
 func _on_stats_changed() -> void:

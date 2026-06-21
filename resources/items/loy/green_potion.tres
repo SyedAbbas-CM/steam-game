@@ -12,3 +12,4 @@ rarity = 0
 buy_price = 15
 sell_value = 4
 use_effect = "restore_stamina_partial"
+demo_approved = true

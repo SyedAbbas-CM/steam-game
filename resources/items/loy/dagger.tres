@@ -32,3 +32,4 @@ bullet_sprite_index = 240
 weapon_range = 1.5
 weapon_type = "dagger"
 ability_id = "dagger"
+demo_approved = true

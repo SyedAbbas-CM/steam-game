@@ -28,6 +28,7 @@ PerkManager="*res://scripts/stats/perk_manager.gd"
 CoopSession="*res://scripts/systems/coop_session.gd"
 CoopRuntime="*res://scripts/systems/coop_runtime.gd"
 PerfTelemetry="*res://scripts/systems/perf_telemetry.gd"
+EnemyObservability="*res://scripts/systems/enemy_observability.gd"
 
 [display]
 

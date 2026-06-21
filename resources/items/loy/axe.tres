@@ -26,3 +26,4 @@ sell_value = 34
 bullet_sprite_index = 144
 weapon_range = 1.3
 weapon_type = "axe"
+demo_approved = true

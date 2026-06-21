@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/drops/skeleton_captain_drops.tres" id="2_drops"]
+
+[resource]
+script = ExtResource("1")
+enemy_name = "Skeleton Captain"
+description = "Bone officer marching the dead south. Slow, telegraphed swings, but the lance thrust kills if you don't roll."
+max_hp = 28
+move_speed = 18.0
+contact_damage = 2
+armor = 1
+level = 5
+kingdom = "undead"
+size_class = 1
+hostile = true
+attack_type = 62
+attack_damage = 4
+attack_speed = 1.8
+bullet_count = 1
+preferred_distance = 18.0
+charge_speed = 60.0
+charge_duration = 0.5
+aggro_range = 110.0
+ignores_terrain = false
+boss_phases = 2
+phase_2_attack = 64
+phase_2_bullet_count = 1
+summon_on_phase_change = true
+summon_count = 2
+summon_phase_count = 2
+use_loy_sprite = true
+loy_tile_index = 78
+sprite_color = Color(0.92, 0.88, 0.74, 1)
+drop_table = ExtResource("2_drops")
+xp_value = 45
+score_value = 80
+quest_kill_name = "Skeleton Captain"

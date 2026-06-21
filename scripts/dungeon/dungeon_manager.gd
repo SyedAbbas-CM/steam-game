@@ -496,6 +496,7 @@ func start_run() -> void:
 	else:
 		current_level = null
 
+	_enemy_obs_begin_run()
 	_generate_floor(1)
 	print("TIMING: TOTAL start_run took %d ms" % (Time.get_ticks_msec() - t0))
 	floor_changed.emit(1)
@@ -4394,6 +4395,12 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 		enemy.set_meta("grid_pos", grid_pos)
 		enemy.tree_exited.connect(_on_enemy_died.bind(grid_pos))
 		enemy_container.add_child(enemy)
+		_enemy_obs_record_spawn(enemy, def, room_data, grid_pos, "room_spawn", {
+			"source_pool": "loy_pool" if loy_pool.size() > 0 else ("biome_pool" if pool.size() > 0 else "fallback"),
+			"level_scale": level_scale,
+			"dmg_scale": dmg_scale,
+			"overlevel": overlevel,
+		})
 		_coop_register_enemy(enemy, grid_pos)
 
 		room_states[grid_pos]["alive"] += 1
@@ -4500,6 +4507,12 @@ func _spawn_horde_wave_2(grid_pos: Vector2i) -> void:
 		enemy.set_meta("grid_pos", grid_pos)
 		enemy.tree_exited.connect(_on_enemy_died.bind(grid_pos))
 		enemy_container.add_child(enemy)
+		_enemy_obs_record_spawn(enemy, def, room_data, grid_pos, "horde_wave_2", {
+			"source_pool": "loy_pool" if loy_pool.size() > 0 else ("biome_pool" if pool.size() > 0 else "fallback"),
+			"level_scale": level_scale,
+			"dmg_scale": dmg_scale,
+			"overlevel": enemy_scaling["overlevel"],
+		})
 		_coop_register_enemy(enemy, grid_pos)
 		# Brief spawn flash
 		enemy.modulate = Color(2.0, 2.0, 2.0, 1.0)
@@ -4654,6 +4667,12 @@ func _spawn_encounter_enemy(grid_pos: Vector2i, room_data: RoomData, spawn_pos: 
 	enemy.set_meta("grid_pos", grid_pos)
 	enemy.tree_exited.connect(_on_enemy_died.bind(grid_pos))
 	enemy_container.add_child(enemy)
+	_enemy_obs_record_spawn(enemy, def, room_data, grid_pos, "encounter_spawn", {
+		"source_pool": "encounter",
+		"level_scale": scaling.get("level_scale", 1.0),
+		"dmg_scale": scaling.get("dmg_scale", 1.0),
+		"overlevel": scaling.get("overlevel", 0),
+	})
 	var vfx = get_node_or_null("/root/VFXManager")
 	if vfx:
 		vfx.warp_portal(spawn_pos, Color(0.84, 0.09, 0.05, 0.98), 18.0 if def.size_class == EnemyDefinition.SizeClass.NORMAL else 24.0, 0.5)
@@ -4667,6 +4686,53 @@ func _apply_generated_elite_identity(def: EnemyDefinition, tier: int) -> void:
 	if def.boss_states.size() > 0:
 		return
 	EliteGenerator.apply_generated_identity(def, tier)
+
+func _enemy_obs_begin_run() -> void:
+	var obs = get_node_or_null("/root/EnemyObservability")
+	if obs == null or not obs.has_method("begin_dungeon_run"):
+		return
+	obs.begin_dungeon_run({
+		"dungeon": starting_biome_name,
+		"biome": current_biome.biome_name if current_biome else "",
+		"mine": current_mine.mine_name if current_mine else "",
+		"level_id": current_level.id if current_level else "",
+		"recommended_level": current_level.recommended_level if current_level else 0,
+		"run_id": run_state.run_id if run_state else "",
+	})
+
+func _enemy_obs_record_spawn(enemy: Node, def: EnemyDefinition, room_data: RoomData, grid_pos: Vector2i, spawn_reason: String, extra: Dictionary = {}) -> void:
+	var obs = get_node_or_null("/root/EnemyObservability")
+	if obs == null or not obs.has_method("record_enemy_spawn"):
+		return
+	var context := {
+		"floor": run_state.current_floor if run_state else 1,
+		"dungeon": starting_biome_name,
+		"biome": current_biome.biome_name if current_biome else "",
+		"level_id": current_level.id if current_level else "",
+		"recommended_level": current_level.recommended_level if current_level else 0,
+		"player_level": player.level_system.level if player and player.level_system else 1,
+		"room_grid": grid_pos,
+		"room_type": _enemy_obs_room_type_name(room_data.type if room_data else 0),
+		"encounter_type": _enemy_obs_encounter_type_name(room_data.encounter_type if room_data else 0),
+		"room_hp_mult": room_data.enemy_hp_mult if room_data else 1.0,
+		"room_damage_mult": room_data.enemy_damage_mult if room_data else 1.0,
+		"spawn_reason": spawn_reason,
+	}
+	for key in extra:
+		context[key] = extra[key]
+	obs.record_enemy_spawn(enemy, def, context)
+
+func _enemy_obs_room_type_name(value: int) -> String:
+	for key in RoomData.RoomType.keys():
+		if int(RoomData.RoomType[key]) == value:
+			return String(key)
+	return str(value)
+
+func _enemy_obs_encounter_type_name(value: int) -> String:
+	for key in RoomData.EncounterType.keys():
+		if int(RoomData.EncounterType[key]) == value:
+			return String(key)
+	return str(value)
 
 # Coop: assigns a deterministic network_id to a newly-spawned enemy and registers
 # with CoopRuntime. No-op offline or in non-room spawns (corridor patrols, mine intrusions —
@@ -5040,6 +5106,12 @@ func _spawn_corridor_enemies() -> void:
 			enemy.set_meta("corridor_patrol", true)
 			enemy.set_meta("patrol_origin", world_pos)
 			enemy_container.add_child(enemy)
+			_enemy_obs_record_spawn(enemy, def, null, Vector2i.ZERO, "corridor_patrol", {
+				"source_pool": "corridor",
+				"level_scale": scaling.get("level_scale", 1.0),
+				"dmg_scale": scaling.get("dmg_scale", 1.0),
+				"overlevel": scaling.get("overlevel", 0),
+			})
 			spawned_count += 1
 
 	if spawned_count > 0:

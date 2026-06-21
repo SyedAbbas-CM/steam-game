@@ -1,0 +1,75 @@
+[gd_resource type="Resource" script_class="DropTable" load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://scripts/drops/drop_table.gd" id="1_table"]
+[ext_resource type="Script" path="res://scripts/drops/drop_entry.gd" id="2_entry"]
+[ext_resource type="Resource" path="res://resources/items/loy/sword.tres" id="3_sword"]
+[ext_resource type="Resource" path="res://resources/items/loy/dagger.tres" id="4_dagger"]
+[ext_resource type="Resource" path="res://resources/items/loy/short_bow.tres" id="5_sbow"]
+[ext_resource type="Resource" path="res://resources/items/loy/staff.tres" id="6_staff"]
+[ext_resource type="Resource" path="res://resources/items/loy/wooden_shield.tres" id="7_shield"]
+[ext_resource type="Resource" path="res://resources/items/loy/wooden_buckler.tres" id="8_buckler"]
+[ext_resource type="Resource" path="res://resources/items/loy/leather_armor.tres" id="9_armor"]
+[ext_resource type="Resource" path="res://resources/items/loy/leather_helmet.tres" id="10_helm"]
+[ext_resource type="Resource" path="res://resources/items/loy/red_potion.tres" id="11_red"]
+[ext_resource type="Resource" path="res://resources/items/loy/mana_potion.tres" id="12_mana"]
+[ext_resource type="Resource" path="res://resources/items/loy/green_potion.tres" id="13_stam"]
+
+[sub_resource type="Resource" id="entry_sword"]
+script = ExtResource("2_entry")
+item = ExtResource("3_sword")
+weight = 3.0
+
+[sub_resource type="Resource" id="entry_dagger"]
+script = ExtResource("2_entry")
+item = ExtResource("4_dagger")
+weight = 3.0
+
+[sub_resource type="Resource" id="entry_sbow"]
+script = ExtResource("2_entry")
+item = ExtResource("5_sbow")
+weight = 2.0
+
+[sub_resource type="Resource" id="entry_staff"]
+script = ExtResource("2_entry")
+item = ExtResource("6_staff")
+weight = 2.0
+
+[sub_resource type="Resource" id="entry_shield"]
+script = ExtResource("2_entry")
+item = ExtResource("7_shield")
+weight = 2.5
+
+[sub_resource type="Resource" id="entry_buckler"]
+script = ExtResource("2_entry")
+item = ExtResource("8_buckler")
+weight = 2.0
+
+[sub_resource type="Resource" id="entry_armor"]
+script = ExtResource("2_entry")
+item = ExtResource("9_armor")
+weight = 2.5
+
+[sub_resource type="Resource" id="entry_helm"]
+script = ExtResource("2_entry")
+item = ExtResource("10_helm")
+weight = 2.0
+
+[sub_resource type="Resource" id="entry_red"]
+script = ExtResource("2_entry")
+item = ExtResource("11_red")
+weight = 4.0
+
+[sub_resource type="Resource" id="entry_mana"]
+script = ExtResource("2_entry")
+item = ExtResource("12_mana")
+weight = 3.0
+
+[sub_resource type="Resource" id="entry_stam"]
+script = ExtResource("2_entry")
+item = ExtResource("13_stam")
+weight = 3.0
+
+[resource]
+script = ExtResource("1_table")
+entries = Array[ExtResource("2_entry")]([SubResource("entry_sword"), SubResource("entry_dagger"), SubResource("entry_sbow"), SubResource("entry_staff"), SubResource("entry_shield"), SubResource("entry_buckler"), SubResource("entry_armor"), SubResource("entry_helm"), SubResource("entry_red"), SubResource("entry_mana"), SubResource("entry_stam")])
+drop_chance = 0.6

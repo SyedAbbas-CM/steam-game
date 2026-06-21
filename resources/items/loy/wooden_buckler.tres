@@ -19,3 +19,4 @@ rarity = 0
 buy_price = 95
 sell_value = 24
 weapon_type = "buckler"
+demo_approved = true
