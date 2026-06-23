@@ -1276,7 +1276,7 @@ func _refresh_stats() -> void:
 		lines.append("Pierce: %d" % equipment_manager.get_pierce_count())
 		lines.append("Crit Damage: %.0f%%" % (equipment_manager.get_crit_damage() * 100))
 		lines.append("Armor: %.0f" % equipment_manager.get_armor())
-		lines.append("Dodge: %.0f%%" % equipment_manager.get_dodge_chance())
+		lines.append("Dodge: %.0f%%" % (equipment_manager.get_dodge_chance() * 100.0))
 		lines.append("Luck: %.0f" % equipment_manager.get_luck())
 		lines.append("XP Gain: %.0f%%" % (equipment_manager.get_xp_mult() * 100))
 		lines.append("Gold Gain: %.0f%%" % (equipment_manager.get_gold_mult() * 100))

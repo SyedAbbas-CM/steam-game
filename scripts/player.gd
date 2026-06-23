@@ -1298,8 +1298,9 @@ func _physics_process(delta: float) -> void:
 		else:
 			var _pm = get_node_or_null("/root/PerkManager")
 			if not (_pm and _pm.has_special("ghost")):
+				# stealth_stat is 0-1 (0.15 = 15%). Caps at 0.6 = 60% drain cut.
 				var stealth_stat = equipment_manager.get_stealth()
-				var sneak_drain = SNEAK_STAMINA_BASE_DRAIN * (1.0 - clampf(stealth_stat / 50.0, 0.0, 0.6))
+				var sneak_drain = SNEAK_STAMINA_BASE_DRAIN * (1.0 - clampf(stealth_stat, 0.0, 0.6))
 				stamina = maxf(stamina - sneak_drain * delta, 0.0)
 				_stamina_regen_delay = 0.5
 				stamina_changed.emit(stamina)
@@ -2104,9 +2105,13 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 			_grant_warrior_rage_from_hit(amount)
 			return  # fully blocked, no damage gets through
 
-	# Dodge check
+	# Dodge check. Stat is in 0-1 range (0.15 = 15%). Evasion Surge spell
+	# applies a buff via status_effects with the percent-point value (e.g. 80
+	# = +80%); we divide by 100 to combine with the 0-1 gear stat.
 	var dodge = equipment_manager.get_dodge_chance()
-	if not is_true_damage and dodge > 0 and randf() * 100.0 < dodge:
+	if status_effects and status_effects.has_method("get_buff_value"):
+		dodge += status_effects.get_buff_value("dodge") / 100.0
+	if not is_true_damage and dodge > 0.0 and randf() < dodge:
 		# Dodged! Brief white flash + SFX
 		var sfx_dg = get_node_or_null("/root/SFXManager")
 		if sfx_dg:

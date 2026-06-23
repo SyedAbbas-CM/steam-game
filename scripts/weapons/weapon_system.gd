@@ -102,6 +102,10 @@ func try_shoot(origin: Vector2, aim_direction: Vector2) -> void:
 	var cooldown = weapon_pattern.cooldown_override
 	if cooldown <= 0.0:
 		cooldown = equipment_manager.get_attack_speed()
+	# Apply equipped attack-speed bonuses as a divisor so percent_bonus = 0.15
+	# means +15% faster fire (lower cooldown), in line with every other percent
+	# stat in the game. Base cooldown comes from the pattern or class stat.
+	cooldown = cooldown / equipment_manager.get_attack_speed_mult()
 	# Apply fire_rate buff from status effects (e.g. Battle Cry, Reckless Strike).
 	var total_fire_mult = fire_rate_mult
 	var p = get_parent()

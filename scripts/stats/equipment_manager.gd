@@ -804,6 +804,29 @@ func get_damage() -> int:
 		return 0
 	return maxi(1, final_dmg)
 func get_attack_speed() -> float: return get_stat(StatModifier.StatType.ATTACK_SPEED)
+
+## Multiplier for fire rate. >1 = faster fire. Sums percent_bonus on
+## ATTACK_SPEED across equipped items + perks, then returns 1 + that sum.
+## Consumers compute cooldown as base_cooldown / this — keeping the existing
+## "lower attack_speed value = faster fire" cooldown field intact while letting
+## items declare "+15% fire rate" via percent_bonus = 0.15 like every other
+## percent stat in the game.
+func get_attack_speed_mult() -> float:
+	var pct: float = 0.0
+	for item in equipped.values():
+		if not item:
+			continue
+		for mod in item.modifiers:
+			if mod.stat == StatModifier.StatType.ATTACK_SPEED:
+				pct += mod.percent_bonus
+		for gem in item.get_socketed_gems():
+			for gmod in gem.modifiers:
+				if gmod.stat == StatModifier.StatType.ATTACK_SPEED:
+					pct += gmod.percent_bonus
+	var pm = get_node_or_null("/root/PerkManager")
+	if pm and pm.has_method("get_stat_percent_bonus"):
+		pct += pm.get_stat_percent_bonus(StatModifier.StatType.ATTACK_SPEED) / 100.0
+	return 1.0 + pct
 func get_bullet_speed() -> float: return get_stat(StatModifier.StatType.BULLET_SPEED)
 func get_bullet_count() -> int: return maxi(1, int(round(get_stat(StatModifier.StatType.BULLET_COUNT))))
 func get_spread_angle() -> float: return get_stat(StatModifier.StatType.SPREAD_ANGLE)

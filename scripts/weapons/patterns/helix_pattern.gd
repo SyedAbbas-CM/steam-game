@@ -23,5 +23,6 @@ func get_fire_data(aim_direction: Vector2, stats: EquipmentManager) -> Array[Dic
 			"offset": offset,
 			"speed_mult": 1.0
 		})
-	accumulated_angle += rotation_speed * stats.get_attack_speed()
+	# attack_speed_mult >1 = faster fire/rotate. See equipment_manager.gd.
+	accumulated_angle += rotation_speed * stats.get_attack_speed_mult()
 	return result

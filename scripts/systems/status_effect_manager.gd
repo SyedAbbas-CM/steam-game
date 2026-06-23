@@ -54,9 +54,11 @@ func apply_effect(type: StatusEffect.Type, duration: float, strength: float, sou
 	if type != StatusEffect.Type.STRENGTHENED:
 		var em = _player.get_node_or_null("EquipmentManager") if _player else null
 		if em:
+			# Tenacity is 0-1 (0.15 = 15% shorter negative statuses).
+			# Capped at 0.95 so debuffs always have at least a tiny duration.
 			var tenacity = em.get_tenacity()
 			if tenacity > 0.0:
-				duration *= (1.0 - tenacity / 100.0)
+				duration *= (1.0 - clampf(tenacity, 0.0, 0.95))
 	for e in active_effects:
 		if e.type == type:
 			e.duration = maxf(e.duration, duration)

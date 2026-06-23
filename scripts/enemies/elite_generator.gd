@@ -299,12 +299,23 @@ static func _finalize_generated_identity(def: EnemyDefinition, archetype, affixe
 		def.phase_3_attack = int(attack_pool[min(attack_pool.size() - 1, 2)])
 	def.set_meta("generated_identity_locked", true)
 	def.set_meta("generated_archetype_id", archetype.archetype_id)
+	def.set_meta("generated_tier", _tier_name(tier))
 	def.set_meta("generated_attack_pool", attack_pool)
 	var affix_ids: Array[String] = []
 	for affix in affixes:
 		affix_ids.append(affix.affix_id)
 	def.set_meta("generated_affix_ids", affix_ids)
 	def.enemy_name = _compose_name(def.enemy_name, archetype, affixes)
+
+static func _tier_name(tier: int) -> String:
+	match tier:
+		Tier.ELITE:
+			return "ELITE"
+		Tier.HYPER:
+			return "HYPER"
+		Tier.BOSS:
+			return "BOSS"
+	return str(tier)
 
 static func _build_attack_pool(def: EnemyDefinition, archetype, affixes: Array, role: String, tier: int) -> Array[int]:
 	var pool: Array[int] = []

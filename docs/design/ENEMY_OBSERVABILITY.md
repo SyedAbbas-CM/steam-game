@@ -36,6 +36,7 @@ Each spawn record includes:
 - summon-on-phase-change, summon count, summon definition
 - generated archetype id, generated affix ids, generated attack pool
 - status effect payload
+- search tags for symptom descriptions, such as `green`, `poison`, `summoner`, `adds`, `bomb`, `mine`, `area_denial`, `orbit`, `stationary`, and `bullet_spam`
 
 ## Audit Workflow
 
@@ -44,6 +45,25 @@ Each spawn record includes:
 3. Open the printed summary path.
 4. Look at `Major Spawns` first.
 5. If the problem is not obvious, inspect the JSONL file for exact per-spawn fields.
+
+From the repo, use:
+
+```bash
+scripts/tools/find_enemy_logs.sh
+scripts/tools/find_enemy_logs.sh 'green'
+scripts/tools/find_enemy_logs.sh 'summoner'
+scripts/tools/find_enemy_logs.sh 'stationary|mine|orbit'
+```
+
+The helper searches:
+
+`~/Library/Application Support/Godot/app_userdata/DungeonCrawl/enemy_observability`
+
+If a custom userdata path is used:
+
+```bash
+ENEMY_OBS_DIR=/path/to/enemy_observability scripts/tools/find_enemy_logs.sh 'toxic'
+```
 
 ## Current Design Constraints
 

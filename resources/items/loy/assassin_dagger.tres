@@ -11,7 +11,7 @@ flat_bonus = 4.0
 [sub_resource type="Resource" id="mod_1"]
 script = ExtResource("2")
 stat = 3
-flat_bonus = 0.05
+percent_bonus = 0.05
 
 [sub_resource type="Resource" id="mod_2"]
 script = ExtResource("2")

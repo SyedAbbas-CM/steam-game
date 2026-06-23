@@ -13,6 +13,7 @@ var _counts_by_name: Dictionary = {}
 var _counts_by_room: Dictionary = {}
 var _counts_by_archetype: Dictionary = {}
 var _counts_by_affix: Dictionary = {}
+var _counts_by_tag: Dictionary = {}
 var _jsonl_path: String = ""
 var _summary_path: String = ""
 
@@ -34,6 +35,7 @@ func begin_dungeon_run(context: Dictionary = {}) -> void:
 	_counts_by_room.clear()
 	_counts_by_archetype.clear()
 	_counts_by_affix.clear()
+	_counts_by_tag.clear()
 	_jsonl_path = "%s/%s_spawns.jsonl" % [LOG_DIR, _run_id]
 	_summary_path = "%s/%s_summary.txt" % [LOG_DIR, _run_id]
 	print("[EnemyObs] logging to %s" % ProjectSettings.globalize_path(_summary_path))
@@ -73,12 +75,14 @@ func record_enemy_spawn(enemy: Node, definition: Resource, context: Dictionary =
 		_count(_counts_by_archetype, archetype)
 	for affix in event.get("affixes", []):
 		_count(_counts_by_affix, String(affix))
+	for tag in event.get("search_tags", []):
+		_count(_counts_by_tag, String(tag))
 
 	_append_jsonl(event)
 	if bool(event.get("is_major", false)) or _events.size() % 10 == 0:
 		write_summary()
 	if bool(event.get("is_major", false)):
-		print("[EnemyObs] %s room=%s floor=%s hp=%s dmg=%s atk=%s phases=%s arch=%s affixes=%s summons=%s" % [
+		print("[EnemyObs] %s room=%s floor=%s hp=%s dmg=%s atk=%s phases=%s arch=%s affixes=%s summons=%s tags=%s" % [
 			event.get("enemy_name", "Unknown"),
 			event.get("room_type", "?"),
 			event.get("floor", "?"),
@@ -89,6 +93,7 @@ func record_enemy_spawn(enemy: Node, definition: Resource, context: Dictionary =
 			event.get("archetype", ""),
 			str(event.get("affixes", [])),
 			event.get("summon_phase_count", 0),
+			str(event.get("search_tags", [])),
 		])
 
 func write_summary() -> void:
@@ -111,10 +116,13 @@ func write_summary() -> void:
 	lines.append("By Affix")
 	lines.append_array(_format_counts(_counts_by_affix))
 	lines.append("")
+	lines.append("By Search Tag")
+	lines.append_array(_format_counts(_counts_by_tag))
+	lines.append("")
 	lines.append("Major Spawns")
 	for event in _events:
 		if bool(event.get("is_major", false)):
-			lines.append("- F%s %s %s hp=%s dmg=%s pool=%s arch=%s affixes=%s summons=%s" % [
+			lines.append("- F%s %s %s hp=%s dmg=%s pool=%s arch=%s affixes=%s summons=%s tags=%s" % [
 				event.get("floor", "?"),
 				event.get("room_type", "?"),
 				event.get("enemy_name", "Unknown"),
@@ -124,6 +132,7 @@ func write_summary() -> void:
 				event.get("archetype", ""),
 				str(event.get("affixes", [])),
 				event.get("summon_phase_count", 0),
+				str(event.get("search_tags", [])),
 			])
 
 	var file := FileAccess.open(_summary_path, FileAccess.WRITE)
@@ -139,6 +148,24 @@ func get_summary_path() -> String:
 
 func get_jsonl_path() -> String:
 	return ProjectSettings.globalize_path(_jsonl_path) if _jsonl_path != "" else ""
+
+func search_recent(query: String) -> Array[Dictionary]:
+	var terms: Array[String] = []
+	for raw in query.to_lower().split(" ", false):
+		var term := raw.strip_edges()
+		if term != "":
+			terms.append(term)
+	var matches: Array[Dictionary] = []
+	for event in _events:
+		var haystack := JSON.stringify(event).to_lower()
+		var ok := true
+		for term in terms:
+			if not haystack.contains(term):
+				ok = false
+				break
+		if ok:
+			matches.append(event)
+	return matches
 
 func _build_spawn_event(enemy: Node, definition: Resource, context: Dictionary) -> Dictionary:
 	var attack_pool: Array = []
@@ -197,6 +224,7 @@ func _build_spawn_event(enemy: Node, definition: Resource, context: Dictionary) 
 		"summon_count": int(definition.get("summon_count")),
 		"summon_definition": String(summon_def.enemy_name) if summon_def else "",
 		"archetype": String(definition.get_meta("generated_archetype_id")) if definition.has_meta("generated_archetype_id") else "",
+		"generated_tier": String(definition.get_meta("generated_tier")) if definition.has_meta("generated_tier") else "",
 		"affixes": affixes,
 		"attack_pool": attack_pool,
 		"melee_secondary": _attack_name(int(definition.get_meta("melee_secondary"))) if definition.has_meta("melee_secondary") else "",
@@ -204,6 +232,7 @@ func _build_spawn_event(enemy: Node, definition: Resource, context: Dictionary) 
 		"status_duration": float(definition.get("bullet_status_duration")),
 		"is_major": _is_major_spawn(definition, context),
 	}
+	event["search_tags"] = _build_search_tags(event)
 	return event
 
 func _append_jsonl(payload: Dictionary) -> void:
@@ -235,6 +264,80 @@ func _format_counts(dict: Dictionary) -> Array[String]:
 	for key in keys:
 		out.append("- %s: %d" % [String(key), int(dict[key])])
 	return out
+
+func _build_search_tags(event: Dictionary) -> Array[String]:
+	var tags: Array[String] = []
+	_add_tag(tags, String(event.get("room_type", "")).to_lower())
+	_add_tag(tags, String(event.get("spawn_reason", "")).to_lower())
+	_add_tag(tags, String(event.get("size_class", "")).to_lower())
+	_add_tag(tags, String(event.get("generated_tier", "")).to_lower())
+	_add_tag(tags, String(event.get("archetype", "")).to_lower())
+	for affix in event.get("affixes", []):
+		_add_tag(tags, String(affix).to_lower())
+
+	var all_attacks: Array[String] = [
+		String(event.get("attack_type", "")),
+		String(event.get("phase_2_attack", "")),
+		String(event.get("phase_3_attack", "")),
+		String(event.get("melee_secondary", "")),
+	]
+	for attack in event.get("attack_pool", []):
+		all_attacks.append(String(attack))
+	for attack in all_attacks:
+		var lower: String = attack.to_lower()
+		if lower == "" or lower == "none":
+			continue
+		_add_tag(tags, lower)
+		if lower.contains("bomb") or lower in ["artillery", "mortar", "meteor_shower", "fire_rain"]:
+			_add_tag(tags, "bomb")
+			_add_tag(tags, "artillery")
+		if lower.contains("mine"):
+			_add_tag(tags, "mine")
+			_add_tag(tags, "area_denial")
+		if lower.contains("summon"):
+			_add_tag(tags, "summoner")
+		if lower.contains("poison"):
+			_add_tag(tags, "green")
+			_add_tag(tags, "poison")
+		if lower.contains("barrier") or lower.contains("wall"):
+			_add_tag(tags, "wall")
+			_add_tag(tags, "area_denial")
+
+	var status: String = String(event.get("status_effect", "")).to_lower()
+	if status != "":
+		_add_tag(tags, status)
+	if status.contains("poison"):
+		_add_tag(tags, "green")
+		_add_tag(tags, "poison")
+
+	var movement: Dictionary = event.get("movement", {})
+	var movement_path := String(movement.get("path", "")).to_lower()
+	if movement_path != "":
+		_add_tag(tags, movement_path.get_file().get_basename())
+		if movement_path.contains("orbit"):
+			_add_tag(tags, "orbit")
+		if movement_path.contains("hold") or movement_path.contains("anchor"):
+			_add_tag(tags, "stationary")
+	if float(movement.get("approach_weight", 1.0)) <= 0.35 and float(movement.get("hold_weight", 0.0)) >= 0.35:
+		_add_tag(tags, "stationary")
+
+	if bool(event.get("summon_on_phase_change", false)) or int(event.get("summon_phase_count", 0)) > 0 or int(event.get("summon_count", 0)) > 0:
+		_add_tag(tags, "summoner")
+		_add_tag(tags, "adds")
+	if String(event.get("summon_definition", "")) != "":
+		_add_tag(tags, "minions")
+	if int(event.get("bullet_count", 0)) >= 5 or int(event.get("phase_2_bullet_count", 0)) >= 8 or int(event.get("phase_3_bullet_count", 0)) >= 8:
+		_add_tag(tags, "bullet_spam")
+	if float(event.get("bomb_aoe_radius", 0.0)) > 20.0:
+		_add_tag(tags, "large_aoe")
+	return tags
+
+func _add_tag(tags: Array[String], tag: String) -> void:
+	tag = tag.strip_edges().replace(" ", "_")
+	if tag == "" or tag == "unknown":
+		return
+	if tag not in tags:
+		tags.append(tag)
 
 func _attack_name(value: int) -> String:
 	for key in EnemyDefinition.AttackType.keys():

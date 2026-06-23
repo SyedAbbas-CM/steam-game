@@ -925,7 +925,9 @@ func _physics_process(delta: float) -> void:
 					var stealth_stat = 0.0
 					if is_instance_valid(player) and player.get_node_or_null("EquipmentManager"):
 						stealth_stat = player.equipment_manager.get_stealth()
-					var stealth_factor = 1.0 / (1.0 + stealth_stat / 15.0)
+					# stealth_stat is 0-1 (0.15 = 15%). At 1.0 (full stealth gear)
+					# awareness ramp is halved; partial stealth scales between.
+					var stealth_factor = 1.0 / (1.0 + stealth_stat)
 					# Sneak: 0.1x awareness ramp (very slow detection)
 					var sneak_factor = 0.1 if _player_sneaking else 1.0
 					# Vision cone: detection depends on angle between facing and player

@@ -21,5 +21,6 @@ func get_fire_data(aim_direction: Vector2, stats: EquipmentManager) -> Array[Dic
 			"offset": offset,
 			"speed_mult": 0.7
 		})
-	orbit_angle += 0.5 * stats.get_attack_speed()
+	# Spin faster when fire-rate stats are higher. attack_speed_mult >1 = faster.
+	orbit_angle += 0.5 * stats.get_attack_speed_mult()
 	return result
