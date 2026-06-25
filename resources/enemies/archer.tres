@@ -5,11 +5,11 @@
 [resource]
 script = ExtResource("1")
 enemy_name = "Archer"
-max_hp = 20
+max_hp = 240
 move_speed = 20.0
-contact_damage = 1
+contact_damage = 12
 attack_type = 2
-attack_damage = 3
+attack_damage = 36
 attack_speed = 1.5
 bullet_speed = 110.0
 bullet_count = 1

@@ -6,12 +6,12 @@
 script = ExtResource("1")
 enemy_name = "Shadow Dancer"
 description = "Stealths then dash-strikes through the player, leaving a trail of bullets."
-max_hp = 4
+max_hp = 48
 move_speed = 25.0
-contact_damage = 2
+contact_damage = 24
 kingdom = "undead"
 attack_type = 55
-attack_damage = 2
+attack_damage = 24
 attack_speed = 2.5
 bullet_speed = 60.0
 bullet_count = 5

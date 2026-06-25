@@ -283,6 +283,7 @@ func _build_search_tags(event: Dictionary) -> Array[String]:
 	]
 	for attack in event.get("attack_pool", []):
 		all_attacks.append(String(attack))
+	var uses_summon_attack := false
 	for attack in all_attacks:
 		var lower: String = attack.to_lower()
 		if lower == "" or lower == "none":
@@ -295,6 +296,7 @@ func _build_search_tags(event: Dictionary) -> Array[String]:
 			_add_tag(tags, "mine")
 			_add_tag(tags, "area_denial")
 		if lower.contains("summon"):
+			uses_summon_attack = true
 			_add_tag(tags, "summoner")
 		if lower.contains("poison"):
 			_add_tag(tags, "green")
@@ -321,10 +323,12 @@ func _build_search_tags(event: Dictionary) -> Array[String]:
 	if float(movement.get("approach_weight", 1.0)) <= 0.35 and float(movement.get("hold_weight", 0.0)) >= 0.35:
 		_add_tag(tags, "stationary")
 
-	if bool(event.get("summon_on_phase_change", false)) or int(event.get("summon_phase_count", 0)) > 0 or int(event.get("summon_count", 0)) > 0:
+	var phase_summons := bool(event.get("summon_on_phase_change", false)) and int(event.get("summon_phase_count", 0)) > 0
+	var direct_summons := uses_summon_attack and int(event.get("summon_count", 0)) > 0
+	if phase_summons or direct_summons:
 		_add_tag(tags, "summoner")
 		_add_tag(tags, "adds")
-	if String(event.get("summon_definition", "")) != "":
+	if String(event.get("summon_definition", "")) != "" and (phase_summons or direct_summons):
 		_add_tag(tags, "minions")
 	if int(event.get("bullet_count", 0)) >= 5 or int(event.get("phase_2_bullet_count", 0)) >= 8 or int(event.get("phase_3_bullet_count", 0)) >= 8:
 		_add_tag(tags, "bullet_spam")

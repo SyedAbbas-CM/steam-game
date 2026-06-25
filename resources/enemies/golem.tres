@@ -5,11 +5,11 @@
 [resource]
 script = ExtResource("1")
 enemy_name = "Golem"
-max_hp = 12
+max_hp = 144
 move_speed = 8.0
-contact_damage = 2
+contact_damage = 24
 attack_type = 7
-attack_damage = 3
+attack_damage = 36
 attack_speed = 3.0
 bullet_speed = 0.0
 bullet_count = 0

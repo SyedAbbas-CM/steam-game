@@ -12,4 +12,4 @@ rarity = 0
 buy_price = 80
 sell_value = 20
 use_effect = "heal_cure"
-heal_hp = 20
+heal_hp = 240

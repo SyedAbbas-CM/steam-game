@@ -7,7 +7,7 @@ script = ExtResource("1")
 
 enemy_name = "Chicken"
 description = "A cute fluffy chicken pecking around town"
-max_hp = 2
+max_hp = 24
 move_speed = 12.0
 contact_damage = 0
 level = 1

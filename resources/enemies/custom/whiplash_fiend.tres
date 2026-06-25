@@ -6,12 +6,12 @@
 script = ExtResource("1")
 enemy_name = "Whiplash Fiend"
 description = "Fast demon that lashes out with sweeping arcs of bullets. Dashes between attacks."
-max_hp = 6
+max_hp = 72
 move_speed = 22.0
-contact_damage = 2
+contact_damage = 24
 kingdom = "demon"
 attack_type = 53
-attack_damage = 2
+attack_damage = 24
 attack_speed = 2.0
 bullet_speed = 85.0
 bullet_count = 10

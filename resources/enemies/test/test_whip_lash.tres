@@ -6,14 +6,14 @@
 script = ExtResource("1")
 enemy_name = "Test Whip Lash"
 description = "Fast sweeping arc of bullets fired in rapid sequence"
-max_hp = 5
+max_hp = 60
 move_speed = 20.0
-contact_damage = 1
+contact_damage = 12
 level = 3
 kingdom = "demon"
 hostile = true
 attack_type = 53
-attack_damage = 1
+attack_damage = 12
 attack_speed = 2.5
 bullet_speed = 80.0
 bullet_count = 10

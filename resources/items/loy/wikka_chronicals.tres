@@ -6,17 +6,17 @@
 [sub_resource type="Resource" id="mod_0"]
 script = ExtResource("2")
 stat = 0
-flat_bonus = 12.0
+flat_bonus = 144
 
 [sub_resource type="Resource" id="mod_1"]
 script = ExtResource("2")
 stat = 2
-flat_bonus = 10.0
+flat_bonus = 120
 
 [sub_resource type="Resource" id="mod_2"]
 script = ExtResource("2")
 stat = 14
-flat_bonus = 5.0
+flat_bonus = 60
 
 [resource]
 script = ExtResource("1")

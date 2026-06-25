@@ -7,14 +7,14 @@
 script = ExtResource("1")
 enemy_name = "Move: Elastic"
 description = "Tethered to spawn, stretches toward you then snaps back"
-max_hp = 50
+max_hp = 600
 move_speed = 20.0
-contact_damage = 1
+contact_damage = 12
 level = 1
 kingdom = "undead"
 hostile = true
 attack_type = 2
-attack_damage = 1
+attack_damage = 12
 attack_speed = 2.0
 bullet_speed = 60
 bullet_count = 1

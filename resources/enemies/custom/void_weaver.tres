@@ -6,12 +6,12 @@
 script = ExtResource("1")
 enemy_name = "Void Weaver"
 description = "Creates swirling vortexes of homing projectiles. Teleports away when threatened."
-max_hp = 4
+max_hp = 48
 move_speed = 14.0
-contact_damage = 1
+contact_damage = 12
 kingdom = "demon"
 attack_type = 50
-attack_damage = 1
+attack_damage = 12
 attack_speed = 3.0
 bullet_speed = 45.0
 bullet_count = 8

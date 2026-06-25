@@ -11,5 +11,5 @@ slot_type = 10
 rarity = 0
 buy_price = 120
 sell_value = 30
-heal_hp = 30
+heal_hp = 360
 demo_approved = true

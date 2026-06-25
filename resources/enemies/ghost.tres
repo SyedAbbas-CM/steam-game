@@ -5,11 +5,11 @@
 [resource]
 script = ExtResource("1")
 enemy_name = "Ghost"
-max_hp = 3
+max_hp = 36
 move_speed = 20.0
-contact_damage = 1
+contact_damage = 12
 attack_type = 8
-attack_damage = 1
+attack_damage = 12
 attack_speed = 2.0
 bullet_speed = 70.0
 bullet_count = 3

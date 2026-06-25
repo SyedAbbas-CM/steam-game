@@ -317,7 +317,7 @@ const CHARGE_STAMINA_COST = 30.0  # stamina on release (legacy, now drained duri
 const CHARGE_MP_COST = 15.0  # MP on release
 const CHARGE_MIN_TIME = 0.15  # very short min hold — almost always fires
 const CHARGE_DMG_MULT = 5.0  # damage multiplier at full charge
-const CHARGE_FLAT_DMG = 15  # flat bonus damage at full charge (added on top of multiplied base)
+const CHARGE_FLAT_DMG = 180  # flat bonus damage at full charge (added on top of multiplied base). Phase 1 ×12.
 const CHARGE_SIZE_MULT = 3.0  # bullet size at full charge
 const CHARGE_SPEED_MULT = 0.5  # slower projectile
 var _charge_indicator: ColorRect  # visual charge bar
@@ -2389,8 +2389,11 @@ func _apply_class_stats() -> void:
 	# Hall of Souls permanent upgrades
 	var gm = get_node_or_null("/root/GameManager")
 	if gm and gm.has_method("get_hall_upgrade_level"):
-		bs.max_hp += gm.get_hall_upgrade_level("starting_health") * 5
-		bs.attack_damage += gm.get_hall_upgrade_level("starting_damage")
+		# Phase 1 ×12: hall HP/damage upgrades scaled to match the new HP/damage
+		# floor (skeleton ~360, sword ~12) so each stack still gives a perceptible
+		# bump (HP +60/stack, dmg +12/stack) instead of becoming rounding noise.
+		bs.max_hp += gm.get_hall_upgrade_level("starting_health") * 60
+		bs.attack_damage += gm.get_hall_upgrade_level("starting_damage") * 12
 		bs.hp_regen += gm.get_hall_upgrade_level("heart_of_embers") * 0.1
 		bs.gold_mult += gm.get_hall_upgrade_level("gold_find") * 0.05
 		bs.xp_mult += gm.get_hall_upgrade_level("xp_find") * 0.05
@@ -2398,8 +2401,9 @@ func _apply_class_stats() -> void:
 	if gm and gm.save_data:
 		var atk_stacks = int(gm.save_data.permanent_upgrades.get("elixir_attack", 0))
 		var def_stacks = int(gm.save_data.permanent_upgrades.get("elixir_defence", 0))
-		bs.attack_damage += atk_stacks
-		bs.armor += def_stacks * 2.0
+		# Phase 1 ×12 to match the rescaled damage/armor floor.
+		bs.attack_damage += atk_stacks * 12
+		bs.armor += def_stacks * 24.0
 
 func get_weight() -> float:
 	var pc = _get_player_class()
@@ -4669,12 +4673,13 @@ func _ability_heal() -> void:
 	# Restore 20 + level*2 HP.
 	# EMPOWERED: AoE heal pulse — heals self for 1.5× AND adds a small shield (10 + level).
 	var empowered = _consume_empowered()
-	var amount = 20 + level_system.level * 2
+	# Phase 1 ×12: heal amounts scaled to match 360-HP class baseline.
+	var amount = 240 + level_system.level * 24
 	if empowered:
 		amount = int(amount * 1.5)
 	heal(amount)
 	if empowered:
-		shield += 10 + level_system.level
+		shield += 120 + level_system.level * 12
 		var scene_root = get_tree().current_scene if is_inside_tree() else null
 		if scene_root:
 			FloatingText.spawn(scene_root, global_position + Vector2(0, -28), "+%d Shield" % (10 + level_system.level), Color(0.6, 0.85, 1.0))
@@ -4692,8 +4697,8 @@ func _ability_heal() -> void:
 			vfx.shockwave(global_position, 28.0, Color(0.4, 1.0, 0.5, 0.5))
 
 func _ability_minor_heal() -> void:
-	# Wizard starter: quick small heal
-	var amount = 8 + level_system.level
+	# Wizard starter: quick small heal. Phase 1 ×12 ≈ 96 + lvl*12.
+	var amount = 96 + level_system.level * 12
 	heal(amount)
 	sprite.modulate = Color(0.6, 1.8, 0.6)
 	var tween = create_tween()
@@ -4910,8 +4915,8 @@ func _ability_bullet_shield() -> void:
 		flicker.tween_interval(0.15)
 
 func _ability_greater_heal() -> void:
-	# Restore 50 + level*3 HP
-	var amount = 50 + level_system.level * 3
+	# Restore 600 + level*36 HP. Phase 1 ×12 from 50 + lvl*3.
+	var amount = 600 + level_system.level * 36
 	heal(amount)
 	# Visual: bright green flash
 	sprite.modulate = Color(0.3, 2.5, 0.3)

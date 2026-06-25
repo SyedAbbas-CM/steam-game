@@ -5,11 +5,11 @@
 [resource]
 script = ExtResource("1")
 enemy_name = "Skeleton"
-max_hp = 6
+max_hp = 72
 move_speed = 20.0
-contact_damage = 2
+contact_damage = 24
 attack_type = 1
-attack_damage = 2
+attack_damage = 24
 attack_speed = 0.0
 bullet_speed = 0.0
 bullet_count = 0

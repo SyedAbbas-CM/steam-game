@@ -6,12 +6,12 @@
 script = ExtResource("1")
 enemy_name = "Plague Shaman"
 description = "Lobs poison bombs that leave lingering toxic clouds on impact."
-max_hp = 5
+max_hp = 60
 move_speed = 10.0
-contact_damage = 1
+contact_damage = 12
 kingdom = "magical"
 attack_type = 54
-attack_damage = 2
+attack_damage = 24
 attack_speed = 3.5
 bullet_speed = 50.0
 bullet_count = 1

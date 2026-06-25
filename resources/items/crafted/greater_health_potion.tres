@@ -11,4 +11,4 @@ slot_type = 10
 rarity = 1
 buy_price = 100
 sell_value = 25
-heal_hp = 25
+heal_hp = 300

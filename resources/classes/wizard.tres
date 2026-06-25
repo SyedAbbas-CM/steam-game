@@ -6,7 +6,7 @@
 script = ExtResource("1")
 class_name_str = "Wizard"
 description = "A magical glass cannon. Homing projectiles, high damage spells, and a devastating meteor strike that damages all enemies on screen."
-base_hp = 32
+base_hp = 384
 base_speed = 95.0
 base_damage = 0.0
 resource_type = "charge"

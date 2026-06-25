@@ -6,14 +6,14 @@
 script = ExtResource("1")
 enemy_name = "Test Vortex"
 description = "Swirling homing bullets spawned in a wide circle"
-max_hp = 5
+max_hp = 60
 move_speed = 14.0
-contact_damage = 1
+contact_damage = 12
 level = 3
 kingdom = "demon"
 hostile = true
 attack_type = 50
-attack_damage = 1
+attack_damage = 12
 attack_speed = 3.0
 bullet_speed = 45.0
 bullet_count = 8

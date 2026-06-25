@@ -1268,7 +1268,7 @@ func _lob_land() -> void:
 		var p = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
 		if p and is_instance_valid(p) and p.global_position.distance_to(global_position) < _lob_aoe_radius:
 			if p.has_method("take_damage"):
-				p.take_damage(damage, global_position)
+				p.take_damage(maxi(1, damage), global_position)
 	else:
 		for e in get_tree().get_nodes_in_group("enemy"):
 			if is_instance_valid(e) and e.global_position.distance_to(global_position) < _lob_aoe_radius:
@@ -1296,7 +1296,7 @@ func _lob_land() -> void:
 			sub.bullet_sprite_index = bullet_sprite_index
 			sub.behavior = BulletBehavior.LOBBED
 			sub._target_pos = global_position + offset
-			sub._lob_duration = 0.35
+			sub._lob_duration = 0.55
 			sub._lob_height = 1.5
 			sub._lob_aoe_radius = _lob_aoe_radius * 0.6
 			sub._lob_ring_count = 0

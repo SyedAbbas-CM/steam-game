@@ -5,11 +5,11 @@
 [resource]
 script = ExtResource("1")
 enemy_name = "Bat"
-max_hp = 2
+max_hp = 24
 move_speed = 30.0
-contact_damage = 1
+contact_damage = 12
 attack_type = 5
-attack_damage = 1
+attack_damage = 12
 attack_speed = 1.5
 bullet_speed = 0.0
 bullet_count = 0

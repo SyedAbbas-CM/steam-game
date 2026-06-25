@@ -7,9 +7,9 @@ script = ExtResource("1")
 
 enemy_name = "Hollow Shepherd"
 description = "A cowled figure commanding the hollowed. Its voice drains the will from the living."
-max_hp = 450
+max_hp = 5400
 move_speed = 18.0
-contact_damage = 8
+contact_damage = 96
 level = 10
 
 kingdom = "demon"
@@ -17,7 +17,7 @@ size_class = 2
 hostile = true
 
 attack_type = 6
-attack_damage = 7
+attack_damage = 84
 attack_speed = 2.0
 bullet_speed = 60
 bullet_count = 3

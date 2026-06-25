@@ -7,9 +7,9 @@ script = ExtResource("1")
 
 enemy_name = "Corrupted Priestess"
 description = "Once a healer of Nord, now twisted by the Hollow Tide. Ice and shadow answer her call."
-max_hp = 600
+max_hp = 7200
 move_speed = 16.0
-contact_damage = 10
+contact_damage = 120
 level = 15
 
 kingdom = "human"
@@ -17,7 +17,7 @@ size_class = 2
 hostile = true
 
 attack_type = 13
-attack_damage = 9
+attack_damage = 108
 attack_speed = 1.8
 bullet_speed = 70
 bullet_count = 1
@@ -42,7 +42,7 @@ drains_resource = false
 poison_chance = 0.0
 split_count = 2
 stealth_duration = 2.0
-shield_hp = 20
+shield_hp = 240
 beam_duration = 1.5
 beam_sweep_speed = 2.0
 death_bullet_pattern = 0

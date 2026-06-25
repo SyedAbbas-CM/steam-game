@@ -6,7 +6,7 @@
 script = ExtResource("1")
 class_name_str = "Mercenary"
 description = "A versatile fighter who wields both blade and bow. Swap weapons mid-combat with Shift for tactical advantage."
-base_hp = 50
+base_hp = 600
 base_speed = 110.0
 base_damage = 0.0
 resource_type = "rage"

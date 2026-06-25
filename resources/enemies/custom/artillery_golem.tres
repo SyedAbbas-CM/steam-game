@@ -6,13 +6,13 @@
 script = ExtResource("1")
 enemy_name = "Artillery Golem"
 description = "Massive golem that lobs devastating high-arc bombs with huge explosion radii."
-max_hp = 15
+max_hp = 180
 move_speed = 5.0
-contact_damage = 3
-armor = 2
+contact_damage = 36
+armor = 24
 kingdom = "mecha"
 attack_type = 52
-attack_damage = 3
+attack_damage = 36
 attack_speed = 3.5
 bullet_speed = 40.0
 bullet_count = 1

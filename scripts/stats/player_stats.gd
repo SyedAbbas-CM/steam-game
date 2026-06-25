@@ -2,7 +2,11 @@ class_name PlayerStats
 extends Resource
 
 @export_group("Core")
-@export var max_hp: int = 30
+# Phase 1 rescale ×12: 30 → 360. Class .tres base_hp overrides this on spawn
+# via _apply_class_stats; the default only matters when PlayerStats is
+# instantiated without class data attached. attack_damage stays 0 — the
+# weapon's flat_bonus is the source of damage, not the class baseline.
+@export var max_hp: int = 360
 @export var move_speed: float = 130.0
 @export var attack_damage: int = 0
 @export var attack_speed: float = 0.2

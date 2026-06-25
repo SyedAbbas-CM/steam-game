@@ -6,7 +6,7 @@
 script = ExtResource("1")
 class_name_str = "Ranger"
 description = "A swift ranged fighter with bow and dagger. Bow damage scales with distance, swap to dagger for close-range crits."
-base_hp = 35
+base_hp = 420
 base_speed = 120.0
 base_damage = 0.0
 resource_type = "zen"

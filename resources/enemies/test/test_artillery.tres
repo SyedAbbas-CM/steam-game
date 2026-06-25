@@ -6,14 +6,14 @@
 script = ExtResource("1")
 enemy_name = "Test Artillery"
 description = "Single massive bomb with huge AOE and bullet ring explosion"
-max_hp = 6
+max_hp = 72
 move_speed = 6.0
-contact_damage = 1
+contact_damage = 12
 level = 3
 kingdom = "mecha"
 hostile = true
 attack_type = 52
-attack_damage = 2
+attack_damage = 24
 attack_speed = 4.0
 bullet_speed = 40.0
 bullet_count = 1

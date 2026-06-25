@@ -6,14 +6,14 @@
 script = ExtResource("1")
 enemy_name = "Test Leaping Slam"
 description = "Jump to player position, AOE shockwave + bullet ring on landing"
-max_hp = 8
+max_hp = 96
 move_speed = 10.0
-contact_damage = 2
+contact_damage = 24
 level = 3
 kingdom = "undead"
 hostile = true
 attack_type = 60
-attack_damage = 2
+attack_damage = 24
 attack_speed = 3.5
 bullet_speed = 60.0
 bullet_count = 8

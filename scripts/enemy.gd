@@ -2114,16 +2114,15 @@ func _is_bomb_attack_type(atk: int) -> bool:
 	]
 
 func _get_bomb_flight_time(base_flight: float, extra_scale: float = 1.0) -> float:
-	# Bombs are reaction-time gates: the player has to recognize the marker and roll.
-	# Floor raised 0.9 → 1.4 and ceiling 2.4 → 3.2 (≈ 2.8–6.4s total lob duration).
-	var tuned = maxf(base_flight, 1.4) * extra_scale
+	# Bombs need a readable marker, but long flights made carpet bombs feel broken.
+	var tuned = maxf(base_flight, 0.85) * extra_scale
 	if definition:
 		var lvl := maxi(definition.level, 1)
 		if lvl <= 3:
-			tuned *= 1.35
+			tuned *= 1.15
 		elif lvl <= 7:
-			tuned *= 1.18
-	return clampf(tuned, 1.4, 3.2)
+			tuned *= 1.08
+	return clampf(tuned, 0.9, 2.2)
 
 func _is_heavy_bomb_attack(atk: int) -> bool:
 	return atk in [
@@ -3855,15 +3854,16 @@ func _shoot_boomerang(dir: Vector2) -> void:
 	var spread: float = 0.3
 	var count: int = _get_active_bullet_count()
 	var t: float = Time.get_ticks_msec() / 1000.0
-	var b = bullet_scene.instantiate()
 	var sfx_bm = get_node_or_null("/root/SFXManager")
 	if sfx_bm:
 		sfx_bm.play("woosh_b", -6.0, 0.12)
 	if not bullets_container:
 		return
 	for i in range(count):
+		var b = bullet_scene.instantiate()
+		var offset := (float(i) - float(count - 1) * 0.5) * spread
 		b.global_position = global_position
-		b.direction = dir.rotated(t * spread)
+		b.direction = dir.rotated(offset + sin(t + float(i)) * 0.08)
 		b.is_player_bullet = false
 		b.speed = bspeed
 		b.behavior = b.BulletBehavior.BOOMERANG
@@ -3916,14 +3916,14 @@ func _shoot_returning(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	var count: int = _get_active_bullet_count()
-	var angle: float = 0.0
-	var b = bullet_scene.instantiate()
 	var sfx_rv = get_node_or_null("/root/SFXManager")
 	if sfx_rv:
 		sfx_rv.play("swerve", -6.0, 0.1)
 	if not bullets_container:
 		return
 	for i in range(count):
+		var b = bullet_scene.instantiate()
+		var angle := (float(i) - float(count - 1) * 0.5) * 0.22
 		b.global_position = global_position
 		b.direction = dir.rotated(angle)
 		b.lifetime = 5.0
@@ -3940,14 +3940,14 @@ func _shoot_seeking_mines() -> void:
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	var spawn_offset: Vector2 = Vector2.ZERO
 	var count: int = _get_active_bullet_count()
-	var angle: float = 0.0
-	var b = bullet_scene.instantiate()
 	var sfx_sm = get_node_or_null("/root/SFXManager")
 	if sfx_sm:
 		sfx_sm.play("spell_a", -7.0, 0.15)
 	if not bullets_container:
 		return
 	for i in range(count):
+		var b = bullet_scene.instantiate()
+		var angle := TAU * float(i) / maxf(float(count), 1.0)
 		b.global_position = global_position + spawn_offset
 		b.direction = Vector2.RIGHT.rotated(angle)
 		b.lifetime = 8.0
@@ -3962,15 +3962,16 @@ func _shoot_detonator(dir: Vector2) -> void:
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	var spread: float = 0.3
 	var count: int = _get_active_bullet_count()
-	var b = bullet_scene.instantiate()
 	var sfx_dt = get_node_or_null("/root/SFXManager")
 	if sfx_dt:
 		sfx_dt.play("fire_c", -6.0, 0.1)
 	if not bullets_container:
 		return
 	for i in range(count):
+		var b = bullet_scene.instantiate()
+		var offset := (float(i) - float(count - 1) * 0.5) * spread
 		b.global_position = global_position
-		b.direction = dir.rotated(spread)
+		b.direction = dir.rotated(offset)
 		b.lifetime = 4.0
 		_apply_enemy_bullet_props(b, bspeed)
 		b.behavior = b.BulletBehavior.DECELERATING
@@ -3985,7 +3986,6 @@ func _shoot_splitter(dir: Vector2) -> void:
 	var spread: float = 0.3
 	var dist_to_player: float = global_position.distance_to(player.global_position) if is_instance_valid(player) else 999.0
 	var count: int = _get_active_bullet_count()
-	var b = bullet_scene.instantiate()
 	var sfx_sp = get_node_or_null("/root/SFXManager")
 	if sfx_sp:
 		sfx_sp.play("spell_b", -6.0, 0.12)
@@ -3994,8 +3994,10 @@ func _shoot_splitter(dir: Vector2) -> void:
 	# Split timer = time to travel half the distance to player
 	var split_time = maxf((dist_to_player * 0.5) / maxf(bspeed, 1.0), 0.3)
 	for i in range(count):
+		var b = bullet_scene.instantiate()
+		var offset := (float(i) - float(count - 1) * 0.5) * spread
 		b.global_position = global_position
-		b.direction = dir.rotated(spread * 0.2)  # tighter aim at player
+		b.direction = dir.rotated(offset * 0.5)  # tighter aim at player
 		b.lifetime = 4.0
 		_apply_enemy_bullet_props(b, bspeed)
 		b.behavior = b.BulletBehavior.SPLITTING
@@ -4010,15 +4012,16 @@ func _shoot_sine_barrage(dir: Vector2) -> void:
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	var spread: float = 0.3
 	var count: int = _get_active_bullet_count()
-	var b = bullet_scene.instantiate()
 	var sfx_sb = get_node_or_null("/root/SFXManager")
 	if sfx_sb:
 		sfx_sb.play("wiggle_a", -6.0, 0.1)
 	if not bullets_container:
 		return
 	for i in range(count):
+		var b = bullet_scene.instantiate()
+		var offset := (float(i) - float(count - 1) * 0.5) * spread
 		b.global_position = global_position
-		b.direction = dir.rotated(spread * 0.3)
+		b.direction = dir.rotated(offset)
 		b.lifetime = 4.0
 		_apply_enemy_bullet_props(b, bspeed * randf_range(0.8, 1.1))
 		b.behavior = b.BulletBehavior.SINE_WAVE
@@ -4034,7 +4037,6 @@ func _shoot_homing_salvo(dir: Vector2) -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	var count: int = _get_active_bullet_count()
-	var b = bullet_scene.instantiate()
 	var sfx_hs = get_node_or_null("/root/SFXManager")
 	if sfx_hs:
 		sfx_hs.play("fire_b", -5.0, 0.1)
@@ -4048,6 +4050,7 @@ func _shoot_homing_salvo(dir: Vector2) -> void:
 				if not bc:
 					return
 				# Fire in a wide arc — homing will correct course
+				var b = bullet_scene.instantiate()
 				var spread_angle = randf_range(-0.8, 0.8)
 				b.global_position = global_position
 				b.direction = dir.rotated(spread_angle)
@@ -4065,7 +4068,6 @@ func _shoot_telegraph_explosion() -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var dmg: int = definition.attack_damage if definition else 2
 	var bc = get_tree().get_first_node_in_group("bullets")
-	var b = bullet_scene.instantiate()
 	var radius: int = 16
 	var alpha: float = 0.4
 	var tween = create_tween()
@@ -4110,6 +4112,8 @@ func _shoot_telegraph_explosion() -> void:
 			if not bc:
 				return
 			for j in range(ring_count):
+				var b = bullet_scene.instantiate()
+				var angle := TAU * float(j) / float(ring_count)
 				b.global_position = target_pos
 				b.direction = Vector2.RIGHT.rotated(angle)
 				b.is_player_bullet = false
@@ -4128,14 +4132,14 @@ func _shoot_orbit_launch(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	var count: int = _get_active_bullet_count()
-	var angle: float = 0.0
-	var b = bullet_scene.instantiate()
 	var sfx_ol = get_node_or_null("/root/SFXManager")
 	if sfx_ol:
 		sfx_ol.play("sorcery", -6.0, 0.12)
 	if not bullets_container:
 		return
 	for i in range(count):
+		var b = bullet_scene.instantiate()
+		var angle := TAU * float(i) / maxf(float(count), 1.0)
 		var orbit_offset = Vector2.RIGHT.rotated(angle) * 12.0
 		b.global_position = global_position + orbit_offset
 		b.direction = dir  # launch direction after orbit completes
@@ -4156,7 +4160,6 @@ func _shoot_wall_bounce(dir: Vector2) -> void:
 	var spread: float = 0.3
 	var count: int = _get_active_bullet_count()
 	var t: float = Time.get_ticks_msec() / 1000.0
-	var b = bullet_scene.instantiate()
 	var sfx_wb = get_node_or_null("/root/SFXManager")
 	if sfx_wb:
 		sfx_wb.play("rebound", -6.0, 0.1)
@@ -4164,8 +4167,10 @@ func _shoot_wall_bounce(dir: Vector2) -> void:
 		return
 	var bounces = definition.bounce_count if definition and definition.bounce_count > 0 else 2
 	for i in range(count):
+		var b = bullet_scene.instantiate()
+		var offset := (float(i) - float(count - 1) * 0.5) * spread
 		b.global_position = global_position
-		b.direction = dir.rotated(t * spread)
+		b.direction = dir.rotated(offset + sin(t + float(i)) * 0.06)
 		b.behavior = b.BulletBehavior.WALL_BOUNCE
 		b.bounce_count = bounces
 		b.lifetime = 4.0
@@ -4178,7 +4183,6 @@ func _shoot_laser_grid(_dir: Vector2) -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	var delay: float = 0.5
-	var b = bullet_scene.instantiate()
 	var sfx_lg = get_node_or_null("/root/SFXManager")
 	if sfx_lg:
 		sfx_lg.play("laser_b", -5.0, 0.08)
@@ -4192,6 +4196,7 @@ func _shoot_laser_grid(_dir: Vector2) -> void:
 				func():
 					if is_instance_valid(self) and hp > 0:
 						if bc:
+							var b = bullet_scene.instantiate()
 							b.global_position = global_position
 							b.direction = arm_dir
 							b.lifetime = 1.5
@@ -4227,8 +4232,9 @@ func _shoot_gravity_well(dir: Vector2) -> void:
 				if bc:
 					for i in range(12):
 						var sub = bullet_scene.instantiate()
-						sub.global_position = pos
-						sub.direction = Vector2.from_angle(angle)
+						var ring_angle := TAU * float(i) / 12.0
+						sub.global_position = orb.global_position
+						sub.direction = Vector2.from_angle(ring_angle)
 						sub.is_player_bullet = false
 						sub.damage = definition.attack_damage if definition else 2
 						sub.speed = 90.0
@@ -4255,8 +4261,6 @@ func _shoot_chain_lightning(dir: Vector2) -> void:
 	var start: Vector2 = global_position
 	var to_player: Vector2 = (player.global_position - global_position) if is_instance_valid(player) else Vector2.ZERO
 	var delay: float = 0.5
-	var b = bullet_scene.instantiate()
-	var dist: float = 0.0
 	var tw = create_tween()
 	var target: Vector2 = player.global_position if is_instance_valid(player) else global_position
 	var bcc = get_tree().get_first_node_in_group("bullets")
@@ -4291,6 +4295,7 @@ func _shoot_chain_lightning(dir: Vector2) -> void:
 			func():
 				if is_instance_valid(self):
 					if bcc:
+						var b = bullet_scene.instantiate()
 						b.global_position = seg_pos
 						b.direction = Vector2.ZERO
 						b.lifetime = 0.5
@@ -4304,6 +4309,7 @@ func _shoot_chain_lightning(dir: Vector2) -> void:
 		)
 	# Direct damage if player is in chain path
 	if is_instance_valid(player):
+		var dist := to_player.length()
 		if dist < 80.0:
 			# Check if player is roughly along the bolt line
 			var bolt_dir = (target - start).normalized()
@@ -4318,7 +4324,6 @@ func _shoot_death_spiral_at(pos: Vector2) -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	var delay: float = 0.5
-	var b = bullet_scene.instantiate()
 	if not bullets_container:
 		return
 	var arms = 3
@@ -4330,6 +4335,7 @@ func _shoot_death_spiral_at(pos: Vector2) -> void:
 					for arm in range(arms):
 						var base_angle = (TAU / arms) * arm
 						var spiral_angle = base_angle + i * 0.4
+						var b = bullet_scene.instantiate()
 						b.global_position = pos
 						b.direction = Vector2.from_angle(spiral_angle)
 						b.is_player_bullet = false
@@ -4432,8 +4438,6 @@ func _shoot_vortex(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var count: int = _get_active_bullet_count()
-	var angle: float = 0.0
-	var b = bullet_scene.instantiate()
 	var sfx_vx = get_node_or_null("/root/SFXManager")
 	if sfx_vx:
 		sfx_vx.play("spell_b", -5.0, 0.1)
@@ -4441,6 +4445,8 @@ func _shoot_vortex(dir: Vector2) -> void:
 		return
 	# Fire bullets in a wide circle that slowly home toward player
 	for i in range(count):
+		var b = bullet_scene.instantiate()
+		var angle := TAU * float(i) / maxf(float(count), 1.0)
 		var spawn_offset = Vector2.from_angle(angle) * 30.0
 		b.global_position = global_position + spawn_offset
 		# Initial direction is tangential (perpendicular to radius) creating a swirl
@@ -4458,7 +4464,6 @@ func _shoot_vortex(dir: Vector2) -> void:
 func _shoot_ring_pulse(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bc = get_tree().get_first_node_in_group("bullets")
-	var angle: float = 0.0
 	var ring_count: int = 8
 	var sfx_rp = get_node_or_null("/root/SFXManager")
 	if sfx_rp:
@@ -4478,6 +4483,7 @@ func _shoot_ring_pulse(dir: Vector2) -> void:
 				for i in range(bullets_per_ring):
 					if i >= gap_start and i < gap_start + gap_size:
 						continue  # gap slot
+					var angle := TAU * (float(i) / float(bullets_per_ring)) + float(wave) * 0.18
 					_spawn_bullet(bc, Vector2.from_angle(angle), bspeed * (1.0 + wave * 0.15))
 				if sfx_rp:
 					sfx_rp.play("fire_b", -8.0, 0.1)
@@ -4505,13 +4511,14 @@ func _shoot_whip_lash(dir: Vector2) -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
 	var count: int = _get_active_bullet_count()
-	var angle: float = 0.0
 	if sfx:
 		sfx.play("blaster", -5.0, 0.1)
 	if not bc:
 		return
 	var sweep_arc = PI * 0.6  # 108 degree sweep
 	for i in range(count):
+		var t := float(i) / maxf(float(count - 1), 1.0)
+		var shot_dir := dir.rotated(lerpf(-sweep_arc * 0.5, sweep_arc * 0.5, t))
 		get_tree().create_timer(i * 0.03).timeout.connect(
 			func():
 				if not is_instance_valid(self) or hp <= 0:
@@ -4519,7 +4526,7 @@ func _shoot_whip_lash(dir: Vector2) -> void:
 				var bcc = _get_bullets_container()
 				if not bcc:
 					return
-				_spawn_bullet(bcc, Vector2.from_angle(angle), bspeed)
+				_spawn_bullet(bcc, shot_dir, bspeed)
 		)
 
 ## POISON_CLOUD: Lobbed bomb that creates a lingering poison zone on impact
@@ -4540,7 +4547,7 @@ func _shoot_poison_cloud() -> void:
 	bomb.direction = (player.global_position - global_position).normalized()
 	bomb.behavior = bomb.BulletBehavior.LOBBED
 	bomb._target_pos = player.global_position
-	bomb._lob_duration = flight * 2.0
+	bomb._lob_duration = clampf(flight * 1.25, 0.9, 3.0)
 	bomb._lob_aoe_radius = radius
 	bomb._lob_ring_count = 0
 	bomb._lob_cluster_count = 0
@@ -4552,14 +4559,13 @@ func _shoot_poison_cloud() -> void:
 	bomb.damage = maxi(1, int(bomb.damage * 1.5))
 	bomb.bullet_sprite_index = ObjSpriteIndex.POISON_BALL
 	bc.add_child(bomb)
-	_spawn_landing_marker(player.global_position, radius, flight * 2.0)
+	_spawn_landing_marker(player.global_position, radius, bomb._lob_duration)
 
 ## DASH_STRIKE: Quick dash toward player, firing bouncing bullets behind
 func _shoot_dash_strike(dir: Vector2) -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
 	var count: int = _get_active_bullet_count()
-	var b = bullet_scene.instantiate()
 	if sfx:
 		sfx.play("dash", -4.0, 0.1)
 	# Fire a spread of bouncing bullets behind as we charge
@@ -4567,9 +4573,14 @@ func _shoot_dash_strike(dir: Vector2) -> void:
 		var back_dir = -dir
 		for i in range(count):
 			var spread = (float(i) / maxf(count - 1, 1) - 0.5) * PI * 0.4
-			if b:
-				b.behavior = b.BulletBehavior.WALL_BOUNCE
-				b.bounce_count = 3
+			var b = bullet_scene.instantiate()
+			b.global_position = global_position
+			b.direction = back_dir.rotated(spread)
+			b.behavior = b.BulletBehavior.WALL_BOUNCE
+			b.bounce_count = 3
+			b.lifetime = 2.0
+			_apply_enemy_bullet_props(b, definition.bullet_speed if definition else 60.0)
+			bc.add_child(b)
 	# Dash toward player
 	charge_dir = dir
 	charge_timer = 0.35
@@ -4582,17 +4593,21 @@ func _shoot_lance_thrust(dir: Vector2) -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
 	var count: int = _get_active_bullet_count()
-	var b = bullet_scene.instantiate()
 	if sfx:
 		sfx.play("slash_a", -5.0, 0.1)
 	if not bc:
 		return
 	for i in range(count):
 		var delay = i * 0.05
+		var spawn_offset := dir * float(i) * 5.0
 		get_tree().create_timer(delay).timeout.connect(func():
 			if is_instance_valid(self) and state != State.DEAD:
-				if b:
-					b.lifetime = 2.5
+				var b = bullet_scene.instantiate()
+				b.global_position = global_position + spawn_offset
+				b.direction = dir
+				b.lifetime = 2.5
+				_apply_enemy_bullet_props(b, definition.bullet_speed if definition else 60.0)
+				bc.add_child(b)
 		)
 
 ## SHIELD_WALL: 3-5 barrier bullets in arc facing player — defensive screen
@@ -4630,13 +4645,17 @@ func _shoot_curse_bolt(dir: Vector2) -> void:
 	if not bc:
 		return
 	if b:
+		b.global_position = global_position
+		b.direction = dir
 		b.behavior = b.BulletBehavior.HOMING_ENEMY
 		b.lifetime = 5.0
 		b.bullet_sprite_index = ObjSpriteIndex.DARK_ORB
+		_apply_enemy_bullet_props(b, definition.bullet_speed if definition else 60.0)
 		# Apply random debuff on hit via meta
 		var debuffs = ["SLOWED", "POISONED", "BURNING"]
 		b.set_meta("apply_status", debuffs[randi() % debuffs.size()])
 		b.set_meta("status_duration", 3.0)
+		bc.add_child(b)
 
 ## SUMMON_WALL: Summon 2-3 weak minions in a line between self and player
 func _shoot_summon_wall(dir: Vector2) -> void:
@@ -5444,7 +5463,7 @@ func _spawn_lob_at(container: Node, target: Vector2, sprite_idx: int,
 	bomb.direction = (target - global_position).normalized() if global_position.distance_to(target) > 1 else Vector2.RIGHT
 	bomb.behavior = bomb.BulletBehavior.LOBBED
 	bomb._target_pos = target
-	bomb._lob_duration = flight_time * 2.0
+	bomb._lob_duration = clampf(flight_time * 1.25, 0.9, 3.0)
 	bomb._lob_aoe_radius = aoe_radius
 	bomb._lob_ring_count = ring_count
 	bomb._lob_cluster_count = cluster_count

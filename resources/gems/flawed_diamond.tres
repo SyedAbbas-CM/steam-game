@@ -6,7 +6,7 @@
 [sub_resource type="Resource" id="StatModifier_hp"]
 script = ExtResource("2")
 stat = 0
-flat_bonus = 12.0
+flat_bonus = 144
 
 [resource]
 script = ExtResource("1")

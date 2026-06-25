@@ -6,11 +6,11 @@
 [resource]
 script = ExtResource("1")
 enemy_name = "Necromancer"
-max_hp = 4
+max_hp = 48
 move_speed = 12.0
-contact_damage = 1
+contact_damage = 12
 attack_type = 6
-attack_damage = 1
+attack_damage = 12
 attack_speed = 4.0
 bullet_speed = 0.0
 bullet_count = 0

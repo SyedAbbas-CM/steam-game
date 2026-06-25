@@ -6,14 +6,14 @@
 script = ExtResource("1")
 enemy_name = "Test Dash Strike"
 description = "Dashes at player while spraying bullets behind"
-max_hp = 5
+max_hp = 60
 move_speed = 22.0
-contact_damage = 2
+contact_damage = 24
 level = 3
 kingdom = "undead"
 hostile = true
 attack_type = 55
-attack_damage = 1
+attack_damage = 12
 attack_speed = 2.5
 bullet_speed = 60.0
 bullet_count = 5
