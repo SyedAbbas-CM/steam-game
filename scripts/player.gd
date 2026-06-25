@@ -60,6 +60,16 @@ signal class_meter_changed(value: float, max_value: float)
 
 # Warrior Rage — only count one damage instance per ~0.5s so heavy hits aren't double-dipped.
 var _rage_damage_grace: float = 0.0
+# Warrior Rampage (X-press spend at 30-99 rage). Mirrors the Killshot model:
+# partial-bar spend for a short power-burst; full bar (100) still triggers
+# Blood Dream as the proper ult.
+const RAMPAGE_MIN_RAGE := 30.0
+const RAMPAGE_DURATION := 4.0
+const RAMPAGE_FIRE_RATE_BONUS := 0.75              # +75% fire/swing rate
+const RAMPAGE_DAMAGE_BONUS := 0.25                 # +25% damage on top of weapon
+const RAGE_SPLASH_MIN := 50.0                      # melee swings AoE-splash above this
+const RAGE_SPLASH_RADIUS := 24.0
+const RAGE_SPLASH_DMG_PCT := 0.5                   # splash deals 50% of bullet damage
 
 # Warrior Blood Dream (X) — vampiric trance state.
 var _blood_dream_active: bool = false
@@ -85,6 +95,9 @@ const RECKLESS_STRIKE_STUN_DURATION := 0.5
 # Archer Focus — regen / lockout state.
 var _archer_focus_lockout: float = 0.0          # 3s after taking damage, no regen
 var _archer_shoot_grace: float = 0.0            # ticks down; if >0, you are "shooting" (not aiming down sights)
+# On-player visual that shows the Killshot is queued. Spawned when X is pressed
+# at ≥60 focus, freed automatically when the next bullet consumes the meta.
+var _killshot_indicator: Node2D = null
 const ARCHER_FOCUS_LOCKOUT := 3.0
 const ARCHER_FOCUS_REGEN_BASE := 6.0            # /sec while in combat, no damage
 const ARCHER_FOCUS_REGEN_STATIONARY := 12.0     # /sec while standing still and not shooting
@@ -986,12 +999,28 @@ func _physics_process(delta: float) -> void:
 
 	# Class-meter full move (X key) — fires when class_meter is full, consumes it
 	if Input.is_action_just_pressed("class_meter_use"):
-		# Archer Killshot can fire at >=60 focus (partial-charge shot). Everyone else
-		# still needs the full meter. The handler enforces the archer minimum itself.
+		# Archer Killshot fires at >=60 focus (partial-charge shot).
+		# Warrior Rampage fires at >=30 rage (Blood Dream stays at 100, branched inside the unleash).
+		# Everyone else still needs a full meter.
 		var pc_x = _get_player_class()
-		var min_needed = KILLSHOT_MIN_FOCUS if (pc_x == "archer" or pc_x == "ranger") else class_meter_max
+		var min_needed = class_meter_max
+		if pc_x == "archer" or pc_x == "ranger":
+			min_needed = KILLSHOT_MIN_FOCUS
+		elif pc_x == "warrior":
+			min_needed = RAMPAGE_MIN_RAGE
 		if class_meter >= min_needed:
 			_unleash_class_meter_move()
+		else:
+			# Deny feedback so the press isn't a silent no-op. Tells the player
+			# how much more meter they need (or just "NOT READY" for non-archers).
+			var _sfx_d = get_node_or_null("/root/SFXManager")
+			if _sfx_d:
+				_sfx_d.play("error", -8.0, 0.05)
+			var _root_d = get_tree().current_scene if is_inside_tree() else null
+			if _root_d:
+				var needed_pts = int(ceil(min_needed - class_meter))
+				var msg = ("+%d FOCUS" % needed_pts) if (pc_x == "archer" or pc_x == "ranger") else "NOT READY"
+				FloatingText.spawn(_root_d, global_position + Vector2(0, -18), msg, Color(0.85, 0.85, 0.85))
 	# Refresh reticle every frame while locked (target moves)
 	if is_instance_valid(_lock_on_target):
 		queue_redraw()
@@ -2813,31 +2842,54 @@ func _unleash_class_meter_move() -> void:
 	var scene_root = get_tree().current_scene if is_inside_tree() else null
 	var now = Time.get_ticks_msec() / 1000.0
 	# Archer Killshot is special: it consumes the FOCUS bar but only when at ≥60.
-	# All other classes require a full meter (the input gate at the call site
-	# already checks that — but archer's lower gate has to be enforced here).
+	# Warrior has a similar two-tier model: 30-99 = Rampage, 100 = Blood Dream.
+	# Other classes require a full meter (the input gate at the call site enforces it).
 	if pc == "archer" or pc == "ranger":
 		if class_meter < KILLSHOT_MIN_FOCUS:
 			return
+	elif pc == "warrior":
+		if class_meter < RAMPAGE_MIN_RAGE:
+			return
 	match pc:
 		"warrior":
-			# Blood Dream — 30s vampiric trance. Snapshot HP, fill the bar, lifesteal everything.
-			# Backlash on expiry: paralyze 3s + slow 6s. Rage drops to 20% (head start).
-			_blood_dream_active = true
-			_blood_dream_until = now + BLOOD_DREAM_DURATION
-			_blood_dream_banked_hp = hp
-			_blood_dream_heal_budget = float(max_hp) * BLOOD_DREAM_LIFESTEAL_CAP_PCT
-			_blood_dream_heal_budget_until = now + 1.0
-			hp = max_hp
-			hp_changed.emit(hp)
-			if vfx:
-				vfx.shockwave(global_position, 40.0, Color(0.85, 0.05, 0.10, 0.75))
-				vfx.shake(2.8, 0.20)
-			if sfx:
-				sfx.play("special_b", 0.0, 0.0)
-			if scene_root:
-				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "BLOOD DREAM!", Color(0.95, 0.15, 0.15))
-			class_meter = 0.0
-			class_meter_changed.emit(class_meter, class_meter_max)
+			# Two-tier: full meter triggers the proper ult, partial spends as Rampage.
+			if class_meter >= class_meter_max:
+				# Blood Dream — 30s vampiric trance. Snapshot HP, fill the bar, lifesteal everything.
+				# Backlash on expiry: paralyze 3s + slow 6s. Rage drops to 20% (head start).
+				_blood_dream_active = true
+				_blood_dream_until = now + BLOOD_DREAM_DURATION
+				_blood_dream_banked_hp = hp
+				_blood_dream_heal_budget = float(max_hp) * BLOOD_DREAM_LIFESTEAL_CAP_PCT
+				_blood_dream_heal_budget_until = now + 1.0
+				hp = max_hp
+				hp_changed.emit(hp)
+				if vfx:
+					vfx.shockwave(global_position, 40.0, Color(0.85, 0.05, 0.10, 0.75))
+					vfx.shake(2.8, 0.20)
+				if sfx:
+					sfx.play("special_b", 0.0, 0.0)
+				if scene_root:
+					FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "BLOOD DREAM!", Color(0.95, 0.15, 0.15))
+				class_meter = 0.0
+				class_meter_changed.emit(class_meter, class_meter_max)
+			else:
+				# Rampage — 4s burst of +75% fire rate + +25% damage. Spends all rage.
+				# Status-effect buffs let weapon_system's existing fire_rate/damage
+				# multipliers pick the bonus up automatically — no hot-path changes.
+				if status_effects:
+					if status_effects.has_method("apply_buff"):
+						status_effects.apply_buff("fire_rate", RAMPAGE_DURATION, RAMPAGE_FIRE_RATE_BONUS)
+						status_effects.apply_buff("damage", RAMPAGE_DURATION, RAMPAGE_DAMAGE_BONUS)
+				if vfx:
+					vfx.shockwave(global_position, 32.0, Color(1.0, 0.30, 0.15, 0.85))
+					vfx.shake(2.2, 0.15)
+				if sfx:
+					sfx.play("special_b", 0.0, 0.05)
+				if scene_root:
+					var pct_r = int(round(class_meter))
+					FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "RAMPAGE %d!" % pct_r, Color(1.0, 0.35, 0.15))
+				class_meter = 0.0
+				class_meter_changed.emit(class_meter, class_meter_max)
 		"wizard":
 			# Overflow — 10 s of free empowered casts, 3× cooldown ticks,
 			# +40% damage. Also tops MP and applies a brief damage buff so the
@@ -2868,6 +2920,10 @@ func _unleash_class_meter_move() -> void:
 			if scene_root:
 				var pct = int(round(class_meter))
 				FloatingText.spawn(scene_root, global_position + Vector2(0, -16), "KILLSHOT %d!" % pct, Color(0.6, 1.0, 0.6))
+			# Charge indicator — a pulsing golden halo on the player tells you
+			# the shot is queued. _tick_class_meter_buffs frees it when the
+			# bullet consumes killshot_charge meta.
+			_spawn_killshot_indicator()
 			# Drain bar to 0 (Killshot always burns ALL focus, regardless of how much).
 			class_meter = 0.0
 			class_meter_changed.emit(class_meter, class_meter_max)
@@ -2947,6 +3003,11 @@ func _tick_archer_focus(delta: float) -> void:
 ## Reckless Strike and Overflow are checked lazily by hot paths — only Blood
 ## Dream needs its own tick (heal-budget reset + duration expiry).
 func _tick_class_meter_buffs(_delta: float) -> void:
+	# Killshot indicator: free the halo the moment weapon_system clears the meta
+	# (i.e. the queued shot was fired). Cheap presence check every frame.
+	if _killshot_indicator and not has_meta("killshot_charge"):
+		_killshot_indicator.queue_free()
+		_killshot_indicator = null
 	if not _blood_dream_active:
 		return
 	var now = Time.get_ticks_msec() / 1000.0
@@ -2955,6 +3016,29 @@ func _tick_class_meter_buffs(_delta: float) -> void:
 		_blood_dream_heal_budget_until = now + 1.0
 	if now >= _blood_dream_until:
 		_end_blood_dream()
+
+## Build the on-player Killshot halo. CPUParticles2D so it pulses on its own
+## without us needing to drive a tween per frame.
+func _spawn_killshot_indicator() -> void:
+	if _killshot_indicator and is_instance_valid(_killshot_indicator):
+		_killshot_indicator.queue_free()
+	var p := CPUParticles2D.new()
+	p.name = "KillshotIndicator"
+	p.amount = 14
+	p.lifetime = 0.55
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 7.0
+	p.direction = Vector2(0, -1)
+	p.spread = 180.0
+	p.gravity = Vector2.ZERO
+	p.initial_velocity_min = 10.0
+	p.initial_velocity_max = 22.0
+	p.scale_amount_min = 1.0
+	p.scale_amount_max = 1.6
+	p.color = Color(1.4, 1.15, 0.35, 0.95)
+	p.z_index = 6
+	add_child(p)
+	_killshot_indicator = p
 
 ## Distance check: is at least one alive enemy within `radius` pixels?
 func _has_enemies_nearby(radius: float) -> bool:

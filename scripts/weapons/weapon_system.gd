@@ -129,6 +129,18 @@ func try_shoot(origin: Vector2, aim_direction: Vector2) -> void:
 	if not bullets_container:
 		return
 
+	# Archer Killshot: pull the meta off the player ONCE and attach the focus
+	# spent to every bullet in this volley. This way multi-bullet patterns
+	# (bow ParallelPattern, scatter, etc.) get the bonus on every arrow, not
+	# just the first one through _spawn_bullet. Meta is cleared here so any
+	# follow-up `try_shoot` (next frame) won't re-apply it.
+	if p and p.has_meta("killshot_charge"):
+		var _ks_focus = float(p.get_meta("killshot_focus_spent", 100.0))
+		for d in fire_data:
+			d["killshot_focus"] = _ks_focus
+		p.remove_meta("killshot_charge")
+		p.remove_meta("killshot_focus_spent")
+
 	# SFX: fire sound based on weapon type. If the player has 0 proficiency
 	# (off-class weapon with no stats allocated), play the error chime instead so
 	# the swing/shoot still happens but feels obviously wrong.
@@ -212,22 +224,25 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	#  - Archer: NO base-damage scaling (Killshot is the only damage spike); per-stack bullet speed/range applied to the bullet itself further down.
 	#  - Wizard: damage scaling REMOVED — empowerment is the lever now.
 	var _killshot_pierce_bonus := 0  # archer Killshot: +3 pierces, applied AFTER the equipment pierce line so it isn't overwritten
+	var _killshot_force_crit := false
+	var _rage_stack_for_splash := 0.0
 	if p and "class_meter" in p:
 		var pc = p._get_player_class() if p.has_method("_get_player_class") else ""
 		var stack: float = p.class_meter
 		if pc == "warrior":
-			# Rage: up to +30% weapon damage at full stack
-			base_damage = int(base_damage * (1.0 + stack * 0.003))
-		elif pc == "ranger" or pc == "archer":
-			# Killshot — scales with focus spent: dmg = 3× + (focus_spent / 100) × 2×.
-			# At 60 focus: 4.2×; at 100 focus: 5×. Pierces 3 enemies.
-			if p.has_meta("killshot_charge"):
-				var fs = float(p.get_meta("killshot_focus_spent", 100.0))
-				var mult = 3.0 + clampf(fs / 100.0, 0.0, 1.0) * 2.0
-				base_damage = int(base_damage * mult)
-				_killshot_pierce_bonus = 3
-				p.remove_meta("killshot_charge")
-				p.remove_meta("killshot_focus_spent")
+			# Rage: up to +60% weapon damage at full stack (doubled from +30% —
+			# the old number was too subtle to feel without a damage readout).
+			base_damage = int(base_damage * (1.0 + stack * 0.006))
+			_rage_stack_for_splash = stack
+	# Killshot — read from per-bullet data, not player meta. All bullets in a
+	# multi-bullet volley get the bonus because try_shoot stamps every fire_data
+	# dict with `killshot_focus` before this loop runs.
+	if data.has("killshot_focus"):
+		var fs = float(data["killshot_focus"])
+		var mult = 3.0 + clampf(fs / 100.0, 0.0, 1.0) * 2.0
+		base_damage = int(base_damage * mult)
+		_killshot_pierce_bonus = 3
+		_killshot_force_crit = true
 	# Per-bullet damage split from pattern (e.g. shotgun pellets share total damage)
 	if data.has("damage_mult"):
 		base_damage = maxi(1, int(base_damage * data["damage_mult"]))
@@ -241,7 +256,13 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	# Mercenary Adrenaline: +0.15%/stack passive crit chance (up to +15% at full meter).
 	if p and "class_meter" in p and p.has_method("_get_player_class") and p._get_player_class() == "mercenary":
 		crit_chance += p.class_meter * 0.15
-	if crit_chance > 0 and randf() * 100.0 < crit_chance:
+	# Killshot is a guaranteed crit — bypasses the RNG roll so the design-doc
+	# 3-5× damage stacks WITH the crit-damage multiplier, and the bullet gets
+	# the scaled-up "crit" sprite + crit_spark VFX on impact for free.
+	if _killshot_force_crit:
+		bullet.is_crit = true
+		bullet.damage = int(base_damage * equipment_manager.get_crit_damage())
+	elif crit_chance > 0 and randf() * 100.0 < crit_chance:
 		bullet.is_crit = true
 		bullet.damage = int(base_damage * equipment_manager.get_crit_damage())
 		# Mercenary: every crit landed adds +1 to Adrenaline.
@@ -257,6 +278,10 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 	# Killshot pierce bonus — applied AFTER equipment so it survives.
 	if _killshot_pierce_bonus > 0:
 		bullet.pierce_count += _killshot_pierce_bonus
+	# Killshot bullets get an extra ~40% sprite scale on top of the crit pop
+	# (bullet._ready() reads sprite_scale_mult to multiply the final sprite).
+	if _killshot_force_crit:
+		bullet.set_meta("sprite_scale_mult", 1.4)
 	bullet.lifetime = equipment_manager.get_bullet_lifetime()
 
 	# Apply weapon-specific bullet sprite and range
@@ -344,6 +369,14 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 				if weapon.slot_type == EquipmentItem.SlotType.WEAPON_MELEE \
 					and weapon.weapon_type not in ["throwing", "javelin"]:
 					bullet.is_melee = true
+
+	# Warrior Rage Splash — at ≥50 rage, every melee swing creates a tiny AoE
+	# splash on hit. Bullet reads `rage_splash_radius` / `rage_splash_dmg_pct`
+	# in its hurtbox hit path to damage nearby enemies. Felt on every swing,
+	# unlike the silent +%damage bonus.
+	if _rage_stack_for_splash >= 50.0 and weapon and weapon.slot_type == EquipmentItem.SlotType.WEAPON_MELEE:
+		bullet.set_meta("rage_splash_radius", 24.0)
+		bullet.set_meta("rage_splash_dmg_pct", 0.5)
 
 	container.add_child(bullet)
 	# Coop: notify peers so they can render a visual ghost of this player bullet.

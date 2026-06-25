@@ -4071,7 +4071,9 @@ func _shoot_telegraph_explosion() -> void:
 	var radius: int = 16
 	var alpha: float = 0.4
 	var tween = create_tween()
-	var angle: float = 0.0
+	# Dead outer "var angle" removed — the ring/explosion loops below own their
+	# own angle locals, and the deferred lambda's `var angle :=` was clashing
+	# with this declaration (Godot 4 lambdas inherit parent scope).
 	var ring_count: int = 8
 	if not is_instance_valid(player):
 		return

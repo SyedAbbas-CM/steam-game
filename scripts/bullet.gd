@@ -1078,6 +1078,23 @@ func _on_area_entered(area: Node2D) -> void:
 			# Off-hand throws weaken enemies on hit
 			if has_meta("apply_weaken") and enemy.has_method("apply_status"):
 				enemy.apply_status("WEAKENED", get_meta("apply_weaken"))
+			# Warrior Rage Splash — at ≥50 rage every melee swing deals a small
+			# AoE around the primary hit. Felt on every swing instead of the
+			# invisible +%damage scaling.
+			if is_player_bullet and has_meta("rage_splash_radius"):
+				var rs_radius = float(get_meta("rage_splash_radius", 24.0))
+				var rs_pct = float(get_meta("rage_splash_dmg_pct", 0.5))
+				var rs_dmg = maxi(1, int(total_dmg * rs_pct))
+				for _e in get_tree().get_nodes_in_group("enemy"):
+					if not is_instance_valid(_e) or _e == enemy:
+						continue
+					if _e.global_position.distance_to(enemy.global_position) > rs_radius:
+						continue
+					if _e.has_method("take_damage"):
+						_e.take_damage(rs_dmg)
+				var _vfx_rs = get_node_or_null("/root/VFXManager")
+				if _vfx_rs and _vfx_rs.has_method("shockwave"):
+					_vfx_rs.shockwave(enemy.global_position, rs_radius, Color(1.0, 0.35, 0.15, 0.55))
 			# Perk/Item passives: lifesteal, hemorrhage, pyromancer
 			if is_player_bullet:
 				_apply_player_passive_effects(enemy, total_dmg)
