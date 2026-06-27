@@ -26,3 +26,4 @@ dist/
 
 # Local workflow notes
 /docs/workflow/local/
+tools/__pycache__
