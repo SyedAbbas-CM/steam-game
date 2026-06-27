@@ -3864,29 +3864,31 @@ func _shoot_mortar(_dir: Vector2) -> void:
 ## NOVA: Double ring burst — inner ring fast, outer ring slow with offset
 func _shoot_nova(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
-	var bc = get_tree().get_first_node_in_group("bullets")
-	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	var bc: Node = get_tree().get_first_node_in_group("bullets")
+	var bullets_container: Node = get_tree().get_first_node_in_group("bullets")
 	var count: int = _get_active_bullet_count()
-	var angle: float = 0.0
+	# (Dead "var angle: float = 0.0" removed — it was never read here and
+	# was shadowed in the deferred lambda below.)
 	var sfx_nv = get_node_or_null("/root/SFXManager")
 	if sfx_nv:
 		sfx_nv.play("area_effect_b", -5.0, 0.08)
 	if not bullets_container:
 		return
+	var base_angle: float = dir.angle()
 	# Inner ring: fast, one bullet aimed at player
-	var inner = maxi(count / 2, 4)
+	var inner: int = maxi(count / 2, 4)
 	for i in range(inner):
-		var shot_angle := dir.angle() + TAU * float(i) / float(inner)
+		var shot_angle: float = base_angle + TAU * float(i) / float(inner)
 		_spawn_bullet(bullets_container, Vector2.from_angle(shot_angle), bspeed * 1.5)
 	# Outer ring: slow, offset by half step, delayed
 	get_tree().create_timer(0.15).timeout.connect(
 		func():
 			if is_instance_valid(self) and hp > 0:
 				if bc:
-					var outer = count
-					var half_step = TAU / outer / 2.0
+					var outer: int = count
+					var half_step: float = TAU / float(outer) / 2.0
 					for j in range(outer):
-						var shot_angle := dir.angle() + half_step + TAU * float(j) / float(outer)
+						var shot_angle: float = base_angle + half_step + TAU * float(j) / float(outer)
 						_spawn_bullet(bc, Vector2.from_angle(shot_angle), bspeed * 0.6)
 	)
 
