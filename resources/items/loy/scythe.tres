@@ -30,4 +30,4 @@ buy_price = 1052
 sell_value = 263
 bullet_sprite_index = 224
 weapon_range = 2.3
-weapon_type = "spear"
+weapon_type = "scythe"

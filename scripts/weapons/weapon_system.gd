@@ -1,6 +1,17 @@
 class_name WeaponSystem
 extends Node
 
+## weapon_type → list of accepted ammo_type strings. Anything not listed here
+## either uses no ammo (melee) or accepts any (empty allowlist).
+const WEAPON_AMMO_TYPES := {
+	"bow": ["arrow"],
+	"short_bow": ["arrow"],
+	"crossbow": ["arrow", "bolt"],
+	"throwing": ["knife", "throwing"],
+	"javelin": ["javelin"],
+	"sling": ["stone", "rock"],
+}
+
 @export var weapon_pattern: WeaponPattern
 
 var bullet_scene: PackedScene
@@ -86,9 +97,10 @@ func update_pattern_for_weapon() -> void:
 		"scythe":
 			pattern = CrossPattern.new()
 		"claws":
-			var p = GatlingPattern.new()
-			p.cooldown_override = 0.3
-			pattern = p
+			# Honor the GatlingPattern default 0.65 s cooldown. The old
+			# 0.3 s override turned claws into a machine gun at 4× sword DPS
+			# (post-Phase 1 maxi(1) floor no longer hides the cheat).
+			pattern = GatlingPattern.new()
 		_:
 			pattern = SpreadPattern.new()
 	_pattern_cache[wtype] = pattern
@@ -349,13 +361,19 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 			"Malorian Crook":
 				bullet.set_meta("apply_feared", 2.0)
 
-	# Arrow/throwing ammo effects (ranged weapons + throwing/javelin melee)
+	# Arrow/throwing ammo effects. The weapon's projectile class has to match
+	# the ammo's ammo_type — slings can't fire arrows, bows can't fire stones,
+	# javelins can't fire throwing knives. Empty ammo_type defaults to "arrow"
+	# for back-compat with the existing fire_arrow / freeze_arrow / etc. .tres.
 	var uses_ammo = weapon and (weapon.slot_type == EquipmentItem.SlotType.WEAPON_RANGED or weapon.weapon_type in ["throwing", "javelin"])
 	if uses_ammo:
 		var ammo = equipment_manager.get_equipped_ammo()
 		if ammo and ammo.quantity > 0 and ammo.arrow_effect != "":
-			_apply_arrow_effects(bullet, ammo)
-			equipment_manager.consume_ammo()
+			var expected_ammo: Array = WEAPON_AMMO_TYPES.get(weapon.weapon_type, [])
+			var ammo_kind: String = ammo.ammo_type if ammo.ammo_type != "" else "arrow"
+			if expected_ammo.is_empty() or ammo_kind in expected_ammo:
+				_apply_arrow_effects(bullet, ammo)
+				equipment_manager.consume_ammo()
 
 	# Cliff respect: default is slot-based (melee blocked, ranged passes through). Designers
 	# can override per-weapon via EquipmentItem.cliff_respect (Auto / Blocked / Passes).

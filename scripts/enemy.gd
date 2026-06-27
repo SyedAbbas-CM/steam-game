@@ -91,6 +91,11 @@ var _boss_base_name: String = ""
 # Random attack pool for elites/bosses
 var _attack_pool: Array[int] = []  # random attack types assigned on setup
 var _attack_pool_idx: int = 0  # cycles through pool
+var _obs_attack_seq: int = 0
+var _obs_current_attack_id: int = 0
+var _obs_current_attack_name: String = ""
+var _obs_stationary_time: float = 0.0
+var _obs_last_stationary_report_msec: int = 0
 
 # AttackSlot system: per-attack modifiers
 var _active_modifier: AttackModifier  # set per-attack from slot, cleared after firing
@@ -138,6 +143,98 @@ func _get_bullets_container() -> Node:
 	if not is_inside_tree():
 		return null
 	return get_tree().get_first_node_in_group("bullets")
+
+func _obs_node() -> Node:
+	if not is_inside_tree():
+		return null
+	var obs = get_node_or_null("/root/EnemyObservability")
+	if obs and obs.has_method("is_enabled") and obs.is_enabled():
+		return obs
+	return null
+
+func _obs_attack_name(atk: int) -> String:
+	for key in EnemyDefinition.AttackType.keys():
+		if int(EnemyDefinition.AttackType[key]) == atk:
+			return String(key)
+	return str(atk)
+
+func _obs_state_name() -> String:
+	for key in State.keys():
+		if int(State[key]) == state:
+			return String(key)
+	return str(state)
+
+func _obs_context(extra: Dictionary = {}) -> Dictionary:
+	var ctx := {
+		"attack_id": _obs_current_attack_id,
+		"attack_type": _obs_current_attack_name,
+		"phase": _current_phase,
+		"state": _obs_state_name(),
+		"major_enemy": _is_boss_or_large or (definition and definition.has_meta("generated_archetype_id")),
+	}
+	if has_meta("grid_pos"):
+		ctx["room_grid"] = str(get_meta("grid_pos"))
+	for key in extra:
+		ctx[key] = extra[key]
+	return ctx
+
+func _obs_record_attack(atk: int, source: String) -> void:
+	var obs = _obs_node()
+	if obs == null or definition == null or not obs.has_method("record_enemy_attack"):
+		return
+	_obs_attack_seq += 1
+	_obs_current_attack_id = _obs_attack_seq
+	_obs_current_attack_name = _obs_attack_name(atk)
+	var dist := -1.0
+	if is_instance_valid(player):
+		dist = global_position.distance_to(player.global_position)
+	obs.record_enemy_attack(self, definition, atk, _obs_context({
+		"source": source,
+		"distance_to_player": dist,
+		"cooldown": shoot_interval,
+		"bullet_count": _get_active_bullet_count(),
+		"bullet_speed": definition.bullet_speed if definition else 0.0,
+		"attack_pool": _attack_pool.duplicate(),
+	}))
+
+func _obs_record_projectile(projectile: Node, extra: Dictionary = {}) -> void:
+	var obs = _obs_node()
+	if obs == null or definition == null or not obs.has_method("record_projectile_spawn"):
+		return
+	obs.record_projectile_spawn(self, definition, projectile, _obs_context(extra))
+
+func _obs_record_suspicion(reason: String, extra: Dictionary = {}) -> void:
+	var obs = _obs_node()
+	if obs == null or definition == null or not obs.has_method("record_enemy_suspicion"):
+		return
+	obs.record_enemy_suspicion(self, definition, reason, _obs_context(extra))
+
+func _obs_tick_runtime(delta: float, dist_to_player: float) -> void:
+	if definition == null or state == State.DEAD:
+		return
+	var should_watch := _is_boss_or_large or definition.has_meta("generated_archetype_id")
+	if not should_watch or state not in [State.CHASE, State.ATTACK, State.COOLDOWN]:
+		_obs_stationary_time = 0.0
+		return
+	if dist_to_player > 180.0:
+		_obs_stationary_time = 0.0
+		return
+	if velocity.length() <= 2.0:
+		_obs_stationary_time += delta
+	else:
+		_obs_stationary_time = 0.0
+	if _obs_stationary_time < 3.0:
+		return
+	var now := Time.get_ticks_msec()
+	if now - _obs_last_stationary_report_msec < 3000:
+		return
+	_obs_last_stationary_report_msec = now
+	_obs_record_suspicion("stationary_too_long", {
+		"duration": _obs_stationary_time,
+		"velocity": velocity.length(),
+		"distance_to_player": dist_to_player,
+		"attack_type": _obs_current_attack_name,
+	})
 
 
 func _ready() -> void:
@@ -1257,6 +1354,7 @@ func _physics_process(delta: float) -> void:
 			_enemy_anim.set_state(EnemyAnimator.AnimState.IDLE)
 
 	# (Whirlwind bounce is handled in the early-return block above)
+	_obs_tick_runtime(delta, dist)
 
 	# Time Warp velocity reduction
 	if _time_warp_mult < 1.0:
@@ -2618,6 +2716,7 @@ func _do_attack(dir: Vector2) -> void:
 		atk = slot.attack_type
 		_active_modifier = slot.modifier  # may be null = plain attack
 		_slot_idx += 1
+	_obs_record_attack(atk, "direct")
 
 	match atk:
 		EnemyDefinition.AttackType.NONE:
@@ -2788,6 +2887,7 @@ func _do_attack(dir: Vector2) -> void:
 	_active_modifier = null  # clear per-attack modifier after firing
 
 func _fire_attack_type(atk: int, dir: Vector2) -> void:
+	_obs_record_attack(atk, "combo")
 	match atk:
 		EnemyDefinition.AttackType.NONE, EnemyDefinition.AttackType.RANGED, \
 		EnemyDefinition.AttackType.CHARGE, EnemyDefinition.AttackType.DASH, \
@@ -3245,6 +3345,7 @@ func _shoot_spiral(dir: Vector2) -> void:
 	# Fire 5 rapid volleys for a continuous spiral stream
 	var volleys = 5
 	for v in range(volleys):
+		var volley_idx := v
 		get_tree().create_timer(v * 0.12).timeout.connect(
 			func():
 				if not is_instance_valid(self) or hp <= 0:
@@ -3252,7 +3353,8 @@ func _shoot_spiral(dir: Vector2) -> void:
 				if not bc:
 					return
 				for i in range(count):
-					_spawn_bullet(bc, Vector2.from_angle(angle), bspeed)
+					var shot_angle := angle + float(volley_idx) * 0.35 + TAU * float(i) / float(count)
+					_spawn_bullet(bc, Vector2.from_angle(shot_angle), bspeed)
 				_spiral_angle += 0.35
 		)
 
@@ -3558,6 +3660,13 @@ func _spawn_bullet(container: Node, dir: Vector2, spd: float) -> Area2D:
 	bullet.direction = dir
 	_apply_enemy_bullet_props(bullet, spd)
 	container.add_child(bullet)
+	_obs_record_projectile(bullet, {
+		"speed": bullet.speed,
+		"damage": bullet.damage,
+		"direction": bullet.direction,
+		"behavior": int(bullet.behavior),
+		"lifetime": bullet.lifetime,
+	})
 	# SFX: enemy fire (rate-limited to avoid spam from multi-bullet patterns)
 	var frame = Engine.get_physics_frames()
 	if frame != _last_fire_sfx_frame:
@@ -3573,6 +3682,13 @@ func _spawn_bullet_at(container: Node, pos: Vector2, dir: Vector2, spd: float) -
 	bullet.direction = dir
 	_apply_enemy_bullet_props(bullet, spd)
 	container.add_child(bullet)
+	_obs_record_projectile(bullet, {
+		"speed": bullet.speed,
+		"damage": bullet.damage,
+		"direction": bullet.direction,
+		"behavior": int(bullet.behavior),
+		"lifetime": bullet.lifetime,
+	})
 	_coop_broadcast_enemy_bullet(bullet)
 
 func _spawn_behavior_bullet(container: Node, dir: Vector2, spd: float, bhv: int) -> void:
@@ -3584,21 +3700,30 @@ func _spawn_behavior_bullet(container: Node, dir: Vector2, spd: float, bhv: int)
 	bullet._origin_entity = self
 	_apply_enemy_bullet_props(bullet, spd)
 	container.add_child(bullet)
+	_obs_record_projectile(bullet, {
+		"speed": bullet.speed,
+		"damage": bullet.damage,
+		"direction": bullet.direction,
+		"behavior": int(bullet.behavior),
+		"lifetime": bullet.lifetime,
+		"stationary_ok": bhv in [bullet.BulletBehavior.BARRIER, bullet.BulletBehavior.LOBBED],
+	})
 
 ## SHIELD_BASH: Spawns a frontal barrier arc then charges at player
 func _shoot_shield_bash(dir: Vector2) -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx_sh = get_node_or_null("/root/SFXManager")
-	var offset: Vector2 = Vector2.ZERO
 	var center: Vector2 = global_position
-	var b = bullet_scene.instantiate()
 	if sfx_sh:
 		sfx_sh.play("spell_a", -13.0, 0.18)
 	if not bc:
 		return
 	# Spawn a 3-segment barrier arc in front of the enemy
+	var perp := Vector2(-dir.y, dir.x)
 	for i in range(3):
-		b.global_position = center + offset
+		var b = bullet_scene.instantiate()
+		var lateral := (float(i) - 1.0) * 8.0
+		b.global_position = center + dir * 12.0 + perp * lateral
 		b.direction = Vector2.ZERO
 		b.behavior = b.BulletBehavior.BARRIER
 		b.barrier_hp = shield_hp if shield_hp > 0 else 3
@@ -3625,14 +3750,16 @@ func _shoot_volley(_dir: Vector2) -> void:
 		sfx_v.play("shoot_b", -6.0, 0.1)
 	if not bc:
 		return
-	var target_center = player.global_position
+	var target_center: Vector2 = player.global_position
 	# Scatter lobbed shots in a pattern around the player
 	for i in range(count):
+		var target_offset := Vector2.from_angle(TAU * float(i) / maxf(float(count), 1.0)) * randf_range(0.0, 18.0)
+		var shot_target := target_center + target_offset
 		get_tree().create_timer(i * 0.1).timeout.connect(
 			func():
 				if is_instance_valid(self) and hp > 0:
 					if bcc:
-						_spawn_lob_at(bcc, target, ObjSpriteIndex.FIREBALL, 8.0, 0.5, 4, 0)
+						_spawn_lob_at(bcc, shot_target, ObjSpriteIndex.FIREBALL, 8.0, 0.5, 4, 0)
 		)
 
 ## CROSS_SHOT: Fires + pattern, then delayed X pattern — two interlocked crosses
@@ -3648,8 +3775,9 @@ func _shoot_cross(dir: Vector2) -> void:
 		return
 	# First cross: cardinal directions (+ shape)
 	for arm in range(4):
-		_spawn_bullet(bullets_container, arm_dir, bspeed)
-		_spawn_bullet(bullets_container, arm_dir, bspeed * 0.6)
+		var shot_dir := arm_dir.rotated(float(arm) * PI * 0.5)
+		_spawn_bullet(bullets_container, shot_dir, bspeed)
+		_spawn_bullet(bullets_container, shot_dir, bspeed * 0.6)
 	# Delayed second cross: diagonal (X shape)
 	get_tree().create_timer(0.3).timeout.connect(
 		func():
@@ -3660,8 +3788,9 @@ func _shoot_cross(dir: Vector2) -> void:
 			if sfx_cr:
 				sfx_cr.play("fire_b", -8.0, 0.1)
 			for arm in range(4):
-				_spawn_bullet(bc, arm_dir, bspeed * 0.9)
-				_spawn_bullet(bc, arm_dir, bspeed * 0.5)
+				var shot_dir := arm_dir.rotated(PI * 0.25 + float(arm) * PI * 0.5)
+				_spawn_bullet(bc, shot_dir, bspeed * 0.9)
+				_spawn_bullet(bc, shot_dir, bspeed * 0.5)
 	)
 
 ## WAVE_SHOT: Sine-wave spread — bullets fan out then converge in a wave pattern
@@ -3677,12 +3806,12 @@ func _shoot_wave(dir: Vector2) -> void:
 	if not bullets_container:
 		return
 	for i in range(count):
-		var wave_offset = sin(t * PI * 2.0) * 8.0
-		_spawn_bullet_at(bullets_container, spawn_pos, dir, bspeed)
+		var offset_angle := sin(t * PI * 2.0 + float(i) * 0.7) * 0.35
+		var lateral := Vector2(-dir.y, dir.x) * (float(i) - float(count - 1) * 0.5) * 3.0
+		_spawn_bullet_at(bullets_container, spawn_pos + lateral, dir.rotated(offset_angle), bspeed)
 
 ## GATLING: Long burst of fast bullets tracking the player — machine gun
 func _shoot_gatling(dir: Vector2) -> void:
-	var jitter: float = randf_range(-0.08, 0.08)
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
 	var bc = bullets_container
@@ -3693,6 +3822,7 @@ func _shoot_gatling(dir: Vector2) -> void:
 	if not bullets_container:
 		return
 	for i in range(count):
+		var shot_jitter := randf_range(-0.08, 0.08)
 		get_tree().create_timer(i * 0.05).timeout.connect(
 			func():
 				if not is_instance_valid(self) or hp <= 0:
@@ -3703,7 +3833,7 @@ func _shoot_gatling(dir: Vector2) -> void:
 				var aim := dir
 				if is_instance_valid(player):
 					aim = (player.global_position - global_position).normalized()
-				_spawn_bullet(bc, aim.rotated(jitter), bspeed)
+				_spawn_bullet(bc, aim.rotated(shot_jitter), bspeed)
 		)
 
 ## MORTAR: Lobs bombs in high arc toward player area — artillery barrage
@@ -3722,11 +3852,13 @@ func _shoot_mortar(_dir: Vector2) -> void:
 	if not bc:
 		return
 	for i in range(count):
+		var target_offset := Vector2.from_angle(TAU * float(i) / maxf(float(count), 1.0)) * randf_range(0.0, 20.0)
+		var shot_target := target + target_offset
 		get_tree().create_timer(i * 0.3).timeout.connect(
 			func():
 				if is_instance_valid(self) and hp > 0:
 					if bcc:
-						_spawn_lob_at(bcc, target, ObjSpriteIndex.FIREBALL, radius, flight, 8, 0)
+						_spawn_lob_at(bcc, shot_target, ObjSpriteIndex.FIREBALL, radius, flight, 8, 0)
 		)
 
 ## NOVA: Double ring burst — inner ring fast, outer ring slow with offset
@@ -3744,7 +3876,8 @@ func _shoot_nova(dir: Vector2) -> void:
 	# Inner ring: fast, one bullet aimed at player
 	var inner = maxi(count / 2, 4)
 	for i in range(inner):
-		_spawn_bullet(bullets_container, Vector2.from_angle(angle), bspeed * 1.5)
+		var shot_angle := dir.angle() + TAU * float(i) / float(inner)
+		_spawn_bullet(bullets_container, Vector2.from_angle(shot_angle), bspeed * 1.5)
 	# Outer ring: slow, offset by half step, delayed
 	get_tree().create_timer(0.15).timeout.connect(
 		func():
@@ -3753,7 +3886,8 @@ func _shoot_nova(dir: Vector2) -> void:
 					var outer = count
 					var half_step = TAU / outer / 2.0
 					for j in range(outer):
-						_spawn_bullet(bc, Vector2.from_angle(angle), bspeed * 0.6)
+						var shot_angle := dir.angle() + half_step + TAU * float(j) / float(outer)
+						_spawn_bullet(bc, Vector2.from_angle(shot_angle), bspeed * 0.6)
 	)
 
 ## ZIGZAG: Alternating left-right angled shots for a weaving bullet wall
@@ -3761,7 +3895,6 @@ func _shoot_zigzag(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
-	var bullet_dir: Vector2 = Vector2.ZERO
 	var count: int = _get_active_bullet_count()
 	var sfx_zz = get_node_or_null("/root/SFXManager")
 	if sfx_zz:
@@ -3770,11 +3903,12 @@ func _shoot_zigzag(dir: Vector2) -> void:
 		return
 	var zigzag_angle = 0.35
 	for i in range(count):
+		var shot_dir := dir.rotated(zigzag_angle if i % 2 == 0 else -zigzag_angle)
 		get_tree().create_timer(i * 0.06).timeout.connect(
 			func():
 				if is_instance_valid(self) and hp > 0:
 					if bc:
-						_spawn_bullet(bc, bullet_dir, bspeed)
+						_spawn_bullet(bc, shot_dir, bspeed)
 		)
 
 ## SHOTGUN_BLAST: Very wide cone, short-lived bullets — close-range devastation
@@ -3782,8 +3916,6 @@ func _shoot_shotgun(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var count: int = _get_active_bullet_count()
-	var angle: float = 0.0
-	var b = bullet_scene.instantiate()
 	var sfx_sg = get_node_or_null("/root/SFXManager")
 	if sfx_sg:
 		sfx_sg.play("shotgun", -5.0, 0.1)
@@ -3791,7 +3923,10 @@ func _shoot_shotgun(dir: Vector2) -> void:
 		return
 	var cone = 1.2  # very wide cone
 	for i in range(count):
+		var b = bullet_scene.instantiate()
 		var spd = bspeed * randf_range(0.7, 1.3)
+		var t := float(i) / maxf(float(count - 1), 1.0)
+		var angle := lerpf(-cone * 0.5, cone * 0.5, t)
 		b.global_position = global_position
 		b.direction = dir.rotated(angle)
 		b.lifetime = 0.6  # short range — dies quickly
@@ -4194,7 +4329,8 @@ func _shoot_laser_grid(_dir: Vector2) -> void:
 	for arm in range(4):
 		var arm_dir = Vector2.RIGHT.rotated(arm * PI / 2.0)
 		for j in range(5):
-			get_tree().create_timer(delay).timeout.connect(
+			var shot_delay := delay + float(j) * 0.05
+			get_tree().create_timer(shot_delay).timeout.connect(
 				func():
 					if is_instance_valid(self) and hp > 0:
 						if bc:
@@ -4211,9 +4347,6 @@ func _shoot_gravity_well(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var bullets_container = get_tree().get_first_node_in_group("bullets")
-	var pull_dir: Vector2 = Vector2.ZERO
-	var pos: Vector2 = global_position
-	var angle: float = 0.0
 	var sfx_gw = get_node_or_null("/root/SFXManager")
 	if sfx_gw:
 		sfx_gw.play("special_a", -5.0, 0.1)
@@ -4249,7 +4382,8 @@ func _shoot_gravity_well(dir: Vector2) -> void:
 		get_tree().create_timer(0.5 * tick).timeout.connect(
 			func():
 				if is_instance_valid(orb) and is_instance_valid(player):
-					if pull_dir.length() < 100.0:
+					var pull_dir := orb.global_position - player.global_position
+					if pull_dir.length() < 100.0 and pull_dir.length() > 0.01:
 						# Stronger pull closer to orb
 						var strength = lerpf(30.0, 10.0, pull_dir.length() / 100.0)
 						player.velocity += pull_dir.normalized() * strength
@@ -4331,18 +4465,19 @@ func _shoot_death_spiral_at(pos: Vector2) -> void:
 	var arms = 3
 	var bullets_per_arm = 8
 	for i in range(bullets_per_arm):
-		get_tree().create_timer(delay).timeout.connect(
+		var step_idx := i
+		get_tree().create_timer(delay * float(i + 1)).timeout.connect(
 			func():
 				if bc:
 					for arm in range(arms):
 						var base_angle = (TAU / arms) * arm
-						var spiral_angle = base_angle + i * 0.4
+						var spiral_angle = base_angle + step_idx * 0.4
 						var b = bullet_scene.instantiate()
 						b.global_position = pos
 						b.direction = Vector2.from_angle(spiral_angle)
 						b.is_player_bullet = false
 						b.damage = definition.attack_damage if definition else 2
-						b.speed = bspeed + i * 8.0
+						b.speed = bspeed + step_idx * 8.0
 						b.lifetime = 3.0
 						b.enemy_kingdom = definition.kingdom if definition else ""
 						bc.add_child(b)
@@ -4707,7 +4842,6 @@ func _shoot_summon_wall(dir: Vector2) -> void:
 
 ## LEAPING_SLAM: Jump to player position, AOE shockwave + bullet ring on land
 func _shoot_leaping_slam(dir: Vector2) -> void:
-	var angle: float = 0.0
 	var bspeed: float = definition.bullet_speed if definition else 60.0
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var sfx = get_node_or_null("/root/SFXManager")
@@ -4738,7 +4872,8 @@ func _shoot_leaping_slam(dir: Vector2) -> void:
 		if bc:
 			var ring_count = maxi(_get_active_bullet_count(), 8)
 			for i in range(ring_count):
-				_spawn_bullet(bc, Vector2(cos(angle), sin(angle)), bspeed)
+				var shot_angle := TAU * float(i) / float(ring_count)
+				_spawn_bullet(bc, Vector2.from_angle(shot_angle), bspeed)
 		if sfx2:
 			sfx2.play("boom_a", -10.0, 0.1)
 	)
@@ -4748,13 +4883,8 @@ func _shoot_arrow_volley() -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
 	var flight: float = 0.3
 	var sfx = get_node_or_null("/root/SFXManager")
-	var pulse: float = 0.0
-	var center: Vector2 = global_position
 	var radius: int = 16
-	var _elapsed: float = 0.0
 	var count: int = _get_active_bullet_count()
-	var duration: float = 1.0
-	var offset: Vector2 = Vector2.ZERO
 	if not is_instance_valid(player):
 		return
 	if sfx:
@@ -4762,7 +4892,8 @@ func _shoot_arrow_volley() -> void:
 	if not bc:
 		return
 	for i in range(count):
-		_spawn_lob_at(bc, center + offset, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 1.5)
+		var offset := Vector2.from_angle(TAU * float(i) / maxf(float(count), 1.0)) * randf_range(4.0, 22.0)
+		_spawn_lob_at(bc, player.global_position + offset, ObjSpriteIndex.FIREBALL, radius, flight, 0, 0, -1.0, 1.5)
 
 ## --- Lobbed Bomb Attacks ---
 
@@ -5479,6 +5610,16 @@ func _spawn_lob_at(container: Node, target: Vector2, sprite_idx: int,
 	bomb.damage = maxi(2, int(bomb.damage * damage_mult))  # bombs hit harder than regular bullets
 	bomb.bullet_sprite_index = sprite_idx  # override after apply so bomb sprite is always correct
 	container.add_child(bomb)
+	_obs_record_projectile(bomb, {
+		"speed": bomb.speed,
+		"damage": bomb.damage,
+		"direction": bomb.direction,
+		"behavior": int(bomb.behavior),
+		"lifetime": bomb.lifetime,
+		"stationary_ok": true,
+		"lob_duration": bomb._lob_duration,
+		"lob_radius": aoe_radius,
+	})
 	_spawn_landing_marker(target, aoe_radius, bomb._lob_duration)
 
 ## BOMB_TOSS: Single bomb at player position, explodes into bullet ring

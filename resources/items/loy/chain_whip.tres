@@ -25,4 +25,4 @@ buy_price = 48
 sell_value = 12
 bullet_sprite_index = 144
 weapon_range = 1.3
-weapon_type = "flail"
+weapon_type = "whip"

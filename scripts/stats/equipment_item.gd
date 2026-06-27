@@ -82,6 +82,12 @@ var source_path: String = ""
 @export var quantity: int = 0  # current ammo count (0 = not ammo / infinite)
 @export var max_quantity: int = 0  # max stack size
 @export var arrow_effect: String = ""  # "fire", "freeze", "explosion", "poison", "lightning", "slow"
+## Ammo projectile class. Empty defaults to "arrow" for back-compat with all
+## the existing fire_arrow / freeze_arrow / etc. resources. Slings should set
+## "stone"; throwing-knife stacks "knife"; javelins "javelin". The weapon_system
+## checks ammo_type against the weapon's weapon_type before consuming a charge,
+## so a sling no longer eats your stack of fire arrows.
+@export var ammo_type: String = ""
 
 ## Create a copy that remembers its original .tres path for save/load
 func make_copy() -> EquipmentItem:

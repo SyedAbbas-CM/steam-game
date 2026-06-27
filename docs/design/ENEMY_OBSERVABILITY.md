@@ -22,6 +22,13 @@ The Godot console prints the absolute summary path at dungeon start:
 
 The summary updates during the run, so it remains useful even if the game is stopped mid-test.
 
+The JSONL file now includes both spawn records and runtime combat records:
+
+- `enemy_spawn`: final composed enemy stats and generated identity
+- `enemy_attack`: attack selected at runtime, phase, state, distance, bullet count, bullet speed
+- `projectile_spawn`: projectile sanity samples for major/generated enemies and suspicious bullets
+- `enemy_suspicion`: throttled runtime anomalies such as an elite staying stationary too long
+
 ## Captured Fields
 
 Each spawn record includes:
@@ -38,13 +45,24 @@ Each spawn record includes:
 - status effect payload
 - search tags for symptom descriptions, such as `green`, `poison`, `summoner`, `adds`, `bomb`, `mine`, `area_denial`, `orbit`, `stationary`, and `bullet_spam`
 
+Runtime records also include:
+
+- stable `enemy_instance_id`
+- attack id and attack source (`direct`, `combo`, etc.)
+- active phase and state
+- current distance to player
+- projectile speed, damage, direction, behavior, lifetime
+- rolling projectile count over the last 3 seconds
+- suspicious tags: `zero_direction`, `zero_speed`, `zero_damage`, `very_fast_projectile`, `projectile_spam`, `stationary_too_long`
+
 ## Audit Workflow
 
 1. Enter the problem dungeon.
 2. Reproduce the bad room or bad elite.
 3. Open the printed summary path.
 4. Look at `Major Spawns` first.
-5. If the problem is not obvious, inspect the JSONL file for exact per-spawn fields.
+5. Check `Recent Suspicious Runtime Events`.
+6. If the problem is not obvious, inspect the JSONL file for exact per-spawn and runtime fields.
 
 From the repo, use:
 
@@ -53,6 +71,8 @@ scripts/tools/find_enemy_logs.sh
 scripts/tools/find_enemy_logs.sh 'green'
 scripts/tools/find_enemy_logs.sh 'summoner'
 scripts/tools/find_enemy_logs.sh 'stationary|mine|orbit'
+scripts/tools/find_enemy_logs.sh 'zero_speed|zero_damage|projectile_spam'
+scripts/tools/find_enemy_logs.sh 'very_fast_projectile|bomb|artillery'
 ```
 
 The helper searches:
@@ -76,3 +96,13 @@ For the demo, generated enemies should not violate these rules:
 - bomb, mine, and area-denial attacks need readable range and cadence
 
 When a bad enemy appears, use its exact generated name and telemetry line as the tuning target.
+
+## Runtime Audit Targets
+
+Use these tags to map player-facing reports to logs:
+
+- “bullets stuck where fired”: search `zero_speed`, `zero_direction`, `stationary`
+- “bombs too fast”: search `very_fast_projectile`, `bomb`, `artillery`
+- “does no damage”: search `zero_damage`
+- “100 bullets/minions”: search `projectile_spam`, `summoner`, `adds`
+- “elite just stands still”: search `stationary_too_long`, `hold_ranged`, `anchor`

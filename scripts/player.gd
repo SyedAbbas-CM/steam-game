@@ -5844,7 +5844,10 @@ func _handle_whip_spin(delta: float) -> void:
 			bullet.direction = dir
 			bullet.is_player_bullet = true
 			bullet.speed = equipment_manager.get_bullet_speed() * 0.6
-			bullet.damage = int(equipment_manager.get_damage() * 1.5)
+			# Whip-Spin extra bullets at 0.5x base (was 1.5x). With base damage
+			# at the Phase 1 floor, the spin is a costly burst window — +50 DPS
+			# during 25 stamina/s drain — rather than free permanent +15 DPS.
+			bullet.damage = int(equipment_manager.get_damage() * 0.5)
 			bullet.pierce_count = 2
 			bullet.lifetime = 0.8
 			bullet.behavior = bullet.BulletBehavior.BOOMERANG

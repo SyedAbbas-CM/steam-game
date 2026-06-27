@@ -5,15 +5,22 @@ extends Node
 
 const LOG_DIR := "user://enemy_observability"
 const MAX_RECENT_EVENTS := 256
+const MAX_RECENT_SUSPICIOUS := 80
+const PROJECTILE_SPAM_WINDOW_MSEC := 3000
+const PROJECTILE_SPAM_THRESHOLD := 45
 
 var _enabled: bool = false
 var _run_id: String = ""
 var _events: Array[Dictionary] = []
+var _recent_suspicious: Array[Dictionary] = []
 var _counts_by_name: Dictionary = {}
 var _counts_by_room: Dictionary = {}
 var _counts_by_archetype: Dictionary = {}
 var _counts_by_affix: Dictionary = {}
 var _counts_by_tag: Dictionary = {}
+var _counts_by_attack: Dictionary = {}
+var _counts_by_suspicion: Dictionary = {}
+var _projectile_times_by_enemy: Dictionary = {}
 var _jsonl_path: String = ""
 var _summary_path: String = ""
 
@@ -36,6 +43,10 @@ func begin_dungeon_run(context: Dictionary = {}) -> void:
 	_counts_by_archetype.clear()
 	_counts_by_affix.clear()
 	_counts_by_tag.clear()
+	_counts_by_attack.clear()
+	_counts_by_suspicion.clear()
+	_projectile_times_by_enemy.clear()
+	_recent_suspicious.clear()
 	_jsonl_path = "%s/%s_spawns.jsonl" % [LOG_DIR, _run_id]
 	_summary_path = "%s/%s_summary.txt" % [LOG_DIR, _run_id]
 	print("[EnemyObs] logging to %s" % ProjectSettings.globalize_path(_summary_path))
@@ -96,6 +107,92 @@ func record_enemy_spawn(enemy: Node, definition: Resource, context: Dictionary =
 			str(event.get("search_tags", [])),
 		])
 
+func record_enemy_attack(enemy: Node, definition: Resource, attack_type: int, context: Dictionary = {}) -> void:
+	if not _enabled or definition == null:
+		return
+	if _run_id == "":
+		begin_dungeon_run(context)
+	var attack_name := _attack_name(attack_type)
+	_count(_counts_by_attack, attack_name)
+	var event := _build_runtime_event("enemy_attack", enemy, definition, context)
+	event["attack_type"] = attack_name
+	event["attack_id"] = int(context.get("attack_id", 0))
+	event["phase"] = int(context.get("phase", 1))
+	event["state"] = String(context.get("state", ""))
+	event["distance_to_player"] = float(context.get("distance_to_player", -1.0))
+	event["cooldown"] = float(context.get("cooldown", 0.0))
+	event["bullet_count"] = int(context.get("bullet_count", 0))
+	event["bullet_speed"] = float(context.get("bullet_speed", 0.0))
+	event["attack_pool"] = context.get("attack_pool", [])
+	event["source"] = String(context.get("source", "direct"))
+	event["search_tags"] = _runtime_tags(event)
+	_append_jsonl(event)
+
+func record_projectile_spawn(enemy: Node, definition: Resource, projectile: Node, context: Dictionary = {}) -> void:
+	if not _enabled or definition == null:
+		return
+	if _run_id == "":
+		begin_dungeon_run(context)
+	var now := Time.get_ticks_msec()
+	var enemy_key := str(enemy.get_instance_id() if enemy else 0)
+	var recent: Array = _projectile_times_by_enemy.get(enemy_key, [])
+	recent.append(now)
+	var keep: Array = []
+	for t in recent:
+		if now - int(t) <= PROJECTILE_SPAM_WINDOW_MSEC:
+			keep.append(t)
+	_projectile_times_by_enemy[enemy_key] = keep
+
+	var speed := float(context.get("speed", projectile.get("speed") if projectile else 0.0))
+	var damage := int(context.get("damage", projectile.get("damage") if projectile else 0))
+	var dir: Vector2 = context.get("direction", projectile.get("direction") if projectile else Vector2.ZERO)
+	var behavior := int(context.get("behavior", projectile.get("behavior") if projectile else 0))
+	var suspicion: Array[String] = []
+	if dir.length_squared() <= 0.0001 and not bool(context.get("stationary_ok", false)):
+		suspicion.append("zero_direction")
+	if speed <= 0.01 and not bool(context.get("stationary_ok", false)):
+		suspicion.append("zero_speed")
+	if damage <= 0 and not bool(context.get("zero_damage_ok", false)):
+		suspicion.append("zero_damage")
+	if speed >= 220.0:
+		suspicion.append("very_fast_projectile")
+	if keep.size() >= PROJECTILE_SPAM_THRESHOLD:
+		suspicion.append("projectile_spam")
+
+	var should_log := not suspicion.is_empty() or bool(context.get("major_enemy", false)) or bool(context.get("force_log", false))
+	if not should_log:
+		return
+	var event := _build_runtime_event("projectile_spawn", enemy, definition, context)
+	event["attack_type"] = String(context.get("attack_type", ""))
+	event["attack_id"] = int(context.get("attack_id", 0))
+	event["speed"] = speed
+	event["damage"] = damage
+	event["direction"] = [dir.x, dir.y]
+	event["behavior"] = behavior
+	event["lifetime"] = float(context.get("lifetime", projectile.get("lifetime") if projectile else 0.0))
+	event["recent_projectiles_3s"] = keep.size()
+	event["suspicion"] = suspicion
+	event["search_tags"] = _runtime_tags(event)
+	_append_jsonl(event)
+	if not suspicion.is_empty():
+		_record_suspicion_event(event, suspicion)
+
+func record_enemy_suspicion(enemy: Node, definition: Resource, reason: String, context: Dictionary = {}) -> void:
+	if not _enabled or definition == null or reason == "":
+		return
+	if _run_id == "":
+		begin_dungeon_run(context)
+	var event := _build_runtime_event("enemy_suspicion", enemy, definition, context)
+	event["reason"] = reason
+	event["state"] = String(context.get("state", ""))
+	event["duration"] = float(context.get("duration", 0.0))
+	event["velocity"] = float(context.get("velocity", 0.0))
+	event["distance_to_player"] = float(context.get("distance_to_player", -1.0))
+	event["attack_type"] = String(context.get("attack_type", ""))
+	event["search_tags"] = _runtime_tags(event)
+	_append_jsonl(event)
+	_record_suspicion_event(event, [reason])
+
 func write_summary() -> void:
 	if not _enabled or _summary_path == "":
 		return
@@ -119,6 +216,12 @@ func write_summary() -> void:
 	lines.append("By Search Tag")
 	lines.append_array(_format_counts(_counts_by_tag))
 	lines.append("")
+	lines.append("By Runtime Attack")
+	lines.append_array(_format_counts(_counts_by_attack))
+	lines.append("")
+	lines.append("By Suspicion")
+	lines.append_array(_format_counts(_counts_by_suspicion))
+	lines.append("")
 	lines.append("Major Spawns")
 	for event in _events:
 		if bool(event.get("is_major", false)):
@@ -134,6 +237,20 @@ func write_summary() -> void:
 				event.get("summon_phase_count", 0),
 				str(event.get("search_tags", [])),
 			])
+	lines.append("")
+	lines.append("Recent Suspicious Runtime Events")
+	for event in _recent_suspicious:
+		lines.append("- %s %s attack=%s reason=%s speed=%s dmg=%s recent3s=%s dist=%s tags=%s" % [
+			event.get("event", "?"),
+			event.get("enemy_name", "Unknown"),
+			event.get("attack_type", ""),
+			str(event.get("suspicion", event.get("reason", ""))),
+			event.get("speed", ""),
+			event.get("damage", ""),
+			event.get("recent_projectiles_3s", ""),
+			event.get("distance_to_player", ""),
+			str(event.get("search_tags", [])),
+		])
 
 	var file := FileAccess.open(_summary_path, FileAccess.WRITE)
 	if file:
@@ -247,6 +364,47 @@ func _append_jsonl(payload: Dictionary) -> void:
 	file.store_line(JSON.stringify(payload))
 	file.close()
 
+func _build_runtime_event(event_name: String, enemy: Node, definition: Resource, context: Dictionary) -> Dictionary:
+	var affixes: Array[String] = []
+	if definition.has_meta("generated_affix_ids"):
+		for affix in definition.get_meta("generated_affix_ids"):
+			affixes.append(String(affix))
+	var attack_pool: Array[String] = []
+	if definition.has_meta("generated_attack_pool"):
+		for attack_id in definition.get_meta("generated_attack_pool"):
+			attack_pool.append(_attack_name(int(attack_id)))
+	return {
+		"event": event_name,
+		"run_id": _run_id,
+		"time_msec": Time.get_ticks_msec(),
+		"enemy_instance_id": enemy.get_instance_id() if enemy else 0,
+		"enemy_name": String(definition.get("enemy_name")),
+		"resource_path": String(definition.resource_path),
+		"size_class": _size_name(int(definition.get("size_class"))),
+		"archetype": String(definition.get_meta("generated_archetype_id")) if definition.has_meta("generated_archetype_id") else "",
+		"generated_tier": String(definition.get_meta("generated_tier")) if definition.has_meta("generated_tier") else "",
+		"affixes": affixes,
+		"max_hp": int(definition.get("max_hp")),
+		"attack_damage": int(definition.get("attack_damage")),
+		"base_attack": _attack_name(int(definition.get("attack_type"))),
+		"phase_2_attack": _attack_name(int(definition.get("phase_2_attack"))),
+		"phase_3_attack": _attack_name(int(definition.get("phase_3_attack"))),
+		"movement": _movement_summary(definition.get("movement_pattern")),
+		"generated_attack_pool": attack_pool,
+		"room_grid": String(context.get("room_grid", "")),
+		"room_type": String(context.get("room_type", "")),
+		"floor": int(context.get("floor", 0)),
+	}
+
+func _record_suspicion_event(event: Dictionary, reasons: Array) -> void:
+	for reason in reasons:
+		_count(_counts_by_suspicion, String(reason))
+		_count(_counts_by_tag, String(reason))
+	_recent_suspicious.append(event.duplicate(true))
+	while _recent_suspicious.size() > MAX_RECENT_SUSPICIOUS:
+		_recent_suspicious.pop_front()
+	write_summary()
+
 func _is_major_spawn(definition: Resource, context: Dictionary) -> bool:
 	var room_type := String(context.get("room_type", ""))
 	return room_type in ["ELITE", "SUPER_ELITE", "BOSS"] \
@@ -334,6 +492,40 @@ func _build_search_tags(event: Dictionary) -> Array[String]:
 		_add_tag(tags, "bullet_spam")
 	if float(event.get("bomb_aoe_radius", 0.0)) > 20.0:
 		_add_tag(tags, "large_aoe")
+	return tags
+
+func _runtime_tags(event: Dictionary) -> Array[String]:
+	var tags: Array[String] = []
+	_add_tag(tags, String(event.get("event", "")).to_lower())
+	_add_tag(tags, String(event.get("size_class", "")).to_lower())
+	_add_tag(tags, String(event.get("generated_tier", "")).to_lower())
+	_add_tag(tags, String(event.get("archetype", "")).to_lower())
+	_add_tag(tags, String(event.get("attack_type", "")).to_lower())
+	_add_tag(tags, String(event.get("base_attack", "")).to_lower())
+	for affix in event.get("affixes", []):
+		_add_tag(tags, String(affix).to_lower())
+	for suspicion in event.get("suspicion", []):
+		_add_tag(tags, String(suspicion).to_lower())
+	if event.has("reason"):
+		_add_tag(tags, String(event.get("reason", "")).to_lower())
+	var attack := String(event.get("attack_type", "")).to_lower()
+	if attack.contains("bomb") or attack in ["artillery", "mortar", "meteor_shower", "fire_rain"]:
+		_add_tag(tags, "bomb")
+		_add_tag(tags, "artillery")
+	if attack.contains("mine"):
+		_add_tag(tags, "mine")
+		_add_tag(tags, "area_denial")
+	if attack.contains("summon"):
+		_add_tag(tags, "summoner")
+		_add_tag(tags, "adds")
+	var movement: Dictionary = event.get("movement", {})
+	var movement_path := String(movement.get("path", "")).to_lower()
+	if movement_path != "":
+		_add_tag(tags, movement_path.get_file().get_basename())
+		if movement_path.contains("hold") or movement_path.contains("anchor"):
+			_add_tag(tags, "stationary")
+		if movement_path.contains("orbit"):
+			_add_tag(tags, "orbit")
 	return tags
 
 func _add_tag(tags: Array[String], tag: String) -> void:
