@@ -8,6 +8,7 @@ const MAX_RECENT_EVENTS := 256
 const MAX_RECENT_SUSPICIOUS := 80
 const PROJECTILE_SPAM_WINDOW_MSEC := 3000
 const PROJECTILE_SPAM_THRESHOLD := 45
+const MAJOR_PROJECTILE_SAMPLE_RATE := 12
 
 var _enabled: bool = false
 var _run_id: String = ""
@@ -21,6 +22,7 @@ var _counts_by_tag: Dictionary = {}
 var _counts_by_attack: Dictionary = {}
 var _counts_by_suspicion: Dictionary = {}
 var _projectile_times_by_enemy: Dictionary = {}
+var _projectile_counts_by_attack: Dictionary = {}
 var _jsonl_path: String = ""
 var _summary_path: String = ""
 
@@ -36,7 +38,7 @@ func is_enabled() -> bool:
 func begin_dungeon_run(context: Dictionary = {}) -> void:
 	if not _enabled:
 		return
-	_run_id = "%s_%d" % [String(context.get("dungeon", "dungeon")).replace(" ", "_"), Time.get_unix_time_from_system()]
+	_run_id = "%s_%d" % [str(context.get("dungeon", "dungeon")).replace(" ", "_"), Time.get_unix_time_from_system()]
 	_events.clear()
 	_counts_by_name.clear()
 	_counts_by_room.clear()
@@ -46,6 +48,7 @@ func begin_dungeon_run(context: Dictionary = {}) -> void:
 	_counts_by_attack.clear()
 	_counts_by_suspicion.clear()
 	_projectile_times_by_enemy.clear()
+	_projectile_counts_by_attack.clear()
 	_recent_suspicious.clear()
 	_jsonl_path = "%s/%s_spawns.jsonl" % [LOG_DIR, _run_id]
 	_summary_path = "%s/%s_summary.txt" % [LOG_DIR, _run_id]
@@ -79,15 +82,15 @@ func record_enemy_spawn(enemy: Node, definition: Resource, context: Dictionary =
 	if _events.size() > MAX_RECENT_EVENTS:
 		_events.pop_front()
 
-	_count(_counts_by_name, String(event.get("enemy_name", "Unknown")))
-	_count(_counts_by_room, String(event.get("room_type", "unknown")))
-	var archetype := String(event.get("archetype", ""))
+	_count(_counts_by_name, str(event.get("enemy_name", "Unknown")))
+	_count(_counts_by_room, str(event.get("room_type", "unknown")))
+	var archetype := str(event.get("archetype", ""))
 	if archetype != "":
 		_count(_counts_by_archetype, archetype)
 	for affix in event.get("affixes", []):
-		_count(_counts_by_affix, String(affix))
+		_count(_counts_by_affix, str(affix))
 	for tag in event.get("search_tags", []):
-		_count(_counts_by_tag, String(tag))
+		_count(_counts_by_tag, str(tag))
 
 	_append_jsonl(event)
 	if bool(event.get("is_major", false)) or _events.size() % 10 == 0:
@@ -118,13 +121,13 @@ func record_enemy_attack(enemy: Node, definition: Resource, attack_type: int, co
 	event["attack_type"] = attack_name
 	event["attack_id"] = int(context.get("attack_id", 0))
 	event["phase"] = int(context.get("phase", 1))
-	event["state"] = String(context.get("state", ""))
+	event["state"] = str(context.get("state", ""))
 	event["distance_to_player"] = float(context.get("distance_to_player", -1.0))
 	event["cooldown"] = float(context.get("cooldown", 0.0))
 	event["bullet_count"] = int(context.get("bullet_count", 0))
 	event["bullet_speed"] = float(context.get("bullet_speed", 0.0))
 	event["attack_pool"] = context.get("attack_pool", [])
-	event["source"] = String(context.get("source", "direct"))
+	event["source"] = str(context.get("source", "direct"))
 	event["search_tags"] = _runtime_tags(event)
 	_append_jsonl(event)
 
@@ -135,6 +138,9 @@ func record_projectile_spawn(enemy: Node, definition: Resource, projectile: Node
 		begin_dungeon_run(context)
 	var now := Time.get_ticks_msec()
 	var enemy_key := str(enemy.get_instance_id() if enemy else 0)
+	var attack_key := "%s:%s" % [enemy_key, str(context.get("attack_id", 0))]
+	var attack_projectile_count := int(_projectile_counts_by_attack.get(attack_key, 0)) + 1
+	_projectile_counts_by_attack[attack_key] = attack_projectile_count
 	var recent: Array = _projectile_times_by_enemy.get(enemy_key, [])
 	recent.append(now)
 	var keep: Array = []
@@ -159,11 +165,14 @@ func record_projectile_spawn(enemy: Node, definition: Resource, projectile: Node
 	if keep.size() >= PROJECTILE_SPAM_THRESHOLD:
 		suspicion.append("projectile_spam")
 
-	var should_log := not suspicion.is_empty() or bool(context.get("major_enemy", false)) or bool(context.get("force_log", false))
+	var major_sample := bool(context.get("major_enemy", false)) and (
+		attack_projectile_count == 1 or attack_projectile_count % MAJOR_PROJECTILE_SAMPLE_RATE == 0
+	)
+	var should_log := not suspicion.is_empty() or major_sample or bool(context.get("force_log", false))
 	if not should_log:
 		return
 	var event := _build_runtime_event("projectile_spawn", enemy, definition, context)
-	event["attack_type"] = String(context.get("attack_type", ""))
+	event["attack_type"] = str(context.get("attack_type", ""))
 	event["attack_id"] = int(context.get("attack_id", 0))
 	event["speed"] = speed
 	event["damage"] = damage
@@ -171,6 +180,8 @@ func record_projectile_spawn(enemy: Node, definition: Resource, projectile: Node
 	event["behavior"] = behavior
 	event["lifetime"] = float(context.get("lifetime", projectile.get("lifetime") if projectile else 0.0))
 	event["recent_projectiles_3s"] = keep.size()
+	event["attack_projectile_count"] = attack_projectile_count
+	event["sampled"] = major_sample and suspicion.is_empty()
 	event["suspicion"] = suspicion
 	event["search_tags"] = _runtime_tags(event)
 	_append_jsonl(event)
@@ -184,11 +195,11 @@ func record_enemy_suspicion(enemy: Node, definition: Resource, reason: String, c
 		begin_dungeon_run(context)
 	var event := _build_runtime_event("enemy_suspicion", enemy, definition, context)
 	event["reason"] = reason
-	event["state"] = String(context.get("state", ""))
+	event["state"] = str(context.get("state", ""))
 	event["duration"] = float(context.get("duration", 0.0))
 	event["velocity"] = float(context.get("velocity", 0.0))
 	event["distance_to_player"] = float(context.get("distance_to_player", -1.0))
-	event["attack_type"] = String(context.get("attack_type", ""))
+	event["attack_type"] = str(context.get("attack_type", ""))
 	event["search_tags"] = _runtime_tags(event)
 	_append_jsonl(event)
 	_record_suspicion_event(event, [reason])
@@ -293,7 +304,7 @@ func _build_spawn_event(enemy: Node, definition: Resource, context: Dictionary) 
 	var affixes: Array[String] = []
 	if definition.has_meta("generated_affix_ids"):
 		for affix in definition.get_meta("generated_affix_ids"):
-			affixes.append(String(affix))
+			affixes.append(str(affix))
 
 	var movement := _movement_summary(definition.get("movement_pattern"))
 	var summon_def = definition.get("summon_definition")
@@ -302,14 +313,14 @@ func _build_spawn_event(enemy: Node, definition: Resource, context: Dictionary) 
 		"run_id": _run_id,
 		"time_msec": Time.get_ticks_msec(),
 		"enemy_instance_id": enemy.get_instance_id() if enemy else 0,
-		"enemy_name": String(definition.get("enemy_name")),
-		"resource_path": String(definition.resource_path),
+		"enemy_name": str(definition.get("enemy_name")),
+		"resource_path": str(definition.resource_path),
 		"floor": int(context.get("floor", 0)),
 		"room_grid": str(context.get("room_grid", Vector2i.ZERO)),
-		"room_type": String(context.get("room_type", "unknown")),
-		"encounter_type": String(context.get("encounter_type", "unknown")),
-		"spawn_reason": String(context.get("spawn_reason", "room_spawn")),
-		"source_pool": String(context.get("source_pool", "")),
+		"room_type": str(context.get("room_type", "unknown")),
+		"encounter_type": str(context.get("encounter_type", "unknown")),
+		"spawn_reason": str(context.get("spawn_reason", "room_spawn")),
+		"source_pool": str(context.get("source_pool", "")),
 		"recommended_level": int(context.get("recommended_level", 0)),
 		"player_level": int(context.get("player_level", 1)),
 		"overlevel": int(context.get("overlevel", 0)),
@@ -339,13 +350,14 @@ func _build_spawn_event(enemy: Node, definition: Resource, context: Dictionary) 
 		"summon_on_phase_change": bool(definition.get("summon_on_phase_change")),
 		"summon_phase_count": int(definition.get("summon_phase_count")),
 		"summon_count": int(definition.get("summon_count")),
-		"summon_definition": String(summon_def.enemy_name) if summon_def else "",
-		"archetype": String(definition.get_meta("generated_archetype_id")) if definition.has_meta("generated_archetype_id") else "",
-		"generated_tier": String(definition.get_meta("generated_tier")) if definition.has_meta("generated_tier") else "",
+		"summon_definition": str(summon_def.enemy_name) if summon_def else "",
+		"archetype": str(definition.get_meta("generated_archetype_id")) if definition.has_meta("generated_archetype_id") else "",
+		"generated_tier": str(definition.get_meta("generated_tier")) if definition.has_meta("generated_tier") else "",
 		"affixes": affixes,
 		"attack_pool": attack_pool,
+		"early_balance_caps": definition.get_meta("early_balance_caps") if definition.has_meta("early_balance_caps") else {},
 		"melee_secondary": _attack_name(int(definition.get_meta("melee_secondary"))) if definition.has_meta("melee_secondary") else "",
-		"status_effect": String(definition.get("bullet_status_effect")),
+		"status_effect": str(definition.get("bullet_status_effect")),
 		"status_duration": float(definition.get("bullet_status_duration")),
 		"is_major": _is_major_spawn(definition, context),
 	}
@@ -368,7 +380,7 @@ func _build_runtime_event(event_name: String, enemy: Node, definition: Resource,
 	var affixes: Array[String] = []
 	if definition.has_meta("generated_affix_ids"):
 		for affix in definition.get_meta("generated_affix_ids"):
-			affixes.append(String(affix))
+			affixes.append(str(affix))
 	var attack_pool: Array[String] = []
 	if definition.has_meta("generated_attack_pool"):
 		for attack_id in definition.get_meta("generated_attack_pool"):
@@ -378,11 +390,11 @@ func _build_runtime_event(event_name: String, enemy: Node, definition: Resource,
 		"run_id": _run_id,
 		"time_msec": Time.get_ticks_msec(),
 		"enemy_instance_id": enemy.get_instance_id() if enemy else 0,
-		"enemy_name": String(definition.get("enemy_name")),
-		"resource_path": String(definition.resource_path),
+		"enemy_name": str(definition.get("enemy_name")),
+		"resource_path": str(definition.resource_path),
 		"size_class": _size_name(int(definition.get("size_class"))),
-		"archetype": String(definition.get_meta("generated_archetype_id")) if definition.has_meta("generated_archetype_id") else "",
-		"generated_tier": String(definition.get_meta("generated_tier")) if definition.has_meta("generated_tier") else "",
+		"archetype": str(definition.get_meta("generated_archetype_id")) if definition.has_meta("generated_archetype_id") else "",
+		"generated_tier": str(definition.get_meta("generated_tier")) if definition.has_meta("generated_tier") else "",
 		"affixes": affixes,
 		"max_hp": int(definition.get("max_hp")),
 		"attack_damage": int(definition.get("attack_damage")),
@@ -391,22 +403,22 @@ func _build_runtime_event(event_name: String, enemy: Node, definition: Resource,
 		"phase_3_attack": _attack_name(int(definition.get("phase_3_attack"))),
 		"movement": _movement_summary(definition.get("movement_pattern")),
 		"generated_attack_pool": attack_pool,
-		"room_grid": String(context.get("room_grid", "")),
-		"room_type": String(context.get("room_type", "")),
+		"room_grid": str(context.get("room_grid", "")),
+		"room_type": str(context.get("room_type", "")),
 		"floor": int(context.get("floor", 0)),
 	}
 
 func _record_suspicion_event(event: Dictionary, reasons: Array) -> void:
 	for reason in reasons:
-		_count(_counts_by_suspicion, String(reason))
-		_count(_counts_by_tag, String(reason))
+		_count(_counts_by_suspicion, str(reason))
+		_count(_counts_by_tag, str(reason))
 	_recent_suspicious.append(event.duplicate(true))
 	while _recent_suspicious.size() > MAX_RECENT_SUSPICIOUS:
 		_recent_suspicious.pop_front()
 	write_summary()
 
 func _is_major_spawn(definition: Resource, context: Dictionary) -> bool:
-	var room_type := String(context.get("room_type", ""))
+	var room_type := str(context.get("room_type", ""))
 	return room_type in ["ELITE", "SUPER_ELITE", "BOSS"] \
 		or int(definition.get("size_class")) >= 1 \
 		or bool(definition.get("summon_on_phase_change")) \
@@ -420,27 +432,27 @@ func _format_counts(dict: Dictionary) -> Array[String]:
 	keys.sort_custom(func(a, b): return int(dict[a]) > int(dict[b]))
 	var out: Array[String] = []
 	for key in keys:
-		out.append("- %s: %d" % [String(key), int(dict[key])])
+		out.append("- %s: %d" % [str(key), int(dict[key])])
 	return out
 
 func _build_search_tags(event: Dictionary) -> Array[String]:
 	var tags: Array[String] = []
-	_add_tag(tags, String(event.get("room_type", "")).to_lower())
-	_add_tag(tags, String(event.get("spawn_reason", "")).to_lower())
-	_add_tag(tags, String(event.get("size_class", "")).to_lower())
-	_add_tag(tags, String(event.get("generated_tier", "")).to_lower())
-	_add_tag(tags, String(event.get("archetype", "")).to_lower())
+	_add_tag(tags, str(event.get("room_type", "")).to_lower())
+	_add_tag(tags, str(event.get("spawn_reason", "")).to_lower())
+	_add_tag(tags, str(event.get("size_class", "")).to_lower())
+	_add_tag(tags, str(event.get("generated_tier", "")).to_lower())
+	_add_tag(tags, str(event.get("archetype", "")).to_lower())
 	for affix in event.get("affixes", []):
-		_add_tag(tags, String(affix).to_lower())
+		_add_tag(tags, str(affix).to_lower())
 
 	var all_attacks: Array[String] = [
-		String(event.get("attack_type", "")),
-		String(event.get("phase_2_attack", "")),
-		String(event.get("phase_3_attack", "")),
-		String(event.get("melee_secondary", "")),
+		str(event.get("attack_type", "")),
+		str(event.get("phase_2_attack", "")),
+		str(event.get("phase_3_attack", "")),
+		str(event.get("melee_secondary", "")),
 	]
 	for attack in event.get("attack_pool", []):
-		all_attacks.append(String(attack))
+		all_attacks.append(str(attack))
 	var uses_summon_attack := false
 	for attack in all_attacks:
 		var lower: String = attack.to_lower()
@@ -463,7 +475,7 @@ func _build_search_tags(event: Dictionary) -> Array[String]:
 			_add_tag(tags, "wall")
 			_add_tag(tags, "area_denial")
 
-	var status: String = String(event.get("status_effect", "")).to_lower()
+	var status: String = str(event.get("status_effect", "")).to_lower()
 	if status != "":
 		_add_tag(tags, status)
 	if status.contains("poison"):
@@ -471,7 +483,7 @@ func _build_search_tags(event: Dictionary) -> Array[String]:
 		_add_tag(tags, "poison")
 
 	var movement: Dictionary = event.get("movement", {})
-	var movement_path := String(movement.get("path", "")).to_lower()
+	var movement_path := str(movement.get("path", "")).to_lower()
 	if movement_path != "":
 		_add_tag(tags, movement_path.get_file().get_basename())
 		if movement_path.contains("orbit"):
@@ -486,7 +498,7 @@ func _build_search_tags(event: Dictionary) -> Array[String]:
 	if phase_summons or direct_summons:
 		_add_tag(tags, "summoner")
 		_add_tag(tags, "adds")
-	if String(event.get("summon_definition", "")) != "" and (phase_summons or direct_summons):
+	if str(event.get("summon_definition", "")) != "" and (phase_summons or direct_summons):
 		_add_tag(tags, "minions")
 	if int(event.get("bullet_count", 0)) >= 5 or int(event.get("phase_2_bullet_count", 0)) >= 8 or int(event.get("phase_3_bullet_count", 0)) >= 8:
 		_add_tag(tags, "bullet_spam")
@@ -496,19 +508,19 @@ func _build_search_tags(event: Dictionary) -> Array[String]:
 
 func _runtime_tags(event: Dictionary) -> Array[String]:
 	var tags: Array[String] = []
-	_add_tag(tags, String(event.get("event", "")).to_lower())
-	_add_tag(tags, String(event.get("size_class", "")).to_lower())
-	_add_tag(tags, String(event.get("generated_tier", "")).to_lower())
-	_add_tag(tags, String(event.get("archetype", "")).to_lower())
-	_add_tag(tags, String(event.get("attack_type", "")).to_lower())
-	_add_tag(tags, String(event.get("base_attack", "")).to_lower())
+	_add_tag(tags, str(event.get("event", "")).to_lower())
+	_add_tag(tags, str(event.get("size_class", "")).to_lower())
+	_add_tag(tags, str(event.get("generated_tier", "")).to_lower())
+	_add_tag(tags, str(event.get("archetype", "")).to_lower())
+	_add_tag(tags, str(event.get("attack_type", "")).to_lower())
+	_add_tag(tags, str(event.get("base_attack", "")).to_lower())
 	for affix in event.get("affixes", []):
-		_add_tag(tags, String(affix).to_lower())
+		_add_tag(tags, str(affix).to_lower())
 	for suspicion in event.get("suspicion", []):
-		_add_tag(tags, String(suspicion).to_lower())
+		_add_tag(tags, str(suspicion).to_lower())
 	if event.has("reason"):
-		_add_tag(tags, String(event.get("reason", "")).to_lower())
-	var attack := String(event.get("attack_type", "")).to_lower()
+		_add_tag(tags, str(event.get("reason", "")).to_lower())
+	var attack := str(event.get("attack_type", "")).to_lower()
 	if attack.contains("bomb") or attack in ["artillery", "mortar", "meteor_shower", "fire_rain"]:
 		_add_tag(tags, "bomb")
 		_add_tag(tags, "artillery")
@@ -519,7 +531,7 @@ func _runtime_tags(event: Dictionary) -> Array[String]:
 		_add_tag(tags, "summoner")
 		_add_tag(tags, "adds")
 	var movement: Dictionary = event.get("movement", {})
-	var movement_path := String(movement.get("path", "")).to_lower()
+	var movement_path := str(movement.get("path", "")).to_lower()
 	if movement_path != "":
 		_add_tag(tags, movement_path.get_file().get_basename())
 		if movement_path.contains("hold") or movement_path.contains("anchor"):
@@ -538,20 +550,20 @@ func _add_tag(tags: Array[String], tag: String) -> void:
 func _attack_name(value: int) -> String:
 	for key in EnemyDefinition.AttackType.keys():
 		if int(EnemyDefinition.AttackType[key]) == value:
-			return String(key)
+			return str(key)
 	return str(value)
 
 func _size_name(value: int) -> String:
 	for key in EnemyDefinition.SizeClass.keys():
 		if int(EnemyDefinition.SizeClass[key]) == value:
-			return String(key)
+			return str(key)
 	return str(value)
 
 func _movement_summary(movement) -> Dictionary:
 	if movement == null:
 		return {}
 	return {
-		"path": String(movement.resource_path),
+		"path": str(movement.resource_path),
 		"move_type": int(movement.get("move_type")),
 		"approach_weight": float(movement.get("approach_weight")),
 		"hold_weight": float(movement.get("hold_weight")),

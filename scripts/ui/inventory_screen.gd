@@ -2597,13 +2597,13 @@ func _refresh_blueprint_list() -> void:
 	for bp_id in discovered:
 		if seen_blueprints.has(bp_id):
 			continue
-		var bp_def = gm.get_blueprint_definition(String(bp_id))
+		var bp_def = gm.get_blueprint_definition(str(bp_id))
 		var row = HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
 		_salvage_bp_list.add_child(row)
 
 		var name_lbl = Label.new()
-		name_lbl.text = bp_def.blueprint_name if bp_def else String(bp_id)
+		name_lbl.text = bp_def.blueprint_name if bp_def else str(bp_id)
 		name_lbl.add_theme_font_size_override("font_size", 26)
 		name_lbl.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
 		name_lbl.custom_minimum_size = Vector2(180, 0)

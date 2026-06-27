@@ -1162,7 +1162,7 @@ func _on_class_meter_changed(value: float, max_value: float) -> void:
 		_class_meter_label.text = "%s  %d%%" % [disp_name, int(ratio * 100.0)]
 
 func _update_class_meter_label_for_class(class_id: String) -> void:
-	_meter_name = String(_METER_NAMES.get(class_id, "METER"))
+	_meter_name = str(_METER_NAMES.get(class_id, "METER"))
 	var col: Color = _METER_COLORS.get(class_id, Color(0.7, 0.7, 0.7))
 	if _class_meter_label:
 		_class_meter_label.text = _meter_name + "  0%"

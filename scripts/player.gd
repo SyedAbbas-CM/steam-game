@@ -1959,7 +1959,7 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 				nearest_d = d
 				nearest_e = e
 		if nearest_e:
-			_last_damage_source_name = String(nearest_e.get("definition").enemy_name) if nearest_e.get("definition") != null else String(nearest_e.name)
+			_last_damage_source_name = str(nearest_e.get("definition").enemy_name) if nearest_e.get("definition") != null else str(nearest_e.name)
 			_last_damage_attack_name = "Contact" if is_contact else "Projectile"
 		else:
 			_last_damage_source_name = "the dark"
@@ -5471,7 +5471,7 @@ func _ability_gravity_well() -> void:
 				continue
 			var d = e.global_position.distance_to(well_pos)
 			if d < well_radius and d > 4.0:
-				var pull_dir = (well_pos - e.global_position).normalized()
+				var pull_dir: Vector2 = (well_pos - e.global_position).normalized()
 				var strength = (1.0 - d / well_radius) * 80.0 * scale_mult
 				e.velocity += pull_dir * strength
 				if e.has_method("apply_status"):
@@ -6286,7 +6286,7 @@ func _whip_lasso_pull() -> void:
 			nearest = e
 			nearest_dist = dist
 	if nearest:
-		var pull_dir = (global_position - nearest.global_position).normalized()
+		var pull_dir: Vector2 = (global_position - nearest.global_position).normalized()
 		var target_pos = global_position - pull_dir * 8.0 * scale_m
 		nearest.global_position = target_pos
 		nearest.velocity = Vector2.ZERO

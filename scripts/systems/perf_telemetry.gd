@@ -465,7 +465,7 @@ func _build_tracked_script_counts() -> Dictionary:
 	_collect_script_counts(root, raw_counts)
 	var tracked := {}
 	for key in raw_counts.keys():
-		var path := String(key)
+		var path := str(key)
 		if path.begins_with("res://scripts/dungeon/traps/") \
 		or path == "res://scripts/dungeon/trap_tile.gd" \
 		or path == "res://scripts/enemy.gd" \

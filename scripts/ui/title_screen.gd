@@ -511,7 +511,7 @@ func _show_host_coop_dialog(slot: int) -> void:
 		var net: Dictionary = coop.get_host_network_summary()
 		var locals: PackedStringArray = net.get("local_addresses", PackedStringArray())
 		var local_text: String = ", ".join(locals) if not locals.is_empty() else "none found"
-		var external_text: String = String(net.get("external_address", ""))
+		var external_text: String = str(net.get("external_address", ""))
 		var upnp_ok: bool = bool(net.get("upnp_ok", false))
 		var lines: Array[String] = []
 		lines.append("LAN IPs: %s" % local_text)

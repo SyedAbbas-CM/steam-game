@@ -98,6 +98,11 @@ const _AREA_DENIAL_ATTACKS := {
 	EnemyDefinition.AttackType.ORBIT_LAUNCH: true,
 }
 
+const _SUMMON_ATTACKS := {
+	EnemyDefinition.AttackType.SUMMON: true,
+	EnemyDefinition.AttackType.SUMMON_WALL: true,
+}
+
 static var _archetypes: Array = []
 static var _affixes: Array = []
 static var _loaded: bool = false
@@ -145,7 +150,7 @@ static func _load_resources_in_dir(dir_path: String) -> Array:
 				out.append(res)
 		name = dir.get_next()
 	dir.list_dir_end()
-	out.sort_custom(func(a, b): return String(a.resource_path) < String(b.resource_path))
+	out.sort_custom(func(a, b): return str(a.resource_path) < str(b.resource_path))
 	return out
 
 static func _classify_role(def: EnemyDefinition) -> String:
@@ -157,22 +162,26 @@ static func _classify_role(def: EnemyDefinition) -> String:
 
 static func _pick_archetype(def: EnemyDefinition, role: String, tier: int):
 	var candidates: Array = []
-	var lvl := maxi(def.level if def else 1, 1)
+	var early_context := _is_early_context(def, tier)
 	for archetype in _archetypes:
 		if archetype == null:
 			continue
-		if lvl <= 4 and tier <= Tier.ELITE:
+		if early_context:
 			if archetype.summon_on_phase_change:
 				continue
-			if archetype.forced_attack_type in _SUPPORT_ATTACKS:
+			if not _attack_allowed_for_context(archetype.forced_attack_type, def, tier):
 				continue
 			var archetype_pool: Array = archetype.attack_pool
-			var has_support_attack := false
+			var has_blocked_attack := false
 			for attack_type in archetype_pool:
-				if _SUPPORT_ATTACKS.has(attack_type) or _AREA_DENIAL_ATTACKS.has(attack_type):
-					has_support_attack = true
+				if not _attack_allowed_for_context(attack_type, def, tier):
+					has_blocked_attack = true
 					break
-			if has_support_attack:
+			if not _attack_allowed_for_context(archetype.phase_2_attack, def, tier):
+				has_blocked_attack = true
+			if not _attack_allowed_for_context(archetype.phase_3_attack, def, tier):
+				has_blocked_attack = true
+			if has_blocked_attack:
 				continue
 		if _role_allowed(role, archetype.allowed_roles):
 			candidates.append(archetype)
@@ -189,20 +198,25 @@ static func _pick_affixes(def: EnemyDefinition, role: String, tier: int) -> Arra
 	var projectile_capable := not _MELEE_ATTACKS.has(def.attack_type) and def.attack_type != EnemyDefinition.AttackType.SUMMON
 	var melee_capable := _MELEE_ATTACKS.has(def.attack_type)
 	var candidates: Array = []
+	var early_context := _is_early_context(def, tier)
 	for affix in _affixes:
 		if affix == null:
 			continue
 		if affix.min_tier > tier:
 			continue
-		if def.level <= 4 and tier <= Tier.ELITE:
+		if early_context:
 			if affix.affix_id in ["toxic", "phantom", "bulwark"]:
 				continue
-			var has_area_denial := false
+			var has_blocked_attack := false
 			for attack_type in affix.add_attack_types:
-				if _AREA_DENIAL_ATTACKS.has(attack_type) or _SUPPORT_ATTACKS.has(attack_type):
-					has_area_denial = true
+				if not _attack_allowed_for_context(attack_type, def, tier):
+					has_blocked_attack = true
 					break
-			if has_area_denial:
+			if not _attack_allowed_for_context(affix.phase_2_attack, def, tier):
+				has_blocked_attack = true
+			if not _attack_allowed_for_context(affix.phase_3_attack, def, tier):
+				has_blocked_attack = true
+			if has_blocked_attack:
 				continue
 		if not _role_allowed(role, affix.allowed_roles):
 			continue
@@ -293,10 +307,13 @@ static func _merge_affix_modifier(base_modifier, affix):
 
 static func _finalize_generated_identity(def: EnemyDefinition, archetype, affixes: Array, role: String, tier: int) -> void:
 	var attack_pool := _build_attack_pool(def, archetype, affixes, role, tier)
+	_sanitize_phase_attack(def, "phase_2_attack", tier)
+	_sanitize_phase_attack(def, "phase_3_attack", tier)
 	if def.phase_2_attack == EnemyDefinition.AttackType.NONE and attack_pool.size() > 0:
 		def.phase_2_attack = int(attack_pool[min(1, attack_pool.size() - 1)])
 	if tier >= Tier.HYPER and def.phase_3_attack == EnemyDefinition.AttackType.NONE and attack_pool.size() > 0:
 		def.phase_3_attack = int(attack_pool[min(attack_pool.size() - 1, 2)])
+	_apply_early_context_caps(def, tier)
 	def.set_meta("generated_identity_locked", true)
 	def.set_meta("generated_archetype_id", archetype.archetype_id)
 	def.set_meta("generated_tier", _tier_name(tier))
@@ -342,24 +359,73 @@ static func _build_attack_pool(def: EnemyDefinition, archetype, affixes: Array, 
 		if pool.size() >= max_size:
 			break
 		if attack_type not in pool:
+			if not _attack_allowed_for_context(attack_type, def, tier):
+				continue
 			pool.append(attack_type)
 	if pool.size() > max_size:
 		pool.resize(max_size)
 	return pool
 
 static func _attack_allowed_for_context(attack_type: int, def: EnemyDefinition, tier: int) -> bool:
+	if attack_type == EnemyDefinition.AttackType.NONE:
+		return true
+	var lvl := maxi(def.level if def else 1, 1)
+	var rec_level := _get_generation_rec_level(def)
+	var low_enemy := lvl <= 8 or rec_level <= 3
+	var mid_enemy := lvl <= 12 or rec_level <= 6
+	if tier <= Tier.ELITE and low_enemy:
+		if _HEAVY_BOMB_ATTACKS.has(attack_type) or _AREA_DENIAL_ATTACKS.has(attack_type) or _SUMMON_ATTACKS.has(attack_type):
+			return false
+	if tier <= Tier.HYPER and rec_level <= 3:
+		if _HEAVY_BOMB_ATTACKS.has(attack_type) or _AREA_DENIAL_ATTACKS.has(attack_type):
+			return false
+	if tier <= Tier.HYPER and mid_enemy and _SUMMON_ATTACKS.has(attack_type):
+		return false
 	if not _HEAVY_BOMB_ATTACKS.has(attack_type):
 		if _AREA_DENIAL_ATTACKS.has(attack_type) and _movement_discourages_commitment(def.movement_pattern):
 			return false
 		return true
-	var lvl := maxi(def.level if def else 1, 1)
-	if tier <= Tier.ELITE and lvl <= 5:
+	if tier <= Tier.ELITE and lvl <= 8:
 		return false
-	if tier <= Tier.HYPER and lvl <= 3:
+	if tier <= Tier.HYPER and lvl <= 5:
 		return false
 	if _movement_discourages_commitment(def.movement_pattern):
 		return false
 	return true
+
+static func _sanitize_phase_attack(def: EnemyDefinition, prop: StringName, tier: int) -> void:
+	var attack_type := int(def.get(prop))
+	if not _attack_allowed_for_context(attack_type, def, tier):
+		def.set(prop, EnemyDefinition.AttackType.NONE)
+
+static func _apply_early_context_caps(def: EnemyDefinition, tier: int) -> void:
+	var rec_level := _get_generation_rec_level(def)
+	if tier <= Tier.ELITE and rec_level <= 3:
+		def.bullet_count = clampi(def.bullet_count, 1, 5)
+		def.phase_2_bullet_count = clampi(def.phase_2_bullet_count, 0, 6)
+		def.phase_3_bullet_count = clampi(def.phase_3_bullet_count, 0, 6)
+		def.bullet_speed = minf(def.bullet_speed, 105.0)
+		def.attack_damage = mini(def.attack_damage, 24)
+		def.summon_on_phase_change = false
+		def.summon_phase_count = 0
+	elif tier <= Tier.HYPER and rec_level <= 3:
+		def.bullet_count = clampi(def.bullet_count, 1, 6)
+		def.phase_2_bullet_count = clampi(def.phase_2_bullet_count, 0, 7)
+		def.phase_3_bullet_count = clampi(def.phase_3_bullet_count, 0, 7)
+		def.bullet_speed = minf(def.bullet_speed, 110.0)
+		def.attack_damage = mini(def.attack_damage, 30)
+		def.summon_on_phase_change = false
+		def.summon_phase_count = 0
+
+static func _is_early_context(def: EnemyDefinition, tier: int) -> bool:
+	if tier > Tier.HYPER:
+		return false
+	return _get_generation_rec_level(def) <= 3 or (def != null and def.level <= 5)
+
+static func _get_generation_rec_level(def: EnemyDefinition) -> int:
+	if def != null and def.has_meta("generation_rec_level"):
+		return maxi(int(def.get_meta("generation_rec_level")), 1)
+	return maxi(def.level if def else 1, 1)
 
 static func _movement_discourages_commitment(p) -> bool:
 	if p == null:

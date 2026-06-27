@@ -131,7 +131,7 @@ func add_salvage_points(amount: int) -> void:
 	if save_data and amount > 0:
 		save_data.salvage_points += amount
 		for blueprint_id in save_data.blueprint_progress.keys():
-			_try_unlock_blueprint(String(blueprint_id))
+			_try_unlock_blueprint(str(blueprint_id))
 		save_data.save_to_slot()
 
 func get_salvage_points() -> int:
@@ -393,7 +393,7 @@ func finalize_hall_legacy_selection(selected_indices: Array[int]) -> void:
 			break
 		if idx < 0 or idx >= save_data.last_death_inventory_items.size():
 			continue
-		var item_path := String(save_data.last_death_inventory_items[idx])
+		var item_path := str(save_data.last_death_inventory_items[idx])
 		if item_path == "":
 			continue
 		save_data.pending_legacy_items.append(item_path)
@@ -785,7 +785,7 @@ func apply_pending_legacy_equipment(equip_mgr: EquipmentManager) -> void:
 	if not save_data or not equip_mgr or save_data.pending_legacy_items.is_empty():
 		return
 	for i in range(save_data.pending_legacy_items.size()):
-		var path := String(save_data.pending_legacy_items[i])
+		var path := str(save_data.pending_legacy_items[i])
 		if not ResourceLoader.exists(path):
 			continue
 		var res := load(path) as EquipmentItem
@@ -830,8 +830,8 @@ func _snapshot_death_legacy(run_state = null) -> void:
 	# Keys: source (enemy name), attack (Projectile/Contact/attack id), damage.
 	if save_data.has_meta("last_death_recap"):
 		var recap: Dictionary = save_data.get_meta("last_death_recap")
-		save_data.last_death_run_summary["recap_source"] = String(recap.get("source", "the dark"))
-		save_data.last_death_run_summary["recap_attack"] = String(recap.get("attack", "Unknown"))
+		save_data.last_death_run_summary["recap_source"] = str(recap.get("source", "the dark"))
+		save_data.last_death_run_summary["recap_attack"] = str(recap.get("attack", "Unknown"))
 		save_data.last_death_run_summary["recap_damage"] = int(recap.get("damage", 0))
 		save_data.remove_meta("last_death_recap")
 	var ancestor_entry := save_data.last_death_run_summary.duplicate(true)

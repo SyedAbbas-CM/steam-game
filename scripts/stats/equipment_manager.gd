@@ -742,13 +742,13 @@ func get_equipped_offhand_type() -> String:
 	var item = equipped.get(EquipmentItem.SlotType.SHIELD, null) as EquipmentItem
 	if not item:
 		return ""
-	var item_type := String(item.weapon_type).strip_edges().to_lower()
+	var item_type := str(item.weapon_type).strip_edges().to_lower()
 	if item_type == "parrying_dagger":
 		return "parrying_dagger"
 	if item_type == "buckler":
 		return "buckler"
-	var item_name := String(item.item_name).to_lower()
-	var item_path := String(item.resource_path if item.resource_path != "" else item.source_path).to_lower()
+	var item_name := str(item.item_name).to_lower()
+	var item_path := str(item.resource_path if item.resource_path != "" else item.source_path).to_lower()
 	if "parrying dagger" in item_name or "parrying_dagger" in item_path:
 		return "parrying_dagger"
 	if "buckler" in item_name or "buckler" in item_path:

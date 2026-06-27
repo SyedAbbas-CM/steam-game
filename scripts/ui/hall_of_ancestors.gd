@@ -364,7 +364,7 @@ func _spawn_ancestor_ghosts() -> void:
 		ghost.polygon = PackedVector2Array([
 			Vector2(-10, -18), Vector2(10, -18), Vector2(14, 6), Vector2(0, 22), Vector2(-14, 6)
 		])
-		var class_id := String(entry.get("class_id", "warrior"))
+		var class_id := str(entry.get("class_id", "warrior"))
 		var color: Color = CLASS_COLORS.get(class_id, Color(0.8, 0.8, 0.9))
 		ghost.color = Color(color.r, color.g, color.b, 0.45)
 		ghost.position = ghost_positions[i]
@@ -388,7 +388,7 @@ func _update_nearest_station() -> void:
 		var poly: Polygon2D = _current_station.get_meta("base_poly", null) as Polygon2D
 		if poly:
 			poly.color = STATION_HIGHLIGHT
-		_prompt_label.text = "[E] " + String(_current_station.get_meta("station_title", "Interact"))
+		_prompt_label.text = "[E] " + str(_current_station.get_meta("station_title", "Interact"))
 		_prompt_label.visible = true
 	else:
 		_prompt_label.visible = false
@@ -396,8 +396,8 @@ func _update_nearest_station() -> void:
 func _open_station(station: Area2D) -> void:
 	if station == null:
 		return
-	var station_id := String(station.get_meta("station_id", ""))
-	_show_panel(String(station.get_meta("station_title", "Station")))
+	var station_id := str(station.get_meta("station_id", ""))
+	_show_panel(str(station.get_meta("station_title", "Station")))
 	match station_id:
 		"memorial":
 			_build_memorial_panel()
@@ -443,7 +443,7 @@ func _build_memorial_panel() -> void:
 		var s: Dictionary = sd.last_death_run_summary
 		summary.text = "The latest fallen hero yielded %d Soul Points.\nClass: %s  Lv.%d  Floor: %d  Kills: %d  Gold Lost: %d" % [
 			int(s.get("soul_gain", 0)),
-			String(s.get("class_id", "unknown")).capitalize(),
+			str(s.get("class_id", "unknown")).capitalize(),
 			int(s.get("level", 1)),
 			int(s.get("floor", 0)),
 			int(s.get("enemies_killed", 0)),
@@ -466,7 +466,7 @@ func _build_memorial_panel() -> void:
 		return
 
 	for i in range(sd.last_death_inventory_items.size()):
-		var path := String(sd.last_death_inventory_items[i])
+		var path := str(sd.last_death_inventory_items[i])
 		var item := load(path) as EquipmentItem
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
@@ -496,7 +496,7 @@ func _build_vault_panel() -> void:
 		_panel_content.add_child(empty)
 		return
 	for i in range(sd.legacy_vault_items.size()):
-		var path := String(sd.legacy_vault_items[i])
+		var path := str(sd.legacy_vault_items[i])
 		var item := load(path) as EquipmentItem
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
@@ -524,7 +524,7 @@ func _build_audience_panel() -> void:
 		var box := VBoxContainer.new()
 		box.add_theme_constant_override("separation", 4)
 		card.add_child(box)
-		var class_id := String(entry.get("class_id", "warrior"))
+		var class_id := str(entry.get("class_id", "warrior"))
 		var header := Label.new()
 		header.text = "%s  Lv.%d" % [class_id.capitalize(), int(entry.get("level", 1))]
 		header.add_theme_color_override("font_color", CLASS_COLORS.get(class_id, Color.WHITE))

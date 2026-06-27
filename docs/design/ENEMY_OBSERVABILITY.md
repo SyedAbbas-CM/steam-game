@@ -37,6 +37,7 @@ Each spawn record includes:
 - spawn reason: room spawn, horde wave, encounter spawn, corridor patrol
 - recommended level, player level, overlevel, HP/damage scaling
 - final enemy name, resource path, HP, damage, contact damage, armor
+- early balance cap deltas when starter-dungeon safety caps changed HP/damage/projectiles
 - size class, movement pattern summary, base attack, phase attacks
 - bullet count/speed, bomb radius/flight time
 - boss phases, authored boss state count
@@ -67,6 +68,11 @@ Runtime records also include:
 From the repo, use:
 
 ```bash
+python3 scripts/tools/audit_enemy_resources.py
+python3 scripts/tools/audit_enemy_resources.py --include-damage-noise
+python3 scripts/tools/audit_enemy_resources.py --include-test
+python3 scripts/tools/audit_dungeon_pools.py Haven-Dungeons
+
 scripts/tools/find_enemy_logs.sh
 scripts/tools/find_enemy_logs.sh 'green'
 scripts/tools/find_enemy_logs.sh 'summoner'
@@ -106,3 +112,10 @@ Use these tags to map player-facing reports to logs:
 - “does no damage”: search `zero_damage`
 - “100 bullets/minions”: search `projectile_spam`, `summoner`, `adds`
 - “elite just stands still”: search `stationary_too_long`, `hold_ranged`, `anchor`
+- “starter dungeon enemy is too tanky”: search `early_balance_caps`, then compare `before` and `after`
+
+## Current Findings
+
+- `Haven-Dungeons` was vulnerable to old-scale enemy resources such as Risen Corpse and Bone Crawler.
+- `Haven-Crypt` must stay a separate level chain from `Haven-Dungeons`; chain-base logic must not strip a bare `-Crypt` suffix.
+- Starter dungeon runtime caps now limit final HP, attack damage, contact damage, bullet speed, and bullet count after all scaling/generated modifiers.

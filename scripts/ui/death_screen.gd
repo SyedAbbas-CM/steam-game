@@ -151,10 +151,10 @@ func _build_death_recap_line() -> String:
 	var summary: Dictionary = gm.save_data.last_death_run_summary
 	if summary.is_empty():
 		return ""
-	var source: String = String(summary.get("recap_source", ""))
+	var source: String = str(summary.get("recap_source", ""))
 	if source == "":
 		return ""
-	var attack: String = String(summary.get("recap_attack", "Unknown"))
+	var attack: String = str(summary.get("recap_attack", "Unknown"))
 	var dmg: int = int(summary.get("recap_damage", 0))
 	return "Killed by %s — %s, %d damage" % [source, attack, dmg]
 

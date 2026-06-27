@@ -44,9 +44,9 @@ static func _ensure_scanned() -> void:
 				if data == null:
 					continue
 				var fx_name = data.get_custom_data_by_layer_id(name_layer)
-				if fx_name == null or String(fx_name) == "":
+				if fx_name == null or str(fx_name) == "":
 					continue
-				var s := String(fx_name)
+				var s := str(fx_name)
 				# Skip placeholder grid names so they don't clobber real entries
 				# if the user reused a grid name elsewhere by accident.
 				if s.begins_with("large_") or s.begins_with("small_"):
@@ -78,7 +78,7 @@ static func spawn_anim(scene_root: Node, fx_names: Array, world_pos: Vector2, fr
 	# typo'd frame doesn't break the whole effect.
 	var frames: Array = []
 	for n in fx_names:
-		var t = get_texture(String(n))
+		var t = get_texture(str(n))
 		if t != null:
 			frames.append(t)
 	if frames.is_empty():

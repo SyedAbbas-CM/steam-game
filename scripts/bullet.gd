@@ -148,7 +148,7 @@ func _ready() -> void:
 	# The base sprite still gets set up below so enchant tint + tinting logic
 	# stays in one place; the overlay just covers it visually.
 	if has_meta("fx_overlay"):
-		var fx_name := String(get_meta("fx_overlay"))
+		var fx_name := str(get_meta("fx_overlay"))
 		var fx_tex = FXAtlasLookup.get_texture(fx_name)
 		if fx_tex:
 			var overlay := Sprite2D.new()
@@ -317,7 +317,7 @@ func _apply_projectile_fx(sprite: Sprite2D) -> void:
 
 func _resolve_projectile_fx_kind() -> int:
 	if has_meta("projectile_fx_kind"):
-		match String(get_meta("projectile_fx_kind")):
+		match str(get_meta("projectile_fx_kind")):
 			"fire":
 				return 1
 			"poison":
@@ -512,7 +512,7 @@ func _physics_process(delta: float) -> void:
 			if p and is_instance_valid(p):
 				var dist = p.global_position.distance_to(global_position)
 				if dist < _force_radius and dist > 4.0:
-					var pull_dir = (global_position - p.global_position).normalized()
+					var pull_dir: Vector2 = (global_position - p.global_position).normalized()
 					var falloff = 1.0 - (dist / _force_radius)
 					p.velocity += pull_dir * _force_strength * falloff * delta * 60.0
 			# Pulsate purple + radius ring indicator
@@ -1493,7 +1493,7 @@ func _fireball_explode() -> void:
 		if impact_data is Array:
 			frames = impact_data
 		else:
-			frames = [String(impact_data)]
+			frames = [str(impact_data)]
 		FXAtlasLookup.spawn_anim(self, frames, global_position, 0.08, aoe_radius * 1.2, 9)
 	var sfx = get_node_or_null("/root/SFXManager")
 	if sfx:

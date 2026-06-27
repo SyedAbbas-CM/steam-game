@@ -73,7 +73,7 @@ func get_connected_peer_ids() -> PackedInt32Array:
 func get_local_ipv4_addresses() -> PackedStringArray:
 	var out := PackedStringArray()
 	for addr in IP.get_local_addresses():
-		var ip: String = String(addr)
+		var ip: String = str(addr)
 		if ":" in ip:
 			continue
 		if ip.begins_with("127."):
@@ -137,8 +137,8 @@ func host_with_optional_upnp(port: int = DEFAULT_PORT, desired_max_players: int 
 	if use_upnp:
 		result.upnp = try_upnp(port)
 		host_network_info["upnp_ok"] = bool(result.upnp.get("ok", false))
-		host_network_info["gateway"] = String(result.upnp.get("gateway", ""))
-		host_network_info["external_address"] = String(result.upnp.get("external_address", ""))
+		host_network_info["gateway"] = str(result.upnp.get("gateway", ""))
+		host_network_info["external_address"] = str(result.upnp.get("external_address", ""))
 		host_network_info_updated.emit(get_host_network_summary())
 	result.network_info = get_host_network_summary()
 	return result

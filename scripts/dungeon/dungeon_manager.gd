@@ -605,14 +605,15 @@ static func _is_chain_base_entry(lid: String) -> bool:
 	var last = parts[parts.size() - 1]
 	return last == "Dungeons" or last == "base" or last == "Base" or last == "Tower" or last == "Crypt"
 
-## Extract chain base from level ID: strips trailing number or "Dungeons"/"base"/"Tower" suffix
-## "Aria-Dungeons" → "Aria", "Aria-2" → "Aria", "Aria-Crypt-3" → "Aria-Crypt"
+## Extract chain base from level ID: strips trailing number or "Dungeons"/"base"/"Tower" suffix.
+## "Aria-Dungeons" -> "Aria", "Aria-2" -> "Aria", "Aria-Crypt-3" -> "Aria-Crypt".
+## Do not strip bare "Crypt"; "Haven-Crypt" is a separate chain from "Haven-Dungeons".
 static func _get_chain_base(lid: String) -> String:
 	var parts = lid.split("-")
 	if parts.size() <= 1:
 		return lid
 	var last = parts[parts.size() - 1]
-	if last.is_valid_int() or last in ["Dungeons", "base", "Base", "Tower", "Crypt"]:
+	if last.is_valid_int() or last in ["Dungeons", "base", "Base", "Tower"]:
 		parts.resize(parts.size() - 1)
 		return "-".join(PackedStringArray(parts))
 	return lid
@@ -1051,7 +1052,7 @@ func _generate_height_test_floor() -> void:
 		vb.add_child(title)
 		for entry in ht_labels:
 			var lbl := Label.new()
-			lbl.text = "• " + String(entry.get("text", "?")).replace("\n", " — ")
+			lbl.text = "• " + str(entry.get("text", "?")).replace("\n", " — ")
 			lbl.add_theme_font_size_override("font_size", 10)
 			lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.95))
 			vb.add_child(lbl)
@@ -4387,6 +4388,8 @@ func _spawn_room_enemies(grid_pos: Vector2i, room_data: RoomData) -> void:
 			else:
 				def.drop_table = _item_pool.create_drop_table(run_state.current_floor, false, bd)
 
+		_apply_early_dungeon_enemy_caps(def, room_data, rec_level)
+
 		var enemy = enemy_scene.instantiate()
 		enemy.global_position = spawn_pos
 		enemy.setup(def)
@@ -4636,6 +4639,70 @@ func _get_encounter_scaling() -> Dictionary:
 		"bd": current_biome.base_difficulty if current_biome else 0,
 	}
 
+func _apply_early_dungeon_enemy_caps(def: EnemyDefinition, room_data: RoomData, rec_level: int) -> void:
+	if def == null or rec_level > 4:
+		return
+	var room_type := room_data.type if room_data else RoomData.RoomType.COMBAT
+	var is_boss_like := def.size_class >= EnemyDefinition.SizeClass.BOSS or room_type in [RoomData.RoomType.BOSS, RoomData.RoomType.SUPER_ELITE]
+	var is_elite_like := is_boss_like or def.size_class >= EnemyDefinition.SizeClass.LARGE or room_type == RoomData.RoomType.ELITE
+	var hp_cap := 180
+	var damage_cap := 18
+	var contact_cap := 16
+	var bullet_speed_cap := 110.0
+	var bullet_count_cap := 5
+	if rec_level <= 1:
+		hp_cap = 100
+		damage_cap = 10
+		contact_cap = 10
+		bullet_speed_cap = 95.0
+		bullet_count_cap = 4
+	elif rec_level <= 3:
+		hp_cap = 140
+		damage_cap = 14
+		contact_cap = 12
+		bullet_speed_cap = 105.0
+		bullet_count_cap = 5
+	if is_boss_like:
+		hp_cap = int(float(hp_cap) * 3.5)
+		damage_cap = int(float(damage_cap) * 1.75)
+		contact_cap = int(float(contact_cap) * 1.75)
+		bullet_count_cap += 3
+	elif is_elite_like:
+		hp_cap = int(float(hp_cap) * 2.0)
+		damage_cap = int(float(damage_cap) * 1.4)
+		contact_cap = int(float(contact_cap) * 1.35)
+		bullet_count_cap += 1
+	var before := {
+		"max_hp": def.max_hp,
+		"attack_damage": def.attack_damage,
+		"contact_damage": def.contact_damage,
+		"bullet_speed": def.bullet_speed,
+		"bullet_count": def.bullet_count,
+	}
+	def.max_hp = mini(def.max_hp, hp_cap)
+	def.attack_damage = mini(def.attack_damage, damage_cap)
+	def.contact_damage = mini(def.contact_damage, contact_cap)
+	def.bullet_speed = minf(def.bullet_speed, bullet_speed_cap)
+	def.bullet_count = mini(def.bullet_count, bullet_count_cap)
+	def.phase_2_bullet_count = mini(def.phase_2_bullet_count, bullet_count_cap + 1)
+	def.phase_3_bullet_count = mini(def.phase_3_bullet_count, bullet_count_cap + 2)
+	if before["max_hp"] != def.max_hp \
+			or before["attack_damage"] != def.attack_damage \
+			or before["contact_damage"] != def.contact_damage \
+			or before["bullet_speed"] != def.bullet_speed \
+			or before["bullet_count"] != def.bullet_count:
+		def.set_meta("early_balance_caps", {
+			"recommended_level": rec_level,
+			"before": before,
+			"after": {
+				"max_hp": def.max_hp,
+				"attack_damage": def.attack_damage,
+				"contact_damage": def.contact_damage,
+				"bullet_speed": def.bullet_speed,
+				"bullet_count": def.bullet_count,
+			},
+		})
+
 func _spawn_encounter_enemy(grid_pos: Vector2i, room_data: RoomData, spawn_pos: Vector2, def: EnemyDefinition, scaling: Dictionary) -> Node2D:
 	var enemy_scene = preload("res://scenes/enemy.tscn")
 	# Apply scaling
@@ -4643,6 +4710,7 @@ func _spawn_encounter_enemy(grid_pos: Vector2i, room_data: RoomData, spawn_pos: 
 	def.attack_damage = maxi(1, int(def.attack_damage * room_data.enemy_damage_mult * scaling["dmg_scale"]))
 	def.attack_speed = def.attack_speed * scaling.get("atk_speed_mult", 1.0)
 	def.xp_value = maxi(def.xp_value, int(def.xp_value * (1.0 + scaling["floor_idx"] * 0.15)))
+	_apply_early_dungeon_enemy_caps(def, room_data, current_level.recommended_level if current_level else 1)
 
 	# 30% melee secondary for normal enemies
 	if def.size_class == EnemyDefinition.SizeClass.NORMAL and randf() < 0.3:
@@ -4685,6 +4753,11 @@ func _apply_generated_elite_identity(def: EnemyDefinition, tier: int) -> void:
 		return
 	if def.boss_states.size() > 0:
 		return
+	if current_level:
+		def.set_meta("generation_rec_level", current_level.recommended_level)
+	else:
+		def.set_meta("generation_rec_level", 1)
+	def.set_meta("generation_floor", run_state.current_floor if run_state else 1)
 	EliteGenerator.apply_generated_identity(def, tier)
 
 func _enemy_obs_begin_run() -> void:
@@ -4720,18 +4793,20 @@ func _enemy_obs_record_spawn(enemy: Node, def: EnemyDefinition, room_data: RoomD
 	}
 	for key in extra:
 		context[key] = extra[key]
+	if enemy:
+		enemy.set_meta("enemy_obs_context", context.duplicate(true))
 	obs.record_enemy_spawn(enemy, def, context)
 
 func _enemy_obs_room_type_name(value: int) -> String:
 	for key in RoomData.RoomType.keys():
 		if int(RoomData.RoomType[key]) == value:
-			return String(key)
+			return str(key)
 	return str(value)
 
 func _enemy_obs_encounter_type_name(value: int) -> String:
 	for key in RoomData.EncounterType.keys():
 		if int(RoomData.EncounterType[key]) == value:
-			return String(key)
+			return str(key)
 	return str(value)
 
 # Coop: assigns a deterministic network_id to a newly-spawned enemy and registers

@@ -449,7 +449,7 @@ static func create_loot_container(c_type: ContainerType, dungeon_scale: bool = t
 		for entry in table:
 			acc += int(entry[1])
 			if roll < acc:
-				var item_name: String = String(entry[0])
+				var item_name: String = str(entry[0])
 				var qty = randi_range(int(entry[2]), int(entry[3]))
 				_grant_item(container, item_name, qty)
 				break
@@ -490,7 +490,7 @@ static func _grant_item(container: LootContainer, item_name: String, qty: int) -
 	var path: String = ""
 	var qm = container.get_node_or_null("/root/QuestManager")
 	if qm and "_item_cache" in qm and qm._item_cache.has(item_name):
-		path = String(qm._item_cache[item_name])
+		path = str(qm._item_cache[item_name])
 	else:
 		var slug = item_name.to_lower().replace(" ", "_")
 		var candidates = [

@@ -155,13 +155,13 @@ func _obs_node() -> Node:
 func _obs_attack_name(atk: int) -> String:
 	for key in EnemyDefinition.AttackType.keys():
 		if int(EnemyDefinition.AttackType[key]) == atk:
-			return String(key)
+			return str(key)
 	return str(atk)
 
 func _obs_state_name() -> String:
 	for key in State.keys():
 		if int(State[key]) == state:
-			return String(key)
+			return str(key)
 	return str(state)
 
 func _obs_context(extra: Dictionary = {}) -> Dictionary:
@@ -172,6 +172,11 @@ func _obs_context(extra: Dictionary = {}) -> Dictionary:
 		"state": _obs_state_name(),
 		"major_enemy": _is_boss_or_large or (definition and definition.has_meta("generated_archetype_id")),
 	}
+	if has_meta("enemy_obs_context"):
+		var spawn_ctx = get_meta("enemy_obs_context")
+		if spawn_ctx is Dictionary:
+			for key in spawn_ctx:
+				ctx[key] = spawn_ctx[key]
 	if has_meta("grid_pos"):
 		ctx["room_grid"] = str(get_meta("grid_pos"))
 	for key in extra:
@@ -4354,8 +4359,10 @@ func _shoot_gravity_well(dir: Vector2) -> void:
 		sfx_gw.play("special_a", -5.0, 0.1)
 	if not bullets_container:
 		return
-	# Spawn the gravity orb (large, slow)
-	var orb = bullet_scene.instantiate()
+	# Spawn the gravity orb (large, slow). Annotated as Node2D so the deferred
+	# lambdas below can infer types on `orb.global_position` — without it the
+	# capture is Variant and `var x := orb.global_position - …` fails to compile.
+	var orb: Node2D = bullet_scene.instantiate() as Node2D
 	orb.global_position = global_position
 	orb.direction = dir
 	orb.lifetime = 3.0
@@ -4368,8 +4375,8 @@ func _shoot_gravity_well(dir: Vector2) -> void:
 			if is_instance_valid(orb):
 				if bc:
 					for i in range(12):
-						var sub = bullet_scene.instantiate()
-						var ring_angle := TAU * float(i) / 12.0
+						var sub: Node2D = bullet_scene.instantiate() as Node2D
+						var ring_angle: float = TAU * float(i) / 12.0
 						sub.global_position = orb.global_position
 						sub.direction = Vector2.from_angle(ring_angle)
 						sub.is_player_bullet = false
@@ -4384,10 +4391,10 @@ func _shoot_gravity_well(dir: Vector2) -> void:
 		get_tree().create_timer(0.5 * tick).timeout.connect(
 			func():
 				if is_instance_valid(orb) and is_instance_valid(player):
-					var pull_dir := orb.global_position - player.global_position
+					var pull_dir: Vector2 = orb.global_position - player.global_position
 					if pull_dir.length() < 100.0 and pull_dir.length() > 0.01:
 						# Stronger pull closer to orb
-						var strength = lerpf(30.0, 10.0, pull_dir.length() / 100.0)
+						var strength: float = lerpf(30.0, 10.0, pull_dir.length() / 100.0)
 						player.velocity += pull_dir.normalized() * strength
 		)
 
@@ -5514,7 +5521,7 @@ func _shoot_grab_throw(dir: Vector2) -> void:
 		if player.has_method("take_damage"):
 			player.take_damage(base_dmg, global_position, true, false)
 		# Yank player toward us
-		var pull_dir = (global_position - player.global_position).normalized()
+		var pull_dir: Vector2 = (global_position - player.global_position).normalized()
 		player.velocity = pull_dir * 200.0
 		# Phase 2: After brief hold, throw player away
 		get_tree().create_timer(0.25).timeout.connect(func():
@@ -6905,5 +6912,5 @@ func _coop_broadcast_enemy_bullet(bullet: Node) -> void:
 	if coop_rt == null or not coop_rt.has_method("broadcast_enemy_bullet"):
 		return
 	var spr_idx: int = int(bullet.get("bullet_sprite_index")) if "bullet_sprite_index" in bullet else -1
-	var kingdom: String = String(bullet.get("enemy_kingdom")) if "enemy_kingdom" in bullet else ""
+	var kingdom: String = str(bullet.get("enemy_kingdom")) if "enemy_kingdom" in bullet else ""
 	coop_rt.broadcast_enemy_bullet(bullet.global_position, bullet.direction, bullet.speed, bullet.damage, spr_idx, kingdom)
