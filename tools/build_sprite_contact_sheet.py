@@ -24,6 +24,7 @@ Reads no Godot APIs; the tile→sheet math mirrors scripts/ui/item_icon_helper.g
 import re
 import glob
 import html
+import base64
 from collections import defaultdict
 
 SHEETS = {
@@ -63,20 +64,37 @@ def parse_item(p: str) -> dict | None:
     }
 
 
+_SHEET_CACHE: dict[str, str] = {}
+
+
+def _sheet_data_url(sheet_key: str) -> str:
+    """Return a base64 data: URL for the given sheet PNG. Loaded once, cached.
+
+    We embed the PNG bytes into the HTML so it stays self-contained — opening
+    the file via file:// from any browser shows sprites without cross-origin
+    blocking (Chrome / Edge / Safari all refuse `url("../assets/…")` lookups
+    from a file:// HTML in different sibling dirs).
+    """
+    if sheet_key not in _SHEET_CACHE:
+        path = SHEETS[sheet_key]
+        with open(path, 'rb') as f:
+            blob = f.read()
+        _SHEET_CACHE[sheet_key] = 'data:image/png;base64,' + base64.b64encode(blob).decode('ascii')
+    return _SHEET_CACHE[sheet_key]
+
+
 def sprite_style(tile_idx: int) -> str:
     if tile_idx < 0:
         return 'background: repeating-linear-gradient(45deg,#222 0 6px,#111 6px 12px);'
-    sheet = SHEETS['tiles'] if tile_idx < 256 else SHEETS['tiles2']
+    sheet_key = 'tiles' if tile_idx < 256 else 'tiles2'
     idx = tile_idx % 256
     col = idx % 16
     row = idx // 16
-    # The contact sheet HTML lives at tools/, so the sheet path is one
-    # directory up. background-size scales the full sheet so we can crop
-    # at DISPLAY_PX precision.
-    sheet_rel = '../' + sheet
+    # Use a CSS class reference per sheet (set on the page once) so each card
+    # carries only the cropping offsets, not a fresh ~75 KB data URL.
     scale = DISPLAY_PX // TILE_PX
     return (
-        f'background-image:url("{sheet_rel}");'
+        f'background-image:var(--{sheet_key});'
         f'background-position:-{col * TILE_PX * scale}px -{row * TILE_PX * scale}px;'
         f'background-size:{16 * DISPLAY_PX}px auto;'
         f'image-rendering:pixelated;'
@@ -96,9 +114,19 @@ def main() -> None:
     for k in groups:
         groups[k].sort(key=lambda x: (x['tile'], x['name']))
 
+    # Preload both sheets as data: URLs so the HTML is fully self-contained.
+    tiles_url = _sheet_data_url('tiles')
+    tiles2_url = _sheet_data_url('tiles2')
+
     out: list[str] = []
     out.append('<!doctype html><html><head><meta charset="utf-8"><title>Sprite Contact Sheet</title>')
-    out.append('''<style>
+    out.append('<style>')
+    # Sheet image refs land on CSS custom properties, set once on :root.
+    out.append(':root{')
+    out.append(f'--tiles:url("{tiles_url}");')
+    out.append(f'--tiles2:url("{tiles2_url}");')
+    out.append('}')
+    out.append('''
 body{background:#1a1a1f;color:#ddd;font-family:-apple-system,Helvetica,Arial,sans-serif;margin:0;padding:24px;}
 h1{margin:0 0 8px;color:#fff;}
 h2{margin:32px 0 12px;padding:8px 12px;background:#272730;border-left:4px solid #c08040;color:#f0d090;}
