@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Graphite Ring"
-loy_tile_index = 172
+loy_tile_index = 1163
 description = "An exceptional enchanted ring; Easier to lose than to find."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

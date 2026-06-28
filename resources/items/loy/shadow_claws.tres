@@ -17,7 +17,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Shadow Claws"
-loy_tile_index = 291
+loy_tile_index = 111
 description = "A fine shadow-touched set of claws; Hard to keep an eye on, even in plain sight."
 slot_type = 0
 rarity = 1

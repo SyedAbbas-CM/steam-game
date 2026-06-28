@@ -21,7 +21,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Runic Hammer"
-loy_tile_index = 286
+loy_tile_index = 105
 description = "An exceptional thunderous warhammer; Slow, deliberate, and unanswerable."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

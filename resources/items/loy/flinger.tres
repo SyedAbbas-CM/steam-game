@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Flinger"
-loy_tile_index = 377
+loy_tile_index = 273
 description = "An exceptional aerodynamic throwing weapon; Silent compared to a bow — useful in quiet work."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

@@ -16,7 +16,7 @@ flat_bonus = 24
 [resource]
 script = ExtResource("1")
 item_name = "Feather Robes"
-loy_tile_index = 112
+loy_tile_index = 686
 description = "A fine well-crafted armour; Heavier than it looks, lighter than it lives up to."
 slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

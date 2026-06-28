@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Swamp Brew"
-loy_tile_index = 83
+loy_tile_index = 1426
 description = "A murky brew that heals wounds and cures poison."
 slot_type = 10
 rarity = 0

@@ -21,7 +21,7 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Cyania Sceptre"
-loy_tile_index = 503
+loy_tile_index = 413
 description = "An exceptional channeling staff; A focus for those who shape the unseen."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

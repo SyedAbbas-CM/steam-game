@@ -16,7 +16,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Imperial Armor"
-loy_tile_index = 463
+loy_tile_index = 693
 description = "An exceptional padded armour; Heavier than it looks, lighter than it lives up to."
 slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

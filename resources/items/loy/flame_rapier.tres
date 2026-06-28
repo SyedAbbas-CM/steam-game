@@ -21,7 +21,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Flame Rapier"
-loy_tile_index = 417
+loy_tile_index = 54
 description = "An exceptional flame-kissed blade; Edges shimmer with a heat that does not fade."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

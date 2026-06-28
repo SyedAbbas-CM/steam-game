@@ -21,7 +21,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Diamond Knife"
-loy_tile_index = 363
+loy_tile_index = 40
 description = "An exceptional razor-sharp dagger; Strikes faster than the eye can follow."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

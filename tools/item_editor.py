@@ -52,10 +52,12 @@ from urllib.parse import urlsplit
 PORT = 8765
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-SHEETS = {
-    'tiles': PROJECT_ROOT / 'assets/sprites/loy/tiles.png',
-    'tiles2': PROJECT_ROOT / 'assets/sprites/loy/tiles2.png',
-}
+MASTER_SHEET = PROJECT_ROOT / 'assets/sprites/items_master.png'
+# Slot ordering must match tools/migrate_to_master_sheet.py SLOT_ORDER.
+SLOT_ORDER_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+GAP_ROWS = 5
+COLS_PER_ROW = 16
+TILE_PX = 32
 
 SLOT_NAMES = {
     0: 'Melee', 1: 'Ranged', 2: 'Magic',
@@ -99,6 +101,16 @@ def _find_int(text: str, field: str, default: int = 0) -> int:
         return default
     try:
         return int(float(raw))
+    except ValueError:
+        return default
+
+
+def _find_float(text: str, field: str, default: float = 0.0) -> float:
+    raw = _find(text, field)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
     except ValueError:
         return default
 
@@ -287,27 +299,52 @@ _HTML_TEMPLATE: str | None = None
 _SHUTDOWN: threading.Event = threading.Event()
 
 
+def _compute_layout(items: list[dict]) -> tuple[list[dict], int]:
+    """Mirror the layout in migrate_to_master_sheet.py so the editor's grid
+    matches the actual master PNG. Returns (sections, total_rows)."""
+    by_slot: dict[int, int] = defaultdict(int)
+    for it in items:
+        by_slot[it['slot']] += 1
+    sections: list[dict] = []
+    cur_row = 0
+    for sid in SLOT_ORDER_IDS:
+        n = by_slot.get(sid, 0)
+        rows_used = (n + COLS_PER_ROW - 1) // COLS_PER_ROW if n else 0
+        sections.append({
+            'slot': sid,
+            'name': SLOT_NAMES.get(sid, f'slot {sid}'),
+            'count': n,
+            'start_row': cur_row,
+            'end_row': cur_row + rows_used,
+            'gap_end_row': cur_row + rows_used + GAP_ROWS,
+        })
+        cur_row += rows_used + GAP_ROWS
+    return sections, cur_row
+
+
 def _build_html() -> str:
-    # Embed both sheets as base64 data URLs so the page is self-contained.
-    sheet_urls = {}
-    for k, p in SHEETS.items():
-        if not p.is_file():
-            raise FileNotFoundError(p)
-        sheet_urls[k] = 'data:image/png;base64,' + base64.b64encode(p.read_bytes()).decode('ascii')
+    if not MASTER_SHEET.is_file():
+        raise FileNotFoundError(
+            f'{MASTER_SHEET} not found. Run tools/migrate_to_master_sheet.py first.'
+        )
+    master_url = 'data:image/png;base64,' + base64.b64encode(MASTER_SHEET.read_bytes()).decode('ascii')
     items = load_all_items()
     usage: dict[int, int] = defaultdict(int)
     for it in items:
         if it['tile'] >= 0:
             usage[it['tile']] += 1
+    sections, total_rows = _compute_layout(items)
 
     payload = {
         'items': items,
         'usage': dict(usage),
         'slot_names': SLOT_NAMES,
         'stat_names': STAT_NAMES,
+        'sections': sections,
+        'total_rows': total_rows,
+        'cols': COLS_PER_ROW,
     }
-    return _HTML.replace('__TILES_URL__', sheet_urls['tiles']) \
-                .replace('__TILES2_URL__', sheet_urls['tiles2']) \
+    return _HTML.replace('__MASTER_URL__', master_url) \
                 .replace('__BOOTSTRAP_JSON__', json.dumps(payload))
 
 
@@ -366,7 +403,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 _HTML = r'''<!doctype html>
 <html><head><meta charset="utf-8"><title>Item Editor</title>
 <style>
-:root{--tiles:url("__TILES_URL__");--tiles2:url("__TILES2_URL__");}
+:root{--master:url("__MASTER_URL__");}
 *{box-sizing:border-box;}
 body{margin:0;height:100vh;display:flex;flex-direction:column;background:#16161b;color:#ddd;font-family:-apple-system,Helvetica,Arial,sans-serif;overflow:hidden;}
 .topbar{padding:10px 16px;background:#1c1c22;border-bottom:1px solid #333;display:flex;align-items:center;gap:14px;}
@@ -404,8 +441,11 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:#16161b
 /* Sprite grid */
 .sheet-head{font-size:12px;color:#aaa;margin:10px 0 6px;}
 .sheet-head b{color:#fff;}
-.grid{display:grid;grid-template-columns:repeat(16,1fr);gap:2px;max-width:880px;}
+.section-band{margin:14px 0 6px;padding:6px 10px;background:#272730;border-left:4px solid #c08040;color:#f0d090;font-size:12px;border-radius:3px;}
+.section-band b{color:#fff;font-size:13px;}
+.grid{display:grid;grid-template-columns:repeat(16,1fr);gap:2px;max-width:880px;margin-bottom:6px;}
 .cell{position:relative;width:100%;aspect-ratio:1;background-color:#0a0a0e;border:1px solid #2a2a30;cursor:pointer;image-rendering:pixelated;}
+.cell.gap{background-color:#15151a;border-color:#1f1f25;}
 .cell:hover{outline:2px solid #f0d090;outline-offset:-2px;z-index:1;}
 .cell.assigned{outline:2px solid #80c080;outline-offset:-2px;z-index:1;}
 .cell.used::after{content:attr(data-uses);position:absolute;top:1px;right:1px;background:rgba(0,0,0,0.7);color:#f0d090;font-size:9px;padding:0 3px;border-radius:2px;}
@@ -452,10 +492,8 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:#16161b
   <div class="pane middle">
     <div id="sheet-empty" class="empty-hint">Pick an item on the left to start editing.</div>
     <div id="sheet-container" style="display:none;">
-      <div class="sheet-head"><b>tiles.png</b> (0–255) — click any cell to assign</div>
-      <div class="grid" id="grid-tiles"></div>
-      <div class="sheet-head" style="margin-top:14px;"><b>tiles2.png</b> (256–511) — click any cell to assign</div>
-      <div class="grid" id="grid-tiles2"></div>
+      <div class="sheet-head"><b>items_master.png</b> — sprites grouped by slot, gap rows are paintable space</div>
+      <div id="sections"></div>
     </div>
   </div>
   <div class="pane right">
@@ -468,27 +506,29 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:#16161b
 const COLS = 16;
 const ICON_PX_LIST = 44;
 const ICON_PX_FORM = 48;
-const CELL_PX = 40; // grid cell display size
-const SHEET_VARS = { tiles: 'var(--tiles)', tiles2: 'var(--tiles2)' };
+const MASTER_VAR = 'var(--master)';
 
 const BOOT = __BOOTSTRAP_JSON__;
 const SLOT_NAMES = BOOT.slot_names;
 const STAT_NAMES = BOOT.stat_names;
-const ITEMS = BOOT.items;  // canonical, mutated as we save
-const USAGE = BOOT.usage;  // cell idx -> count, refreshed when a tile changes
-let selected = null;       // currently-selected path
-let edits = {};            // path -> partial edits (cleared on save)
+const ITEMS = BOOT.items;       // canonical, mutated as we save
+const USAGE = BOOT.usage;       // cell idx -> count, refreshed when a tile changes
+const SECTIONS = BOOT.sections; // [{slot, name, start_row, end_row, gap_end_row, count}]
+const TOTAL_ROWS = BOOT.total_rows;
+let selected = null;            // currently-selected path
+let edits = {};                 // path -> partial edits (cleared on save)
 
 function escapeHTML(s){return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function $(id){return document.getElementById(id);}
 
 function spriteStyle(tile, displayPx){
   if(tile < 0) return 'background:repeating-linear-gradient(45deg,#222 0 6px,#111 6px 12px);';
-  const sheetKey = tile < 256 ? 'tiles' : 'tiles2';
-  const local = tile % 256;
-  const col = local % COLS;
-  const row = Math.floor(local / COLS);
-  return `background-image:${SHEET_VARS[sheetKey]};background-position:-${col*displayPx}px -${row*displayPx}px;background-size:${COLS*displayPx}px auto;image-rendering:pixelated;`;
+  // The master sheet is 16 cols × TOTAL_ROWS tall. Pixel-based positioning works
+  // for fixed-size icons (list + form preview). Grid cells use percentage-based
+  // positioning instead — see renderSections().
+  const col = tile % COLS;
+  const row = Math.floor(tile / COLS);
+  return `background-image:${MASTER_VAR};background-position:-${col*displayPx}px -${row*displayPx}px;background-size:${COLS*displayPx}px ${TOTAL_ROWS*displayPx}px;image-rendering:pixelated;`;
 }
 
 function getEdited(it){
@@ -542,25 +582,48 @@ function filterItems(){
   });
 }
 
-function renderGrid(targetId, baseIdx){
-  const el = $(targetId);
-  el.innerHTML = '';
-  for(let r=0; r<16; r++){
-    for(let c=0; c<COLS; c++){
-      const idx = baseIdx + r*COLS + c;
-      const sheetKey = baseIdx === 0 ? 'tiles' : 'tiles2';
-      const localCol = idx % 256 % COLS;
-      const localRow = Math.floor((idx % 256) / COLS);
-      const uses = USAGE[idx] || 0;
-      const cell = document.createElement('div');
-      cell.className = 'cell' + (uses > 0 ? ' used' : '');
-      cell.dataset.idx = idx;
-      cell.style.cssText = `background-image:${SHEET_VARS[sheetKey]};background-position:-${localCol*CELL_PX}px -${localRow*CELL_PX}px;background-size:${COLS*CELL_PX}px auto;`;
-      if(uses > 0) cell.dataset.uses = uses + 'x';
-      cell.innerHTML = `<span class="cell-idx">${idx}</span>`;
-      cell.onclick = () => assignCell(idx);
-      el.appendChild(cell);
+// Render the master sheet broken into per-slot sections, with a header band
+// before each slot block + a visually separated empty band for the gap rows.
+// Cells use percentage-based background positioning so the crop stays aligned
+// at any rendered cell width.
+//
+// background-size on a cell is "(16 cols × cellW) px wide × (TOTAL_ROWS × cellH) px tall"
+// expressed as percentages: 1600% wide × (TOTAL_ROWS×100)% tall. Position is the
+// fraction across the master, computed from the cell's row/col.
+function renderSections(){
+  const root = $('sections');
+  root.innerHTML = '';
+  const sheetW_pct = 100 * COLS;             // 1600%
+  const sheetH_pct = 100 * TOTAL_ROWS;
+  for(const sec of SECTIONS){
+    if(sec.count === 0 && (sec.gap_end_row - sec.start_row) === 0) continue;
+    // Section header
+    const head = document.createElement('div');
+    head.className = 'section-band';
+    head.innerHTML = `<b>${sec.name}</b> · ${sec.count} items · rows ${sec.start_row}–${sec.end_row - 1} · gap rows ${sec.end_row}–${sec.gap_end_row - 1}`;
+    root.appendChild(head);
+    // Sprite rows (occupied + gap, the gap cells stay transparent so painting
+    // them in Aseprite later just lights up here)
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    for(let r = sec.start_row; r < sec.gap_end_row; r++){
+      const isGap = r >= sec.end_row;
+      for(let c = 0; c < COLS; c++){
+        const idx = r * COLS + c;
+        const xPct = (c / (COLS - 1)) * 100;
+        const yPct = TOTAL_ROWS > 1 ? (r / (TOTAL_ROWS - 1)) * 100 : 0;
+        const uses = USAGE[idx] || 0;
+        const cell = document.createElement('div');
+        cell.className = 'cell' + (uses > 0 ? ' used' : '') + (isGap ? ' gap' : '');
+        cell.dataset.idx = idx;
+        cell.style.cssText = `background-image:${MASTER_VAR};background-position:${xPct}% ${yPct}%;background-size:${sheetW_pct}% ${sheetH_pct}%;image-rendering:pixelated;`;
+        if(uses > 0) cell.dataset.uses = uses + 'x';
+        cell.innerHTML = `<span class="cell-idx">${idx}</span>`;
+        cell.onclick = () => assignCell(idx);
+        grid.appendChild(cell);
+      }
     }
+    root.appendChild(grid);
   }
 }
 
@@ -797,8 +860,7 @@ function flash(msg, isErr){
 }
 
 // Init
-renderGrid('grid-tiles', 0);
-renderGrid('grid-tiles2', 256);
+renderSections();
 renderItemList();
 </script></body></html>
 '''

@@ -21,7 +21,7 @@ flat_bonus = 0.03
 [resource]
 script = ExtResource("1")
 item_name = "Shadow Knife"
-loy_tile_index = 309
+loy_tile_index = 112
 description = "An exceptional shadow-touched dagger; Hard to keep an eye on, even in plain sight."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

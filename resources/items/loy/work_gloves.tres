@@ -11,7 +11,7 @@ flat_bonus = 24
 [resource]
 script = ExtResource("1")
 item_name = "Work Gloves"
-loy_tile_index = 167
+loy_tile_index = 1060
 description = "A gripping gloves; Lets a blade live longer in the hand."
 slot_type = 7
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

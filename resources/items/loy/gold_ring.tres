@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Gold Ring"
-loy_tile_index = 31
+loy_tile_index = 1162
 description = "An exceptional gilded ring; Worth more for its shine than its bite, some say."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

@@ -21,7 +21,7 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Lined Cap"
-loy_tile_index = 355
+loy_tile_index = 562
 description = "A fine battle-tested helm; Trades a little hearing for a lot of skull."
 slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

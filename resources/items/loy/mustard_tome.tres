@@ -21,7 +21,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Mustard Tome"
-loy_tile_index = 353
+loy_tile_index = 430
 description = "An exceptional ancient tome; Each spell costs a page, then a pulse of will."
 slot_type = 2
 weapon_type = "tome"

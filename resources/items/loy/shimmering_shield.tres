@@ -16,7 +16,7 @@ flat_bonus = 24
 [resource]
 script = ExtResource("1")
 item_name = "Shimmering Shield"
-loy_tile_index = 186
+loy_tile_index = 838
 description = "A fine guardian's shield; A line in the dirt you can carry with you."
 slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

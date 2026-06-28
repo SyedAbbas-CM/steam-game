@@ -16,7 +16,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Crafted Armor"
-loy_tile_index = 21
+loy_tile_index = 679
 description = "An exceptional battle-worn armour; Built to take the hit, then stand to take another."
 slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

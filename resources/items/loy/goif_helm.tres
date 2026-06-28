@@ -16,7 +16,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Goif Helm"
-loy_tile_index = 135
+loy_tile_index = 555
 description = "A fine visored helm; Trades a little hearing for a lot of skull."
 slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

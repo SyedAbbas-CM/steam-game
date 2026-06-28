@@ -17,7 +17,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Bone Claws"
-loy_tile_index = 291
+loy_tile_index = 16
 description = "A bone-carved set of claws; Shaped from something that was once alive."
 slot_type = 0
 rarity = 0

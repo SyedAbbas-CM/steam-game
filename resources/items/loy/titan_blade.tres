@@ -11,7 +11,7 @@ flat_bonus = 48
 [resource]
 script = ExtResource("1")
 item_name = "Titan Blade"
-loy_tile_index = 289
+loy_tile_index = 139
 description = "An exceptional devastating greatsword; Sweeps clear arcs of space around the wielder."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

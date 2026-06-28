@@ -16,7 +16,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Robes of Virtue"
-loy_tile_index = 461
+loy_tile_index = 712
 description = "An exceptional reinforced armour; Stops what a tunic only suggests."
 slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

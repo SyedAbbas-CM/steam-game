@@ -3090,12 +3090,14 @@ func on_crit_landed() -> void:
 ## damage-dealt). Scales with the RAW incoming damage so Iron Skin / armor /
 ## shield absorbing the hit doesn't starve the meter.
 ## 0.5s grace prevents multi-tick hits (DoTs, lasers) from double-charging.
+const RAGE_GAIN_PER_DMG := 0.5     # rage per HP of raw incoming damage (was 1.5 — too fast)
+const RAGE_GAIN_HIT_CAP := 12.0    # single hit can't grant more than this (boss swings don't fill the bar in one shot)
 func _grant_warrior_rage_from_hit(raw_incoming: int) -> void:
 	if _get_player_class() != "warrior" or raw_incoming <= 0:
 		return
 	if _rage_damage_grace > 0.0:
 		return
-	var gain = float(raw_incoming) * 1.5
+	var gain = minf(float(raw_incoming) * RAGE_GAIN_PER_DMG, RAGE_GAIN_HIT_CAP)
 	class_meter = minf(class_meter + gain, class_meter_max)
 	_rage_damage_grace = 0.5
 	_rage_decay_grace = 4.0

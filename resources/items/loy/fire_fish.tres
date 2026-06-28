@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Fire Fish"
-loy_tile_index = 385
+loy_tile_index = 1383
 description = "Restores 10 MP. Tastes faintly of starlight and old ink."
 slot_type = 10
 rarity = 0

@@ -17,7 +17,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Runic Greatsword"
-loy_tile_index = 8
+loy_tile_index = 104
 description = "An exceptional devastating greatsword; Sweeps clear arcs of space around the wielder."
 slot_type = 0
 rarity = 2

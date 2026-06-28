@@ -16,7 +16,7 @@ percent_bonus = 0.05
 [resource]
 script = ExtResource("1")
 item_name = "Hammer"
-loy_tile_index = 277
+loy_tile_index = 57
 description = "A mighty warhammer; Designed to dent helm and rib alike."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

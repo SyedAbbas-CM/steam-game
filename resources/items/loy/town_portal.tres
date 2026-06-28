@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Town Portal"
-loy_tile_index = 99
+loy_tile_index = 1427
 description = "Use: Town Portal."
 slot_type = 10
 rarity = 1

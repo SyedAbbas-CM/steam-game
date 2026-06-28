@@ -17,7 +17,7 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Scorpion Tail"
-loy_tile_index = 291
+loy_tile_index = 109
 description = "A fine coiled whip; Coils around limbs and weapons alike."
 slot_type = 0
 rarity = 1

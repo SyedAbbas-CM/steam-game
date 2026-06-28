@@ -16,7 +16,7 @@ percent_bonus = 0.06
 [resource]
 script = ExtResource("1")
 item_name = "Soul Whip"
-loy_tile_index = 283
+loy_tile_index = 118
 description = "An exceptional lashing whip; Strikes where shields cannot guard."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

@@ -16,7 +16,7 @@ percent_bonus = 0.05
 [resource]
 script = ExtResource("1")
 item_name = "Crude Short Bow"
-loy_tile_index = 292
+loy_tile_index = 264
 description = "A quick-draw short bow; Easy to draw on the run or from horseback."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

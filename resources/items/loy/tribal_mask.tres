@@ -16,7 +16,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Tribal Mask"
-loy_tile_index = 294
+loy_tile_index = 575
 description = "A fine reinforced helm; Trades a little hearing for a lot of skull."
 slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

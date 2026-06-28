@@ -26,7 +26,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Staff of Eternity"
-loy_tile_index = 305
+loy_tile_index = 440
 description = "An exceptional enchanted staff; Long enough to ward, true enough to strike."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2"), SubResource("mod_3")])

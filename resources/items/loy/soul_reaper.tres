@@ -17,7 +17,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Soul Reaper"
-loy_tile_index = 15
+loy_tile_index = 117
 description = "An exceptional reaping scythe; Carries the weight of every harvest before it."
 slot_type = 0
 rarity = 2

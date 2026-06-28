@@ -11,7 +11,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Doom Edge"
-loy_tile_index = 289
+loy_tile_index = 43
 description = "An exceptional devastating greatsword; Sweeps clear arcs of space around the wielder."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

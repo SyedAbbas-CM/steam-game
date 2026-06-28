@@ -16,7 +16,7 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Iron Spear"
-loy_tile_index = 289
+loy_tile_index = 74
 description = "An iron-cast spear; Plain, dependable, and likely to outlast its owner."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

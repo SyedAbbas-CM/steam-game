@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Red Potion"
-loy_tile_index = 80
+loy_tile_index = 1407
 description = "Restores 8 HP. A traveller's friend, a chirurgeon's compromise."
 slot_type = 10
 rarity = 0

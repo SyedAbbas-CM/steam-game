@@ -11,7 +11,7 @@ flat_bonus = 48
 [resource]
 script = ExtResource("1")
 item_name = "Wind Sling"
-loy_tile_index = 25
+loy_tile_index = 317
 description = "An exceptional elastic sling; Forgotten by armies; never by farmers."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

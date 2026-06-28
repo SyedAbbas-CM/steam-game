@@ -16,7 +16,7 @@ percent_bonus = 0.04
 [resource]
 script = ExtResource("1")
 item_name = "Viper Lash"
-loy_tile_index = 283
+loy_tile_index = 148
 description = "A fine supple whip; More punishment than killing weapon — until it isn't."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

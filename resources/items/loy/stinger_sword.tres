@@ -16,7 +16,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Stinger Sword"
-loy_tile_index = 206
+loy_tile_index = 129
 description = "A fine balanced blade; Favoured by knights and travelling sellswords alike."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

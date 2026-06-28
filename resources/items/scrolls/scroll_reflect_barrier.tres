@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Scroll of Reflect Barrier"
-loy_tile_index = 94
+loy_tile_index = 1418
 description = "Teaches the Reflect Barrier spell permanently"
 slot_type = 10
 rarity = 2

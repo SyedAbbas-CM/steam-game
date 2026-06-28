@@ -17,7 +17,7 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Void Lash"
-loy_tile_index = 291
+loy_tile_index = 150
 description = "A legendary knotted whip; More punishment than killing weapon — until it isn't."
 slot_type = 0
 rarity = 3

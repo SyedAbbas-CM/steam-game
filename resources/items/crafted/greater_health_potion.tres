@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Greater Health Potion"
-loy_tile_index = 80
+loy_tile_index = 1390
 description = "A potent healing potion (+25HP)"
 slot_type = 10
 rarity = 1

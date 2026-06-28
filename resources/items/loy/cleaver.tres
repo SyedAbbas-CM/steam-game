@@ -16,7 +16,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Cleaver"
-loy_tile_index = 230
+loy_tile_index = 25
 description = "An exceptional broad-bladed axe; Splits shields as readily as skulls."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

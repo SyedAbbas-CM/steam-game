@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Spectral Cloak"
-loy_tile_index = 397
+loy_tile_index = 1275
 description = "An exceptional lined cloak; Hides the shape long enough to shape the fight."
 slot_type = 9
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

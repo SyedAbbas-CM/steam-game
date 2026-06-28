@@ -11,7 +11,7 @@ flat_bonus = 120
 [resource]
 script = ExtResource("1")
 item_name = "Demon Blade"
-loy_tile_index = 89
+loy_tile_index = 37
 description = "A wicked blade pulsing with demonic fire."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

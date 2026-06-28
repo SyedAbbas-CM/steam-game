@@ -16,7 +16,7 @@ flat_bonus = 24
 [resource]
 script = ExtResource("1")
 item_name = "Tome of Doom"
-loy_tile_index = 151
+loy_tile_index = 445
 description = "A fine inscribed tome; Best wielded by the patient and the curious."
 slot_type = 2
 weapon_type = "tome"

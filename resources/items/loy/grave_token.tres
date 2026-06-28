@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Grave Token"
-loy_tile_index = 158
+loy_tile_index = 1528
 description = "A skull-etched token taken from the Skeleton Captain. The dead have been marching toward something, and this is what they were carrying."
 slot_type = 11
 rarity = 1

@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Ancient Bark"
-loy_tile_index = 126
+loy_tile_index = 1520
 description = "Thick bark from an ancient tree."
 slot_type = 11
 rarity = 0

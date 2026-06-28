@@ -16,7 +16,7 @@ percent_bonus = -0.03
 [resource]
 script = ExtResource("1")
 item_name = "Ravager"
-loy_tile_index = 260
+loy_tile_index = 100
 description = "A fine double-bladed great axe; Best held high, brought down with the hips."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

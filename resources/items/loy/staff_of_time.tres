@@ -16,7 +16,7 @@ flat_bonus = 15.0
 [resource]
 script = ExtResource("1")
 item_name = "Staff of Time"
-loy_tile_index = 189
+loy_tile_index = 443
 description = "An exceptional rune-carved staff; Bleeds magic with every gesture. Grants Time Warp while equipped."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

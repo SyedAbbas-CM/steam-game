@@ -11,7 +11,7 @@ flat_bonus = 48
 [resource]
 script = ExtResource("1")
 item_name = "Bark Shield"
-loy_tile_index = 129
+loy_tile_index = 816
 description = "A sturdy shield crafted from ancient bark and iron."
 slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

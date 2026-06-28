@@ -16,7 +16,7 @@ percent_bonus = 0.05
 [resource]
 script = ExtResource("1")
 item_name = "Cloak"
-loy_tile_index = 129
+loy_tile_index = 1265
 description = "A shadow-cut cloak; Keeps rain off and onlookers off the trail."
 slot_type = 9
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

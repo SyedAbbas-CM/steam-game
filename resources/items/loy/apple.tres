@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Apple"
-loy_tile_index = 81
+loy_tile_index = 1377
 description = "Restores 3 HP. Drink in a single pull — the second sip is always wasted."
 slot_type = 10
 rarity = 0

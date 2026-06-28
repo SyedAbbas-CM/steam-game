@@ -16,7 +16,7 @@ flat_bonus = 12
 [resource]
 script = ExtResource("1")
 item_name = "Broadsword"
-loy_tile_index = 180
+loy_tile_index = 19
 description = "A duelist's blade; Sings through unarmored foes."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

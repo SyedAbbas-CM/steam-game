@@ -16,7 +16,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Cloak of Shadows"
-loy_tile_index = 352
+loy_tile_index = 1268
 description = "An exceptional shadow-touched cloak; Hard to keep an eye on, even in plain sight."
 slot_type = 9
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

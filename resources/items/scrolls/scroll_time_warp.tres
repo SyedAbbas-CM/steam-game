@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Scroll of Time Warp"
-loy_tile_index = 94
+loy_tile_index = 1420
 description = "Teaches the Time Warp spell permanently"
 slot_type = 10
 rarity = 2

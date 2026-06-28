@@ -21,7 +21,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Ronia Stone"
-loy_tile_index = 504
+loy_tile_index = 103
 description = "An exceptional lightweight throwing weapon; Silent compared to a bow — useful in quiet work."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

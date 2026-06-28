@@ -16,7 +16,7 @@ flat_bonus = 0.3
 [resource]
 script = ExtResource("1")
 item_name = "Ember Wand"
-loy_tile_index = 304
+loy_tile_index = 419
 description = "A fine ember-veined staff; Lines of orange light pulse along its length."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

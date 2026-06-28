@@ -21,7 +21,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Doom Axe"
-loy_tile_index = 282
+loy_tile_index = 42
 description = "An exceptional heavy-bladed axe; Forged for raiders who prefer noise to subtlety."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

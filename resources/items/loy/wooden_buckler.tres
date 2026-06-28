@@ -11,7 +11,7 @@ flat_bonus = 24
 [resource]
 script = ExtResource("1")
 item_name = "Wooden Buckler"
-loy_tile_index = 187
+loy_tile_index = 845
 description = "A small studded shield; Not for blocking — for nudging the world aside in a heartbeat."
 slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

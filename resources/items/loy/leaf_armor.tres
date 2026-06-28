@@ -16,7 +16,7 @@ flat_bonus = 12
 [resource]
 script = ExtResource("1")
 item_name = "Leaf Armor"
-loy_tile_index = 198
+loy_tile_index = 697
 description = "A battle-worn armour; Stops what a tunic only suggests."
 slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

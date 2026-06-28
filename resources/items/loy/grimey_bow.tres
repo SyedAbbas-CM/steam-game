@@ -16,7 +16,7 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Grimey Bow"
-loy_tile_index = 388
+loy_tile_index = 277
 description = "A sturdy bow; The string sings; the arrow does the killing."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

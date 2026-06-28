@@ -21,7 +21,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Rapier"
-loy_tile_index = 416
+loy_tile_index = 99
 description = "An exceptional sharp blade; Equally at home cleaving and thrusting."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

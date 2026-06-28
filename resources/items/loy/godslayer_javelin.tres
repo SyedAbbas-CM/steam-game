@@ -11,7 +11,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Godslayer Javelin"
-loy_tile_index = 17
+loy_tile_index = 274
 description = "A legendary armor-piercing javelin; Throw, then close — never the other way around."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

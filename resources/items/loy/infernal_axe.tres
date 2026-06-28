@@ -21,7 +21,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Infernal Axe"
-loy_tile_index = 283
+loy_tile_index = 65
 description = "An exceptional infernal axe; Smells of brimstone, faintly, even after rain."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

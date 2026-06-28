@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Skull Mask"
-loy_tile_index = 300
+loy_tile_index = 570
 description = "An exceptional skull-graven helm; A skull's hollow grin marks the maker's pride."
 slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

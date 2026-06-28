@@ -16,7 +16,7 @@ percent_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Frost Bolt"
-loy_tile_index = 107
+loy_tile_index = 423
 description = "A frost-rimed staff; Cold seeps from its surface and into the wound."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

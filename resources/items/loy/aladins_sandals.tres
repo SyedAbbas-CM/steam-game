@@ -16,7 +16,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Aladins Sandals"
-loy_tile_index = 447
+loy_tile_index = 928
 description = "An exceptional sure-footed boots; Worn long enough to fight in barefoot ease."
 slot_type = 6
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

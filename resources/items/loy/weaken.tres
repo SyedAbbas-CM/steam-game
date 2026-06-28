@@ -16,7 +16,7 @@ percent_bonus = 0.05
 [resource]
 script = ExtResource("1")
 item_name = "Weaken"
-loy_tile_index = 312
+loy_tile_index = 449
 description = "An arcane staff; Carries its own faint light in dark places."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

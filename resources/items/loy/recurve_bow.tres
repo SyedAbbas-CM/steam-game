@@ -16,7 +16,7 @@ percent_bonus = 50.0
 [resource]
 script = ExtResource("1")
 item_name = "Recurve Bow"
-loy_tile_index = 291
+loy_tile_index = 299
 description = "A fine accurate bow; Reach is everything; never let foes close."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

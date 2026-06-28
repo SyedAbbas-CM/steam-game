@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Pearl Shield"
-loy_tile_index = 453
+loy_tile_index = 833
 description = "An exceptional guardian's shield; Turns a sword's edge into wasted breath."
 slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

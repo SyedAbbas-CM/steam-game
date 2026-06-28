@@ -16,7 +16,7 @@ percent_bonus = 0.2
 [resource]
 script = ExtResource("1")
 item_name = "Dual Crossbow"
-loy_tile_index = 361
+loy_tile_index = 268
 description = "An exceptional heavy-bolt crossbow; Trades a bow's grace for raw mechanical force."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

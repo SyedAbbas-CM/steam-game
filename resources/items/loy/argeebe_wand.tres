@@ -21,7 +21,7 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Argeebe Wand"
-loy_tile_index = 445
+loy_tile_index = 402
 description = "An exceptional sparking wand; Demands a steady hand — backlash is unforgiving."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

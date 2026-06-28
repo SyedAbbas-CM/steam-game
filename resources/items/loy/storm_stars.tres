@@ -21,7 +21,7 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Storm Stars"
-loy_tile_index = 291
+loy_tile_index = 131
 description = "An exceptional storm-charged throwing weapon; Hairs rise on the arm that holds it."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

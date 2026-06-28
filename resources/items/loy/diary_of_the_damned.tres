@@ -21,7 +21,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Diary of the Damned"
-loy_tile_index = 149
+loy_tile_index = 417
 description = "An exceptional ancient tome; Best wielded by the patient and the curious."
 slot_type = 2
 weapon_type = "tome"

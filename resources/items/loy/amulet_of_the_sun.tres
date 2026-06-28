@@ -16,7 +16,7 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Amulet of the Sun"
-loy_tile_index = 296
+loy_tile_index = 1152
 description = "A fine inscribed ring; Small, quiet, and hard to part with."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

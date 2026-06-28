@@ -16,7 +16,7 @@ percent_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Swamp Gloves"
-loy_tile_index = 375
+loy_tile_index = 1059
 description = "A fine supple gloves; Knuckles plated where the work demands."
 slot_type = 7
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

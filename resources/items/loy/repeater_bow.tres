@@ -16,7 +16,7 @@ percent_bonus = 0.06
 [resource]
 script = ExtResource("1")
 item_name = "Repeater Bow"
-loy_tile_index = 295
+loy_tile_index = 300
 description = "A fine compact short bow; Easy to draw on the run or from horseback."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

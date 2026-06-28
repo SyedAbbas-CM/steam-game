@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Scroll of Borrowed Time"
-loy_tile_index = 94
+loy_tile_index = 1409
 description = "Teaches the Borrowed Time spell permanently"
 slot_type = 10
 rarity = 2

@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Fish"
-loy_tile_index = 236
+loy_tile_index = 1385
 description = "Restores 3 HP. Bottled in better days, priced for these ones."
 slot_type = 10
 rarity = 0

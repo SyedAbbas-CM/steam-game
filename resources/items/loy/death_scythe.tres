@@ -17,7 +17,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Death Scythe"
-loy_tile_index = 15
+loy_tile_index = 36
 description = "An exceptional reaping scythe; Hooks legs as readily as it severs them."
 slot_type = 0
 rarity = 2

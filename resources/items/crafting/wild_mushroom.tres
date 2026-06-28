@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Wild Mushroom"
-loy_tile_index = 124
+loy_tile_index = 1537
 description = "A plump cave mushroom with potent properties."
 slot_type = 11
 rarity = 0

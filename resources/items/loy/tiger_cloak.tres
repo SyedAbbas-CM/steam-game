@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Tiger Cloak"
-loy_tile_index = 336
+loy_tile_index = 1276
 description = "An exceptional concealing cloak; Easy to leave behind if it ever betrays you."
 slot_type = 9
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

@@ -21,7 +21,7 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Venom Blade"
-loy_tile_index = 308
+loy_tile_index = 146
 description = "A fine venom-laced dagger; A wound here closes slowly, if at all."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

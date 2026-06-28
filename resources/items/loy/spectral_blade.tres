@@ -21,7 +21,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Spectral Blade"
-loy_tile_index = 395
+loy_tile_index = 119
 description = "An exceptional well-forged blade; Quick to parry, quicker to riposte."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

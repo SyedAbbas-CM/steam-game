@@ -16,7 +16,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Lava Sword"
-loy_tile_index = 207
+loy_tile_index = 81
 description = "An exceptional balanced blade; Sings through unarmored foes."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

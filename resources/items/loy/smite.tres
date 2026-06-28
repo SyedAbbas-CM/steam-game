@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Smite"
-loy_tile_index = 118
+loy_tile_index = 437
 description = "An exceptional enchanted staff; Long enough to ward, true enough to strike."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

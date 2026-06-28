@@ -17,7 +17,7 @@ percent_bonus = 0.05
 [resource]
 script = ExtResource("1")
 item_name = "Doomcleaver"
-loy_tile_index = 15
+loy_tile_index = 44
 description = "An exceptional enormous great axe; Best held high, brought down with the hips."
 slot_type = 0
 rarity = 2

@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Scroll of Evasion Surge"
-loy_tile_index = 94
+loy_tile_index = 1412
 description = "Teaches the Evasion Surge spell permanently"
 slot_type = 10
 rarity = 2

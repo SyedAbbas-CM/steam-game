@@ -11,7 +11,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Frost Arrow"
-loy_tile_index = 111
+loy_tile_index = 1527
 description = "A freezing arrow"
 slot_type = 11
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

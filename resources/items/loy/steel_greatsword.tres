@@ -17,7 +17,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Steel Greatsword"
-loy_tile_index = 8
+loy_tile_index = 126
 description = "A fine tempered-steel greatsword; Honest steel, well-folded and well-kept."
 slot_type = 0
 rarity = 1

@@ -21,7 +21,7 @@ flat_bonus = 20.0
 [resource]
 script = ExtResource("1")
 item_name = "Staff of Demid"
-loy_tile_index = 190
+loy_tile_index = 439
 description = "An exceptional channeling staff; Long enough to ward, true enough to strike."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

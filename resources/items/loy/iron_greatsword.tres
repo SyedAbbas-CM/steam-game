@@ -17,7 +17,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Iron Greatsword"
-loy_tile_index = 8
+loy_tile_index = 71
 description = "An iron-cast greatsword; Plain, dependable, and likely to outlast its owner."
 slot_type = 0
 rarity = 0

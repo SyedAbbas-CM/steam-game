@@ -16,7 +16,7 @@ percent_bonus = 0.05
 [resource]
 script = ExtResource("1")
 item_name = "Thunder Whip"
-loy_tile_index = 283
+loy_tile_index = 137
 description = "A fine thunder-cast whip; Each strike rolls like a distant peal."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

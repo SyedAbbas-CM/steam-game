@@ -11,7 +11,7 @@ flat_bonus = 48
 [resource]
 script = ExtResource("1")
 item_name = "Titan Cleaver"
-loy_tile_index = 260
+loy_tile_index = 140
 description = "An exceptional executioner's great axe; Built for one terrible swing at a time."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

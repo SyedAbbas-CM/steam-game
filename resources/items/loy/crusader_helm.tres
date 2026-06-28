@@ -16,7 +16,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Crusader Helm"
-loy_tile_index = 0
+loy_tile_index = 549
 description = "A fine protective helm; Adds weight, but the kind a head can grow used to."
 slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

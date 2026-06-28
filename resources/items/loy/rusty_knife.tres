@@ -16,7 +16,7 @@ percent_bonus = 0.02
 [resource]
 script = ExtResource("1")
 item_name = "Rusty Knife"
-loy_tile_index = 180
+loy_tile_index = 106
 description = "A swift dagger; Slips between plates and through joints."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

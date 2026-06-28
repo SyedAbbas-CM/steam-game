@@ -21,7 +21,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "War Axe"
-loy_tile_index = 282
+loy_tile_index = 153
 description = "An exceptional war-worn axe; Splits shields as readily as skulls."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

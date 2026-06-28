@@ -16,7 +16,7 @@ percent_bonus = 0.04
 [resource]
 script = ExtResource("1")
 item_name = "Iron Stars"
-loy_tile_index = 291
+loy_tile_index = 75
 description = "An iron-cast throwing weapon; Plain, dependable, and likely to outlast its owner."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

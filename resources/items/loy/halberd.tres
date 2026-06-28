@@ -16,7 +16,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Halberd"
-loy_tile_index = 290
+loy_tile_index = 56
 description = "A fine guardian's halberd; Thrust like a spear, hew like an axe, hook like a flail."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

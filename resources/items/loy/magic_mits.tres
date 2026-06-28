@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Magic Mits"
-loy_tile_index = 469
+loy_tile_index = 1165
 description = "An exceptional engraved ring; A circle never closes if it has work to do."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

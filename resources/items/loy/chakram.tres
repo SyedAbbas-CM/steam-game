@@ -16,7 +16,7 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Chakram"
-loy_tile_index = 292
+loy_tile_index = 22
 description = "A fine lightweight throwing weapon; Strikes hardest when thrown with the wrist, not the arm."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

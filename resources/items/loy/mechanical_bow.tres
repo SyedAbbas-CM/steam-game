@@ -16,7 +16,7 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Mechanical Bow"
-loy_tile_index = 502
+loy_tile_index = 294
 description = "An exceptional flexible bow; Reach is everything; never let foes close."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

@@ -16,7 +16,7 @@ flat_bonus = 12
 [resource]
 script = ExtResource("1")
 item_name = "Steel Helmet"
-loy_tile_index = 133
+loy_tile_index = 572
 description = "A tempered-steel helm; Honest steel, well-folded and well-kept."
 slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
