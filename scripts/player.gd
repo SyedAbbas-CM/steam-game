@@ -2178,29 +2178,33 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 		if raw > armor:
 			amount = maxi(amount, maxi(1, int(raw * 0.2)))
 
-	# Contact damage resistance for melee classes (only when holding melee weapon)
-		if is_contact:
-			var pc = _get_player_class()
-			var cur_wep = equipment_manager.get_equipped_weapon()
-			var holding_melee = cur_wep and cur_wep.slot_type == EquipmentItem.SlotType.WEAPON_MELEE
-			if pc == "warrior":
-				amount = maxi(0, int(amount * 0.4))  # 60% contact resistance (always, warrior is tanky)
-			elif pc == "mercenary" and holding_melee:
-				amount = maxi(0, int(amount * 0.6))  # 40% contact resistance only with sword
+	# Contact damage resistance for melee classes (only when holding melee weapon).
+	# These four blocks used to be incorrectly indented INSIDE the armor `if`,
+	# so warriors got their 60% resist only when armored — which made bare-class
+	# defense feel paper-thin and turned every armor swap into a confusing damage
+	# spike when the armor branch tripped the resist alongside the subtraction.
+	if is_contact:
+		var pc = _get_player_class()
+		var cur_wep = equipment_manager.get_equipped_weapon()
+		var holding_melee = cur_wep and cur_wep.slot_type == EquipmentItem.SlotType.WEAPON_MELEE
+		if pc == "warrior":
+			amount = maxi(0, int(amount * 0.4))  # 60% contact resistance (always, warrior is tanky)
+		elif pc == "mercenary" and holding_melee:
+			amount = maxi(0, int(amount * 0.6))  # 40% contact resistance only with sword
 
-		if _arcane_shield_active and mp > 0:
-			var mp_drain = amount * 1.5
-			if mp >= mp_drain:
-				mp -= mp_drain
-				mp_changed.emit(mp)
-				amount = maxi(1, int(amount * 0.4))
-			else:
-				mp = 0.0
-				mp_changed.emit(mp)
-				_arcane_shield_active = false
+	if _arcane_shield_active and mp > 0:
+		var mp_drain = amount * 1.5
+		if mp >= mp_drain:
+			mp -= mp_drain
+			mp_changed.emit(mp)
+			amount = maxi(1, int(amount * 0.4))
+		else:
+			mp = 0.0
+			mp_changed.emit(mp)
+			_arcane_shield_active = false
 
-		if _guard_stance_active:
-			amount = maxi(1, int(amount * 0.5))
+	if _guard_stance_active:
+		amount = maxi(1, int(amount * 0.5))
 
 	# Shield absorption (equipment-based shield, separate from warrior block)
 	if not is_true_damage and shield > 0:

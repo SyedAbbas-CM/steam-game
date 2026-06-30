@@ -406,14 +406,6 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 		bullet.set_meta("rage_splash_dmg_pct", 0.5)
 		bullet.set_meta("rage_splash_color", Color(0.55, 0.40, 0.20, 0.65))
 
-	# Sword Shift — Blade Dance stamps the AoE splash on every swing for ALL
-	# classes (warrior, mercenary, archer, wizard equally). No rage gating, no
-	# class-specific branching. Pick up a sword, hold shift, you get the
-	# splash. Same identity as hammer's Ground Slam.
-	if weapon and weapon.weapon_type == "sword" and p and p.get("_blade_dance_active"):
-		bullet.set_meta("rage_splash_radius", 24.0)
-		bullet.set_meta("rage_splash_dmg_pct", 0.5)
-		bullet.set_meta("rage_splash_color", Color(0.95, 0.85, 0.45, 0.55))
 
 	container.add_child(bullet)
 	# Coop: notify peers so they can render a visual ghost of this player bullet.

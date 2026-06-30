@@ -1,6 +1,10 @@
 extends CharacterBody2D
 
 const PlayerQuery = preload("res://scripts/systems/player_query.gd")
+const DEFAULT_ENEMY_PROJECTILE_SPEED := 60.0
+const MIN_ACTIVE_ENEMY_PROJECTILE_SPEED := 35.0
+const BULLET_BEHAVIOR_LOBBED := 11
+const BULLET_BEHAVIOR_BARRIER := 12
 
 enum State { IDLE, CHASE, ATTACK, COOLDOWN, CHARGING, DEAD, STEALTHED, INVESTIGATE }
 
@@ -1803,32 +1807,48 @@ func _move_teleport(p: MovementPattern, spd: float, delta: float) -> void:
 
 ## Find a valid floor position near a center point. Returns center if no floor found.
 func _find_valid_floor_pos(center: Vector2, min_dist: float, max_dist: float) -> Vector2:
-	var room_node = get_parent().get_parent() if get_parent() else null
-	var floor_tm: TileMapLayer = null
-	if room_node and room_node.has_node("Floor"):
-		floor_tm = room_node.get_node("Floor") as TileMapLayer
 	for _i in range(15):
 		var dist := randf_range(min_dist, maxf(min_dist, max_dist))
 		var offset := Vector2.RIGHT.rotated(randf() * TAU) * dist
 		var candidate = center + offset
-		if floor_tm:
-			var local_pos = floor_tm.to_local(candidate)
-			var cell = floor_tm.local_to_map(local_pos)
-			if floor_tm.get_cell_source_id(cell) >= 0:
-				return candidate
-		else:
+		if _is_valid_floor_pos(candidate):
 			return candidate
-	return center  # couldn't find valid spot, stay put
+	return center if _is_valid_floor_pos(center) else global_position
+
+func _is_valid_floor_pos(world_pos: Vector2) -> bool:
+	var room_node = get_parent().get_parent() if get_parent() else null
+	if room_node and room_node.has_node("Floor"):
+		var floor_tm := room_node.get_node("Floor") as TileMapLayer
+		if floor_tm:
+			var local_pos = floor_tm.to_local(world_pos)
+			var cell = floor_tm.local_to_map(local_pos)
+			return floor_tm.get_cell_source_id(cell) >= 0
+	return true
 
 func _do_teleport_blink(p: MovementPattern) -> void:
 	var start_pos := global_position
 	var tw = create_tween()
 	var anchor := global_position
+	var preferred: Array[Vector2] = []
 	if is_instance_valid(player):
 		var away := (global_position - player.global_position)
 		if away.length() > 0.01:
-			anchor = global_position + away.normalized() * minf(p.teleport_range * 0.35, 24.0)
-	global_position = _find_valid_floor_pos(anchor, 20.0, p.teleport_range)
+			var away_dir := away.normalized()
+			var side_dir := Vector2(-away_dir.y, away_dir.x) * (1.0 if randf() < 0.5 else -1.0)
+			var blink_dist := clampf(p.teleport_range * randf_range(0.45, 0.9), 24.0, p.teleport_range)
+			preferred.append(global_position + (away_dir * 0.75 + side_dir * 0.65).normalized() * blink_dist)
+			preferred.append(global_position + (away_dir * 0.35 - side_dir).normalized() * blink_dist)
+			preferred.append(global_position + away_dir * blink_dist)
+	if not preferred.is_empty():
+		for candidate in preferred:
+			var valid_candidate := _find_valid_floor_pos(candidate, 0.0, 1.0)
+			if valid_candidate.distance_to(start_pos) > 8.0:
+				global_position = valid_candidate
+				break
+		if global_position == start_pos:
+			global_position = _find_valid_floor_pos(anchor, 20.0, p.teleport_range)
+	else:
+		global_position = _find_valid_floor_pos(anchor, 20.0, p.teleport_range)
 	velocity = Vector2.ZERO
 	# Visual flash
 	var spr = get_node_or_null("Sprite2D")
@@ -3664,12 +3684,34 @@ func _apply_enemy_bullet_props(bullet, spd: float) -> void:
 
 var _last_fire_sfx_frame: int = 0
 
+func _resolve_enemy_projectile_speed(spd: float, fallback: float = DEFAULT_ENEMY_PROJECTILE_SPEED) -> float:
+	if spd > 0.01:
+		return spd
+	if definition and definition.bullet_speed > 0.01:
+		return definition.bullet_speed
+	return fallback
+
+func _ensure_active_projectile_motion(bullet: Node, fallback_speed: float = DEFAULT_ENEMY_PROJECTILE_SPEED) -> void:
+	if bullet == null:
+		return
+	var bhv := int(bullet.get("behavior"))
+	var stationary_ok := bhv in [BULLET_BEHAVIOR_LOBBED, BULLET_BEHAVIOR_BARRIER]
+	if not stationary_ok and float(bullet.get("speed")) <= 0.01:
+		bullet.set("speed", maxf(fallback_speed, MIN_ACTIVE_ENEMY_PROJECTILE_SPEED))
+	var dir: Vector2 = bullet.get("direction")
+	if not stationary_ok and dir.length_squared() <= 0.0001:
+		var aim := Vector2.RIGHT
+		if is_instance_valid(player) and player.global_position.distance_to(global_position) > 0.01:
+			aim = (player.global_position - global_position).normalized()
+		bullet.set("direction", aim)
+
 func _spawn_bullet(container: Node, dir: Vector2, spd: float) -> Area2D:
 	var bullet = bullet_scene.instantiate()
 	var sfx = get_node_or_null("/root/SFXManager")
 	bullet.global_position = global_position
 	bullet.direction = dir
-	_apply_enemy_bullet_props(bullet, spd)
+	_apply_enemy_bullet_props(bullet, _resolve_enemy_projectile_speed(spd))
+	_ensure_active_projectile_motion(bullet)
 	container.add_child(bullet)
 	_obs_record_projectile(bullet, {
 		"speed": bullet.speed,
@@ -3691,7 +3733,8 @@ func _spawn_bullet_at(container: Node, pos: Vector2, dir: Vector2, spd: float) -
 	var bullet = bullet_scene.instantiate()
 	bullet.global_position = pos
 	bullet.direction = dir
-	_apply_enemy_bullet_props(bullet, spd)
+	_apply_enemy_bullet_props(bullet, _resolve_enemy_projectile_speed(spd))
+	_ensure_active_projectile_motion(bullet)
 	container.add_child(bullet)
 	_obs_record_projectile(bullet, {
 		"speed": bullet.speed,
@@ -3709,7 +3752,8 @@ func _spawn_behavior_bullet(container: Node, dir: Vector2, spd: float, bhv: int)
 	bullet.behavior = bhv
 	bullet._origin_pos = global_position
 	bullet._origin_entity = self
-	_apply_enemy_bullet_props(bullet, spd)
+	_apply_enemy_bullet_props(bullet, _resolve_enemy_projectile_speed(spd))
+	_ensure_active_projectile_motion(bullet)
 	container.add_child(bullet)
 	_obs_record_projectile(bullet, {
 		"speed": bullet.speed,
@@ -3721,6 +3765,8 @@ func _spawn_behavior_bullet(container: Node, dir: Vector2, spd: float, bhv: int)
 	})
 
 func _finalize_direct_enemy_bullet(container: Node, bullet: Node, stationary_ok: bool = false) -> void:
+	if not stationary_ok:
+		_ensure_active_projectile_motion(bullet)
 	container.add_child(bullet)
 	_obs_record_projectile(bullet, {
 		"speed": bullet.speed,

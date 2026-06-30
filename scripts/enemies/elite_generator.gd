@@ -12,6 +12,7 @@ const MOVE_PATROL_V := 5
 const MOVE_FLEE := 6
 const MOVE_TELEPORT := 12
 const MOVE_MIRROR := 13
+const DEFAULT_GENERATED_PROJECTILE_SPEED := 60.0
 
 enum Tier {
 	ELITE,
@@ -313,6 +314,7 @@ static func _finalize_generated_identity(def: EnemyDefinition, archetype, affixe
 		def.phase_2_attack = int(attack_pool[min(1, attack_pool.size() - 1)])
 	if tier >= Tier.HYPER and def.phase_3_attack == EnemyDefinition.AttackType.NONE and attack_pool.size() > 0:
 		def.phase_3_attack = int(attack_pool[min(attack_pool.size() - 1, 2)])
+	_ensure_projectile_speed_for_pool(def, attack_pool)
 	_apply_early_context_caps(def, tier)
 	def.set_meta("generated_identity_locked", true)
 	def.set_meta("generated_archetype_id", archetype.archetype_id)
@@ -323,6 +325,23 @@ static func _finalize_generated_identity(def: EnemyDefinition, archetype, affixe
 		affix_ids.append(affix.affix_id)
 	def.set_meta("generated_affix_ids", affix_ids)
 	def.enemy_name = _compose_name(def.enemy_name, archetype, affixes)
+
+static func _ensure_projectile_speed_for_pool(def: EnemyDefinition, attack_pool: Array[int]) -> void:
+	if def == null or def.bullet_speed > 0.01:
+		return
+	for attack_type in attack_pool:
+		if _attack_needs_projectile_speed(attack_type):
+			def.bullet_speed = DEFAULT_GENERATED_PROJECTILE_SPEED
+			return
+	if _attack_needs_projectile_speed(def.phase_2_attack) or _attack_needs_projectile_speed(def.phase_3_attack):
+		def.bullet_speed = DEFAULT_GENERATED_PROJECTILE_SPEED
+
+static func _attack_needs_projectile_speed(attack_type: int) -> bool:
+	if attack_type == EnemyDefinition.AttackType.NONE:
+		return false
+	if _MELEE_ATTACKS.has(attack_type) or _SUPPORT_ATTACKS.has(attack_type):
+		return false
+	return true
 
 static func _tier_name(tier: int) -> String:
 	match tier:
