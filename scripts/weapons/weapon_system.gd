@@ -396,6 +396,16 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 		bullet.set_meta("rage_splash_radius", 24.0)
 		bullet.set_meta("rage_splash_dmg_pct", 0.5)
 
+	# Hammer Ground Slam — while shift is held (_earthquake_active), every
+	# hammer swing becomes a bigger AoE with stun, replacing the old walking-
+	# slam-every-0.5s pattern. Overrides any rage_splash values above when
+	# both apply, since Ground Slam is the stronger active commitment.
+	if weapon and weapon.weapon_type == "hammer" and p and p.get("_earthquake_active"):
+		bullet.set_meta("rage_splash_radius", 40.0)
+		bullet.set_meta("rage_splash_dmg_pct", 0.8)
+		bullet.set_meta("rage_splash_stun", 0.4)
+		bullet.set_meta("rage_splash_color", Color(0.55, 0.40, 0.20, 0.65))
+
 	container.add_child(bullet)
 	# Coop: notify peers so they can render a visual ghost of this player bullet.
 	# Damage routing for any hit on enemies stays inside bullet.gd (RPC to host).

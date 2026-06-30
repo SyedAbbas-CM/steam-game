@@ -33,8 +33,12 @@ func get_buff_value(buff_name: String) -> float:
 func get_all_buffs() -> Dictionary:
 	return _buffs
 
-## Convenience wrapper: apply status by name string (e.g. "BURNING", "POISONED")
-func apply_status(status_name: String, duration: float, strength: float = 1.0) -> void:
+## Convenience wrapper: apply status by name string (e.g. "BURNING", "POISONED").
+## Default strength bumped to 12.0 post Phase 1 ×12 rescale: BURNING / POISONED
+## use strength as the per-tick damage value, and a 1-dmg tick on a 360-HP enemy
+## is effectively zero DPS. 12 dmg / 0.5 s = 24 DPS — meaningful chip damage on
+## the new HP scale. Callers passing an explicit strength are unaffected.
+func apply_status(status_name: String, duration: float, strength: float = 12.0) -> void:
 	var type_map := {
 		"BURNING": StatusEffect.Type.BURNING,
 		"SLOWED": StatusEffect.Type.SLOWED,

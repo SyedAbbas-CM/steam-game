@@ -47,10 +47,14 @@ func get_damage() -> int:
 	return _scaled_trap_damage(4, 2, 1)
 
 func _scaled_trap_damage(base: int, per_floor: int, late_floor_bonus: int = 0, late_start_floor: int = 3) -> int:
+	# Post Phase 1 ×12 rescale: trap budgets multiply so hits still land at
+	# the same fraction of player HP. Pre-rescale: 4 + 2×floor on a 30-HP
+	# warrior was ~13% per hit on floor 1. Now: 48 + 24×floor on a 360-HP
+	# warrior is ~13% the same.
 	var floor_i := maxi(floor_number, 1)
-	var dmg := base + floor_i * per_floor
+	var dmg := base * 12 + floor_i * per_floor * 12
 	if late_floor_bonus > 0 and floor_i > late_start_floor:
-		dmg += (floor_i - late_start_floor) * late_floor_bonus
+		dmg += (floor_i - late_start_floor) * late_floor_bonus * 12
 	return dmg
 
 func _find_player() -> Node2D:

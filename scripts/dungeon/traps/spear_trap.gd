@@ -22,7 +22,7 @@ const SPEAR_LENGTH = 14.0
 const SPEAR_WIDTH = 1.5
 const DAMAGE_RANGE_SQ = 196.0  # 14px squared
 const ENEMY_DAMAGE_MULT = 2
-const MAX_ENEMY_DAMAGE = 30
+const MAX_ENEMY_DAMAGE = 360  # Phase 1 ×12 from 30. Cap on per-hit damage to enemies.
 const ACTIVE_RANGE_SQ = 36864.0  # 192px; sleep when far from player
 
 var _thrust_progress: float = 0.0  # 0 = retracted, 1 = fully extended

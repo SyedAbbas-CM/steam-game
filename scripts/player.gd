@@ -336,7 +336,7 @@ const CHARGE_SPEED_MULT = 0.5  # slower projectile
 var _charge_indicator: ColorRect  # visual charge bar
 
 # Ranger Longshot (Space) — piercing arrow that briefly paralyzes enemies
-const LONGSHOT_DMG = 5
+const LONGSHOT_DMG = 60  # Phase 1 ×12 from 5. Ranger longshot ability base damage.
 const LONGSHOT_STAMINA_COST = 15.0
 const LONGSHOT_MP_COST = 5.0
 const LONGSHOT_COOLDOWN = 1.5
@@ -1395,11 +1395,11 @@ func _physics_process(delta: float) -> void:
 	elif _executioner_active:
 		stance_mult = 0.7
 
-	if _earthquake_active:
-		_earthquake_timer += delta
-		if _earthquake_timer >= 0.5:
-			_earthquake_timer -= 0.5
-			_earthquake_slam()
+	# Hammer "Earthquake" used to slam every 0.5 s while walking — the famous
+	# "dun-dun-dun" loop. Replaced by: while held, every hammer swing stamps a
+	# bigger Ground Slam AoE onto each bullet (weapon_system + bullet.gd). The
+	# stance still slows movement (see stance_mult above) so the heavy-hammer
+	# feel survives without the autopilot slam ticks.
 
 	var push_mult = PUSH_SPEED_MULT if _pushing else 1.0
 	var speed_mult = status_effects.get_speed_multiplier() * (SPRINT_SPEED_MULT if _is_sprinting else 1.0) * shield_mult * buff_speed * sneak_mult * push_mult * aimed_mult * charge_mult * stance_mult
@@ -3090,15 +3090,16 @@ func on_crit_landed() -> void:
 ## damage-dealt). Scales with the RAW incoming damage so Iron Skin / armor /
 ## shield absorbing the hit doesn't starve the meter.
 ## 0.5s grace prevents multi-tick hits (DoTs, lasers) from double-charging.
-const RAGE_GAIN_PER_DMG := 0.5     # rage per HP of raw incoming damage (was 1.5 — too fast)
-const RAGE_GAIN_HIT_CAP := 12.0    # single hit can't grant more than this (boss swings don't fill the bar in one shot)
+## FLAT rage per hit — no damage scaling. Predictable cadence; Iron Skin /
+## armor can't starve the meter, and a 100-dmg boss swing doesn't fill it in
+## one shot. 2/hit → Rampage at 15 hits, Blood Dream at 50 hits.
+const RAGE_GAIN_PER_HIT := 2.0
 func _grant_warrior_rage_from_hit(raw_incoming: int) -> void:
 	if _get_player_class() != "warrior" or raw_incoming <= 0:
 		return
 	if _rage_damage_grace > 0.0:
 		return
-	var gain = minf(float(raw_incoming) * RAGE_GAIN_PER_DMG, RAGE_GAIN_HIT_CAP)
-	class_meter = minf(class_meter + gain, class_meter_max)
+	class_meter = minf(class_meter + RAGE_GAIN_PER_HIT, class_meter_max)
 	_rage_damage_grace = 0.5
 	_rage_decay_grace = 4.0
 	class_meter_changed.emit(class_meter, class_meter_max)

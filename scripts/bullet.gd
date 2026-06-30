@@ -1084,6 +1084,8 @@ func _on_area_entered(area: Node2D) -> void:
 			if is_player_bullet and has_meta("rage_splash_radius"):
 				var rs_radius = float(get_meta("rage_splash_radius", 24.0))
 				var rs_pct = float(get_meta("rage_splash_dmg_pct", 0.5))
+				var rs_stun = float(get_meta("rage_splash_stun", 0.0))
+				var rs_color = get_meta("rage_splash_color", Color(1.0, 0.35, 0.15, 0.55))
 				var rs_dmg = maxi(1, int(total_dmg * rs_pct))
 				for _e in get_tree().get_nodes_in_group("enemy"):
 					if not is_instance_valid(_e) or _e == enemy:
@@ -1092,9 +1094,15 @@ func _on_area_entered(area: Node2D) -> void:
 						continue
 					if _e.has_method("take_damage"):
 						_e.take_damage(rs_dmg)
+					if rs_stun > 0.0 and _e.has_method("apply_status"):
+						_e.apply_status("STUNNED", rs_stun)
+				# Primary-hit enemy also eats the stun (it didn't go through the
+				# secondary loop). Ground Slam should stagger the target too.
+				if rs_stun > 0.0 and enemy.has_method("apply_status"):
+					enemy.apply_status("STUNNED", rs_stun)
 				var _vfx_rs = get_node_or_null("/root/VFXManager")
 				if _vfx_rs and _vfx_rs.has_method("shockwave"):
-					_vfx_rs.shockwave(enemy.global_position, rs_radius, Color(1.0, 0.35, 0.15, 0.55))
+					_vfx_rs.shockwave(enemy.global_position, rs_radius, rs_color)
 			# Perk/Item passives: lifesteal, hemorrhage, pyromancer
 			if is_player_bullet:
 				_apply_player_passive_effects(enemy, total_dmg)

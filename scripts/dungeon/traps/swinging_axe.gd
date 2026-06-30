@@ -22,7 +22,7 @@ const FAST_DAMAGE_INTERVAL = 0.25  # damage every 0.25s when fast
 const BLADE_RADIUS = 8.0
 const BLADE_WIDTH = 2.0
 const DAMAGE_RANGE_SQ = 144.0  # 12px squared
-const MAX_ENEMY_DAMAGE = 40
+const MAX_ENEMY_DAMAGE = 480  # Phase 1 ×12 from 40. Cap on per-hit damage to enemies.
 const ENEMY_DAMAGE_MULT = 2
 
 var _speed_t: float = 0.0
