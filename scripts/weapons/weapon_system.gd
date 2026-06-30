@@ -396,15 +396,24 @@ func _spawn_bullet(origin: Vector2, data: Dictionary, container: Node) -> void:
 		bullet.set_meta("rage_splash_radius", 24.0)
 		bullet.set_meta("rage_splash_dmg_pct", 0.5)
 
-	# Hammer Ground Slam — while shift is held (_earthquake_active), every
-	# hammer swing becomes a bigger AoE with stun, replacing the old walking-
-	# slam-every-0.5s pattern. Overrides any rage_splash values above when
-	# both apply, since Ground Slam is the stronger active commitment.
+	# Hammer Shift — replaces the old walking-slam loop. While shift is held
+	# (_earthquake_active), every hammer swing gets the same AoE splash the
+	# warrior sword gets at ≥50 rage. Hammer is class-agnostic on this — any
+	# class can equip a hammer and get the splash by holding shift, since the
+	# whole hammer identity is "AoE swings with movement penalty".
 	if weapon and weapon.weapon_type == "hammer" and p and p.get("_earthquake_active"):
-		bullet.set_meta("rage_splash_radius", 40.0)
-		bullet.set_meta("rage_splash_dmg_pct", 0.8)
-		bullet.set_meta("rage_splash_stun", 0.4)
+		bullet.set_meta("rage_splash_radius", 24.0)
+		bullet.set_meta("rage_splash_dmg_pct", 0.5)
 		bullet.set_meta("rage_splash_color", Color(0.55, 0.40, 0.20, 0.65))
+
+	# Sword Shift — Blade Dance stamps the AoE splash on every swing for ALL
+	# classes (warrior, mercenary, archer, wizard equally). No rage gating, no
+	# class-specific branching. Pick up a sword, hold shift, you get the
+	# splash. Same identity as hammer's Ground Slam.
+	if weapon and weapon.weapon_type == "sword" and p and p.get("_blade_dance_active"):
+		bullet.set_meta("rage_splash_radius", 24.0)
+		bullet.set_meta("rage_splash_dmg_pct", 0.5)
+		bullet.set_meta("rage_splash_color", Color(0.95, 0.85, 0.45, 0.55))
 
 	container.add_child(bullet)
 	# Coop: notify peers so they can render a visual ghost of this player bullet.

@@ -53,6 +53,7 @@ var _sine_frequency: float = 8.0             # wave speed for SINE_WAVE
 var _base_direction: Vector2 = Vector2.RIGHT  # original direction for wave calc
 var _split_count: int = 4                     # bullets to spawn on split
 var _has_split: bool = false                  # prevent multiple splits
+var _returning_has_turned: bool = false       # expire returning bullets once they come home
 var _accel_rate: float = 200.0               # acceleration per second
 var _decel_rate: float = 100.0               # deceleration per second
 var _detonated: bool = false                  # prevent multiple detonations
@@ -406,11 +407,15 @@ func _physics_process(delta: float) -> void:
 		BulletBehavior.RETURNING:
 			var traveled = global_position.distance_to(_origin_pos)
 			if traveled > _max_travel:
+				_returning_has_turned = true
 				# Curve back toward origin
 				var to_origin = (_origin_pos - global_position).normalized()
 				var cur_angle = direction.angle()
 				var tgt_angle = to_origin.angle()
 				direction = Vector2.from_angle(lerp_angle(cur_angle, tgt_angle, 5.0 * delta))
+			elif _returning_has_turned and traveled < 6.0 and _behavior_timer > 0.4:
+				queue_free()
+				return
 
 		BulletBehavior.ACCELERATING:
 			speed += _accel_rate * delta

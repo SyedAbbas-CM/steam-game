@@ -1803,12 +1803,13 @@ func _move_teleport(p: MovementPattern, spd: float, delta: float) -> void:
 
 ## Find a valid floor position near a center point. Returns center if no floor found.
 func _find_valid_floor_pos(center: Vector2, min_dist: float, max_dist: float) -> Vector2:
-	var offset: Vector2 = Vector2.ZERO
 	var room_node = get_parent().get_parent() if get_parent() else null
 	var floor_tm: TileMapLayer = null
 	if room_node and room_node.has_node("Floor"):
 		floor_tm = room_node.get_node("Floor") as TileMapLayer
 	for _i in range(15):
+		var dist := randf_range(min_dist, maxf(min_dist, max_dist))
+		var offset := Vector2.RIGHT.rotated(randf() * TAU) * dist
 		var candidate = center + offset
 		if floor_tm:
 			var local_pos = floor_tm.to_local(candidate)
@@ -1822,7 +1823,12 @@ func _find_valid_floor_pos(center: Vector2, min_dist: float, max_dist: float) ->
 func _do_teleport_blink(p: MovementPattern) -> void:
 	var start_pos := global_position
 	var tw = create_tween()
-	global_position = _find_valid_floor_pos(_spawn_pos, 20.0, p.teleport_range)
+	var anchor := global_position
+	if is_instance_valid(player):
+		var away := (global_position - player.global_position)
+		if away.length() > 0.01:
+			anchor = global_position + away.normalized() * minf(p.teleport_range * 0.35, 24.0)
+	global_position = _find_valid_floor_pos(anchor, 20.0, p.teleport_range)
 	velocity = Vector2.ZERO
 	# Visual flash
 	var spr = get_node_or_null("Sprite2D")
@@ -3714,6 +3720,18 @@ func _spawn_behavior_bullet(container: Node, dir: Vector2, spd: float, bhv: int)
 		"stationary_ok": bhv in [bullet.BulletBehavior.BARRIER, bullet.BulletBehavior.LOBBED],
 	})
 
+func _finalize_direct_enemy_bullet(container: Node, bullet: Node, stationary_ok: bool = false) -> void:
+	container.add_child(bullet)
+	_obs_record_projectile(bullet, {
+		"speed": bullet.speed,
+		"damage": bullet.damage,
+		"direction": bullet.direction,
+		"behavior": int(bullet.behavior),
+		"lifetime": bullet.lifetime,
+		"stationary_ok": stationary_ok,
+	})
+	_coop_broadcast_enemy_bullet(bullet)
+
 ## SHIELD_BASH: Spawns a frontal barrier arc then charges at player
 func _shoot_shield_bash(dir: Vector2) -> void:
 	var bc = get_tree().get_first_node_in_group("bullets")
@@ -4014,7 +4032,7 @@ func _shoot_boomerang(dir: Vector2) -> void:
 		b._max_travel = randf_range(35.0, 55.0)
 		b.lifetime = 5.0
 		_apply_enemy_bullet_props(b, bspeed)
-		bullets_container.add_child(b)
+		_finalize_direct_enemy_bullet(bullets_container, b)
 
 ## STRAFE_RUN: Fires a spread while moving perpendicular — hit-and-run style
 func _shoot_strafe_run(dir: Vector2) -> void:
@@ -4074,7 +4092,7 @@ func _shoot_returning(dir: Vector2) -> void:
 		b._origin_pos = global_position
 		b._origin_entity = self
 		b._max_travel = randf_range(40.0, 70.0)
-		bullets_container.add_child(b)
+		_finalize_direct_enemy_bullet(bullets_container, b)
 
 ## SEEKING_MINES: Drops slow homing mines that drift toward the player
 func _shoot_seeking_mines() -> void:

@@ -1535,22 +1535,13 @@ func _physics_process(delta: float) -> void:
 			weapon_system.crit_bonus = 20.0
 			weapon_system.damage_mult = 2.0
 	elif _blade_dance_active:
-		# Sword SHIFT — Warrior gets heavy swings, Merc gets the dance, Wizard gets arcane infusion.
-		if _pc_class == "warrior":
-			# Warrior power swings — slower, harder hits, knockback feel.
-			weapon_system.fire_rate_mult = 0.75
-			weapon_system.crit_bonus = 5.0
-			weapon_system.damage_mult = 1.8
-		elif _pc_class == "wizard":
-			# Wizard arcane sword — moderate fire rate, big crit chance.
-			weapon_system.fire_rate_mult = 1.4
-			weapon_system.crit_bonus = 25.0
-			weapon_system.damage_mult = 1.0
-		else:
-			# Mercenary / Archer dancing blade — fast flurry, lower per-hit.
-			weapon_system.fire_rate_mult = 2.0
-			weapon_system.crit_bonus = 15.0
-			weapon_system.damage_mult = 0.7
+		# Sword SHIFT — Blade Dance is THE fast-attack flurry for every class.
+		# No more "warrior gets heavy slow swings while merc gets the dance" —
+		# pick up a sword, hold shift, you get Blade Dance. Same numbers across
+		# the roster so the ability has one identity.
+		weapon_system.fire_rate_mult = 2.0
+		weapon_system.crit_bonus = 15.0
+		weapon_system.damage_mult = 0.7
 	elif _berserk_swing_active:
 		weapon_system.fire_rate_mult = 0.8
 		weapon_system.crit_bonus = 0.0

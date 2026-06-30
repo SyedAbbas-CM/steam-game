@@ -53,10 +53,12 @@ func activate() -> void:
 		position = Vector2(track_tiles[_track_index].x * TILE_SIZE + 4, track_tiles[_track_index].y * TILE_SIZE + 4)
 
 func get_damage() -> int:
+	# Phase 1 ×12 rescale: rail blade trams are the heaviest dungeon trap so
+	# they keep their scary status — SAW 96 base + 48/floor, hammer 108 + 48/floor.
 	if rail_type == RailType.SAW:
-		return 8 + floor_number * 4  # heavy TRUE damage
+		return 96 + floor_number * 48  # heavy TRUE damage
 	else:
-		return 9 + floor_number * 4
+		return 108 + floor_number * 48
 
 func _physics_process(delta: float) -> void:
 	if not _active or track_tiles.size() < 2:

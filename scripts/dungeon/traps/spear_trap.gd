@@ -55,10 +55,12 @@ func _ready() -> void:
 	set_physics_process(true)
 
 func get_damage() -> int:
+	# Phase 1 ×12 rescale: base 4 + 2/floor + 2/late-floor → 48 + 24/floor + 24/late.
+	# Same shape, scaled to land at ~13% of warrior HP on floor 1.
 	var floor_i := maxi(floor_number, 1)
-	var dmg := 4 + floor_i * 2
+	var dmg := 48 + floor_i * 24
 	if floor_i > 3:
-		dmg += (floor_i - 3) * 2
+		dmg += (floor_i - 3) * 24
 	return dmg
 
 func set_active(active: bool) -> void:

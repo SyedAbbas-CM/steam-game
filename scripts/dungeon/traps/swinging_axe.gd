@@ -32,7 +32,9 @@ func _ready() -> void:
 	set_physics_process(true)
 
 func get_damage() -> int:
-	return 1 + floor_number
+	# Phase 1 ×12 rescale: 1 + floor → 12 + 12/floor. A grazing blade tick on
+	# floor 1 chunks ~3 % of a warrior's HP; multiple ticks add up fast.
+	return 12 + floor_number * 12
 
 func set_active(active: bool) -> void:
 	_active = active

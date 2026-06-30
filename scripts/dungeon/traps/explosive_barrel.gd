@@ -255,10 +255,12 @@ func _explode() -> void:
 	set_physics_process(false)
 
 	var explosion_radius := EXPLOSION_RADIUS_TILES * TILE_SIZE
+	# Phase 1 ×12 rescale: 10 + 3/floor → 120 + 36/floor. Barrel boom is a
+	# scary punish, not a tickle — chunks 14 % of warrior HP on floor 1.
 	var floor_i := maxi(floor_number, 1)
-	var damage := 10 + floor_i * 3
+	var damage := 120 + floor_i * 36
 	if floor_i > 3:
-		damage += (floor_i - 3) * 2
+		damage += (floor_i - 3) * 24
 
 	# Erase barrel tile (wherever it currently sits)
 	var cur_tile := Vector2i(
