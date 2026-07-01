@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Stamina Potion"
-loy_tile_index = 1424
+loy_tile_index = 1378
 description = "Use: Restore Stamina Partial."
 slot_type = 10
 rarity = 0

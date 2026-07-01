@@ -21,7 +21,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Titan's Trident"
-loy_tile_index = 141
+loy_tile_index = 153
 description = "An exceptional balanced spear; Range is its first virtue, precision its second."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

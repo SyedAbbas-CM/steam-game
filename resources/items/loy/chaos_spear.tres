@@ -21,7 +21,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Chaos Spear"
-loy_tile_index = 23
+loy_tile_index = 127
 description = "An exceptional sharp-tipped spear; Holds enemies at the edge of your reach."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

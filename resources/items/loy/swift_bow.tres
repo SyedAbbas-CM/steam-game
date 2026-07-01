@@ -16,7 +16,7 @@ percent_bonus = 0.04
 [resource]
 script = ExtResource("1")
 item_name = "Swift Bow"
-loy_tile_index = 309
+loy_tile_index = 269
 description = "A handy short bow; Made for skirmish and ambush, not siege."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

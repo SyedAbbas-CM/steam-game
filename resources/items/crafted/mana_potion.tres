@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Mana Potion"
-loy_tile_index = 1396
+loy_tile_index = 1380
 description = "A simple mana potion (+15MP)"
 slot_type = 10
 rarity = 0

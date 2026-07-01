@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Cave Crystal"
-loy_tile_index = 1522
+loy_tile_index = 1534
 description = "A glowing crystal fragment pulsing with energy."
 slot_type = 11
 rarity = 1

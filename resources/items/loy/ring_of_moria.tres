@@ -16,7 +16,7 @@ flat_bonus = 4.0
 [resource]
 script = ExtResource("1")
 item_name = "Ring of Moria"
-loy_tile_index = 1172
+loy_tile_index = 1168
 description = "An exceptional gleaming ring; Magic, the kind that hides in the corner of a hand."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

@@ -21,7 +21,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Ornate Blade"
-loy_tile_index = 94
+loy_tile_index = 137
 description = "An exceptional balanced blade; Sings through unarmored foes."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

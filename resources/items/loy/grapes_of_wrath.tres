@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Grapes of Wrath"
-loy_tile_index = 1389
+loy_tile_index = 1409
 description = "Magical fruit (enchant +1 ATK orc)"
 slot_type = 10
 rarity = 2

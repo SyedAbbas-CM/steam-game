@@ -11,7 +11,7 @@ flat_bonus = 96
 [resource]
 script = ExtResource("1")
 item_name = "Arcane Staff"
-loy_tile_index = 400
+loy_tile_index = 416
 description = "A staff crackling with arcane power."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

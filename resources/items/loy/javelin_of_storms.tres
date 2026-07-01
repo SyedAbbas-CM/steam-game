@@ -16,7 +16,7 @@ percent_bonus = 20.0
 [resource]
 script = ExtResource("1")
 item_name = "Javelin of Storms"
-loy_tile_index = 287
+loy_tile_index = 291
 description = "An exceptional storm-charged javelin; Hairs rise on the arm that holds it. Grants Gravity Well while equipped."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

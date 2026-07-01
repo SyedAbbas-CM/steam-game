@@ -21,7 +21,7 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Chain of Torment"
-loy_tile_index = 20
+loy_tile_index = 145
 description = "An exceptional swinging flail; Bypasses shields by flowing around them."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

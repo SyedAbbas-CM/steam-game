@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Turq Potion"
-loy_tile_index = 1428
+loy_tile_index = 1390
 description = "Restores 130 HP. Drink in a single pull — the second sip is always wasted."
 slot_type = 10
 rarity = 0

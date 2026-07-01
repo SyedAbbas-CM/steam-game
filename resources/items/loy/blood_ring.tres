@@ -16,7 +16,7 @@ flat_bonus = 4.0
 [resource]
 script = ExtResource("1")
 item_name = "Blood Ring"
-loy_tile_index = 1157
+loy_tile_index = 1166
 description = "An exceptional blood-drinking ring; Rumour has it the metal runs warmer in a fight."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

@@ -21,7 +21,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Prong Tome"
-loy_tile_index = 433
+loy_tile_index = 423
 description = "An exceptional ancient tome; Words inside it remember being read."
 slot_type = 2
 weapon_type = "tome"

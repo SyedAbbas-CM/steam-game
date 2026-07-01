@@ -21,7 +21,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Pirate Hook"
-loy_tile_index = 1167
+loy_tile_index = 1165
 description = "An exceptional gleaming ring; Magic, the kind that hides in the corner of a hand."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

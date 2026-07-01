@@ -21,7 +21,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Sword of Nivek"
-loy_tile_index = 133
+loy_tile_index = 158
 description = "An exceptional well-forged blade; Equally at home cleaving and thrusting."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

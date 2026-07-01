@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Octopus"
-loy_tile_index = 1401
+loy_tile_index = 1392
 description = "Restores 25 MP. A little goes far; a lot goes badly."
 slot_type = 10
 rarity = 0

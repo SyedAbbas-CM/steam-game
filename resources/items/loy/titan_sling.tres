@@ -11,7 +11,7 @@ flat_bonus = 48
 [resource]
 script = ExtResource("1")
 item_name = "Titan Sling"
-loy_tile_index = 310
+loy_tile_index = 292
 description = "An exceptional supple sling; Cheap stones, expensive consequences."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

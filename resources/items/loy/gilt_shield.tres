@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Gilt Shield"
-loy_tile_index = 822
+loy_tile_index = 829
 description = "An exceptional banded shield; Trades reach for survival, every time."
 slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

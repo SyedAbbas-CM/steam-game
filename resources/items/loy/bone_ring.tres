@@ -16,7 +16,7 @@ flat_bonus = 4.0
 [resource]
 script = ExtResource("1")
 item_name = "Bone Ring"
-loy_tile_index = 1158
+loy_tile_index = 1167
 description = "An exceptional bone-carved ring; Shaped from something that was once alive."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

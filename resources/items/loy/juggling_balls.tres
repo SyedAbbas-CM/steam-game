@@ -16,7 +16,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Juggling Balls"
-loy_tile_index = 79
+loy_tile_index = 111
 description = "An exceptional brutal flail; Once swinging, it must keep swinging."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

@@ -16,7 +16,7 @@ percent_bonus = 0.2
 [resource]
 script = ExtResource("1")
 item_name = "Bow of Justice"
-loy_tile_index = 260
+loy_tile_index = 312
 description = "An exceptional ice-bound bow; Wounds it makes are slow to warm again."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

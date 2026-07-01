@@ -21,7 +21,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Ninja Gi"
-loy_tile_index = 705
+loy_tile_index = 709
 description = "An exceptional reinforced armour; Stops what a tunic only suggests."
 slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

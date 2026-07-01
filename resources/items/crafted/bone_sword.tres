@@ -11,7 +11,7 @@ flat_bonus = 72
 [resource]
 script = ExtResource("1")
 item_name = "Bone Sword"
-loy_tile_index = 17
+loy_tile_index = 47
 description = "A blade forged from bones of the undead."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

@@ -11,7 +11,7 @@ flat_bonus = 24
 [resource]
 script = ExtResource("1")
 item_name = "Copper Ring"
-loy_tile_index = 1159
+loy_tile_index = 1153
 description = "A mystical ring; Easier to lose than to find."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

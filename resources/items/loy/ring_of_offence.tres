@@ -16,7 +16,7 @@ flat_bonus = 2.0
 [resource]
 script = ExtResource("1")
 item_name = "Ring of Offence"
-loy_tile_index = 1174
+loy_tile_index = 1158
 description = "A fine engraved ring; A circle never closes if it has work to do."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

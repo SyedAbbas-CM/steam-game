@@ -21,7 +21,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Magma Club"
-loy_tile_index = 87
+loy_tile_index = 123
 description = "An exceptional studded club; Cracks armour even when the edge cannot."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

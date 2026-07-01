@@ -21,7 +21,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Griffin Shield"
-loy_tile_index = 823
+loy_tile_index = 846
 description = "An exceptional unyielding shield; Half the fight is reading what the other side will do — the rest is this."
 slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

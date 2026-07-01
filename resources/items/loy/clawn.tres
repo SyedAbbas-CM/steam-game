@@ -21,7 +21,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Clawn"
-loy_tile_index = 24
+loy_tile_index = 100
 description = "An exceptional needle-pointed dagger; Few wear armour that stops a determined cut."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

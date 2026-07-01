@@ -16,7 +16,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Shield of Light"
-loy_tile_index = 837
+loy_tile_index = 844
 description = "An exceptional battered shield; Turns a sword's edge into wasted breath."
 slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

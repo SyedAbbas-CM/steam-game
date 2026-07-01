@@ -21,7 +21,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Dual Swords"
-loy_tile_index = 48
+loy_tile_index = 148
 description = "An exceptional tempered blade; Favoured by knights and travelling sellswords alike."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

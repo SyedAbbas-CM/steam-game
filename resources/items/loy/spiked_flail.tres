@@ -16,7 +16,7 @@ flat_bonus = 0.05
 [resource]
 script = ExtResource("1")
 item_name = "Spiked Flail"
-loy_tile_index = 121
+loy_tile_index = 24
 description = "A chain-linked flail; Hard to learn, terrifying to face."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

@@ -21,7 +21,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Spectral Shield"
-loy_tile_index = 840
+loy_tile_index = 842
 description = "An exceptional studded shield; A line in the dirt you can carry with you."
 slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

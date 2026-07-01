@@ -16,7 +16,7 @@ flat_bonus = 24
 [resource]
 script = ExtResource("1")
 item_name = "Iron Club"
-loy_tile_index = 67
+loy_tile_index = 39
 description = "An iron-cast club; Plain, dependable, and likely to outlast its owner."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

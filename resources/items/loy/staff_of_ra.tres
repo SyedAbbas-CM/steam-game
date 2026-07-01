@@ -16,7 +16,7 @@ flat_bonus = 20.0
 [resource]
 script = ExtResource("1")
 item_name = "Staff of Ra"
-loy_tile_index = 442
+loy_tile_index = 445
 description = "An exceptional resonating staff; Bleeds magic with every gesture."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

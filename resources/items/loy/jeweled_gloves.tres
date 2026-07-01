@@ -16,7 +16,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Jeweled Gloves"
-loy_tile_index = 1049
+loy_tile_index = 1053
 description = "An exceptional studded gloves; Saves fingers without trading away grip."
 slot_type = 7
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

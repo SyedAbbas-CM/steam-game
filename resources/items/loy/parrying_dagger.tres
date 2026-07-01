@@ -16,7 +16,7 @@ flat_bonus = 0.05
 [resource]
 script = ExtResource("1")
 item_name = "Parrying Dagger"
-loy_tile_index = 832
+loy_tile_index = 822
 description = "A slim offhand blade; Thrown, it carves a path through enemy fire."
 slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

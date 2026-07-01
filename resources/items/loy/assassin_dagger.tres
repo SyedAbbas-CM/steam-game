@@ -21,7 +21,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Assassin Dagger"
-loy_tile_index = 1
+loy_tile_index = 71
 description = "A fine swift dagger; Slips between plates and through joints."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

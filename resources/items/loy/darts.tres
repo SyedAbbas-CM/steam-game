@@ -16,7 +16,7 @@ flat_bonus = 0.05
 [resource]
 script = ExtResource("1")
 item_name = "Darts"
-loy_tile_index = 35
+loy_tile_index = 44
 description = "A fine well-weighted throwing weapon; A volley before the foe closes the gap."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

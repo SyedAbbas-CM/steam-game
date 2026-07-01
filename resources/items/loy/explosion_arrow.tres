@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Explosion Arrow"
-loy_tile_index = 1632
+loy_tile_index = 1637
 description = "Arrows that explode on impact, damaging nearby enemies (25 shots)"
 slot_type = 12
 rarity = 0

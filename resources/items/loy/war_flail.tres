@@ -16,7 +16,7 @@ percent_bonus = 0.03
 [resource]
 script = ExtResource("1")
 item_name = "War Flail"
-loy_tile_index = 156
+loy_tile_index = 36
 description = "A chain-linked flail; Once swinging, it must keep swinging."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Scroll of Heal"
-loy_tile_index = 1414
+loy_tile_index = 1404
 description = "Teaches the Heal spell permanently"
 slot_type = 10
 rarity = 1

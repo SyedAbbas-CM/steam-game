@@ -21,7 +21,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Glory Ring"
-loy_tile_index = 1161
+loy_tile_index = 1179
 description = "An exceptional gleaming ring; A circle never closes if it has work to do."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

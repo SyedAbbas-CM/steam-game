@@ -63,11 +63,15 @@ def parse_item(path: Path) -> dict | None:
     t = re.search(r'^loy_tile_index\s*=\s*(-?\d+)$', text, re.MULTILINE)
     if not (n and s):
         return None
+    r = re.search(r'^rarity\s*=\s*(\d+)$', text, re.MULTILINE)
+    b = re.search(r'^buy_price\s*=\s*([-0-9]+)$', text, re.MULTILINE)
     return {
         'path': path,
         'name': n.group(1),
         'slot': int(s.group(1)),
         'old_tile': int(t.group(1)) if t else -1,
+        'rarity': int(r.group(1)) if r else 0,
+        'buy_price': int(b.group(1)) if b else 0,
     }
 
 
@@ -97,8 +101,12 @@ def main() -> None:
     by_slot: dict[int, list[dict]] = {s: [] for s, _ in SLOT_ORDER}
     for it in items:
         by_slot.setdefault(it['slot'], []).append(it)
+    # Sort each slot section by tier: rarity (0 common → 2 rare) first, then
+    # buy_price (cheap → expensive) as a stable tier proxy, then name for tie
+    # break. Result: early-game gear at the top of each slot block, later-tier
+    # / boss drops further down.
     for s in by_slot:
-        by_slot[s].sort(key=lambda x: x['name'].lower())
+        by_slot[s].sort(key=lambda x: (x['rarity'], x['buy_price'], x['name'].lower()))
 
     # Compute section row ranges.
     sections: list[dict] = []

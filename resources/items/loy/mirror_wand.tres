@@ -16,7 +16,7 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Mirror Wand"
-loy_tile_index = 429
+loy_tile_index = 417
 description = "An exceptional sparking wand; Quicker to cast than any staff or tome. Grants Mirror Image while equipped."
 slot_type = 2
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

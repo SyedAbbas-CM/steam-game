@@ -21,7 +21,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Book of Ohm"
-loy_tile_index = 408
+loy_tile_index = 425
 description = "An exceptional inscribed tome; Words inside it remember being read."
 slot_type = 2
 weapon_type = "tome"

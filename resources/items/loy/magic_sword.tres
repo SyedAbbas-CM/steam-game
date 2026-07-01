@@ -16,7 +16,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Magic Sword"
-loy_tile_index = 86
+loy_tile_index = 97
 description = "An exceptional duelist's blade; Sings through unarmored foes."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

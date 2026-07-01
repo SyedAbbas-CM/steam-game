@@ -17,7 +17,7 @@ percent_bonus = 0.05
 [resource]
 script = ExtResource("1")
 item_name = "Berserker Axe"
-loy_tile_index = 8
+loy_tile_index = 76
 description = "An exceptional rending great axe; Few foes stand after meeting one."
 slot_type = 0
 rarity = 2

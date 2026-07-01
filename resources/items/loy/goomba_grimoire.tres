@@ -21,7 +21,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Goomba Grimoire"
-loy_tile_index = 425
+loy_tile_index = 439
 description = "An exceptional glowing tome; Each spell costs a page, then a pulse of will."
 slot_type = 2
 weapon_type = "tome"

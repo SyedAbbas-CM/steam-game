@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 item_name = "Poison Flask"
-loy_tile_index = 1405
+loy_tile_index = 1403
 description = "Throw to release a cloud of poison."
 slot_type = 10
 rarity = 1

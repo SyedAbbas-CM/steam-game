@@ -16,7 +16,7 @@ percent_bonus = 0.2
 [resource]
 script = ExtResource("1")
 item_name = "Magic Bow"
-loy_tile_index = 293
+loy_tile_index = 296
 description = "An exceptional long-range bow; Drawn properly, every shot speaks for itself."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

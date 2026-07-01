@@ -11,7 +11,7 @@ percent_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Swift Boots"
-loy_tile_index = 947
+loy_tile_index = 932
 description = "Feather-light boots that hasten your stride."
 slot_type = 6
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

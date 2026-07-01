@@ -16,7 +16,7 @@ flat_bonus = 36
 [resource]
 script = ExtResource("1")
 item_name = "Consecrated Mace"
-loy_tile_index = 27
+loy_tile_index = 77
 description = "An exceptional studded club; Crushes plate; breaks bones beneath chain. Grants Consecration while equipped."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

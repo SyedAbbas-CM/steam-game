@@ -16,7 +16,7 @@ flat_bonus = 24
 [resource]
 script = ExtResource("1")
 item_name = "Zombie Disguise"
-loy_tile_index = 722
+loy_tile_index = 687
 description = "A fine layered armour; Wear it in until it remembers your shape."
 slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

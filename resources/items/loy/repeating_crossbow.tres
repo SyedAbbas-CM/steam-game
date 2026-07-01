@@ -21,7 +21,7 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Repeating Crossbow"
-loy_tile_index = 301
+loy_tile_index = 300
 description = "An exceptional mechanical crossbow; Slow to reload — choose the shot that counts."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

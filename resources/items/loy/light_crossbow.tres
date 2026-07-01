@@ -16,7 +16,7 @@ flat_bonus = 1.0
 [resource]
 script = ExtResource("1")
 item_name = "Light Crossbow"
-loy_tile_index = 290
+loy_tile_index = 262
 description = "A geared crossbow; One bolt, decisively placed."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

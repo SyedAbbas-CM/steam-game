@@ -11,7 +11,7 @@ flat_bonus = 5.0
 [resource]
 script = ExtResource("1")
 item_name = "Reinforced Chainmail"
-loy_tile_index = 709
+loy_tile_index = 677
 description = "Heavy reinforced armor."
 slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

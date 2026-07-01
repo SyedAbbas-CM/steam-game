@@ -16,7 +16,7 @@ flat_bonus = 60
 [resource]
 script = ExtResource("1")
 item_name = "Elven Chainmail"
-loy_tile_index = 684
+loy_tile_index = 694
 description = "An exceptional well-crafted armour; Heavier than it looks, lighter than it lives up to."
 slot_type = 4
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

@@ -11,7 +11,7 @@ flat_bonus = 24
 [resource]
 script = ExtResource("1")
 item_name = "Steel Javelin"
-loy_tile_index = 307
+loy_tile_index = 273
 description = "A fine tempered-steel javelin; Honest steel, well-folded and well-kept."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0")])

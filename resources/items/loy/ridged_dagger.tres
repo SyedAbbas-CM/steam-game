@@ -16,7 +16,7 @@ flat_bonus = 12
 [resource]
 script = ExtResource("1")
 item_name = "Ridged Dagger"
-loy_tile_index = 102
+loy_tile_index = 29
 description = "A swift dagger; Few wear armour that stops a determined cut."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

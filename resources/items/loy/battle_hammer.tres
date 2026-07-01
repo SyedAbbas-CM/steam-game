@@ -21,7 +21,7 @@ flat_bonus = 24
 [resource]
 script = ExtResource("1")
 item_name = "Battle Hammer"
-loy_tile_index = 7
+loy_tile_index = 66
 description = "A fine heavy warhammer; Slow, deliberate, and unanswerable."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Wizard Hat"
-loy_tile_index = 578
+loy_tile_index = 562
 description = "An exceptional sturdy helm; A good helm is rarely remembered — a bad one only once."
 slot_type = 3
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

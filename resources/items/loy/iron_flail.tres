@@ -16,7 +16,7 @@ percent_bonus = 0.04
 [resource]
 script = ExtResource("1")
 item_name = "Iron Flail"
-loy_tile_index = 69
+loy_tile_index = 34
 description = "An iron-cast flail; Plain, dependable, and likely to outlast its owner."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

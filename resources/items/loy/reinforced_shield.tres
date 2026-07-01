@@ -16,7 +16,7 @@ flat_bonus = 12
 [resource]
 script = ExtResource("1")
 item_name = "Reinforced Shield"
-loy_tile_index = 835
+loy_tile_index = 819
 description = "An orc-forged shield; Crude work, brutally effective."
 slot_type = 5
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

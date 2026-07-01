@@ -16,7 +16,7 @@ percent_bonus = 0.03
 [resource]
 script = ExtResource("1")
 item_name = "Chain Whip"
-loy_tile_index = 21
+loy_tile_index = 2
 description = "A brutal flail; Rewards rhythm; punishes hesitation."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

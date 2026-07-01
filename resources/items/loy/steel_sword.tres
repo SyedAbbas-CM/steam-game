@@ -21,7 +21,7 @@ percent_bonus = 0.05
 [resource]
 script = ExtResource("1")
 item_name = "Steel Sword"
-loy_tile_index = 127
+loy_tile_index = 63
 description = "A fine tempered-steel blade; Honest steel, well-folded and well-kept."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Band of Odin"
-loy_tile_index = 1154
+loy_tile_index = 1161
 description = "An exceptional inscribed ring; Easier to lose than to find."
 slot_type = 8
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

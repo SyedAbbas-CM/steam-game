@@ -16,7 +16,7 @@ flat_bonus = 0.15
 [resource]
 script = ExtResource("1")
 item_name = "Dark Bow"
-loy_tile_index = 265
+loy_tile_index = 298
 description = "An exceptional shadow-touched bow; Drinks light into itself rather than reflecting it."
 slot_type = 1
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
