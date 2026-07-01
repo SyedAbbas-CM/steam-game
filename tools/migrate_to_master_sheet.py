@@ -75,20 +75,59 @@ def parse_item(path: Path) -> dict | None:
     }
 
 
-def crop_old_sprite(idx: int, tiles: Image.Image, tiles2: Image.Image) -> Image.Image | None:
+def crop_from_sheet(idx: int, sheet: Image.Image) -> Image.Image | None:
+    """Crop the 32×32 cell at grid position idx from any 16-wide sprite sheet."""
     if idx < 0:
         return None
-    sheet = tiles if idx < 256 else tiles2
-    local = idx % 256
-    c = local % COLS
-    r = local // COLS
+    max_cells = (sheet.size[1] // TILE_PX) * COLS
+    if idx >= max_cells:
+        return None
+    c = idx % COLS
+    r = idx // COLS
     return sheet.crop((c * TILE_PX, r * TILE_PX, (c + 1) * TILE_PX, (r + 1) * TILE_PX))
+
+
+def resolve_source_sprite(
+    old_tile: int,
+    tiles: Image.Image,
+    tiles2: Image.Image,
+    current_master: Image.Image | None,
+) -> Image.Image | None:
+    """Route to the correct source sheet based on the tile-index range:
+    - 0..255   → tiles.png (LoY range)
+    - 256..511 → tiles2.png (LoY range)
+    - 512+     → the CURRENT master sheet (post-migration range)
+
+    If current_master is None (fresh install / master got deleted) and the
+    index is in the 512+ range we return None, since we have no way to
+    recover a sprite outside the LoY sheets without a source master.
+    """
+    if old_tile < 0:
+        return None
+    if old_tile < 256:
+        return crop_from_sheet(old_tile, tiles)
+    if old_tile < 512:
+        return crop_from_sheet(old_tile - 256, tiles2)
+    if current_master is None:
+        return None
+    return crop_from_sheet(old_tile, current_master)
 
 
 def main() -> None:
     print('Loading source sheets…')
     tiles = Image.open(TILES_PATH).convert('RGBA')
     tiles2 = Image.open(TILES2_PATH).convert('RGBA')
+    # If a master already exists it becomes the source for any item whose
+    # current loy_tile_index lives in the master range (>=512). That way a
+    # re-migration correctly carries each item's sprite from its current
+    # cell to its new cell instead of accidentally cropping from tiles.png
+    # at a bogus offset (which is what wrecked the last re-migration).
+    current_master: Image.Image | None = None
+    if MASTER_PATH.is_file():
+        current_master = Image.open(MASTER_PATH).convert('RGBA')
+        print(f'  using existing {MASTER_PATH.relative_to(PROJECT)} '
+              f'({current_master.size[0]}×{current_master.size[1]}) as source '
+              'for items in master-range indices')
 
     print('Scanning items…')
     items: list[dict] = []
@@ -136,11 +175,8 @@ def main() -> None:
         for i, it in enumerate(group):
             c = i % COLS
             r = sec['start_row'] + i // COLS
-            sprite = crop_old_sprite(it['old_tile'], tiles, tiles2)
-            if sprite is None:
-                # leave transparent — no icon
-                pass
-            else:
+            sprite = resolve_source_sprite(it['old_tile'], tiles, tiles2, current_master)
+            if sprite is not None:
                 master.paste(sprite, (c * TILE_PX, r * TILE_PX), sprite)
             new_index[it['path']] = r * COLS + c
 
