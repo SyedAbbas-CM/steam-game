@@ -558,7 +558,13 @@ function renderItemList(){
     head.className = 'section-head';
     head.textContent = SLOT_NAMES[slot] + ' (' + bySlot[slot].length + ')';
     list.appendChild(head);
-    bySlot[slot].sort((a,b)=>a.name.localeCompare(b.name));
+    // Tier sort: rarity → buy_price → name. Same key as the master sheet
+    // layout so the left list order mirrors the visual grid position.
+    bySlot[slot].sort((a,b) =>
+      ((a.rarity ?? 0) - (b.rarity ?? 0)) ||
+      ((a.buy_price ?? 0) - (b.buy_price ?? 0)) ||
+      a.name.localeCompare(b.name)
+    );
     for(const it of bySlot[slot]){
       const eff = getEdited(it);
       const card = document.createElement('div');
