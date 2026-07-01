@@ -16,7 +16,13 @@ flat_bonus = 0.25
 [resource]
 script = ExtResource("1")
 item_name = "Blood Blade"
-loy_tile_index = 15
+arrow_effect = ""
+ammo_type = ""
+is_quest_item = false
+demo_approved = false
+heal_mp = 0
+heal_hp = 0
+loy_tile_index = 0
 description = "An exceptional blood-drinking blade; Rumour has it the metal runs warmer in a fight. Grants Blood Pact while equipped."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

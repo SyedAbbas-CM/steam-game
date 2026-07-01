@@ -16,7 +16,13 @@ flat_bonus = 24
 [resource]
 script = ExtResource("1")
 item_name = "Thunder Hammer"
-loy_tile_index = 136
+arrow_effect = ""
+ammo_type = ""
+is_quest_item = false
+demo_approved = false
+heal_mp = 0
+heal_hp = 0
+loy_tile_index = 164
 description = "A fine thunder-cast warhammer; Each strike rolls like a distant peal."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])

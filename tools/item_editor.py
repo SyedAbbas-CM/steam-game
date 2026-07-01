@@ -367,6 +367,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.send_header('Content-Length', str(len(html)))
+            # No-cache so browser refresh always sees the latest .tres state.
+            # Without this, Chrome/Safari happily serve stale HTML on reload,
+            # which makes it look like sprite changes didn't stick.
+            self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            self.send_header('Pragma', 'no-cache')
             self.end_headers()
             self.wfile.write(html)
         elif path == '/api/items':
@@ -778,13 +783,25 @@ function renderForm(){
   `;
 }
 
+// Send only the fields that actually changed so the server writes just those.
+// Sending the full effective item made the server touch every field including
+// defaults, which bloated files with `weapon_type = ""`, `heal_hp = 0`, etc.
+function buildDiffPayload(path){
+  const it = ITEMS.find(x => x.path === path);
+  const dirty = edits[path] || {};
+  const out = { path };
+  for(const k of Object.keys(dirty)) out[k] = dirty[k];
+  return out;
+}
+
 async function saveCurrent(){
   if(!selected) return;
+  if(!edits[selected]){ flash('Nothing to save.'); return; }
   const it = ITEMS.find(x => x.path === selected);
-  const eff = getEdited(it);
-  const ok = await save(eff);
+  const payload = buildDiffPayload(selected);
+  const ok = await save(payload);
   if(ok){
-    Object.assign(it, eff);
+    Object.assign(it, edits[selected]);
     delete edits[selected];
     refreshUsage();
     renderItemList();
@@ -799,9 +816,9 @@ async function saveAll(){
   for(const p of paths){
     const it = ITEMS.find(x => x.path === p);
     if(!it) continue;
-    const eff = getEdited(it);
-    if(await save(eff, true)){
-      Object.assign(it, eff);
+    const payload = buildDiffPayload(p);
+    if(await save(payload, true)){
+      Object.assign(it, edits[p]);
       delete edits[p];
       ok++;
     } else fail++;

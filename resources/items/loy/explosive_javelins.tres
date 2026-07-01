@@ -5,7 +5,13 @@
 [resource]
 script = ExtResource("1")
 item_name = "Explosive Javelins"
-loy_tile_index = 1633
+ammo_type = ""
+is_quest_item = false
+demo_approved = false
+heal_mp = 0
+heal_hp = 0
+weapon_type = ""
+loy_tile_index = 144
 description = "Javelins that explode on impact (8 shots)"
 slot_type = 12
 rarity = 1

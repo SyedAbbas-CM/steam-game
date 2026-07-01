@@ -16,12 +16,18 @@ percent_bonus = 0.06
 [sub_resource type="Resource" id="mod_2"]
 script = ExtResource("2")
 stat = 7
-flat_bonus = 1.0
+flat_bonus = 1
 
 [resource]
 script = ExtResource("1")
 item_name = "Void Stars"
-loy_tile_index = 152
+arrow_effect = ""
+ammo_type = ""
+is_quest_item = false
+demo_approved = false
+heal_mp = 0
+heal_hp = 0
+loy_tile_index = 135
 description = "An exceptional balanced throwing weapon; Strikes hardest when thrown with the wrist, not the arm."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])

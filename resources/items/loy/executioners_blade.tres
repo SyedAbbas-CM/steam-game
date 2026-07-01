@@ -17,7 +17,13 @@ flat_bonus = 0.1
 [resource]
 script = ExtResource("1")
 item_name = "Executioner's Blade"
-loy_tile_index = 50
+arrow_effect = ""
+ammo_type = ""
+is_quest_item = false
+demo_approved = false
+heal_mp = 0
+heal_hp = 0
+loy_tile_index = 9
 description = "An exceptional ridge-spined greatsword; Heavy enough to break charges, fine enough to thrust."
 slot_type = 0
 rarity = 2

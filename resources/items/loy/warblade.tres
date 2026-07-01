@@ -16,7 +16,13 @@ percent_bonus = -0.02
 [resource]
 script = ExtResource("1")
 item_name = "Warblade"
-loy_tile_index = 159
+arrow_effect = ""
+ammo_type = ""
+is_quest_item = false
+demo_approved = false
+heal_mp = 0
+heal_hp = 0
+loy_tile_index = 9
 description = "A fine massive greatsword; Sweeps clear arcs of space around the wielder."
 slot_type = 0
 modifiers = Array[ExtResource("2")]([SubResource("mod_0"), SubResource("mod_1")])
