@@ -93,24 +93,25 @@ def resolve_source_sprite(
     tiles2: Image.Image,
     current_master: Image.Image | None,
 ) -> Image.Image | None:
-    """Route to the correct source sheet based on the tile-index range:
-    - 0..255   → tiles.png (LoY range)
-    - 256..511 → tiles2.png (LoY range)
-    - 512+     → the CURRENT master sheet (post-migration range)
+    """Pick the correct source sheet.
 
-    If current_master is None (fresh install / master got deleted) and the
-    index is in the 512+ range we return None, since we have no way to
-    recover a sprite outside the LoY sheets without a source master.
+    Critical: once a master exists, EVERY item's loy_tile_index is a master
+    coordinate — not a LoY (tiles.png/tiles2.png) coordinate. Even values like
+    cell 32 or cell 200 look like they could be LoY indices, but after the
+    first migration they refer to positions inside items_master.png. So we
+    must always use the master when it exists; only fall back to the LoY
+    sheets on a truly fresh migration.
     """
     if old_tile < 0:
         return None
+    if current_master is not None:
+        return crop_from_sheet(old_tile, current_master)
+    # Fresh install fallback: master doesn't exist yet, indices are LoY coords.
     if old_tile < 256:
         return crop_from_sheet(old_tile, tiles)
     if old_tile < 512:
         return crop_from_sheet(old_tile - 256, tiles2)
-    if current_master is None:
-        return None
-    return crop_from_sheet(old_tile, current_master)
+    return None
 
 
 def main() -> None:
