@@ -31,6 +31,7 @@ var _trail_timer: float = 0.0
 var _stealth_timer: float = 0.0
 var _beam_timer: float = 0.0
 var _beam_angle: float = 0.0
+var _beam_shot_timer: float = 0.0
 var _spiral_angle: float = 0.0
 var _los_check_timer: float = 0.0
 var _chase_timer: float = 0.0  # how long we've been chasing
@@ -1282,7 +1283,10 @@ func _physics_process(delta: float) -> void:
 	if _beam_timer > 0:
 		_beam_timer -= delta
 		_beam_angle += (definition.beam_sweep_speed if definition else 1.5) * delta
-		_shoot_single(Vector2.RIGHT.rotated(_beam_angle))
+		_beam_shot_timer -= delta
+		if _beam_shot_timer <= 0.0:
+			_shoot_beam_pulse(Vector2.RIGHT.rotated(_beam_angle))
+			_beam_shot_timer = 0.18 if _is_boss_or_large else 0.26
 
 	# Apply external push (from player collision) — capped to prevent runaway accumulation
 	var max_push := 300.0
@@ -2786,7 +2790,6 @@ func _do_attack(dir: Vector2) -> void:
 			_shoot_shield_bash(dir)
 		EnemyDefinition.AttackType.BEAM:
 			_start_beam(dir)
-			_shoot_single(dir)  # also fires bullets during beam
 		EnemyDefinition.AttackType.SPLIT:
 			_shoot_single(dir)
 		EnemyDefinition.AttackType.VOLLEY:
@@ -2943,7 +2946,6 @@ func _fire_attack_type(atk: int, dir: Vector2) -> void:
 			_shoot_shield_bash(dir)
 		EnemyDefinition.AttackType.BEAM:
 			_start_beam(dir)
-			_shoot_single(dir)
 		EnemyDefinition.AttackType.VOLLEY:
 			_shoot_volley(dir)
 		EnemyDefinition.AttackType.CROSS_SHOT:
@@ -3371,10 +3373,15 @@ func _shoot_spiral(dir: Vector2) -> void:
 		return
 	if count <= 0:
 		return
-	if count < 4:
-		count = 4
-	# Fire 5 rapid volleys for a continuous spiral stream
-	var volleys = 5
+	var max_spiral_count := 6 if _is_boss_or_large else 3
+	if definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS:
+		max_spiral_count = 8
+	count = clampi(count, 2, max_spiral_count)
+	# Controlled pulse stream. The old 5-volley minimum produced hundreds of bullets
+	# from large elites over a few seconds.
+	var volleys := 3 if _is_boss_or_large else 2
+	if definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS:
+		volleys = 4
 	for v in range(volleys):
 		var volley_idx := v
 		get_tree().create_timer(v * 0.12).timeout.connect(
@@ -3402,9 +3409,28 @@ func _enter_stealth() -> void:
 func _start_beam(dir: Vector2) -> void:
 	_beam_timer = definition.beam_duration if definition else 1.0
 	_beam_angle = dir.angle()
+	_beam_shot_timer = 0.0
 	var sfx_beam = get_node_or_null("/root/SFXManager")
 	if sfx_beam:
 		sfx_beam.play("laser_a", -4.0, 0.1)
+
+func _shoot_beam_pulse(dir: Vector2) -> void:
+	var bspeed: float = definition.bullet_speed if definition else 60.0
+	var bullets_container = get_tree().get_first_node_in_group("bullets")
+	if not bullets_container:
+		return
+	var pulse_count := 1
+	if definition and definition.size_class >= EnemyDefinition.SizeClass.BOSS:
+		pulse_count = mini(_get_active_bullet_count(), 3)
+	elif _is_boss_or_large:
+		pulse_count = mini(_get_active_bullet_count(), 2)
+	if pulse_count <= 1:
+		_spawn_bullet(bullets_container, dir, bspeed)
+		return
+	var spread := 0.16
+	for i in range(pulse_count):
+		var offset := (float(i) - float(pulse_count - 1) * 0.5) * spread
+		_spawn_bullet(bullets_container, dir.rotated(offset), bspeed)
 
 func _shoot_single(dir: Vector2) -> void:
 	var bspeed: float = definition.bullet_speed if definition else 60.0
@@ -3656,6 +3682,10 @@ func _spawn_boss_pattern_bullet_at(container: Node, spawn_pos: Vector2, shot_dir
 
 func _apply_enemy_bullet_props(bullet, spd: float) -> void:
 	bullet.is_player_bullet = false
+	# Bullet scene defaults are player-bullet settings (layer 4 -> enemy mask).
+	# Enemy bullets must live on layer 8 so Player/Hitbox can receive area_entered.
+	bullet.collision_layer = 8
+	bullet.collision_mask = 1
 	bullet.speed = spd
 	if definition:
 		var base_dmg: int = definition.attack_damage
@@ -3698,6 +3728,9 @@ func _ensure_active_projectile_motion(bullet: Node, fallback_speed: float = DEFA
 	var stationary_ok := bhv in [BULLET_BEHAVIOR_LOBBED, BULLET_BEHAVIOR_BARRIER]
 	if not stationary_ok and float(bullet.get("speed")) <= 0.01:
 		bullet.set("speed", maxf(fallback_speed, MIN_ACTIVE_ENEMY_PROJECTILE_SPEED))
+	if not stationary_ok and int(bullet.get("damage")) <= 0:
+		var fallback_damage := definition.attack_damage if definition else 1
+		bullet.set("damage", maxi(1, fallback_damage))
 	var dir: Vector2 = bullet.get("direction")
 	if not stationary_ok and dir.length_squared() <= 0.0001:
 		var aim := Vector2.RIGHT

@@ -1247,6 +1247,9 @@ func _create_sub_bullet(container: Node, dir: Vector2, spd: float) -> Node2D:
 	sub.direction = dir
 	sub.speed = spd
 	sub.is_player_bullet = is_player_bullet
+	if not sub.is_player_bullet:
+		sub.collision_layer = 8
+		sub.collision_mask = 1 | 16
 	sub.damage = damage
 	sub.lifetime = 2.0
 	sub.bullet_sprite_index = bullet_sprite_index
@@ -1294,11 +1297,11 @@ func _lob_land() -> void:
 		var cloud_radius = float(get_meta("poison_cloud_radius", _lob_aoe_radius))
 		_spawn_poison_cloud(global_position, cloud_radius, cloud_duration)
 	# AOE damage
-	if not is_player_bullet:
-		var p = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
-		if p and is_instance_valid(p) and p.global_position.distance_to(global_position) < _lob_aoe_radius:
-			if p.has_method("take_damage"):
-				p.take_damage(maxi(1, damage), global_position)
+		if not is_player_bullet:
+			var p = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
+			if p and is_instance_valid(p) and p.global_position.distance_to(global_position) < _lob_aoe_radius:
+				if p.has_method("take_damage"):
+					p.take_damage(maxi(1, damage), global_position, false, false, CombatTypes.DamageType.TRUE)
 	else:
 		for e in get_tree().get_nodes_in_group("enemy"):
 			if is_instance_valid(e) and e.global_position.distance_to(global_position) < _lob_aoe_radius:
@@ -1322,6 +1325,9 @@ func _lob_land() -> void:
 			sub.global_position = global_position
 			sub.direction = offset.normalized()
 			sub.is_player_bullet = is_player_bullet
+			if not sub.is_player_bullet:
+				sub.collision_layer = 8
+				sub.collision_mask = 1 | 16
 			sub.damage = maxi(1, damage / 2)
 			sub.bullet_sprite_index = bullet_sprite_index
 			sub.behavior = BulletBehavior.LOBBED
