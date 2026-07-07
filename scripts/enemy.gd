@@ -286,6 +286,22 @@ func setup(def: EnemyDefinition) -> void:
 	var spr = $Sprite2D
 	definition = def
 	_spawn_pos = global_position
+	# Global difficulty scaling — applied ONCE per shared EnemyDefinition. The
+	# meta flag prevents re-scaling on every subsequent spawn of the same enemy
+	# type. Tune GameManager.ENEMY_HP_MULT / ENEMY_DAMAGE_MULT to shift the
+	# whole roster without touching individual .tres files.
+	if not def.has_meta("_difficulty_scaled"):
+		var _gm = get_node_or_null("/root/GameManager")
+		if _gm:
+			var _hp_m = float(_gm.get("ENEMY_HP_MULT")) if "ENEMY_HP_MULT" in _gm else 1.0
+			var _dmg_m = float(_gm.get("ENEMY_DAMAGE_MULT")) if "ENEMY_DAMAGE_MULT" in _gm else 1.0
+			if _hp_m != 1.0:
+				def.max_hp = maxi(1, int(round(float(def.max_hp) * _hp_m)))
+			if _dmg_m != 1.0:
+				def.attack_damage = maxi(1, int(round(float(def.attack_damage) * _dmg_m)))
+				if def.contact_damage > 0:
+					def.contact_damage = maxi(1, int(round(float(def.contact_damage) * _dmg_m)))
+		def.set_meta("_difficulty_scaled", true)
 	hp = def.max_hp
 	_max_hp = def.max_hp
 	shield_hp = def.shield_hp

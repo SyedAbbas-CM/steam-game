@@ -1,8 +1,7 @@
 [gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
-[ext_resource type="Resource" path="res://resources/drops/orc_common_drops.tres" id="97_pool"]
-
+[ext_resource type="Resource" path="res://resources/drops/minotaur_drops.tres" id="80_dt"]
 [resource]
 script = ExtResource("1")
 
@@ -37,4 +36,4 @@ loy_tile_index = 37
 sprite_color = Color(0.6, 0.8, 0.4, 1)
 xp_value = 165
 score_value = 330
-drop_table = ExtResource("97_pool")
+drop_table = ExtResource("80_dt")

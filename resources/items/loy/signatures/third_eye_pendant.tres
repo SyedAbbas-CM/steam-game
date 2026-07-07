@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1_item"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2_mod"]
+
+[sub_resource type="Resource" id="mod_0"]
+script = ExtResource("2_mod")
+stat = 12
+flat_bonus = 10
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2_mod")
+stat = 18
+percent_bonus = 0.15
+[resource]
+script = ExtResource("1_item")
+item_name = "Third Eye Pendant"
+loy_tile_index = 1178
+description = "The Beholder's central iris, still watching. Sees the shape of luck."
+slot_type = 8
+modifiers = Array[ExtResource("2_mod")]([SubResource("mod_0"), SubResource("mod_1")])
+rarity = 2
+buy_price = 0
+sell_value = 800
+demo_approved = true

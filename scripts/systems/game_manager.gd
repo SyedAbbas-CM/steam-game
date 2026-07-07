@@ -16,6 +16,13 @@ var _loading_screen: CanvasLayer
 var _auto_save_timer: float = 0.0
 var _pending_coop_join_biome: String = ""
 const AUTO_SAVE_INTERVAL: float = 60.0
+# Global enemy difficulty knobs — applied ONCE per EnemyDefinition the first
+# time it's spawned (see enemy.setup). Bumping these here scales every enemy
+# in the game with zero .tres edits. Set both to 1.0 to disable.
+#   ENEMY_HP_MULT     — multiplies definition.max_hp
+#   ENEMY_DAMAGE_MULT — multiplies attack_damage AND contact_damage
+const ENEMY_HP_MULT: float = 1.30
+const ENEMY_DAMAGE_MULT: float = 1.20
 const COOP_BOSS_ARENA_BIOME: String = "Test-Arena-Boss"
 const HALL_OF_ANCESTORS_SCENE := "res://scenes/ui/hall_of_ancestors.tscn"
 const MAX_ANCESTOR_RECORDS: int = 10

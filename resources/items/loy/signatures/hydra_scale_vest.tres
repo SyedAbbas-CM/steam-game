@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="EquipmentItem" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/stats/equipment_item.gd" id="1_item"]
+[ext_resource type="Script" path="res://scripts/stats/stat_modifier.gd" id="2_mod"]
+
+[sub_resource type="Resource" id="mod_0"]
+script = ExtResource("2_mod")
+stat = 0
+flat_bonus = 120
+
+[sub_resource type="Resource" id="mod_1"]
+script = ExtResource("2_mod")
+stat = 14
+flat_bonus = 36
+
+[sub_resource type="Resource" id="mod_2"]
+script = ExtResource("2_mod")
+stat = 10
+flat_bonus = 3
+[resource]
+script = ExtResource("1_item")
+item_name = "Hydra Scale Vest"
+loy_tile_index = 700
+description = "Overlapping scales pulled from the Hydra. Regrows in the sun."
+slot_type = 4
+modifiers = Array[ExtResource("2_mod")]([SubResource("mod_0"), SubResource("mod_1"), SubResource("mod_2")])
+rarity = 2
+buy_price = 0
+sell_value = 800
+demo_approved = true
