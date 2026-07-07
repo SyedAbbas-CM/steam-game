@@ -219,6 +219,28 @@ func _obs_record_suspicion(reason: String, extra: Dictionary = {}) -> void:
 		return
 	obs.record_enemy_suspicion(self, definition, reason, _obs_context(extra))
 
+func _obs_record_damage_delivery(event_name: String, raw_damage: int, hp_before: int, hp_after: int, extra: Dictionary = {}) -> void:
+	var obs = _obs_node()
+	if obs == null or definition == null or not obs.has_method("record_damage_delivery"):
+		return
+	var ctx := _obs_context({
+		"event_name": event_name,
+		"source_enemy_name": definition.enemy_name,
+		"source_enemy_instance_id": get_instance_id(),
+		"source_attack_id": _obs_current_attack_id,
+		"source_attack_type": _obs_current_attack_name,
+		"source_enemy_size_class": int(definition.size_class),
+		"target_name": player.name if is_instance_valid(player) else "",
+		"raw_damage": raw_damage,
+		"hp_before": hp_before,
+		"hp_after": hp_after,
+		"hp_delta": hp_before - hp_after if hp_before >= 0 and hp_after >= 0 else -1,
+		"position": [global_position.x, global_position.y],
+	})
+	for key in extra:
+		ctx[key] = extra[key]
+	obs.record_damage_delivery(ctx)
+
 func _obs_tick_runtime(delta: float, dist_to_player: float) -> void:
 	if definition == null or state == State.DEAD:
 		return
@@ -601,13 +623,13 @@ func _assign_random_attack_pool(def: EnemyDefinition) -> void:
 	# Always include the enemy's native attack (if it's interesting)
 	_attack_pool.clear()
 	var native = def.attack_type
-	if native in ATTACK_POOL_CANDIDATES:
+	if native in ATTACK_POOL_CANDIDATES and _random_pool_attack_allowed(def, native):
 		_attack_pool.append(native)
 	# Also include phase attacks if they exist
-	if def.phase_2_attack != EnemyDefinition.AttackType.NONE and def.phase_2_attack in ATTACK_POOL_CANDIDATES:
+	if def.phase_2_attack != EnemyDefinition.AttackType.NONE and def.phase_2_attack in ATTACK_POOL_CANDIDATES and _random_pool_attack_allowed(def, def.phase_2_attack):
 		if def.phase_2_attack not in _attack_pool:
 			_attack_pool.append(def.phase_2_attack)
-	if def.phase_3_attack != EnemyDefinition.AttackType.NONE and def.phase_3_attack in ATTACK_POOL_CANDIDATES:
+	if def.phase_3_attack != EnemyDefinition.AttackType.NONE and def.phase_3_attack in ATTACK_POOL_CANDIDATES and _random_pool_attack_allowed(def, def.phase_3_attack):
 		if def.phase_3_attack not in _attack_pool:
 			_attack_pool.append(def.phase_3_attack)
 	# Fill remaining slots with random picks
@@ -616,10 +638,39 @@ func _assign_random_attack_pool(def: EnemyDefinition) -> void:
 	for c in candidates:
 		if _attack_pool.size() >= pool_size:
 			break
-		if c not in _attack_pool:
+		if c not in _attack_pool and _random_pool_attack_allowed(def, int(c)):
 			_attack_pool.append(c)
 	_attack_pool.shuffle()
 	_attack_pool_idx = 0
+
+func _random_pool_attack_allowed(def: EnemyDefinition, atk: int) -> bool:
+	if def == null:
+		return false
+	if def.size_class >= EnemyDefinition.SizeClass.BOSS:
+		return true
+	# Large non-boss enemies should not randomly inherit boss-grade screen spam.
+	# Generated elites can still opt into heavier attacks through generated_attack_pool.
+	if atk in [
+		EnemyDefinition.AttackType.SPIRAL,
+		EnemyDefinition.AttackType.BEAM,
+		EnemyDefinition.AttackType.GATLING,
+		EnemyDefinition.AttackType.MORTAR,
+		EnemyDefinition.AttackType.METEOR_SHOWER,
+		EnemyDefinition.AttackType.MINEFIELD,
+		EnemyDefinition.AttackType.SEEKING_MINES,
+		EnemyDefinition.AttackType.SINE_BARRAGE,
+		EnemyDefinition.AttackType.HOMING_SALVO,
+		EnemyDefinition.AttackType.LASER_GRID,
+		EnemyDefinition.AttackType.GRAVITY_WELL,
+		EnemyDefinition.AttackType.DEATH_SPIRAL,
+		EnemyDefinition.AttackType.BOMB_TOSS,
+		EnemyDefinition.AttackType.CARPET_BOMB,
+		EnemyDefinition.AttackType.FIRE_RAIN,
+		EnemyDefinition.AttackType.CLUSTER_BOMB,
+		EnemyDefinition.AttackType.MINE_DROP,
+	]:
+		return false
+	return true
 
 func _uses_boss_state_machine() -> bool:
 	return definition != null and definition.boss_states.size() > 0
@@ -1788,7 +1839,6 @@ func _move_swoop(dir: Vector2, dist: float, p: MovementPattern, delta: float) ->
 
 ## Teleport: blinks to random position in room when hit, also periodic blink
 func _move_teleport(p: MovementPattern, spd: float, delta: float) -> void:
-	var to_spawn: Vector2 = _spawn_pos - global_position
 	if not has_meta("tp_timer"):
 		set_meta("tp_timer", p.teleport_interval)
 		set_meta("tp_last_hp", hp)
@@ -1803,9 +1853,11 @@ func _move_teleport(p: MovementPattern, spd: float, delta: float) -> void:
 		_do_teleport_blink(p)
 		set_meta("tp_timer", p.teleport_interval)
 	else:
-		# Slow drift between teleports
-		if to_spawn.length() > 8.0:
-			velocity = to_spawn.normalized() * spd * 0.3
+		# Teleport enemies should stay engaged. Drifting back to spawn between
+		# blinks reads like a broken leash/snapback during combat.
+		if is_instance_valid(player):
+			var to_player := (player.global_position - global_position)
+			velocity = to_player.normalized() * spd * 0.35 if to_player.length() > 40.0 else Vector2.ZERO
 		else:
 			velocity = Vector2.ZERO
 
@@ -1846,13 +1898,13 @@ func _do_teleport_blink(p: MovementPattern) -> void:
 	if not preferred.is_empty():
 		for candidate in preferred:
 			var valid_candidate := _find_valid_floor_pos(candidate, 0.0, 1.0)
-			if valid_candidate.distance_to(start_pos) > 8.0:
+			if valid_candidate.distance_to(start_pos) > 8.0 and valid_candidate.distance_to(_spawn_pos) > 18.0:
 				global_position = valid_candidate
 				break
 		if global_position == start_pos:
-			global_position = _find_valid_floor_pos(anchor, 20.0, p.teleport_range)
+			global_position = _find_valid_floor_pos(anchor, 24.0, p.teleport_range)
 	else:
-		global_position = _find_valid_floor_pos(anchor, 20.0, p.teleport_range)
+		global_position = _find_valid_floor_pos(anchor, 24.0, p.teleport_range)
 	velocity = Vector2.ZERO
 	# Visual flash
 	var spr = get_node_or_null("Sprite2D")
@@ -2225,6 +2277,13 @@ func _get_active_bullet_count() -> int:
 		return definition.phase_2_bullet_count
 	return definition.bullet_count
 
+func _is_empty_direct_attack(atk: int) -> bool:
+	return atk == EnemyDefinition.AttackType.NONE and _get_active_bullet_count() <= 0
+
+func _get_contact_damage_range() -> float:
+	var in_ow := is_inside_tree() and get_tree().current_scene and get_tree().current_scene.name == "Overworld"
+	return 12.0 * scale.x * (4.0 if in_ow else 1.0)
+
 func _get_bomb_attack_count(default_count: int = 1) -> int:
 	if not definition:
 		return default_count
@@ -2433,10 +2492,15 @@ func _do_chase(dir: Vector2, dist: float, delta: float) -> void:
 			_mod_blocks_attack = true
 
 	if attack_timer <= 0 and dist < _attack_range and _has_los and not _mod_blocks_attack:
+		if _is_empty_direct_attack(_atk_check):
+			if dist <= _get_contact_damage_range():
+				_check_contact_damage()
+			state = State.CHASE
+			return
 		if _atk_mod and _atk_mod.requires_stationary and not _has_continuous_movement():
 			velocity = Vector2.ZERO
 		# All enemies shoot bullets as baseline — special types add extra behavior
-		match atk:
+		match _atk_check:
 			EnemyDefinition.AttackType.NONE:
 				state = State.ATTACK  # still shoots
 			EnemyDefinition.AttackType.MELEE:
@@ -2738,6 +2802,8 @@ func _do_attack(dir: Vector2) -> void:
 				break
 		if combo_has_bomb:
 			attack_timer = shoot_interval * 2.75  # heavy bomb combos need real downtime
+		elif definition and definition.size_class < EnemyDefinition.SizeClass.BOSS:
+			attack_timer = shoot_interval * 0.9
 		else:
 			attack_timer = shoot_interval * 0.25
 		cooldown_timer = 0.1
@@ -2752,6 +2818,17 @@ func _do_attack(dir: Vector2) -> void:
 		_active_modifier = slot.modifier  # may be null = plain attack
 		_slot_idx += 1
 	_obs_record_attack(atk, "direct")
+
+	if _is_empty_direct_attack(atk):
+		_check_contact_damage()
+		state = State.CHASE
+		attack_timer = minf(attack_timer, 0.15)
+		_obs_record_suspicion("empty_attack_chase_fallback", {
+			"attack_type": _obs_attack_name(atk),
+			"distance_to_player": global_position.distance_to(player.global_position) if is_instance_valid(player) else -1.0,
+			"bullet_count": _get_active_bullet_count(),
+		})
+		return
 
 	match atk:
 		EnemyDefinition.AttackType.NONE:
@@ -2922,6 +2999,15 @@ func _do_attack(dir: Vector2) -> void:
 
 func _fire_attack_type(atk: int, dir: Vector2) -> void:
 	_obs_record_attack(atk, "combo")
+	if _is_empty_direct_attack(atk):
+		_check_contact_damage()
+		state = State.CHASE
+		_obs_record_suspicion("empty_combo_attack_chase_fallback", {
+			"attack_type": _obs_attack_name(atk),
+			"distance_to_player": global_position.distance_to(player.global_position) if is_instance_valid(player) else -1.0,
+			"bullet_count": _get_active_bullet_count(),
+		})
+		return
 	match atk:
 		EnemyDefinition.AttackType.NONE, EnemyDefinition.AttackType.RANGED, \
 		EnemyDefinition.AttackType.CHARGE, EnemyDefinition.AttackType.DASH, \
@@ -3135,7 +3221,13 @@ func _check_contact_damage(force_contact: bool = false) -> void:
 	if player.has_method("take_damage"):
 		if _is_boss_or_large:
 			player.set_meta("_hit_from_elite", true)
+		var hp_before := int(player.hp) if "hp" in player else -1
 		player.take_damage(maxi(player_dmg, 1), global_position, true, false)
+		var hp_after := int(player.hp) if "hp" in player else -1
+		_obs_record_damage_delivery("contact_hit", maxi(player_dmg, 1), hp_before, hp_after, {
+			"distance": global_position.distance_to(player.global_position),
+			"force_contact": force_contact,
+		})
 
 	# Thorns: reflect damage to enemy on contact
 	var thorns_em = player.get_node_or_null("EquipmentManager")
@@ -3688,6 +3780,11 @@ func _apply_enemy_bullet_props(bullet, spd: float) -> void:
 	bullet.collision_mask = 1
 	bullet.speed = spd
 	if definition:
+		bullet.set_meta("source_enemy_name", definition.enemy_name)
+		bullet.set_meta("source_enemy_instance_id", get_instance_id())
+		bullet.set_meta("source_attack_id", _obs_current_attack_id)
+		bullet.set_meta("source_attack_type", _obs_current_attack_name)
+		bullet.set_meta("source_enemy_size_class", int(definition.size_class))
 		var base_dmg: int = definition.attack_damage
 		# WEAKENED — deal 50% less damage
 		if has_meta("weakened") and get_meta("weakened"):

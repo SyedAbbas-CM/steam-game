@@ -5,6 +5,7 @@
 [ext_resource type="Script" path="res://scripts/enemies/attack_slot.gd" id="3"]
 [ext_resource type="Resource" path="res://resources/attack_mods/homing_gentle.tres" id="4"]
 [ext_resource type="Resource" path="res://resources/attack_mods/fire_enchant.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/drops/magical_common_drops.tres" id="97_pool"]
 
 [sub_resource type="Resource" id="slot1"]
 script = ExtResource("3")
@@ -44,3 +45,4 @@ loy_tile_index = 112
 sprite_color = Color(0.6, 0.4, 1.0, 1)
 xp_value = 5
 score_value = 10
+drop_table = ExtResource("97_pool")

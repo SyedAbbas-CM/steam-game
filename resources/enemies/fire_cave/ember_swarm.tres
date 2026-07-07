@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/enemies/fire_cave/ember_mite.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/drops/demon_common_drops.tres" id="97_pool"]
 
 [resource]
 script = ExtResource("1")
@@ -32,3 +33,4 @@ loy_tile_index = 442
 sprite_color = Color(1.0, 0.5, 0.15, 1)
 xp_value = 25
 score_value = 50
+drop_table = ExtResource("97_pool")

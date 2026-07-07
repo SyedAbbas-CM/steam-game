@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/enemies/loy/orc/kobold.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/drops/orc_common_drops.tres" id="97_pool"]
 
 [resource]
 script = ExtResource("1")
@@ -30,3 +31,4 @@ loy_tile_index = 271
 sprite_color = Color(0.4, 0.7, 0.3, 1)
 xp_value = 30
 score_value = 60
+drop_table = ExtResource("97_pool")

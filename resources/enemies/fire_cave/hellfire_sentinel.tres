@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/enemies/fire_cave/flame_sprite.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/drops/demon_common_drops.tres" id="97_pool"]
 
 [resource]
 script = ExtResource("1")
@@ -43,3 +44,4 @@ loy_tile_index = 467
 sprite_color = Color(1.0, 0.3, 0.1, 1)
 xp_value = 100
 score_value = 200
+drop_table = ExtResource("97_pool")

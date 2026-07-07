@@ -21,6 +21,7 @@ var _counts_by_affix: Dictionary = {}
 var _counts_by_tag: Dictionary = {}
 var _counts_by_attack: Dictionary = {}
 var _counts_by_suspicion: Dictionary = {}
+var _counts_by_damage_event: Dictionary = {}
 var _projectile_times_by_enemy: Dictionary = {}
 var _projectile_counts_by_attack: Dictionary = {}
 var _jsonl_path: String = ""
@@ -47,6 +48,7 @@ func begin_dungeon_run(context: Dictionary = {}) -> void:
 	_counts_by_tag.clear()
 	_counts_by_attack.clear()
 	_counts_by_suspicion.clear()
+	_counts_by_damage_event.clear()
 	_projectile_times_by_enemy.clear()
 	_projectile_counts_by_attack.clear()
 	_recent_suspicious.clear()
@@ -204,6 +206,51 @@ func record_enemy_suspicion(enemy: Node, definition: Resource, reason: String, c
 	_append_jsonl(event)
 	_record_suspicion_event(event, [reason])
 
+func record_damage_delivery(context: Dictionary = {}) -> void:
+	if not _enabled:
+		return
+	if _run_id == "":
+		begin_dungeon_run(context)
+	var event_name := str(context.get("event_name", "damage_delivery"))
+	_count(_counts_by_damage_event, event_name)
+	var event := {
+		"event": "damage_delivery",
+		"run_id": _run_id,
+		"time_msec": Time.get_ticks_msec(),
+		"delivery_type": event_name,
+		"source_enemy_name": str(context.get("source_enemy_name", "")),
+		"source_enemy_instance_id": int(context.get("source_enemy_instance_id", 0)),
+		"source_attack_id": int(context.get("source_attack_id", 0)),
+		"source_attack_type": str(context.get("source_attack_type", "")),
+		"source_enemy_size_class": int(context.get("source_enemy_size_class", -1)),
+		"target_name": str(context.get("target_name", "")),
+		"raw_damage": int(context.get("raw_damage", 0)),
+		"hp_before": int(context.get("hp_before", -1)),
+		"hp_after": int(context.get("hp_after", -1)),
+		"hp_delta": int(context.get("hp_delta", -1)),
+		"speed": float(context.get("speed", 0.0)),
+		"behavior": int(context.get("behavior", 0)),
+		"radius": float(context.get("radius", 0.0)),
+		"distance": float(context.get("distance", -1.0)),
+		"true_damage": bool(context.get("true_damage", false)),
+		"position": context.get("position", []),
+		"search_tags": [],
+	}
+	var tags: Array[String] = []
+	_add_tag(tags, event_name.to_lower())
+	_add_tag(tags, str(event.get("source_enemy_name", "")).to_lower())
+	_add_tag(tags, str(event.get("source_attack_type", "")).to_lower())
+	if int(event.get("raw_damage", 0)) > 0 and int(event.get("hp_delta", -1)) == 0:
+		_add_tag(tags, "zero_effective_damage")
+		_count(_counts_by_suspicion, "zero_effective_damage")
+		_recent_suspicious.append(event.duplicate(true))
+		while _recent_suspicious.size() > MAX_RECENT_SUSPICIOUS:
+			_recent_suspicious.pop_front()
+	event["search_tags"] = tags
+	_append_jsonl(event)
+	if event_name == "lob_aoe_hit" or "zero_effective_damage" in tags:
+		write_summary()
+
 func write_summary() -> void:
 	if not _enabled or _summary_path == "":
 		return
@@ -232,6 +279,9 @@ func write_summary() -> void:
 	lines.append("")
 	lines.append("By Suspicion")
 	lines.append_array(_format_counts(_counts_by_suspicion))
+	lines.append("")
+	lines.append("By Damage Delivery")
+	lines.append_array(_format_counts(_counts_by_damage_event))
 	lines.append("")
 	lines.append("Major Spawns")
 	for event in _events:

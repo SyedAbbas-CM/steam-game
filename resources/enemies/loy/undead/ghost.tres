@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/drops/undead_common_drops.tres" id="97_pool"]
 
 [resource]
 script = ExtResource("1")
@@ -30,3 +31,4 @@ loy_tile_index = 24
 sprite_color = Color(0.8, 0.85, 1, 0.7)
 xp_value = 8
 score_value = 16
+drop_table = ExtResource("97_pool")

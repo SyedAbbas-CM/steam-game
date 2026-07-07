@@ -5,6 +5,7 @@
 [ext_resource type="Resource" path="res://resources/boss_states/spectre_bounce_fan.tres" id="3"]
 [ext_resource type="Resource" path="res://resources/boss_states/spectre_shroud_ring.tres" id="4"]
 [ext_resource type="Resource" path="res://resources/boss_states/spectre_death_spiral.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/drops/undead_common_drops.tres" id="97_pool"]
 
 [resource]
 script = ExtResource("1")
@@ -34,3 +35,4 @@ loy_tile_index = 45
 sprite_color = Color(0.8, 0.85, 1, 0.8)
 xp_value = 140
 score_value = 280
+drop_table = ExtResource("97_pool")

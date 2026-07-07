@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/enemies/forest/spore_cloud.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/drops/crawler_common_drops.tres" id="97_pool"]
 
 [resource]
 script = ExtResource("1")
@@ -31,3 +32,4 @@ loy_tile_index = 365
 sprite_color = Color(0.15, 0.5, 0.1, 1)
 xp_value = 50
 score_value = 18
+drop_table = ExtResource("97_pool")

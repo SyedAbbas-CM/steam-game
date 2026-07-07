@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/enemies/attack_modifier.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/drops/demon_common_drops.tres" id="97_pool"]
 
 [sub_resource type="Resource" id="atk_mod"]
 script = ExtResource("2")
@@ -32,3 +33,4 @@ loy_tile_index = 176
 sprite_color = Color(0.4, 0.6, 1.0, 1)
 xp_value = 5
 score_value = 10
+drop_table = ExtResource("97_pool")

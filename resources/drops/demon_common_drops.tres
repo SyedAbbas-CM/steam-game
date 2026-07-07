@@ -1,0 +1,51 @@
+[gd_resource type="Resource" script_class="DropTable" load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/drops/drop_table.gd" id="1_table"]
+[ext_resource type="Script" path="res://scripts/drops/drop_entry.gd" id="2_entry"]
+[ext_resource type="Resource" path="res://resources/items/loy/red_potion.tres" id="ir_0"]
+[ext_resource type="Resource" path="res://resources/items/loy/blue_potion.tres" id="ir_1"]
+[ext_resource type="Resource" path="res://resources/items/loy/apple.tres" id="ir_2"]
+[ext_resource type="Resource" path="res://resources/items/crafting/fire_crystal.tres" id="ir_3"]
+[ext_resource type="Resource" path="res://resources/items/crafting/demon_shard.tres" id="ir_4"]
+[ext_resource type="Resource" path="res://resources/items/loy/dagger.tres" id="ir_5"]
+[ext_resource type="Resource" path="res://resources/items/loy/mace.tres" id="ir_6"]
+
+[sub_resource type="Resource" id="entry_0"]
+script = ExtResource("2_entry")
+item = ExtResource("ir_0")
+weight = 3.0
+
+[sub_resource type="Resource" id="entry_1"]
+script = ExtResource("2_entry")
+item = ExtResource("ir_1")
+weight = 3.0
+
+[sub_resource type="Resource" id="entry_2"]
+script = ExtResource("2_entry")
+item = ExtResource("ir_2")
+weight = 1.0
+
+[sub_resource type="Resource" id="entry_3"]
+script = ExtResource("2_entry")
+item = ExtResource("ir_3")
+weight = 1.0
+
+[sub_resource type="Resource" id="entry_4"]
+script = ExtResource("2_entry")
+item = ExtResource("ir_4")
+weight = 1.0
+
+[sub_resource type="Resource" id="entry_5"]
+script = ExtResource("2_entry")
+item = ExtResource("ir_5")
+weight = 1.0
+
+[sub_resource type="Resource" id="entry_6"]
+script = ExtResource("2_entry")
+item = ExtResource("ir_6")
+weight = 1.0
+
+[resource]
+script = ExtResource("1_table")
+entries = Array[ExtResource("2_entry")]([SubResource("entry_0"), SubResource("entry_1"), SubResource("entry_2"), SubResource("entry_3"), SubResource("entry_4"), SubResource("entry_5"), SubResource("entry_6")])
+drop_chance = 0.35

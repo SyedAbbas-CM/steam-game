@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/enemies/valley/shadow_hound.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/drops/human_common_drops.tres" id="97_pool"]
 
 [resource]
 script = ExtResource("1")
@@ -28,3 +29,4 @@ loy_tile_index = 26
 sprite_color = Color(0.35, 0.2, 0.5, 1)
 xp_value = 38
 score_value = 76
+drop_table = ExtResource("97_pool")

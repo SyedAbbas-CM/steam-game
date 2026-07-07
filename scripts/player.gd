@@ -1931,14 +1931,22 @@ func use_mp(cost: float) -> bool:
 	return true
 
 func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: bool = false, is_backstab: bool = false, _damage_type: int = 0) -> void:
+	var _source_size_class := -1
+	if has_meta("_incoming_enemy_size_class_override"):
+		_source_size_class = int(get_meta("_incoming_enemy_size_class_override"))
+		remove_meta("_incoming_enemy_size_class_override")
 	if _dead:
 		return
 	if invincible:
 		return
+	var raw_incoming_damage := amount
 	# Capture death-recap source before any guards eat the hit. Heuristic:
 	# nearest enemy within 80px of source_pos is presumed the attacker.
 	# Cheap, good enough for the recap line; precise attribution would need
 	# bullet/contact callsites to pass the source explicitly.
+	# We ALSO capture the source's size_class here so the armor block below can
+	# apply an elite/boss damage floor (armor can fully block trash but never
+	# fully block elite / boss attacks).
 	if source_pos != Vector2.INF and source_pos.is_finite():
 		var nearest_e: Node = null
 		var nearest_d := 80.0
@@ -1952,6 +1960,9 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 		if nearest_e:
 			_last_damage_source_name = str(nearest_e.get("definition").enemy_name) if nearest_e.get("definition") != null else str(nearest_e.name)
 			_last_damage_attack_name = "Contact" if is_contact else "Projectile"
+			var _def = nearest_e.get("definition")
+			if _def and _source_size_class < 0:
+				_source_size_class = int(_def.size_class)
 		else:
 			_last_damage_source_name = "the dark"
 			_last_damage_attack_name = "Contact" if is_contact else "Projectile"
@@ -2169,14 +2180,23 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 			if scene_root:
 				FloatingText.spawn_damage(scene_root, global_position + Vector2(0, -12), amount, Color(1.0, 0.0, 0.5))
 
-	# Armor reduction — weak attacks fully blockable, strong attacks always deal 20% min
+	# Armor — clean flat subtraction. 12 armor = -12 damage, that's it. No
+	# global 20% floor. Weak enemies fully blockable (0 damage taken).
+	# The floor only kicks in for elite / boss enemies:
+	#   NORMAL: no floor          (armor can fully block a trash hit)
+	#   LARGE  (elite / mini-boss): 10% of raw min (armor helps a lot, doesn't cheese)
+	#   BOSS  (boss / hyper elite): 20% of raw min (armor is help, not immunity)
 	var armor = int(equipment_manager.get_armor()) + int(status_effects.get_buff_value("armor"))
 	if not is_true_damage and armor > 0 and not is_backstab:
 		var raw = amount
 		amount = maxi(0, amount - armor)
-		# Strong attacks (raw > armor) always deal at least 20% of original damage
-		if raw > armor:
-			amount = maxi(amount, maxi(1, int(raw * 0.2)))
+		var floor_pct := 0.0
+		if _source_size_class == EnemyDefinition.SizeClass.LARGE:
+			floor_pct = 0.10
+		elif _source_size_class == EnemyDefinition.SizeClass.BOSS:
+			floor_pct = 0.20
+		if floor_pct > 0.0 and raw > 0:
+			amount = maxi(amount, maxi(1, int(raw * floor_pct)))
 
 	# Contact damage resistance for melee classes (only when holding melee weapon).
 	# These four blocks used to be incorrectly indented INSIDE the armor `if`,
@@ -2264,6 +2284,18 @@ func take_damage(amount: int, source_pos: Vector2 = Vector2.INF, is_contact: boo
 			var scene_root_m = get_tree().current_scene if is_inside_tree() else null
 			if scene_root_m:
 				FloatingText.spawn(scene_root_m, global_position + Vector2(0, -18), "-%d MP" % int(mp_spent), Color(0.3, 0.6, 1.0))
+
+	# Final chip floor for real enemy hits. Avoidance tools above still fully
+	# negate damage, but armor/shield should not make active dungeon enemies feel
+	# broken or harmless forever.
+	if not is_true_damage and not is_backstab and raw_incoming_damage > 0 and _source_size_class >= 0:
+		var chip_floor := 1
+		if _source_size_class == EnemyDefinition.SizeClass.LARGE:
+			chip_floor = maxi(3, int(ceil(float(raw_incoming_damage) * 0.25)))
+		elif _source_size_class >= EnemyDefinition.SizeClass.BOSS:
+			chip_floor = maxi(5, int(ceil(float(raw_incoming_damage) * 0.35)))
+		if amount <= 0 or (_source_size_class >= EnemyDefinition.SizeClass.LARGE and amount < chip_floor):
+			amount = chip_floor
 
 	if amount <= 0:
 		return

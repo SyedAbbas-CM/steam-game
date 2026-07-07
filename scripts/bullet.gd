@@ -1145,11 +1145,20 @@ func _on_area_entered(area: Node2D) -> void:
 		return
 	if (not is_player_bullet or hits_all) and area.name == "Hitbox":
 		var player = area.get_parent()
+		var hp_before := _read_target_hp(player)
 		if player.has_method("take_damage"):
+			if has_meta("source_enemy_size_class"):
+				player.set_meta("_incoming_enemy_size_class_override", int(get_meta("source_enemy_size_class")))
 			if has_meta("trap_true_damage") and get_meta("trap_true_damage"):
 				player.take_damage(damage, global_position, false, false, CombatTypes.DamageType.TRUE)
 			else:
 				player.take_damage(damage, global_position)
+		var hp_after := _read_target_hp(player)
+		_record_enemy_damage_delivery("projectile_hit", player, damage, hp_before, hp_after, {
+			"behavior": int(behavior),
+			"speed": speed,
+			"true_damage": has_meta("trap_true_damage") and bool(get_meta("trap_true_damage")),
+		})
 		# If the player parried us mid-call, take_damage flipped us into a
 		# player_bullet via reflect(). Survive — fly back at the source.
 		if is_player_bullet:
@@ -1297,11 +1306,23 @@ func _lob_land() -> void:
 		var cloud_radius = float(get_meta("poison_cloud_radius", _lob_aoe_radius))
 		_spawn_poison_cloud(global_position, cloud_radius, cloud_duration)
 	# AOE damage
-		if not is_player_bullet:
-			var p = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
-			if p and is_instance_valid(p) and p.global_position.distance_to(global_position) < _lob_aoe_radius:
+	if not is_player_bullet:
+		var p = PlayerQuery.get_nearest_player(get_tree(), global_position) if is_inside_tree() else null
+		if p and is_instance_valid(p):
+			var dist_to_player: float = p.global_position.distance_to(global_position)
+			if dist_to_player < _lob_aoe_radius:
+				var hp_before := _read_target_hp(p)
 				if p.has_method("take_damage"):
+					if has_meta("source_enemy_size_class"):
+						p.set_meta("_incoming_enemy_size_class_override", int(get_meta("source_enemy_size_class")))
 					p.take_damage(maxi(1, damage), global_position, false, false, CombatTypes.DamageType.TRUE)
+				var hp_after := _read_target_hp(p)
+				_record_enemy_damage_delivery("lob_aoe_hit", p, maxi(1, damage), hp_before, hp_after, {
+					"behavior": int(behavior),
+					"radius": _lob_aoe_radius,
+					"distance": dist_to_player,
+					"true_damage": true,
+				})
 	else:
 		for e in get_tree().get_nodes_in_group("enemy"):
 			if is_instance_valid(e) and e.global_position.distance_to(global_position) < _lob_aoe_radius:
@@ -1340,6 +1361,39 @@ func _lob_land() -> void:
 			sub.lifetime = 1.0
 			container.add_child(sub)
 	queue_free()
+
+func _read_target_hp(target: Node) -> int:
+	if target == null or not is_instance_valid(target):
+		return -1
+	if "hp" in target:
+		return int(target.hp)
+	if target.has_method("get_hp"):
+		return int(target.get_hp())
+	return -1
+
+func _record_enemy_damage_delivery(event_name: String, target: Node, raw_damage: int, hp_before: int, hp_after: int, extra: Dictionary = {}) -> void:
+	if is_player_bullet and not hits_all:
+		return
+	var obs = get_node_or_null("/root/EnemyObservability")
+	if obs == null or not obs.has_method("record_damage_delivery"):
+		return
+	var context := {
+		"event_name": event_name,
+		"source_enemy_name": str(get_meta("source_enemy_name", "")),
+		"source_enemy_instance_id": int(get_meta("source_enemy_instance_id", 0)),
+		"source_attack_id": int(get_meta("source_attack_id", 0)),
+		"source_attack_type": str(get_meta("source_attack_type", "")),
+		"source_enemy_size_class": int(get_meta("source_enemy_size_class", -1)),
+		"target_name": target.name if target else "",
+		"raw_damage": raw_damage,
+		"hp_before": hp_before,
+		"hp_after": hp_after,
+		"hp_delta": hp_before - hp_after if hp_before >= 0 and hp_after >= 0 else -1,
+		"position": [global_position.x, global_position.y],
+	}
+	for key in extra:
+		context[key] = extra[key]
+	obs.record_damage_delivery(context)
 
 func _spawn_poison_cloud(pos: Vector2, radius: float, duration: float) -> void:
 	var scene_root = get_tree().current_scene if is_inside_tree() else get_parent()
